@@ -1,0 +1,6 @@
+# backup files
+*~
+# objects
+*.so
+*.pyc
+./build/
