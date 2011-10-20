@@ -3,4 +3,4 @@
 # objects
 *.so
 *.pyc
-./build/
+build/
