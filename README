@@ -1,0 +1,38 @@
+lofreq: detection of rare (low frequency) variants
+
+
+AUTHORS
+-------
+
+Andreas Wilm <wilma@gis.a-star.edu.sg>,
+Grace Yeo
+and Niranjan Nagarajan <nagarajann@gis.a-star.edu.sg>
+
+
+USAGE
+-----
+
+The main script is lofreq_snpcaller.py 
+
+Try
+$ lofreq_snpcaller.py -h
+to get help.
+
+
+INSTALLATION
+------------
+
+Simply try:
+$ python setup.py install
+which will build the source and install the necessary files
+
+Type
+$ python setup.py
+for help
+
+If you want to install lofreq into a different directory use the --prefix
+flag. You can influence compiler options with the CFLAGS and
+LDFLAGS environment variables
+
+If things go wrong it's probably best to delete the ./build directory before
+trying again

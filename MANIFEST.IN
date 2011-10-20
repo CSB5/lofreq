@@ -1,0 +1,3 @@
+include lofreq_ext/cdflib90/cdflib.h
+include lofreq_ext/cdflib90.README
+prune tmp
