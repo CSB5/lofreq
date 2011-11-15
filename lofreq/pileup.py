@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Python helper functions for samtools
+Helper functions for samtools' m/pileup
 """
 
 #--- standard library imports
@@ -35,8 +35,9 @@ LOG = logging.getLogger("")
 logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
-LOG.info("NOTE class PileupColumn() will ignore indels in pileup")
 
+        
+    
 class PileupColumn():
     """
     Pileup column class. Parses samtools m/pileup output.
@@ -47,8 +48,11 @@ class PileupColumn():
     namedtuple('PileupColumn', 'chrom coord refbase coverage read_bases base_quals')
     pileup_column = PileupColumn(*(line.split('\t')))
     pileup_column = PileupColumn._make((line.split('\t')))
+
+    NOTE: this class ignores indels
     """
 
+    # FIXME add quality_filter option
 
     def __init__(self, line=None):
         """
@@ -82,7 +86,7 @@ class PileupColumn():
             self.parse_line(line)
 
         
-    def parse_line(self, line):
+    def parse_line(self, line, delete_raw_values=True):
         """
         Split a line of pileup output and set values accordingly
 
@@ -118,8 +122,6 @@ class PileupColumn():
         qualities to each line of the output. This makes the output
         much larger, but is necessary when a subset of sites are
         selected.
-
-
         """
 
         line_split = line.split('\t')
@@ -136,25 +138,32 @@ class PileupColumn():
         self.base_quals_raw = line_split[5]
         # self.base_quals created below
 
+        # Compute a Phred scale version of base_quals_raw
+        self.base_quals =  [ord(c)-33 for c in self.base_quals_raw]
+
         # Create a clean version of read_bases_raw
         self.read_bases = self.read_bases_raw
         self.read_bases = self.rem_startend_markup(self.read_bases)
-        self.read_bases = self.rem_indel_markup(self.read_bases)
         self.read_bases = self.read_bases.replace(".", self.ref_base)
         self.read_bases = self.read_bases.replace(",", self.ref_base)
         self.read_bases = self.read_bases.upper()
         
-        assert len(self.read_bases) == len(self.base_quals_raw), (
-            "Looks like I didn't remove all markup from read bases string at %s:%d\n"
-            "read_bases = %s\n"
-            "read_bases_raw = %s\n"
-            "base_quals_raw = %s"
-            % (self.chrom, self.coord+1, self.read_bases,  self.read_bases_raw, self.base_quals_raw))
+        # note: deletion on reference ('*') have qualities which will
+        # be deleted as well
+        (self.read_bases, self.base_quals) = self.rem_indel_markup(
+            self.read_bases, self.base_quals)
 
-        # Compute a Phred scale version of base_quals_raw
-        self.base_quals =  [ord(c)-33 for c in self.base_quals_raw]
+        assert len(self.read_bases) == len(self.base_quals), (
+            "Mismatch between number of parsed bases and quality values at %s:%d\n"
+            % (self.chrom, self.coord+1))
 
-
+        #if self.coord == 52-1:
+        #    import pdb; pdb.set_trace()
+            
+        if delete_raw_values:
+            self.read_bases_raw = None
+            self.base_quals_raw = None
+            
 
     @staticmethod
     def rem_startend_markup(read_bases_str):
@@ -174,32 +183,43 @@ class PileupColumn():
 
     
     @staticmethod
-    def rem_indel_markup(read_bases_str):
+    def rem_indel_markup(bases, base_quals):
         """
         Remove indel markup from read bases string
 
         From http://samtools.sourceforge.net/pileup.shtml:
 
-        A pattern `\+[0-9]+[ACGTNacgtn]+' indicates there is an
+        A pattern '\+[0-9]+[ACGTNacgtn]+' indicates there is an
         insertion between this reference position and the next
         reference position. Similarly, a pattern
-        `-[0-9]+[ACGTNacgtn]+' represents a deletion from the
-        reference.
+        '-[0-9]+[ACGTNacgtn]+' represents a deletion from the
+        reference. The deleted bases will be presented as '*' in the
+        following lines.
         """
-
-        # tricky stuff. you have to find out how many
-        # insertion/deletions happened first, so that you can then
-        # delete the right amount of nucleotides afterwards.
+       
+        # First the initial +- markup for which no quality value
+        # exists: find out how many insertion/deletions happened
+        # first, so that you can then delete the right amount of
+        # nucleotides afterwards.
+        #
         while True:
-            match = re.search('[-+][0-9]+', read_bases_str)
+            match = re.search('[-+][0-9]+', bases)
             if not match:
                 break
-            num = int(read_bases_str[match.start()+1:match.end()])
-            left = read_bases_str[:match.start()]
-            right = read_bases_str[match.end()+num:]
-            read_bases_str = left + right
-            
-        return read_bases_str
+            num = int(bases[match.start()+1:match.end()])
+            left = bases[:match.start()]
+            right = bases[match.end()+num:]
+            bases = left + right
+
+        # now delete the deletion on the reference marked as stars
+        # (which have quality values; see also
+        # http://seqanswers.com/forums/showthread.php?t=3388)
+        # and return
+        base_quals = [(q) for (b, q) in zip(bases, base_quals)
+                      if b != '*']
+        bases = ''.join([b for b in bases if b != '*'])
+        
+        return (bases, base_quals)
 
 
 
@@ -207,14 +227,17 @@ def pileup_column_generator(fbam, seq, fref=None, start_pos=None, end_pos=None):
     """
     Generates pileup colums from BAM files. Uses mpileup and disables
     all filtering.
+
+    FIXME: mpileup is the generator function
     """
 
-    # Assume base quality filtering has been done already or is done
-    # here (-Q 0). Disable BAQ computation (-B). No need for indel calling (-I).
-    # 'samtools pileup' swallows some reads. Need to use mpileup instead *and*
-    # increase max sample depth (-d 1000000).
-    mpileup_args = ['-d', ' 1000000', '-Q', '0', '-B', '-I']
-    #
+    # 'samtools pileup' swallows some reads. Need to use mpileup
+    # instead *and* increase max sample depth (-d 1000000). BAQ
+    # computation can be influenced with -B and -E.
+    
+    mpileup_args = ['-d', ' 1000000']
+    # used to contain '-Q 0', but that only affects variant calling
+    
     #import pdb; pdb.set_trace()
     pileupcolumns = mpileup(fbam, seq, mpileup_args, fref, start_pos, end_pos)
     if not pileupcolumns:
@@ -363,7 +386,7 @@ def len_for_sq(header, sq):
     """
 
     for line in header:
-        line_split = line.split()
+        line_split = line.split('\t')
         try:
             if line_split[0] != "@SQ":
                 continue
@@ -371,7 +394,11 @@ def len_for_sq(header, sq):
                 continue
             if not line_split[1][3:] == sq:
                 continue
-            return int(line_split[2][3:])
+
+            # right line, but which is the right field?
+            for field in line_split[2:]:
+                if field.startswith("LN:"):
+                    return int(field[3:])
         except IndexError:
             continue
     return None

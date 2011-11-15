@@ -76,8 +76,7 @@ class QualBasedSNPCaller(object):
         # could use 3 as cutoff. GATK does by default not correct Q<5,
         self.ign_bases_below_q = ign_bases_below_q
 
-
-        LOG.info("New QualBasedSNPCaller: ign_bases_below_q = %d"
+        LOG.debug("New QualBasedSNPCaller: ign_bases_below_q = %d"
                  ", noncons default qual = %d"
                  ", noncons filter qual = %d"
                  ", bonferroni factor = %f"
@@ -89,7 +88,6 @@ class QualBasedSNPCaller(object):
                      self.bonf_factor,
                      self.sig_thresh,
                      self.replace_noncons_quals))
-
 
 
 
@@ -106,7 +104,6 @@ class QualBasedSNPCaller(object):
         #                  for x in range(len(col_bases))]
 
         ret_snp_calls = []
-
 
         assert len(col_bases) == len(col_base_quals), (
             "Need a quality for each base")
@@ -212,7 +209,6 @@ class QualBasedSNPCaller(object):
             for q in range(min(qual_list), max(qual_list)+1):
                 LOG.debug("quality histogram at %d: %d x %d" % (
                     col_coord+1, qual_list.count(q), q))
-
 
 
         # using sorted base_quals might in theory be better for speedup and

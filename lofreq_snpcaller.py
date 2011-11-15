@@ -16,6 +16,7 @@ import logging
 import os
 # optparse deprecated from Python 2.7 on
 from optparse import OptionParser, OptionGroup
+import itertools
 
 #--- third-party imports
 #
@@ -24,7 +25,7 @@ from optparse import OptionParser, OptionGroup
 #--- project specific imports
 #
 # /
-from lofreq import samtools_helper
+from lofreq import pileup
 from lofreq import snp
 from lofreq import em
 from lofreq import qual
@@ -32,7 +33,7 @@ from lofreq.utils import count_bases
 
 
 __author__ = "Andreas Wilm"
-__version__ = "0.1-2011-10-05"
+__version__ = "0.1-2011-11-15"
 __email__ = "wilma@gis.a-star.edu.sg"
 __copyright__ = ""
 __license__ = ""
@@ -54,6 +55,7 @@ NONCONS_FILTER_QUAL = 20
 DEFAULT_IGN_BASES_BELOW_Q = 3
 # EM settings
 DEFAULT_EM_NUM_PARAM = 12
+# FIXME: make user args
 EM_TRAINING_MIN_SAMPLE_SIZE = 1000
 EM_TRAINING_MAX_SAMPLE_SIZE = 10000
 EM_TRAINING_MIN_COVERAGE = 10
@@ -108,15 +110,15 @@ def determine_bonf_factor(fbam, chrom, num_excl_pos=0):
     given BAM files
     """
 
-    bam_header = samtools_helper.header(fbam)
+    bam_header = pileup.header(fbam)
     if bam_header == False:
         LOG.critical("samtools header parsing failed test")
         raise ValueError
-    sq = samtools_helper.sq_from_header(bam_header)
+    sq = pileup.sq_from_header(bam_header)
     assert chrom in sq, (
         "Couldn't find chromosome '%s' in BAM file '%s'" % (
-            chr, fbam))
-    sq_len = samtools_helper.len_for_sq(bam_header, chrom)
+            chrom, fbam))
+    sq_len = pileup.len_for_sq(bam_header, chrom)
     # one for each nonconsensus nucleotide:
     bonf_factor = (sq_len-num_excl_pos) * 3
 
@@ -145,6 +147,17 @@ def cmdline_parser():
                       dest="logfile",
                       help="Optional: log to file")
 
+    parser.add_option("-i", "--input",
+                      dest="fpileup", # type="string|int|float"
+                      default='-',
+                      help="Pileup input. Will read from stdin (default) if '-' or not set at all."
+                      " Tip: Use '-d 100000' to prevent sample depth filtering by samtools."
+                      " Also consider using -B/-E to switch off/influence BAQ computation")
+    parser.add_option("-e", "--exclude",
+                      dest="fexclude", # type="string|int|float"
+                      help="Optional: Exclude positions listed in this file"
+                      " format is: start end [comment ...]"
+                      " , with zero-based, half-open coordinates")
     parser.add_option("-o", "--out",
                       dest="fsnp", # type="string|int|float"
                       help="SNP output file")
@@ -162,43 +175,15 @@ def cmdline_parser():
                       help="Skip EM stage,"
                       " i.e. only use quality based predictions")
     
-
-    pileup_group = OptionGroup(parser, "Pileup options", "")
-
-    pileup_group.add_option("-b", "--bam",
-                      dest="fbam", # type="string|int|float"
-                      help="BAM input file")
-    pileup_group.add_option("-r", "--ref",
-                      dest="fref", # type="string|int|float"
-                      help="Reference fasta file (for pileup)")
-    pileup_group.add_option("-c", "--chr",
-                      dest="chr", # type="string|int|float"
-                      help="Chromosome/sequence (for pileup)")
-    pileup_group.add_option("", "--start",
-                      dest="start_pos", type="int",
-                      help="Optional: start position for pileup (default is 1)")
-    pileup_group.add_option("", "--end",
-                      dest="end_pos", type="int",
-                      help="Optional: end position for pileup (default is all columns)")
-    parser.add_option_group(pileup_group)
-    
-
-    parser.add_option("-e", "--exclude",
-                      dest="fexclude", # type="string|int|float"
-                      help="Optional: Exclude positions listed in this file"
-                      " format is: start end [comment ...]"
-                      " , with zero-based, half-open coordinates")
- 
-    parser.add_option("", "--sig-level",
+    parser.add_option("-b", "--bonf",
+                      dest="bonf", type="int",
+                      help="Bonferroni correction factor"
+                      " (best to set to (seqlen-numexclpos)*3")
+    parser.add_option("-s", "--sig-level",
                       dest="sig_thresh", type="float",
                       default=DEFAULT_SIG_THRESH,
                       help="Optional: p-value significance values"
                       " (default: %g)" % DEFAULT_SIG_THRESH)
-    parser.add_option("", "--bonf",
-                      dest="bonf", type="int",
-                      help="Optional: Bonferroni correction factor"
-                      " (automatically set to sequence length minus"
-                      " exluded positions, if not explicitely set)")
 
 
     em_group = OptionGroup(parser, "Advanced Options for EM-based Stage", "")
@@ -265,30 +250,15 @@ def main():
 
     if opts.verbose:
         LOG.setLevel(logging.INFO)
-        samtools_helper.LOG.setLevel(logging.INFO)
+        pileup.LOG.setLevel(logging.INFO)
         em.LOG.setLevel(logging.INFO)
         qual.LOG.setLevel(logging.INFO)
 
     if opts.debug:
         LOG.setLevel(logging.DEBUG)
-        samtools_helper.LOG.setLevel(logging.DEBUG)
+        pileup.LOG.setLevel(logging.DEBUG)
         em.LOG.setLevel(logging.DEBUG)
         qual.LOG.setLevel(logging.DEBUG)
-
-    for (in_file, descr) in [(opts.fbam, "BAM"),
-                             (opts.fref, "Ref. sequence")]:
-        if not in_file:
-            parser.error("%s input file argument missing." % descr)
-            sys.exit(1)
-        if not os.path.exists(in_file):
-            sys.stderr.write(
-                "file '%s' does not exist.\n" % in_file)
-            sys.exit(1)
-
-
-    if not opts.chr:
-        parser.error("Chromsome argument missing.")
-        sys.exit(1)
 
     if not opts.fsnp:
         parser.error("SNP output file argument missing.")
@@ -304,8 +274,6 @@ def main():
             "file '%s' does not exist.\n" % (opts.fexclude))
         sys.exit(1)
 
-
-
     # quality filter settings (for quality based method)
     #
     noncons_filter_qual = opts.noncons_filter_qual
@@ -317,15 +285,19 @@ def main():
     if opts.em_num_param:
         em_num_param = int(opts.em_num_param)
 
-    # start/end positions for mpileup: directly handed down to
-    # samtools so no need for offset correction
-    #
-    start_pos = 1
-    end_pos = None
-    if opts.start_pos:
-        start_pos = opts.start_pos
-    if opts.end_pos:
-        end_pos = opts.end_pos
+    if opts.fpileup:
+        if opts.fpileup == '-':
+            pileup_fhandle = sys.stdin
+        else:
+            if not os.path.exists(opts.fpileup):
+                sys.stderr.write(
+                    "file '%s' does not exist.\n" % (opts.fpileup))
+                sys.exit(1)
+            else:
+                pileup_fhandle = open(opts.fpileup, 'r')
+    # a buffer for pushing back those pileup lines used up for training
+    pileup_line_buffer = []
+
 
     # exclude positions
     #
@@ -339,23 +311,14 @@ def main():
     # pvalue threshold and correction settings (needs exclude
     # positions)
     #
-    # FIXME in some cases we might not be able to determine the factor
-    # before actually running the stuff. what for example if some of
-    # the pileup columns are empty? Should we rather set it to 1 and
-    # postfilter predictions?
-    #
     if not opts.bonf:
-        bonf_factor = determine_bonf_factor(
-            opts.fbam, opts.chr, len(excl_pos))
-        LOG.info("Using automatically determined Bonferroni factor: %g" % (
-            bonf_factor))
-    else:
-        bonf_factor = opts.bonf
-        LOG.info("Using manually set Bonferroni factor: %g" % bonf_factor)
+        sys.stderr.write("Missing argument: Bonferroni factor")
+        sys.exit(1)
+    bonf_factor = opts.bonf
 
     sig_thresh = opts.sig_thresh
 
-
+    LOG.info("Commandline (workdir %s): %s" % (os.getcwd(), ' '.join(sys.argv)))
 
     snpcaller_em = em.EmBasedSNPCaller(
         num_param = em_num_param,
@@ -368,9 +331,8 @@ def main():
         noncons_filter_qual = noncons_filter_qual,
         bonf_factor = bonf_factor,
         sig_thresh = sig_thresh)
-
     
-
+    
     # ################################################################
     #
     # Stage 1: run EM training to get error probabilities for each
@@ -386,21 +348,25 @@ def main():
     
     # Get pileup data for EM training. Need base-counts and cons-bases
     #
+    # FIXME how does this behave if we have a perfect pileup (no errors?)
+    #
     if not opts.skip_em_stage:
         cons_seq = []
         base_counts = []
-        LOG.info("Starting pileup for EM training")
-        for pcol in samtools_helper.pileup_column_generator(
-            opts.fbam, opts.chr, opts.fref, start_pos, end_pos):
-            # note: pileup_column_generator will ignore empty columns, i.e
-            # it might skip some
+        LOG.info("Processing pileup for EM training")
+        for line in pileup_fhandle:
+            pcol = pileup.PileupColumn(line)
+            pileup_line_buffer.append(line)
+            
+            #LOG.critical("Looking at pos %d for training: coverage %d" % (pcol.coord+1, len(pcol.read_bases)))
+
+            # note: not all columns will be present in pileup
             
             if pcol.coord in excl_pos:
                 LOG.debug("Skipping col %d because of exclusion" % (pcol.coord+1))
                 continue
-     
             if pcol.ref_base not in 'ACGT':
-                LOG.debug("Skipping col %d because of amibigous refbase %s" % (
+                LOG.debug("Skipping col %d because of amibigous reference base %s" % (
                     pcol.coord+1, pcol.ref_base))
                 continue
      
@@ -416,7 +382,8 @@ def main():
      
             if len(base_counts) > EM_TRAINING_MAX_SAMPLE_SIZE:
                 break
-            
+
+        # FIXME: allow error prob input
         if len(base_counts) < EM_TRAINING_MIN_SAMPLE_SIZE:
             LOG.fatal("Insufficient data acquired from pileup for EM training")
             sys.exit(1)
@@ -437,12 +404,16 @@ def main():
     # ################################################################
 
     snp_list = []
-    LOG.info("Starting pileup for SNP calls")
-    for pcol in samtools_helper.pileup_column_generator(
-        opts.fbam, opts.chr, opts.fref, start_pos, end_pos):
-          # note: pileup_column_generator will ignore empty columns, i.e
-          # it might skip some
+    LOG.info("Processing pileup for SNP calls")
+    for line in itertools.chain(pileup_line_buffer, pileup_fhandle):
+        # note: pileup_column_generator will ignore empty columns, i.e
+        # it might skip some
+        pcol = pileup.PileupColumn(line)
 
+        #LOG.critical("Looking at pos %d for calling: coverage %d" % (pcol.coord+1, len(pcol.read_bases)))
+        if (pcol.coord+1) % 100000 == 0:
+            LOG.info("Calling SNPs in column %d" % (pcol.coord+1))
+            
         if pcol.coord in excl_pos:
             LOG.debug("Skipping col %d because of exclusion" % (pcol.coord+1))
             continue
@@ -469,13 +440,14 @@ def main():
         if len(new_snps):
             snp_list.extend(new_snps)
 
-    #LOG.info("EM predicted %d SNPs" % len(snp_list))
-
     write_snps(snp_list, opts.fsnp, opts.append)
     
 
 
 if __name__ == "__main__":
-    # FIXME Add info markup (em error probs args etc) to snp.py or output vcf
     main()
+    LOG.warn("FIXME Add support for vcf-output")
+    LOG.warn("FIXME Add support for coverage filtering")
+    LOG.warn("FIXME Add quality filter for both variations")
+    LOG.warn("FIXME Allow EM error prob input")
     LOG.info("Successful program exit")

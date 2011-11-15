@@ -4,7 +4,7 @@ snpcaller.py
 lofreq/__init__.py
 lofreq/em.py
 lofreq/qual.py
-lofreq/samtools_helper.py
+lofreq/pileup.py
 lofreq/snp.py
 lofreq/utils.py
 lofreq_ext/cdflib90.README

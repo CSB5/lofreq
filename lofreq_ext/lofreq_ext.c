@@ -199,7 +199,8 @@ probvec_tailsum(double *probvec, int tail_startindex, int probvec_len)
  */
 double *
 #if OPTIMIZE
-calc_prob_dist(const int *quals, int total_num_bases, int max_noncons_count, int bonf_factor, double sig_level)
+calc_prob_dist(const int *quals, int total_num_bases, int max_noncons_count, 
+               int bonf_factor, double sig_level)
 #else
 calc_prob_dist(const int *quals, int total_num_bases)
 #endif
@@ -259,7 +260,9 @@ calc_prob_dist(const int *quals, int total_num_bases)
 #if DEBUG
                 fprintf(stderr,
                         "DEBUG(%s:%s:%d): early exit at n=%d with max_noncons_count=%d, bonf_factor=%d pvalue=%g sig_level=%f\n", 
-                         __FILE__, __FUNCTION__, __LINE__, n, max_noncons_count, pvalue, bonf_factor, sig_level);
+                         __FILE__, __FUNCTION__, __LINE__,
+                        n, max_noncons_count, pvalue,
+                        bonf_factor, sig_level);
 #endif
                 probvec=NULL;
                 break;
@@ -303,8 +306,9 @@ calc_prob_dist(const int *quals, int total_num_bases)
  */
 int
 snpcaller_qual(double *snp_pvalues, 
-          const int *phred_quals, const int num_phred_quals, const int *noncons_counts, 
-          const int bonf_factor, const double sig_level)
+               const int *phred_quals, const int num_phred_quals, 
+               const int *noncons_counts, 
+               const int bonf_factor, const double sig_level)
 {
     double *probvec;
     int i;
@@ -314,9 +318,15 @@ snpcaller_qual(double *snp_pvalues,
 #endif
     int max_noncons_count = 0;
 
+#ifdef DEBUG
+            fprintf(stderr, "DEBUG(%s:%s():%d): num_phred_quals=%d noncons_counts=%d bonf_factor=%d sig_level=%f\n", 
+                    __FILE__, __FUNCTION__, __LINE__, 
+                    num_phred_quals, noncons_counts, bonf_factor, sig_level);
+#endif
+
     /* initialise empty results so that we can return anytime */
     for (i=0; i<NUM_NONCONS_BASES; i++) {
-        snp_pvalues[i] = 1.0;
+        snp_pvalues[i] = 1.0 * (double) bonf_factor;
     }
 
     for (i=0; i<NUM_NONCONS_BASES; i++) {
@@ -342,8 +352,8 @@ snpcaller_qual(double *snp_pvalues,
         return 0;
     }
 
-    /* report p-value (sum of probabilities at end of distribution) for each
-     * non-consensus base
+    /* report p-value (sum of probabilities at end of distribution)
+     * for each non-consensus base
      */
     for (i=0; i<NUM_NONCONS_BASES; i++) {        
         if (0 != noncons_counts[i]) {
@@ -355,9 +365,9 @@ snpcaller_qual(double *snp_pvalues,
             pvalue = exp(tailsum);
             snp_pvalues[i] = pvalue * (double)bonf_factor;
 #ifdef DEBUG
-            fprintf(stderr, "DEBUG(%s:%s():%d): tailsum=%g pvalue=%g snp_pvalues[i]=%g bonf_factor=%g\n", 
+            fprintf(stderr, "DEBUG(%s:%s():%d): tailsum=%g pvalue=%g noncons_counts[i]=%d snp_pvalues[i]=%g bonf_factor=%d\n", 
                     __FILE__, __FUNCTION__, __LINE__, 
-                    tailsum, pvalue, snp_pvalues[i], bonf_factor);
+                    tailsum, pvalue, noncons_counts[i], snp_pvalues[i], bonf_factor);
 #endif
         }
     }
