@@ -195,6 +195,11 @@ def cmdline_parser():
                         default=DEFAULT_EM_NUM_PARAM,
                         help='Use 4- or 12-parameter model'
                         ' (default: %d)' % DEFAULT_EM_NUM_PARAM)
+    em_group.add_option('', '--error-prob-file', dest='em_error_prob_file',
+                        help='Read EM error probs from this file (skips training).'
+                        ' General format is: "<ref-base> <snp-base-1> <eprob-1> ...".'
+                        ' 4-parameter model needs only one line: "N A <eprob> C <eprob> <eprob> G T <eprob>".'
+                        ' 12-parameter model needs one line for each nucleotide.')
     #em_group.add_option('', '--convergence',
     #                    dest='conv_epsilon', type=float, default=DEFAULT_CONVERGENCE_EPSILON,
     #                    help='Optional: difference value for convergence')
@@ -258,14 +263,13 @@ def main():
         parser.error("SNP output file argument missing.")
         sys.exit(1)
     if os.path.exists(opts.fsnp) and not opts.append:
-        sys.stderr.write(
+        LOG.fatal(
             "Cowardly refusing to overwrite already existing file '%s'.\n" % (
                 opts.fsnp))
         sys.exit(1)
 
     if opts.fexclude and not os.path.exists(opts.fexclude):
-        sys.stderr.write(
-            "file '%s' does not exist.\n" % (opts.fexclude))
+        LOG.fatal("file '%s' does not exist.\n" % (opts.fexclude))
         sys.exit(1)
 
     # quality filter settings (for quality based method)
@@ -278,14 +282,17 @@ def main():
     #
     if opts.em_num_param:
         em_num_param = int(opts.em_num_param)
+    if opts.em_error_prob_file:
+        if not os.path.exists(opts.em_error_prob_file):
+            LOG.fatal("file '%s' does not exist.\n" % (opts.em_error_prob_file))
+            sys.exit(1)
 
     if opts.fpileup:
         if opts.fpileup == '-':
             pileup_fhandle = sys.stdin
         else:
             if not os.path.exists(opts.fpileup):
-                sys.stderr.write(
-                    "file '%s' does not exist.\n" % (opts.fpileup))
+                LOG.fatal("file '%s' does not exist.\n" % (opts.fpileup))
                 sys.exit(1)
             else:
                 pileup_fhandle = open(opts.fpileup, 'r')
@@ -306,7 +313,7 @@ def main():
     # positions)
     #
     if not opts.bonf:
-        sys.stderr.write("Missing argument: Bonferroni factor")
+        LOG.fatal("Missing argument: Bonferroni factor")
         sys.exit(1)
     bonf_factor = opts.bonf
 
@@ -343,7 +350,7 @@ def main():
     #
     # FIXME how does this behave if we have a perfect pileup (no errors?)
     #
-    if not opts.skip_em_stage:
+    if not opts.skip_em_stage and not opts.em_error_prob_file:
         cons_seq = []
         base_counts = []
         LOG.info("Processing pileup for EM training")
@@ -391,6 +398,14 @@ def main():
             
         snpcaller_em.em_training(base_counts, cons_seq)
         LOG.info("EM training completed.")
+
+        #LOG.critical("Saving provs to schmock.error_prob.")
+        #snpcaller_em.save_error_probs("schmock.error_prob")
+
+
+    elif opts.em_error_prob_file:
+        LOG.info("Skipping EM training and using probs from %s instead." % (opts.em_error_prob_file))
+        snpcaller_em.load_error_probs(opts.em_error_prob_file)
 
 
 
@@ -446,5 +461,4 @@ def main():
 if __name__ == "__main__":
     main()
     LOG.warn("FIXME Add support for vcf-output: quick and dirty, mimic pysam.cvcf or use https://github.com/jdoughertyii/PyVCF")
-    LOG.warn("FIXME Allow EM error prob input")
     LOG.info("Successful program exit")

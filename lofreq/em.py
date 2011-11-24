@@ -358,7 +358,7 @@ class EmBasedSNPCaller(object):
             " load_error_probs() first.")
 
         snp_calls = []
-        
+
         (col_base_counts, cons_base_est) = count_bases(col_bases)
         if not ref_base:
             ref_base = cons_base_est

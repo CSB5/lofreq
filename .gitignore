@@ -4,3 +4,5 @@
 *.so
 *.pyc
 build/
+lofreq/.fuse_hidden*
+.fuse_hidden*
