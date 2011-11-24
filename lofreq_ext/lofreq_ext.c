@@ -251,7 +251,7 @@ calc_prob_dist(const int *quals, int total_num_bases)
 
 #if OPTIMIZE
         /* exit early if even the maximum number of noncons_counts are not
-         * significant. what would probably be even fast would be to
+         * significant. a more elegant, faster way would be to
          * iterate from the end and keep the sum. but the modulo trick
          * here works as well and required less testing */
         if (n>max_noncons_count && n%100==0) {

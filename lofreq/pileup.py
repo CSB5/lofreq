@@ -222,6 +222,36 @@ class PileupColumn():
         return (bases, base_quals)
 
 
+    def rem_bases_below_qual(self, ign_bases_below_q=3):
+        """Illumina 1.5+ indicates errors with Q2 (or lower). Those bases
+        should not be used for downstream analysis. Therefore we
+        could use 3 as cutoff. GATK does by default not correct Q<5,
+        """
+        
+        bases_and_quals = [(b, q)
+                           for (b, q) in zip(self.read_bases, self.base_quals)
+                           if q >= ign_bases_below_q]
+        #rem_bases = len(self.read_bases) - len(bases_and_quals)
+        #LOG.debug("rem_bases_below_qual: Removed %d bases from %s:%d" % (
+        #    rem_bases, self.chrom, self.coord+1))
+        self.read_bases = ''.join([b for (b, q) in bases_and_quals])
+        self.base_quals =  [q for (b, q) in bases_and_quals]
+
+        
+    def rem_ambiguities(self, allowed_bases = 'ACGT'):
+        """Remove bases and their qualities if not in allowed_bases
+        """
+        
+        bases_and_quals = [(b, q)
+                           for(b, q) in zip(self.read_bases, self.base_quals)
+                           if b in allowed_bases]
+        #rem_bases = len(self.read_bases) - len(bases_and_quals)
+        #LOG.debug("rem_ambiguities: Removed %d bases from %s:%d" % (
+        #    rem_bases, self.chrom, self.coord+1))
+        self.read_bases = ''.join([b for (b, q) in bases_and_quals])
+        self.base_quals =  [q for (b, q) in bases_and_quals]
+        
+        
 
 def pileup_column_generator(fbam, seq, fref=None, start_pos=None, end_pos=None):
     """

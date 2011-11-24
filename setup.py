@@ -49,8 +49,7 @@ extension = Extension("lofreq_ext",
 # where modules reside:
 package_dir = {'': 'lofreq'}
     
-setup(
-    name = "snpcaller_ext",
+setup(name = "lofreq_snpcaller",
     version = "0.1",
     description="Low frequency variant caller",
     author="Andreas Wilm",
@@ -60,7 +59,6 @@ setup(
     # classifiers=[],
     
     scripts = ["lofreq_snpcaller.py"],
-    #py_modules = ["em", "qual", "samtools_helper", "utils"],
     packages=['lofreq'],
     ext_modules = [extension]
     )

@@ -395,7 +395,7 @@ class EmBasedSNPCaller(object):
                                          snp_base,
                                          col_base_counts[snp_base]/coverage,
                                          info_dict)
-                    LOG.info("EM Detected SNP %s." % (snpcall))
+                    LOG.info("LofreqNQ SNP %s." % (snpcall))
                     snp_calls.append(snpcall)
 
         return snp_calls

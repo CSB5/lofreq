@@ -41,7 +41,6 @@ logging.basicConfig(level=logging.WARN,
 DEFAULT_SIG_THRESH = 0.01
 NONCONS_DEFAULT_QUAL = 20
 NONCONS_FILTER_QUAL = 20
-DEFAULT_IGN_BASES_BELOW_Q = 3
 
 
 
@@ -51,7 +50,6 @@ class QualBasedSNPCaller(object):
     """
 
     def __init__(self,
-                 ign_bases_below_q = DEFAULT_IGN_BASES_BELOW_Q,
                  noncons_default_qual = NONCONS_DEFAULT_QUAL,
                  noncons_filter_qual = NONCONS_FILTER_QUAL,
                  bonf_factor = 1.0,
@@ -71,18 +69,12 @@ class QualBasedSNPCaller(object):
         self.noncons_filter_qual = noncons_filter_qual
         self.bonf_factor = bonf_factor
         self.sig_thresh = sig_thresh
-        # Illumina indicates errors with Q2 (or lower). Those bases
-        # should not be used for downstream analysis. Therefore we
-        # could use 3 as cutoff. GATK does by default not correct Q<5,
-        self.ign_bases_below_q = ign_bases_below_q
 
-        LOG.debug("New QualBasedSNPCaller: ign_bases_below_q = %d"
-                 ", noncons default qual = %d"
+        LOG.debug("New QualBasedSNPCaller: noncons default qual = %d"
                  ", noncons filter qual = %d"
                  ", bonferroni factor = %f"
                  ", sign. level = %f"
                  " and replace_noncons_quals = %s" % (
-                     self.ign_bases_below_q,
                      self.noncons_default_qual,
                      self.noncons_filter_qual,
                      self.bonf_factor,
@@ -115,17 +107,11 @@ class QualBasedSNPCaller(object):
 
 
         # make a cleaned copy of input bases and qualities. remove N's
-        # and their qualities and uppercase bases and ignore anything
-        # with quality below ign_bases_below_q
-        #
-        bases_and_quals = [(b, q)
-                           for (b, q) in zip(col_bases.upper(), col_base_quals)
-                           if q > self.ign_bases_below_q]
-        ign_bases_below_q_count = len(col_base_quals)-len(bases_and_quals)
+        # and their qualities and uppercase bases
 
+        
         bases_and_quals = [(b, q)
-                           for (b, q) in bases_and_quals
-                           if b != "N"]
+                           for (b, q) in zip(col_bases.upper(), col_base_quals)]
 
 
         #LOG.critical("Using fixed values (see mqual_to_em4/fixed-em-probs)")
@@ -221,15 +207,15 @@ class QualBasedSNPCaller(object):
         # this position
         #
         info_dict = dict()
-        for k, v in raw_base_counts.iteritems():
-            info_dict["raw-basecount-%s" % k] = v
-        info_dict['raw-coverage'] = sum(raw_base_counts.values())
+        # we don't know the raw coverage. depends on pileup
+        #for k, v in raw_base_counts.iteritems():
+        #    info_dict["raw-basecount-%s" % k] = v
+        #info_dict['raw-coverage'] = sum(raw_base_counts.values())
 
         for k, v in base_counts.iteritems():
-            info_dict["filtered-basecount-%s" % k] = v
-        info_dict['filtered-coverage'] = sum(base_counts.values())
+            info_dict["basecount-%s" % k] = v
+        info_dict['coverage'] = sum(base_counts.values())
 
-        info_dict['ign-bases-below-qual-%d' % self.ign_bases_below_q] = ign_bases_below_q_count
 
         # check pvalues for all possible mutations and report if significant
         #
@@ -241,14 +227,14 @@ class QualBasedSNPCaller(object):
                                      cons_base, base,
                                      count/coverage, info_dict)
                 ret_snp_calls.append(snpcall)
-                LOG.info("Qual Detected SNP %s." % (snpcall))
+                LOG.info("LofreqQ SNP %s." % (snpcall))
 
 
         #debug_cols = []
         if col_coord+1 in debug_cols:
             (tmp_base_counts, tmp_cons_base_est) = count_bases(
                 [b for (b, q) in bases_and_quals])
-            LOG.critical("Filtered base counts at %d are=%s" % (
+            LOG.critical("Base counts at %d are=%s" % (
                 col_coord+1, tmp_base_counts))
             for base in set([b for (b, q) in bases_and_quals]):
                 quals = [q for (b, q) in bases_and_quals if b == base]

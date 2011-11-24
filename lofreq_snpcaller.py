@@ -24,7 +24,6 @@ import itertools
 
 #--- project specific imports
 #
-# /
 from lofreq import pileup
 from lofreq import snp
 from lofreq import em
@@ -56,8 +55,7 @@ DEFAULT_IGN_BASES_BELOW_Q = 3
 # EM settings
 DEFAULT_EM_NUM_PARAM = 12
 # FIXME: make user args
-EM_TRAINING_MIN_SAMPLE_SIZE = 1000
-EM_TRAINING_MAX_SAMPLE_SIZE = 10000
+EM_TRAINING_SAMPLE_SIZE = 1000
 EM_TRAINING_MIN_COVERAGE = 10
 
 
@@ -184,6 +182,11 @@ def cmdline_parser():
                       default=DEFAULT_SIG_THRESH,
                       help="Optional: p-value significance values"
                       " (default: %g)" % DEFAULT_SIG_THRESH)
+    parser.add_option("-Q", "--ignore-bases-below-q",
+                          dest="ign_bases_below_q", type="int",
+                          default=DEFAULT_IGN_BASES_BELOW_Q,
+                          help="Optional: remove any base below this base call quality threshold from pileup"
+                          " (default: %d)" % DEFAULT_IGN_BASES_BELOW_Q)
 
 
     em_group = OptionGroup(parser, "Advanced Options for EM-based Stage", "")
@@ -209,20 +212,11 @@ def cmdline_parser():
                           default=NONCONS_FILTER_QUAL,
                           help="Optional: Non-consensus bases below this threshold will be filtered"
                           " (default: %d)" % NONCONS_FILTER_QUAL)
-    qual_group.add_option("", "--ignore-bases-below-q",
-                          dest="ign_bases_below_q", type="int",
-                          default=DEFAULT_IGN_BASES_BELOW_Q,
-                          help="Optional: ignore any bases below this quality threshold"
-                          " (default: %d)" % DEFAULT_IGN_BASES_BELOW_Q)
     parser.add_option_group(qual_group)
 
 
-    #adv_group = OptionGroup(parser, "Advanced Options", "")
-    #parser.add_option("", "--append",
-    #                  dest="append", # type="string|int|float"
-    #                  action="store_true",
-    #                  help="Optional: Append to SNP file")
-    #parser.add_option_group(adv_group)
+    # no need for coverage filter option. snps on low coverage regions
+    # are easily called and easily filtered downstrea.
 
     return parser
 
@@ -326,7 +320,6 @@ def main():
         sig_thresh = sig_thresh)
     
     snpcaller_qual = qual.QualBasedSNPCaller(
-        ign_bases_below_q = ign_bases_below_q,
         noncons_default_qual = noncons_default_qual,
         noncons_filter_qual = noncons_filter_qual,
         bonf_factor = bonf_factor,
@@ -356,9 +349,14 @@ def main():
         LOG.info("Processing pileup for EM training")
         for line in pileup_fhandle:
             pcol = pileup.PileupColumn(line)
+            #LOG.critical("Before filtering: bases = %s" % [(pcol.read_bases.count(b) ,b) for b in set(pcol.read_bases)])
+            #LOG.critical("Before filtering: quals = %s" % [(pcol.base_quals.count(q), q) for q in sorted(set(pcol.base_quals))])
+            pcol.rem_ambiguities()
+            pcol.rem_bases_below_qual(ign_bases_below_q)
+            #LOG.critical("After filtering: bases = %s" % [(pcol.read_bases.count(b), b) for b in set(pcol.read_bases)])
+            #LOG.critical("After filtering: quals = %s" % [(pcol.base_quals.count(q), q) for q in sorted(set(pcol.base_quals))])
             pileup_line_buffer.append(line)
             
-            #LOG.critical("Looking at pos %d for training: coverage %d" % (pcol.coord+1, len(pcol.read_bases)))
 
             # note: not all columns will be present in pileup
             
@@ -380,16 +378,16 @@ def main():
             base_counts.append(col_base_counts)
             cons_seq.append(pcol.ref_base)
      
-            if len(base_counts) > EM_TRAINING_MAX_SAMPLE_SIZE:
+            if len(base_counts) > EM_TRAINING_SAMPLE_SIZE:
                 break
 
         # FIXME: allow error prob input
-        if len(base_counts) < EM_TRAINING_MIN_SAMPLE_SIZE:
-            LOG.fatal("Insufficient data acquired from pileup for EM training")
-            sys.exit(1)
+        if len(base_counts) < EM_TRAINING_SAMPLE_SIZE:
+            LOG.critical("Insufficient data acquired from pileup for EM training.")
         else:
             LOG.info("Using %d columns with an avg. coverage of %d for EM training " % (
-                len(base_counts), sum([sum(c.values()) for c in base_counts])/len(base_counts)))
+                len(base_counts),
+                sum([sum(c.values()) for c in base_counts])/len(base_counts)))
             
         snpcaller_em.em_training(base_counts, cons_seq)
         LOG.info("EM training completed.")
@@ -409,8 +407,9 @@ def main():
         # note: pileup_column_generator will ignore empty columns, i.e
         # it might skip some
         pcol = pileup.PileupColumn(line)
+        pcol.rem_ambiguities()
+        pcol.rem_bases_below_qual(ign_bases_below_q)
 
-        #LOG.critical("Looking at pos %d for calling: coverage %d" % (pcol.coord+1, len(pcol.read_bases)))
         if (pcol.coord+1) % 100000 == 0:
             LOG.info("Calling SNPs in column %d" % (pcol.coord+1))
             
@@ -446,8 +445,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-    LOG.warn("FIXME Add support for vcf-output")
-    LOG.warn("FIXME Add support for coverage filtering")
-    LOG.warn("FIXME Add quality filter for both variations")
+    LOG.warn("FIXME Add support for vcf-output: quick and dirty, mimic pysam.cvcf or use https://github.com/jdoughertyii/PyVCF")
     LOG.warn("FIXME Allow EM error prob input")
     LOG.info("Successful program exit")
