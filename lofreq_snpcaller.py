@@ -55,7 +55,7 @@ DEFAULT_IGN_BASES_BELOW_Q = 3
 # EM settings
 DEFAULT_EM_NUM_PARAM = 12
 # FIXME: make user args
-EM_TRAINING_SAMPLE_SIZE = 1000
+EM_TRAINING_SAMPLE_SIZE = 10000
 EM_TRAINING_MIN_COVERAGE = 10
 
 
@@ -143,11 +143,11 @@ def cmdline_parser():
                       action="store_true",
                       help="Append to SNP file")
     
-    parser.add_option("", "--skip-qual-stage",
+    parser.add_option("", "--em-only",
                       action="store_true", dest="skip_qual_stage",
                       help="Skip quality based stage,"
                       " i.e. terminate after first stage (EM)")
-    parser.add_option("", "--skip-em-stage",
+    parser.add_option("", "--qual-only",
                       action="store_true", dest="skip_em_stage",
                       help="Skip EM stage,"
                       " i.e. only use quality based predictions")
@@ -431,13 +431,11 @@ def main():
             if len(base_counts) > EM_TRAINING_SAMPLE_SIZE:
                 break
 
-        # FIXME: allow error prob input
         if len(base_counts) < EM_TRAINING_SAMPLE_SIZE:
-            LOG.critical("Insufficient data acquired from pileup for EM training.")
-        else:
-            LOG.info("Using %d columns with an avg. coverage of %d for EM training " % (
-                len(base_counts),
-                sum([sum(c.values()) for c in base_counts])/len(base_counts)))
+            LOG.warn("Insufficient data acquired from pileup for EM training.")
+        LOG.info("Using %d columns with an avg. coverage of %d for EM training " % (
+            len(base_counts),
+            sum([sum(c.values()) for c in base_counts])/len(base_counts)))
             
         snpcaller_em.em_training(base_counts, cons_seq)
         LOG.info("EM training completed.")
