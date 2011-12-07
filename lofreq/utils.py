@@ -61,6 +61,13 @@ def prob_to_phredqual(prob):
     return int(round(-10.0 * log10(prob)))
 
 
+def phredqual_to_prob(phredqual):
+    """
+    Turns a phred quality into an error probability
+    """
+    return 10**(-phredqual/10.0)
+
+
 
 def count_bases(bases, allowed_bases = "ACGT"):
     """

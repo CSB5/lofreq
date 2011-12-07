@@ -232,8 +232,8 @@ class PileupColumn():
                            for (b, q) in zip(self.read_bases, self.base_quals)
                            if q >= ign_bases_below_q]
         #rem_bases = len(self.read_bases) - len(bases_and_quals)
-        #LOG.debug("rem_bases_below_qual: Removed %d bases from %s:%d" % (
-        #    rem_bases, self.chrom, self.coord+1))
+        #LOG.critical("rem_bases_below_qual %d: Removed %d bases from %s:%d" % (
+        #    ign_bases_below_q, rem_bases, self.chrom, self.coord+1))
         self.read_bases = ''.join([b for (b, q) in bases_and_quals])
         self.base_quals =  [q for (b, q) in bases_and_quals]
 
