@@ -100,10 +100,10 @@ class QualBasedSNPCaller(object):
         assert len(col_bases) == len(col_base_quals), (
             "Need a quality for each base")
 
-        (raw_base_counts, dummy) = count_bases(col_bases.upper())
-        if col_coord+1 in debug_cols:
-            LOG.critical("Raw base counts at %d are=%s" % (
-                col_coord+1, raw_base_counts))
+        #(raw_base_counts, dummy) = count_bases(col_bases.upper())
+        #if col_coord+1 in debug_cols:
+        #    LOG.critical("Raw base counts at %d are=%s" % (
+        #        col_coord+1, raw_base_counts))
 
 
         # make a cleaned copy of input bases and qualities. remove N's

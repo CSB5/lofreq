@@ -223,9 +223,10 @@ class PileupColumn():
 
 
     def rem_bases_below_qual(self, ign_bases_below_q=3):
-        """Illumina 1.5+ indicates errors with Q2 (or lower). Those bases
-        should not be used for downstream analysis. Therefore we
-        could use 3 as cutoff. GATK does by default not correct Q<5,
+        """Illumina 1.5+ indicates errors with Q2 (or lower). Those
+        bases should not be used for downstream analysis. Therefore we
+        use 3 as default cutoff. Also note that GATK did not use to
+        recalibrate bases Q<5.
         """
         
         bases_and_quals = [(b, q)
