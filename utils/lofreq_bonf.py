@@ -10,7 +10,7 @@ import sys
 import logging
 import os
 # optparse deprecated from Python 2.7 on
-from optparse import OptionParser, OptionGroup
+from optparse import OptionParser
 
 #--- third-party imports
 #
@@ -22,7 +22,7 @@ from lofreq import pileup
 
 
 __author__ = "Andreas Wilm"
-__version__ = "0.1-2011-11-15"
+__version__ = "0.0.1"
 __email__ = "wilma@gis.a-star.edu.sg"
 __copyright__ = ""
 __license__ = ""
@@ -134,14 +134,10 @@ def main():
     if opts.verbose:
         LOG.setLevel(logging.INFO)
         pileup.LOG.setLevel(logging.INFO)
-        em.LOG.setLevel(logging.INFO)
-        qual.LOG.setLevel(logging.INFO)
 
     if opts.debug:
         LOG.setLevel(logging.DEBUG)
         pileup.LOG.setLevel(logging.DEBUG)
-        em.LOG.setLevel(logging.DEBUG)
-        qual.LOG.setLevel(logging.DEBUG)
 
     if not opts.fbam:
         parser.error("BAM input file argument missing.")

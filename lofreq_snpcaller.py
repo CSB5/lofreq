@@ -15,7 +15,7 @@ import sys
 import logging
 import os
 # optparse deprecated from Python 2.7 on
-from optparse import OptionParser, OptionGroup
+from optparse import OptionParser, OptionGroup, SUPPRESS_HELP
 import itertools
 
 #--- third-party imports
@@ -32,7 +32,7 @@ from lofreq.utils import count_bases
 
 
 __author__ = "Andreas Wilm"
-__version__ = "0.1-2011-11-15"
+__version__ = "0.1-2011-11-30"
 __email__ = "wilma@gis.a-star.edu.sg"
 __copyright__ = ""
 __license__ = ""
@@ -47,7 +47,7 @@ logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
 # significance threshold
-DEFAULT_SIG_THRESH = 0.01
+DEFAULT_SIG_THRESH = 0.05
 # quality filters/settings for quality based method
 NONCONS_DEFAULT_QUAL = 20
 NONCONS_FILTER_QUAL = 20
@@ -55,7 +55,7 @@ DEFAULT_IGN_BASES_BELOW_Q = 3
 # EM settings
 DEFAULT_EM_NUM_PARAM = 12
 # FIXME: make user args
-EM_TRAINING_SAMPLE_SIZE = 1000
+EM_TRAINING_SAMPLE_SIZE = 10000
 EM_TRAINING_MIN_COVERAGE = 10
 
 
@@ -103,27 +103,6 @@ def write_snps(snp_list, fname, append=False):
 
     
 
-def determine_bonf_factor(fbam, chrom, num_excl_pos=0):
-    """Determine Bonferroni correction factor from sequence length in
-    given BAM files
-    """
-
-    bam_header = pileup.header(fbam)
-    if bam_header == False:
-        LOG.critical("samtools header parsing failed test")
-        raise ValueError
-    sq = pileup.sq_from_header(bam_header)
-    assert chrom in sq, (
-        "Couldn't find chromosome '%s' in BAM file '%s'" % (
-            chrom, fbam))
-    sq_len = pileup.len_for_sq(bam_header, chrom)
-    # one for each nonconsensus nucleotide:
-    bonf_factor = (sq_len-num_excl_pos) * 3
-
-    return bonf_factor
-
-
-
 
 def cmdline_parser():
     """
@@ -164,11 +143,11 @@ def cmdline_parser():
                       action="store_true",
                       help="Append to SNP file")
     
-    parser.add_option("", "--skip-qual-stage",
+    parser.add_option("", "--em-only",
                       action="store_true", dest="skip_qual_stage",
                       help="Skip quality based stage,"
                       " i.e. terminate after first stage (EM)")
-    parser.add_option("", "--skip-em-stage",
+    parser.add_option("", "--qual-only",
                       action="store_true", dest="skip_em_stage",
                       help="Skip EM stage,"
                       " i.e. only use quality based predictions")
@@ -219,12 +198,76 @@ def cmdline_parser():
                           " (default: %d)" % NONCONS_FILTER_QUAL)
     parser.add_option_group(qual_group)
 
+    parser.add_option("--test-sensitivity", help=SUPPRESS_HELP,
+                      dest="test_sensitivity", action="store_true") 
 
     # no need for coverage filter option. snps on low coverage regions
     # are easily called and easily filtered downstrea.
 
     return parser
 
+
+def test_sensitivity():
+    """FIXME
+    """
+    from lofreq import utils
+
+    bonf = 1
+
+    lofreqnq = em.EmBasedSNPCaller(DEFAULT_EM_NUM_PARAM, bonf, DEFAULT_SIG_THRESH)
+    lofreqnq.set_default_error_probs()
+
+    lofreqq = qual.QualBasedSNPCaller(
+        NONCONS_DEFAULT_QUAL, NONCONS_FILTER_QUAL, bonf, DEFAULT_SIG_THRESH)
+
+    print "Testing default LoFreqQ/LofreqNQ detection limits on fake pileup" \
+        " with varying coverage and uniform quality / error probability" \
+        " (sign.threshold = %f)" % DEFAULT_SIG_THRESH
+
+    refbase = 'A'
+    snpbase = 'G'
+    coverage_range = [10, 100, 1000, 10000]
+    quality_range = [20, 25, 30, 35, 40]
+
+    for q in quality_range:
+        print "\tQ=%d" % q,
+    print
+
+
+    for cov in coverage_range:
+        print "%d" % cov,
+        for q in quality_range:
+
+            num_noncons = 1
+            while [ True ]:
+                bases = (cov-num_noncons)*refbase + num_noncons*snpbase
+                quals = len(bases)*[q]
+                snps = lofreqq.call_snp_in_column(
+                    666, bases, quals, refbase)
+                if len(snps):
+                    print "\t%d" % (num_noncons),
+                    break
+                num_noncons += 1
+                if num_noncons == cov:
+                    break
+
+            num_noncons = 1
+            # turn quality into uniform error probability
+            prob = utils.phredqual_to_prob(q)
+            lofreqnq.error_probs[refbase][snpbase] = prob/3.0
+
+            while [ True ]:
+                bases = (cov-num_noncons)*refbase + num_noncons*snpbase
+                snps = lofreqnq.call_snp_in_column(
+                    666, bases, refbase)
+                if len(snps):
+                    print "/%d" % (num_noncons),
+                    break
+                num_noncons += 1
+                if num_noncons == cov:
+                    break
+
+        print
 
 
 def main():
@@ -239,6 +282,10 @@ def main():
         parser.error("Unrecognized arguments found: %s." % (
             ' '.join(args)))
         sys.exit(1)
+
+    if opts.test_sensitivity:
+        test_sensitivity()
+        sys.exit(0)
 
     if opts.logfile:
         hdlr = logging.FileHandler(opts.logfile)
@@ -356,12 +403,8 @@ def main():
         LOG.info("Processing pileup for EM training")
         for line in pileup_fhandle:
             pcol = pileup.PileupColumn(line)
-            #LOG.critical("Before filtering: bases = %s" % [(pcol.read_bases.count(b) ,b) for b in set(pcol.read_bases)])
-            #LOG.critical("Before filtering: quals = %s" % [(pcol.base_quals.count(q), q) for q in sorted(set(pcol.base_quals))])
             pcol.rem_ambiguities()
             pcol.rem_bases_below_qual(ign_bases_below_q)
-            #LOG.critical("After filtering: bases = %s" % [(pcol.read_bases.count(b), b) for b in set(pcol.read_bases)])
-            #LOG.critical("After filtering: quals = %s" % [(pcol.base_quals.count(q), q) for q in sorted(set(pcol.base_quals))])
             pileup_line_buffer.append(line)
             
 
@@ -388,13 +431,11 @@ def main():
             if len(base_counts) > EM_TRAINING_SAMPLE_SIZE:
                 break
 
-        # FIXME: allow error prob input
         if len(base_counts) < EM_TRAINING_SAMPLE_SIZE:
-            LOG.critical("Insufficient data acquired from pileup for EM training.")
-        else:
-            LOG.info("Using %d columns with an avg. coverage of %d for EM training " % (
-                len(base_counts),
-                sum([sum(c.values()) for c in base_counts])/len(base_counts)))
+            LOG.warn("Insufficient data acquired from pileup for EM training.")
+        LOG.info("Using %d columns with an avg. coverage of %d for EM training " % (
+            len(base_counts),
+            sum([sum(c.values()) for c in base_counts])/len(base_counts)))
             
         snpcaller_em.em_training(base_counts, cons_seq)
         LOG.info("EM training completed.")
@@ -422,8 +463,12 @@ def main():
         # note: pileup_column_generator will ignore empty columns, i.e
         # it might skip some
         pcol = pileup.PileupColumn(line)
+        #LOG.critical("Before filtering: bases = %s" % [(pcol.read_bases.count(b) ,b) for b in set(pcol.read_bases)])
+        #LOG.critical("Before filtering: quals = %s" % [(pcol.base_quals.count(q), q) for q in sorted(set(pcol.base_quals))])
         pcol.rem_ambiguities()
         pcol.rem_bases_below_qual(ign_bases_below_q)
+        #LOG.critical("After filtering: bases = %s" % [(pcol.read_bases.count(b), b) for b in set(pcol.read_bases)])
+        #LOG.critical("After filtering: quals = %s" % [(pcol.base_quals.count(q), q) for q in sorted(set(pcol.base_quals))])
 
         if (pcol.coord+1) % 100000 == 0:
             LOG.info("Calling SNPs in column %d" % (pcol.coord+1))
@@ -459,6 +504,8 @@ def main():
 
 
 if __name__ == "__main__":
+    
     main()
-    LOG.warn("FIXME Add support for vcf-output: quick and dirty, mimic pysam.cvcf or use https://github.com/jdoughertyii/PyVCF")
+    LOG.warn("FIXME Write SNPs immediately.")
+    LOG.warn("FIXME Add support for vcf-output: quick and dirty, mimic pysam.cvcf or use https://github.com/jdoughertyii/PyVCF. See http://www.1000genomes.org/wiki/Analysis/Variant%20Call%20Format/vcf-variant-call-format-version-41 for format description and http://biostar.stackexchange.com/questions/15905/recommendations-for-python-vcf-parser-writer for modules. See also snpcaller/gastric_cancer/snp_to_vcf.py")
     LOG.info("Successful program exit")

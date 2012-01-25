@@ -41,7 +41,7 @@ class SNP(object):
     """
     A simple and generic SNP class.
 
-    Used http://www.hgvs.org/mutnomen/recs.html as template.
+    Original used http://www.hgvs.org/mutnomen/recs.html as template but than got rid of seqtype
     """
 
     def __eq__(self, other):
@@ -51,8 +51,7 @@ class SNP(object):
 
         if self.pos == other.pos and \
            self.wildtype == other.wildtype and \
-           self.variant == other.variant and \
-           self.seq_type == other.seq_type:
+           self.variant == other.variant:
             return True
         else:
             return False
@@ -66,19 +65,15 @@ class SNP(object):
         return not self.__eq__(other)
 
         
-    def __init__(self, pos, wildtype, variant, seq_type = None):
+    def __init__(self, pos, wildtype, variant):
         """
         pos should be zero-offset
         """
 
-        if seq_type:
-            assert seq_type in "cgmrp"
-        assert wildtype != variant
-        
+        assert wildtype != variant        
         self.pos = pos
         self.wildtype = wildtype
         self.variant = variant
-        self.seq_type = seq_type
     
 
     def __str__(self):
@@ -89,9 +84,15 @@ class SNP(object):
         """
 
         outstr = "%d %s>%s" % (self.pos+1, self.wildtype, self.variant)
-        if self.seq_type:
-            outstr = "%s.%s" % (self.seq_type, outstr)
         return outstr
+
+
+    def __hash__(self):
+        """
+        Needed for sets
+        """
+        return hash(str(self))
+
 
 
 
