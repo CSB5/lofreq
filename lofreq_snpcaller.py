@@ -506,5 +506,6 @@ def main():
 if __name__ == "__main__":
     
     main()
-    LOG.warn("FIXME Add support for vcf-output: quick and dirty, mimic pysam.cvcf or use https://github.com/jdoughertyii/PyVCF. See http://www.1000genomes.org/wiki/Analysis/Variant%20Call%20Format/vcf-variant-call-format-version-41 for format description")
+    LOG.warn("FIXME Write SNPs immediately.")
+    LOG.warn("FIXME Add support for vcf-output: quick and dirty, mimic pysam.cvcf or use https://github.com/jdoughertyii/PyVCF. See http://www.1000genomes.org/wiki/Analysis/Variant%20Call%20Format/vcf-variant-call-format-version-41 for format description and http://biostar.stackexchange.com/questions/15905/recommendations-for-python-vcf-parser-writer for modules. See also snpcaller/gastric_cancer/snp_to_vcf.py")
     LOG.info("Successful program exit")
