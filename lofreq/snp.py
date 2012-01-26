@@ -91,7 +91,7 @@ class SNP(object):
         """
         Needed for sets
         """
-        return hash(str(self))
+        return hash("%d %s>%s" % (self.pos+1, self.wildtype, self.variant))
 
 
 
@@ -152,6 +152,17 @@ class ExtSNP(SNP):
             outstr = "%s %s" % (outstr, info_str)
             
         return outstr
+
+
+    def __hash__(self):
+        """
+        Needed for sets. Don't just use str which includes extended info.
+        SNPs with different freqs should still be the same
+        """
+
+        return SNP.__hash__(self)
+
+
 
 
     def identifier(self):
