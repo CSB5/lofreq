@@ -401,12 +401,12 @@ def main():
         cons_seq = []
         base_counts = []
         LOG.info("Processing pileup for EM training")
+        num_lines = 0
         for line in pileup_fhandle:
             pcol = pileup.PileupColumn(line)
             pcol.rem_ambiguities()
             pcol.rem_bases_below_qual(ign_bases_below_q)
             pileup_line_buffer.append(line)
-            
 
             # note: not all columns will be present in pileup
             
@@ -430,7 +430,10 @@ def main():
      
             if len(base_counts) > EM_TRAINING_SAMPLE_SIZE:
                 break
-
+        
+        if num_lines == 0:
+            LOG.fatal("Pileup was empty. Will exit now.")
+            sys.exit(1)
         if len(base_counts) < EM_TRAINING_SAMPLE_SIZE:
             LOG.warn("Insufficient data acquired from pileup for EM training.")
         LOG.info("Using %d columns with an avg. coverage of %d for EM training " % (
@@ -459,7 +462,9 @@ def main():
 
     snp_list = []
     LOG.info("Processing pileup for SNP calls")
+    num_lines = 0
     for line in itertools.chain(pileup_line_buffer, pileup_fhandle):
+        num_line += 1
         # note: pileup_column_generator will ignore empty columns, i.e
         # it might skip some
         pcol = pileup.PileupColumn(line)
@@ -498,6 +503,9 @@ def main():
 
         if len(new_snps):
             snp_list.extend(new_snps)
+    if num_lines == 0:
+        LOG.fatal("Pileup was empty. Will exit now.")
+        sys.exit(1)
 
     write_snps(snp_list, opts.fsnp, opts.append)
     
