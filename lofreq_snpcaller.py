@@ -465,7 +465,7 @@ def main():
     LOG.info("Processing pileup for SNP calls")
     num_lines = 0
     for line in itertools.chain(pileup_line_buffer, pileup_fhandle):
-        num_line += 1
+        num_lines += 1
         # note: pileup_column_generator will ignore empty columns, i.e
         # it might skip some
         pcol = pileup.PileupColumn(line)
