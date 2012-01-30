@@ -32,7 +32,7 @@ from lofreq.utils import count_bases
 
 
 __author__ = "Andreas Wilm"
-__version__ = "0.1-2011-11-30"
+__version__ = "0.1-2012-01-30"
 __email__ = "wilma@gis.a-star.edu.sg"
 __copyright__ = ""
 __license__ = ""
@@ -403,11 +403,12 @@ def main():
         LOG.info("Processing pileup for EM training")
         num_lines = 0
         for line in pileup_fhandle:
+            num_lines += 1
             pcol = pileup.PileupColumn(line)
             pcol.rem_ambiguities()
             pcol.rem_bases_below_qual(ign_bases_below_q)
             pileup_line_buffer.append(line)
-
+            
             # note: not all columns will be present in pileup
             
             if pcol.coord in excl_pos:
@@ -515,5 +516,5 @@ if __name__ == "__main__":
     
     main()
     LOG.warn("FIXME Write SNPs immediately.")
-    LOG.warn("FIXME Add support for vcf-output: quick and dirty, mimic pysam.cvcf or use https://github.com/jdoughertyii/PyVCF. See http://www.1000genomes.org/wiki/Analysis/Variant%20Call%20Format/vcf-variant-call-format-version-41 for format description and http://biostar.stackexchange.com/questions/15905/recommendations-for-python-vcf-parser-writer for modules. See also snpcaller/gastric_cancer/snp_to_vcf.py")
+    LOG.warn("FIXME Add support for vcf-output: quick and dirty or https://github.com/jamescasbon/PyVCF")
     LOG.info("Successful program exit")
