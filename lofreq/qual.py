@@ -201,7 +201,7 @@ class QualBasedSNPCaller(object):
         # numerical stability. in practice I don't see a difference
         pvalues = snpcaller_qual(sorted(base_quals), noncons_counts,
                                  self.bonf_factor, self.sig_thresh)
-        # reported pvalues are already correct with bonferroni factor
+        # reported pvalues are already bonferroni corrected
 
         # setup info dictionary shared between different alleles for
         # this position

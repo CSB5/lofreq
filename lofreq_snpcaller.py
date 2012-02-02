@@ -464,6 +464,7 @@ def main():
     snp_list = []
     LOG.info("Processing pileup for SNP calls")
     num_lines = 0
+    num_ambigious_ref = 0
     for line in itertools.chain(pileup_line_buffer, pileup_fhandle):
         num_lines += 1
         # note: pileup_column_generator will ignore empty columns, i.e
@@ -486,6 +487,7 @@ def main():
         if pcol.ref_base not in 'ACGT':
             LOG.debug("Skipping col %d because of amibigous consensus %s" % (
                 pcol.coord+1, pcol.ref_base))
+            num_ambigious_ref += 1
             continue
 
         if not opts.skip_em_stage:
@@ -507,7 +509,9 @@ def main():
     if num_lines == 0:
         LOG.fatal("Pileup was empty. Will exit now.")
         sys.exit(1)
-
+    if num_ambigious_ref > 0:
+        LOG.warn("%d positions skipped, because of amibigious reference in pileup." % num_ambigious_ref)
+        
     write_snps(snp_list, opts.fsnp, opts.append)
     
 
@@ -515,6 +519,7 @@ def main():
 if __name__ == "__main__":
     
     main()
-    LOG.warn("FIXME Write SNPs immediately.")
-    LOG.warn("FIXME Add support for vcf-output: quick and dirty or https://github.com/jamescasbon/PyVCF")
+    LOG.warn("IMPROVEMENT Write SNPs immediately.")
+    LOG.warn("IMPROVEMENT Add support for vcf-output: quick and dirty or https://github.com/jamescasbon/PyVCF")
+    LOG.warn("IMPROVEMENT Return pvalues as -log(pvalue)")
     LOG.info("Successful program exit")
