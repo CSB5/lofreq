@@ -86,7 +86,7 @@ class PileupColumn():
             self.parse_line(line)
 
         
-    def parse_line(self, line, delete_raw_values=True):
+    def parse_line(self, line, keep_strand_info=False, delete_raw_values=True):
         """
         Split a line of pileup output and set values accordingly
 
@@ -144,10 +144,14 @@ class PileupColumn():
         # Create a clean version of read_bases_raw
         self.read_bases = self.read_bases_raw
         self.read_bases = self.rem_startend_markup(self.read_bases)
-        self.read_bases = self.read_bases.replace(".", self.ref_base)
-        self.read_bases = self.read_bases.replace(",", self.ref_base)
-        self.read_bases = self.read_bases.upper()
-        
+        if keep_strand_info:
+            self.read_bases = self.read_bases.replace(".", self.ref_base.upper())
+            self.read_bases = self.read_bases.replace(",", self.ref_base.lower())
+        else:
+            self.read_bases = self.read_bases.replace(".", self.ref_base)
+            self.read_bases = self.read_bases.replace(",", self.ref_base)
+            self.read_bases = self.read_bases.upper()
+
         # note: deletion on reference ('*') have qualities which will
         # be deleted as well
         (self.read_bases, self.base_quals) = self.rem_indel_markup(

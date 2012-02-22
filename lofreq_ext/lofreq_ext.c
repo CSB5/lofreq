@@ -46,7 +46,7 @@
  * @brief Survival function (1-cdf) computed by means of DCDFLIB to get rid of scipy
  * dependency. Same as scipy.stats.binom.sf().
  *
- * q will hold the probabilty of seeing num_successes or more in num_trials
+ * q will hold the probability of seeing num_successes or more in num_trials
  * given a probabilty of prob_success
  *
  * Returns non-zero status on failure
@@ -256,13 +256,13 @@ calc_prob_dist(const int *quals, int total_num_bases)
          * here works as well and required less testing */
         if (n>max_noncons_count && n%100==0) {
             double pvalue = exp(probvec_tailsum(probvec, max_noncons_count, n));
-            if (pvalue * (double)bonf_factor > sig_level) {
-#if DEBUG
+            if (pvalue * (double)bonf_factor >= sig_level) {
+#ifdef DEBUG
                 fprintf(stderr,
                         "DEBUG(%s:%s:%d): early exit at n=%d with max_noncons_count=%d, bonf_factor=%d pvalue=%g sig_level=%f\n", 
                          __FILE__, __FUNCTION__, __LINE__,
-                        n, max_noncons_count, pvalue,
-                        bonf_factor, sig_level);
+                        n, max_noncons_count, 
+                        bonf_factor, pvalue, sig_level);
 #endif
                 probvec=NULL;
                 break;
@@ -275,9 +275,14 @@ calc_prob_dist(const int *quals, int total_num_bases)
 
 
 #ifdef DEBUG
-    for (n=1; n<total_num_bases+1; n++) {
-        fprintf(stderr, "DEBUG(%s:%s:%d): probvec[%d]=%f\n", 
-                __FILE__, __FUNCTION__, __LINE__, n, probvec[n]);
+    if (NULL == probvec) {
+        fprintf(stderr, "DEBUG(%s:%s:%d): probvec=NULL\n",
+                __FILE__, __FUNCTION__, __LINE__);
+    } else {
+        for (n=1; n<total_num_bases+1; n++) {
+            fprintf(stderr, "DEBUG(%s:%s:%d): probvec[%d]=%f\n", 
+                    __FILE__, __FUNCTION__, __LINE__, n, probvec[n]);
+        }
     }
 #endif
     
@@ -319,9 +324,9 @@ snpcaller_qual(double *snp_pvalues,
     int max_noncons_count = 0;
 
 #ifdef DEBUG
-            fprintf(stderr, "DEBUG(%s:%s():%d): num_phred_quals=%d noncons_counts=%d bonf_factor=%d sig_level=%f\n", 
+            fprintf(stderr, "DEBUG(%s:%s():%d): num_phred_quals=%d bonf_factor=%d sig_level=%f\n", 
                     __FILE__, __FUNCTION__, __LINE__, 
-                    num_phred_quals, noncons_counts, bonf_factor, sig_level);
+                    num_phred_quals, bonf_factor, sig_level);
 #endif
 
     /* initialise empty results so that we can return anytime */

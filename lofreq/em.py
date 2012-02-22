@@ -16,7 +16,8 @@ import os
 #
 USE_SCIPY = False
 if USE_SCIPY:
-    from scipy.stats.distributions import binom
+    from scipy import stats
+    #from scipy.stats.distributions import binom
 
 
 #--- project specific imports
@@ -70,6 +71,8 @@ LOG = logging.getLogger("")
 logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
+if USE_SCIPY:
+    LOG.warn("Using scipy functions instead of internal ones")
 
 
 def expectation(base_counts, ref_seq,
@@ -104,21 +107,25 @@ def expectation(base_counts, ref_seq,
             continue
         
         if USE_SCIPY:
-            bdist = binom(coverage, snp_base_error_prob)
-            # complementary cumulative distribution function
-            pvalue = bdist.sf(base_counts[snp_base] - 1) * bonf_factor
-            
             # old (less accurate): complementary cumulative
             # distribution function
             # pvalue = (1 - bdist.cdf(base_counts[snp_base] - 1))
+
+            # binom.sf
+            #bdist = binom(coverage, snp_base_error_prob)
+            # complementary cumulative distribution function
+            #pvalue = bdist.sf(base_counts[snp_base]) * bonf_factor
+
+            pvalue = stats.binom.sf(base_counts[snp_base]-1,
+                coverage, snp_base_error_prob) * bonf_factor
+
         else:
-            pvalue  = binom_sf(coverage,
-                               base_counts[snp_base] - 1,
+            pvalue  = binom_sf(coverage, base_counts[snp_base]-1,
                                snp_base_error_prob) * bonf_factor
             
         if pvalue < sig_thresh:
             snp_calls.append((pos, pvalue))
-
+        #LOG.debug("pos %d coverage=%d base_counts[snp_base]=%d pvalue %f" % (pos, coverage, base_counts[snp_base], pvalue))
     return snp_calls
 
 

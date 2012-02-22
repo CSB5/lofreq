@@ -226,8 +226,12 @@ def test_sensitivity():
 
     refbase = 'A'
     snpbase = 'G'
-    coverage_range = [10, 100, 1000, 10000]
+
+    coverage_range = [10, 50, 100, 500, 1000, 5000, 10000]
+    #coverage_range = [10]
+
     quality_range = [20, 25, 30, 35, 40]
+    #quality_range = [40]
 
     for q in quality_range:
         print "\tQ=%d" % q,
@@ -250,12 +254,12 @@ def test_sensitivity():
                 num_noncons += 1
                 if num_noncons == cov:
                     break
-
+    
             num_noncons = 1
             # turn quality into uniform error probability
             prob = utils.phredqual_to_prob(q)
-            lofreqnq.error_probs[refbase][snpbase] = prob/3.0
-
+            lofreqnq.error_probs[refbase][snpbase] = prob#;/float(DEFAULT_EM_NUM_PARAM)
+            #import pdb; pdb.set_trace()
             while [ True ]:
                 bases = (cov-num_noncons)*refbase + num_noncons*snpbase
                 snps = lofreqnq.call_snp_in_column(
@@ -368,12 +372,12 @@ def main():
 
     LOG.info("Commandline (workdir %s): %s" % (os.getcwd(), ' '.join(sys.argv)))
 
-    snpcaller_em = em.EmBasedSNPCaller(
+    lofreqnq = em.EmBasedSNPCaller(
         num_param = em_num_param,
         bonf_factor= bonf_factor,
         sig_thresh = sig_thresh)
     
-    snpcaller_qual = qual.QualBasedSNPCaller(
+    lofreqq = qual.QualBasedSNPCaller(
         noncons_default_qual = noncons_default_qual,
         noncons_filter_qual = noncons_filter_qual,
         bonf_factor = bonf_factor,
@@ -441,16 +445,16 @@ def main():
             len(base_counts),
             sum([sum(c.values()) for c in base_counts])/len(base_counts)))
             
-        snpcaller_em.em_training(base_counts, cons_seq)
+        lofreqnq.em_training(base_counts, cons_seq)
         LOG.info("EM training completed.")
 
         #LOG.critical("Saving provs to schmock.error_prob.")
-        #snpcaller_em.save_error_probs("schmock.error_prob")
+        #lofreqnq.save_error_probs("schmock.error_prob")
 
 
     elif opts.em_error_prob_file:
         LOG.info("Skipping EM training and using probs from %s instead." % (opts.em_error_prob_file))
-        snpcaller_em.load_error_probs(opts.em_error_prob_file)
+        lofreqnq.load_error_probs(opts.em_error_prob_file)
 
 
 
@@ -491,7 +495,7 @@ def main():
             continue
 
         if not opts.skip_em_stage:
-            new_snps = snpcaller_em.call_snp_in_column(
+            new_snps = lofreqnq.call_snp_in_column(
                 pcol.coord, pcol.read_bases, pcol.ref_base)
 
         # If a SNP was predicted by EM or if EM was skipped, then
@@ -501,7 +505,7 @@ def main():
         #
         if not opts.skip_qual_stage:
             if opts.skip_em_stage or len(new_snps):
-                new_snps = snpcaller_qual.call_snp_in_column(
+                new_snps = lofreqq.call_snp_in_column(
                     pcol.coord, pcol.read_bases, pcol.base_quals, pcol.ref_base)
 
         if len(new_snps):
@@ -519,7 +523,10 @@ def main():
 if __name__ == "__main__":
     
     main()
-    LOG.warn("IMPROVEMENT Write SNPs immediately.")
     LOG.warn("IMPROVEMENT Add support for vcf-output: quick and dirty or https://github.com/jamescasbon/PyVCF")
+    LOG.warn("IMPROVEMENT Write SNPs immediately.")
     LOG.warn("IMPROVEMENT Return pvalues as -log(pvalue)")
+    LOG.warn("IMPROVEMENT Implement pruned DP properly")
+    LOG.warn("IMPROVEMENT Pileup parsing not opimized and slow at ultra high coverages (>100k X)")
+    LOG.warn("IMPROVEMENT easy to run in parallel since calls per column")
     LOG.info("Successful program exit")

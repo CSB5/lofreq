@@ -206,10 +206,11 @@ def main():
 
         (base_counts, cons_base_est) = count_bases(pcol.read_bases)
         coverage = sum(base_counts.values())
+        if coverage == 0:
+            continue
         for (alt_base, count) in base_counts.iteritems():
             if alt_base == pcol.ref_base:
                 continue
-            
             freq = count/float(coverage)
             if freq > freq_threshold:
                 # need: chrom pos ref alt[|alt..]
