@@ -200,7 +200,7 @@ probvec_tailsum(double *probvec, int tail_startindex, int probvec_len)
 double *
 #if OPTIMIZE
 calc_prob_dist(const int *quals, int total_num_bases, int max_noncons_count, 
-               int bonf_factor, double sig_level)
+               long int bonf_factor, double sig_level)
 #else
 calc_prob_dist(const int *quals, int total_num_bases)
 #endif
@@ -259,7 +259,7 @@ calc_prob_dist(const int *quals, int total_num_bases)
             if (pvalue * (double)bonf_factor >= sig_level) {
 #ifdef DEBUG
                 fprintf(stderr,
-                        "DEBUG(%s:%s:%d): early exit at n=%d with max_noncons_count=%d, bonf_factor=%d pvalue=%g sig_level=%f\n", 
+                        "DEBUG(%s:%s:%d): early exit at n=%d with max_noncons_count=%d, bonf_factor=%ld pvalue=%g sig_level=%f\n", 
                          __FILE__, __FUNCTION__, __LINE__,
                         n, max_noncons_count, 
                         bonf_factor, pvalue, sig_level);
@@ -313,7 +313,7 @@ int
 snpcaller_qual(double *snp_pvalues, 
                const int *phred_quals, const int num_phred_quals, 
                const int *noncons_counts, 
-               const int bonf_factor, const double sig_level)
+               const long int bonf_factor, const double sig_level)
 {
     double *probvec;
     int i;
@@ -324,7 +324,7 @@ snpcaller_qual(double *snp_pvalues,
     int max_noncons_count = 0;
 
 #ifdef DEBUG
-            fprintf(stderr, "DEBUG(%s:%s():%d): num_phred_quals=%d bonf_factor=%d sig_level=%f\n", 
+            fprintf(stderr, "DEBUG(%s:%s():%d): num_phred_quals=%d bonf_factor=%ld sig_level=%f\n", 
                     __FILE__, __FUNCTION__, __LINE__, 
                     num_phred_quals, bonf_factor, sig_level);
 #endif
@@ -452,7 +452,7 @@ py_snpcaller_qual(PyObject *self, PyObject *args)
     int *phred_quals;
     int num_phred_quals;
     int noncons_counts[NUM_NONCONS_BASES];
-    int bonf_factor;
+    long int bonf_factor;
     double sig_level;
 
     /* out */
@@ -468,8 +468,7 @@ py_snpcaller_qual(PyObject *self, PyObject *args)
         return PyErr_NoMemory();    
     }
     
-
-    if (!PyArg_ParseTuple(args, "O(iii)id",
+    if (!PyArg_ParseTuple(args, "O(iii)ld",
                           & py_phred_quals,
                           & noncons_counts[0],
                           & noncons_counts[1],

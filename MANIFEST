@@ -7,6 +7,7 @@ lofreq/qual.py
 lofreq/pileup.py
 lofreq/snp.py
 lofreq/utils.py
+lofreq/conf.py
 lofreq_ext/cdflib90.README
 lofreq_ext/lofreq_ext.c
 lofreq_ext/cdflib90/cdflib.h

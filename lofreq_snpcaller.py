@@ -29,10 +29,11 @@ from lofreq import snp
 from lofreq import em
 from lofreq import qual
 from lofreq.utils import count_bases
+from lofreq import conf
 
 
 __author__ = "Andreas Wilm"
-__version__ = "0.1-2012-01-30"
+__version__ = "0.1.2012-02-25"
 __email__ = "wilma@gis.a-star.edu.sg"
 __copyright__ = ""
 __license__ = ""
@@ -46,17 +47,6 @@ LOG = logging.getLogger("")
 logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
-# significance threshold
-DEFAULT_SIG_THRESH = 0.05
-# quality filters/settings for quality based method
-NONCONS_DEFAULT_QUAL = 20
-NONCONS_FILTER_QUAL = 20
-DEFAULT_IGN_BASES_BELOW_Q = 3
-# EM settings
-DEFAULT_EM_NUM_PARAM = 12
-# FIXME: make user args
-EM_TRAINING_SAMPLE_SIZE = 10000
-EM_TRAINING_MIN_COVERAGE = 10
 
 
 def read_exclude_pos_file(fexclude):
@@ -155,32 +145,32 @@ def cmdline_parser():
     parser.add_option("-b", "--bonf",
                       dest="bonf", type="int",
                       help="Bonferroni correction factor"
-                      " (best to set to (seqlen-numexclpos)*3")
+                      " (best to set to (seqlen-minus-num-excl-pos)*3")
     parser.add_option("-s", "--sig-level",
                       dest="sig_thresh", type="float",
-                      default=DEFAULT_SIG_THRESH,
-                      help="Optional: p-value significance values"
-                      " (default: %g)" % DEFAULT_SIG_THRESH)
+                      default=conf.DEFAULT_SIG_THRESH,
+                      help="Optional: p-value significance value"
+                      " (default: %g)" % conf.DEFAULT_SIG_THRESH)
     parser.add_option("-Q", "--ignore-bases-below-q",
                           dest="ign_bases_below_q", type="int",
-                          default=DEFAULT_IGN_BASES_BELOW_Q,
+                          default=conf.DEFAULT_IGN_BASES_BELOW_Q,
                           help="Optional: remove any base below this base call quality threshold from pileup"
-                          " (default: %d)" % DEFAULT_IGN_BASES_BELOW_Q)
+                          " (default: %d)" % conf.DEFAULT_IGN_BASES_BELOW_Q)
 
 
     em_group = OptionGroup(parser, "Advanced Options for EM-based Stage", "")
     em_group.add_option('', '--num-param', dest='em_num_param',
                         choices = ['4', '12'],
-                        default=DEFAULT_EM_NUM_PARAM,
+                        default=conf.DEFAULT_EM_NUM_PARAM,
                         help='Use 4- or 12-parameter model'
-                        ' (default: %d)' % DEFAULT_EM_NUM_PARAM)
+                        ' (default: %d)' % conf.DEFAULT_EM_NUM_PARAM)
     em_group.add_option('', '--error-prob-file', dest='em_error_prob_file',
                         help='Read EM error probs from this file (skips training).'
                         ' General format is: "<ref-base> <snp-base-1> <eprob-1> ...".'
                         ' 4-parameter model needs only one line: "N A <eprob> C <eprob> <eprob> G T <eprob>".'
                         ' 12-parameter model needs one line for each nucleotide.')
     #em_group.add_option('', '--convergence',
-    #                    dest='conv_epsilon', type=float, default=DEFAULT_CONVERGENCE_EPSILON,
+    #                    dest='conv_epsilon', type=float, default=conf.DEFAULT_CONVERGENCE_EPSILON,
     #                    help='Optional: difference value for convergence')
     parser.add_option_group(em_group)
 
@@ -188,14 +178,14 @@ def cmdline_parser():
     qual_group = OptionGroup(parser, "Advanced Options for Quality-Based Stage", "")
     qual_group.add_option("", "--noncons-default-qual",
                           dest="noncons_default_qual", type="int",
-                          default=NONCONS_DEFAULT_QUAL,
+                          default=conf.NONCONS_DEFAULT_QUAL,
                           help="Optional: Base call quality used for non-consensus bases"
-                          " (default: %d)" % NONCONS_DEFAULT_QUAL)
+                          " (default: %d)" % conf.NONCONS_DEFAULT_QUAL)
     qual_group.add_option("", "--noncons-filter-qual",
                           dest="noncons_filter_qual", type="int",
-                          default=NONCONS_FILTER_QUAL,
+                          default=conf.NONCONS_FILTER_QUAL,
                           help="Optional: Non-consensus bases below this threshold will be filtered"
-                          " (default: %d)" % NONCONS_FILTER_QUAL)
+                          " (default: %d)" % conf.NONCONS_FILTER_QUAL)
     parser.add_option_group(qual_group)
 
     parser.add_option("--test-sensitivity", help=SUPPRESS_HELP,
@@ -214,15 +204,15 @@ def test_sensitivity():
 
     bonf = 1
 
-    lofreqnq = em.EmBasedSNPCaller(DEFAULT_EM_NUM_PARAM, bonf, DEFAULT_SIG_THRESH)
+    lofreqnq = em.EmBasedSNPCaller(conf.DEFAULT_EM_NUM_PARAM, bonf, conf.DEFAULT_SIG_THRESH)
     lofreqnq.set_default_error_probs()
 
     lofreqq = qual.QualBasedSNPCaller(
-        NONCONS_DEFAULT_QUAL, NONCONS_FILTER_QUAL, bonf, DEFAULT_SIG_THRESH)
+        conf.NONCONS_DEFAULT_QUAL, conf.NONCONS_FILTER_QUAL, bonf, conf.DEFAULT_SIG_THRESH)
 
     print "Testing default LoFreqQ/LofreqNQ detection limits on fake pileup" \
         " with varying coverage and uniform quality / error probability" \
-        " (sign.threshold = %f)" % DEFAULT_SIG_THRESH
+        " (sign.threshold = %f)" % conf.DEFAULT_SIG_THRESH
 
     refbase = 'A'
     snpbase = 'G'
@@ -258,7 +248,7 @@ def test_sensitivity():
             num_noncons = 1
             # turn quality into uniform error probability
             prob = utils.phredqual_to_prob(q)
-            lofreqnq.error_probs[refbase][snpbase] = prob#;/float(DEFAULT_EM_NUM_PARAM)
+            lofreqnq.error_probs[refbase][snpbase] = prob#;/float(conf.DEFAULT_EM_NUM_PARAM)
             #import pdb; pdb.set_trace()
             while [ True ]:
                 bases = (cov-num_noncons)*refbase + num_noncons*snpbase
@@ -392,9 +382,9 @@ def main():
     # ################################################################
     
     # Sample from total columns minus exclude positions. Take first
-    # EM_TRAINING_SAMPLE_SIZE pileup columns (if possible given
+    # conf.EM_TRAINING_SAMPLE_SIZE pileup columns (if possible given
     # start_pos and end_pos), with a non-ambigious reference and a
-    # coverage of at least EM_TRAINING_MIN_COVERAGE
+    # coverage of at least conf.EM_TRAINING_MIN_COVERAGE
     
     
     # Get pileup data for EM training. Need base-counts and cons-bases
@@ -427,20 +417,20 @@ def main():
             if col_base_counts.has_key('N'):
                 del col_base_counts['N']
      
-            if sum(col_base_counts.values()) < EM_TRAINING_MIN_COVERAGE:
+            if sum(col_base_counts.values()) < conf.EM_TRAINING_MIN_COVERAGE:
                 continue
      
             base_counts.append(col_base_counts)
             cons_seq.append(pcol.ref_base)
      
-            if len(base_counts) > EM_TRAINING_SAMPLE_SIZE:
+            if len(base_counts) > conf.EM_TRAINING_SAMPLE_SIZE:
                 break
         
         if num_lines == 0:
             LOG.fatal("Pileup was empty. Will exit now.")
             sys.exit(1)
-        if len(base_counts) < EM_TRAINING_SAMPLE_SIZE:
-            LOG.warn("Insufficient data acquired from pileup for EM training.")
+        if len(base_counts) < conf.EM_TRAINING_SAMPLE_SIZE:
+            LOG.warn("Insufficient data (%d) acquired from pileup for EM training." % len(base_counts))
         LOG.info("Using %d columns with an avg. coverage of %d for EM training " % (
             len(base_counts),
             sum([sum(c.values()) for c in base_counts])/len(base_counts)))
@@ -525,8 +515,8 @@ if __name__ == "__main__":
     main()
     LOG.warn("IMPROVEMENT Add support for vcf-output: quick and dirty or https://github.com/jamescasbon/PyVCF")
     LOG.warn("IMPROVEMENT Write SNPs immediately.")
-    LOG.warn("IMPROVEMENT Return pvalues as -log(pvalue)")
+    LOG.warn("IMPROVEMENT Return pvalues phred-scaled")
     LOG.warn("IMPROVEMENT Implement pruned DP properly")
     LOG.warn("IMPROVEMENT Pileup parsing not opimized and slow at ultra high coverages (>100k X)")
-    LOG.warn("IMPROVEMENT easy to run in parallel since calls per column")
+    LOG.warn("IMPROVEMENT easy to run in parallel since calls are per column")
     LOG.info("Successful program exit")

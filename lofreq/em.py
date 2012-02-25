@@ -11,8 +11,8 @@ import os
 
 #--- third-party imports
 #
-# default is to use our ownbinomial extension instead of introducing a
-# scipy dependency.
+# default is to use our own binomial extension instead of introducing
+# a scipy dependency. but it's great for testing/validation
 #
 USE_SCIPY = False
 if USE_SCIPY:
@@ -60,11 +60,8 @@ MAX_ITER = 100
 # covergence if new probs don't differ by more than this threshold
 DEFAULT_CONVERGENCE_EPSILON = 1e-9
 
-# bonferroni factor
-DEFAULT_BONF_FACTOR = 1.0
-
 # significance threshold
-DEFAULT_SIG_THRESH = 0.01
+DEFAULT_SIG_THRESH = 0.05
 
 
 LOG = logging.getLogger("")
@@ -190,7 +187,7 @@ class EmBasedSNPCaller(object):
 
     def __init__(self,
                  num_param = DEFAULT_NUM_PARAM,
-                 bonf_factor = DEFAULT_BONF_FACTOR,
+                 bonf_factor = 1,
                  sig_thresh = DEFAULT_SIG_THRESH,
                  convergence_epsilon = DEFAULT_CONVERGENCE_EPSILON):
         """

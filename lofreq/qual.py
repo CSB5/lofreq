@@ -52,7 +52,7 @@ class QualBasedSNPCaller(object):
     def __init__(self,
                  noncons_default_qual = NONCONS_DEFAULT_QUAL,
                  noncons_filter_qual = NONCONS_FILTER_QUAL,
-                 bonf_factor = 1.0,
+                 bonf_factor = 1,
                  sig_thresh = DEFAULT_SIG_THRESH):
         """
         init function
@@ -72,7 +72,7 @@ class QualBasedSNPCaller(object):
 
         LOG.debug("New QualBasedSNPCaller: noncons default qual = %d"
                  ", noncons filter qual = %d"
-                 ", bonferroni factor = %f"
+                 ", bonferroni factor = %d"
                  ", sign. level = %f"
                  " and replace_noncons_quals = %s" % (
                      self.noncons_default_qual,
