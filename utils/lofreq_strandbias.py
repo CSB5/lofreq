@@ -1,45 +1,34 @@
 #!/usr/bin/env python
-"""FIXME: add doc string
+"""Exakt fisher test on strand bias on already called SNP positions.
+P-Values are not Bonferroni corrected
 """
 
 
 #--- standard library imports
 #
-from __future__ import division
-import sys
-import logging
-import os
+import os, sys
 import tempfile
 import subprocess
+import logging
 # optparse deprecated from Python 2.7 on
 from optparse import OptionParser
 
+USE_SCIPY = False
+
 #--- third-party imports
 #
-# default is to use our own binomial extension instead of introducing
-# a scipy dependency. but it's great for testing/validation
-#
-USE_SCIPY = True
 if USE_SCIPY:
-    from scipy import stats
-    #from scipy.stats.distributions import binom
+    from scipy.stats import fisher_exact
 
-
+    
 #--- project specific imports
 #
 from lofreq import pileup
-#from lofreq.utils import count_bases
 from lofreq import snp
-if not USE_SCIPY:
-    from lofreq_ext import binom_sf
 from lofreq import conf
+if not USE_SCIPY:
+    from lofreq_ext import kt_fisher_exact
 
-# invocation of ipython on exceptions
-if False:
-    import sys, pdb
-    from IPython.core import ultratb
-    sys.excepthook = ultratb.FormattedTB(mode='Verbose',
-                                         color_scheme='Linux', call_pdb=1)
 
 __author__ = "Andreas Wilm"
 __version__ = "0.0.1"
@@ -50,6 +39,8 @@ __credits__ = [""]
 __status__ = ""
 
 
+
+BASES = ['A', 'C', 'G', 'T', 'N']
 DEFAULT_SAMTOOLS_ARGS = "-d 100000"
 
 
@@ -59,11 +50,8 @@ LOG = logging.getLogger("")
 logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
-MYNAME = os.path.basename(sys.argv[0])
 
 
-
-    
 
 def cmdline_parser():
     """
@@ -81,9 +69,9 @@ def cmdline_parser():
     parser.add_option("", "--debug",
                       action="store_true", dest="debug",
                       help="enable debugging")
-    parser.add_option("-d", "--snpdiff",
-                      dest="snpdiff_file", # type="string|int|float"
-                      help="List of SNPs, predicted from other sample and not predicted for this mapping (e.g. somatic calls)")
+    parser.add_option("-s", "--snp_file",
+                      dest="snp_file", # type="string|int|float"
+                      help="SNP file)")
     parser.add_option("-b", "--bam",
                       dest="bam_file", # type="string|int|float"
                       help="BAM file to check")
@@ -104,23 +92,12 @@ def cmdline_parser():
                       " (default: %d). Should be the same as used for the original SNP calling" % conf.DEFAULT_IGN_BASES_BELOW_Q)
     parser.add_option("", "--noncons-filter-qual",
                       dest="noncons_filter_qual", type="int",
-                      default=0, #conf.NONCONS_FILTER_QUAL,
+                      default=conf.NONCONS_FILTER_QUAL,
                       help="Optional: Non-consensus bases below this threshold will be filtered"
-                          " (default: %d). Should be the same as used for the original SNP calling" % 0)#conf.NONCONS_FILTER_QUAL)
-    parser.add_option("", "--uniform-freq",
-                      dest="uniform_freq", type="int",
-                      help="Optional: Assume this uniform frequency [%] instead of original SNP frequency")
-    parser.add_option("", "--freq-factor",
-                      dest="freq_fac", type="float",
-                      help="Optional: Apply this factor (0.0<x<=1.0) to original SNP frequency")
-    parser.add_option("-s", "--sig-level",
-                      dest="sig_thresh", type="float",
-                      default=conf.DEFAULT_SIG_THRESH,
-                      help="Optional: p-value significance value"
-                      " (default: %g)" % conf.DEFAULT_SIG_THRESH)
-
+                          " (default: %d). Should be the same as used for the original SNP calling" % conf.NONCONS_FILTER_QUAL)
+    
+    LOG.warning("What about sig-level/bonf-factor?")
     return parser
-
 
 
 def main():
@@ -145,7 +122,7 @@ def main():
         parser.error("Chromosome argument argument.")
         sys.exit(1)
 
-    for (in_file, descr) in [(opts.snpdiff_file, "SNP diff"), 
+    for (in_file, descr) in [(opts.snp_file, "SNP"), 
                              (opts.bam_file, "BAM"),
                              (opts.ref_fasta_file, "Reference fasta")]:
         if not in_file:
@@ -155,21 +132,10 @@ def main():
             sys.stderr.write(
                 "file '%s' does not exist.\n" % in_file)
             sys.exit(1)
-            
-    if opts.uniform_freq or opts.uniform_freq == 0:
-        if opts.uniform_freq<1 or opts.uniform_freq>100:
-            LOG.fatal("Frequency out of valid range (1-100%)\n")
-            sys.exit(1)
-    if opts.freq_fac or opts.freq_fac == 0:
-        if opts.freq_fac<0.0 or opts.freq_fac>1.0:
-            LOG.fatal("Frequency factor out of valid range (0.0<x<=1.0)")
-            sys.exit(1)
-    if opts.freq_fac and opts.uniform_freq:
-            LOG.fatal("Can't use both, uniform frequency and frequency factor")
-            sys.exit(1)                    
-    snps = snp.parse_snp_file(opts.snpdiff_file)
-    LOG.info("Parsed %d SNPs from %s" % (len(snps), opts.snpdiff_file))
 
+
+    snps = snp.parse_snp_file(opts.snp_file)
+    LOG.info("Parsed %d SNPs from %s" % (len(snps), opts.snp_file))
 
     LOG.info("Removing any base with quality below %d and non-cons bases with quality below %d" % (
             opts.ign_bases_below_q, opts.noncons_filter_qual))
@@ -189,56 +155,43 @@ def main():
                                stderr=subprocess.PIPE)
     #(p_stdout, p_stderr) =  process.communicate()
     for line in process.stdout:
+        if len(line.strip())==0:
+            continue
+        
         pcol = pileup.PileupColumn(line)
+        #pcol.parse_line(line, keep_strand_info=True, delete_raw_values=False)
+        #pcol.rem_ambiguities()
+        #pcol.rem_bases_below_qual(opts.ign_bases_below_q)
 
         snp_candidates = [s for s in snps if s.pos == pcol.coord]
         assert len(snp_candidates) != 0, (
             "Oups..pileup for column %d has no matching SNP" % (pcol.coord+1))
 
         for this_snp in snp_candidates:
-            ref_count = sum(pcol.get_counts_for_base(
-                this_snp.wildtype, opts.ign_bases_below_q))
-            nonref_counts = dict()
-            for base in pileup.VALID_BASES:
-                if base == this_snp.wildtype or base == 'N':
-                    continue
-                nonref_counts[base] = sum(pcol.get_counts_for_base(
-                        base, max(opts.ign_bases_below_q, opts.noncons_filter_qual)))
-            cov = sum([ref_count, sum(nonref_counts.values())])
-            alt_count = nonref_counts[this_snp.variant]
 
-            if cov == 0:
-                print "%s: not rejected (no coverage)" % (this_snp)
-                continue
+            # FIXME there is a function for this in main snpcaller
 
-            if opts.uniform_freq:
-                cmp_freq = opts.uniform_freq/100.0
-            else:
-                cmp_freq = this_snp.freq
-                if opts.freq_fac:
-                    cmp_freq = cmp_freq*opts.freq_fac
-            LOG.info("Testing SNP at pos. %d %s>%s %f. Counts and freq in BAM ref=%d snp=%d snp-freq=%f" % (
-                    pcol.coord+1, this_snp.wildtype, this_snp.variant, cmp_freq,
-                    ref_count, alt_count, alt_count/float(cov)))
+            ref_counts = pcol.get_counts_for_base(
+                this_snp.wildtype, opts.ign_bases_below_q)
+            snp_counts = pcol.get_counts_for_base(
+                this_snp.variant, max(opts.noncons_filter_qual, opts.ign_bases_below_q))
+    
+            try:
+                if USE_SCIPY:
+                    # alternative : two-sided, less, greater
+                    # Which alternative hypothesis to the null hypothesis the test uses. Default is two-sided.
+                    (oddsratio, pvalue) = fisher_exact([[ref_counts[0], ref_counts[1]],
+                                                        [snp_counts[0], snp_counts[1]]])
+                else:
+                    # expects two tuples as input
+                    # returns left, right, twotail pvalues
+                    (left_pv, right_pv, pvalue) = kt_fisher_exact((ref_counts[0], ref_counts[1]),
+                                                                  (snp_counts[0], snp_counts[1]))
+            except ValueError:
+                pvalue = -1
 
-            if USE_SCIPY:
-                pvalue = stats.binom.cdf(alt_count+1, cov, cmp_freq)
-            else:
-                # FIXME
-                raise ValueError, ("Haven't coded up cdf support yet. Use scipy")
-            if pvalue < opts.sig_thresh:
-                print "%s: number of 'SNP' bases significantly low" % (this_snp.identifier())
-            else:
-                print "%s: not rejected" % (this_snp.identifier())
-                
-            
-            
-        
-
-    #LOG.warn("Not deleting tmp file %s" % bed_region_file)
-    os.unlink(bed_region_file)
-    #if len(snps):
-    #    LOG.warn("Unremoved SNPs left")
+            print "%s | counts: ref-fw/ref-rv %d/%d var-fw/var-rv %d/%d | strand bias pvalue %f" % (
+                this_snp, ref_counts[0], ref_counts[1], snp_counts[0], snp_counts[0], pvalue)
         
 if __name__ == "__main__":
     main()

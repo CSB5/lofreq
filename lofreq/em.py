@@ -72,10 +72,8 @@ if USE_SCIPY:
     LOG.warn("Using scipy functions instead of internal ones")
 
 
-def expectation(base_counts, ref_seq,
-                snp_base, snp_base_error_prob,
-                bonf_factor, sig_thresh,
-                from_base='N'):
+def expectation(base_counts, ref_seq, snp_base, snp_base_error_prob,
+                bonf_factor, sig_thresh, from_base='N'):
     """Returns SNP calls for seeing given snp-base at each position in
     region. SNP-calls are tuples of pvalues and positions. P-Values
     are Bonferroni corrected and filtered according to significance
@@ -122,7 +120,8 @@ def expectation(base_counts, ref_seq,
             
         if pvalue < sig_thresh:
             snp_calls.append((pos, pvalue))
-        #LOG.debug("pos %d coverage=%d base_counts[snp_base]=%d pvalue %f" % (pos, coverage, base_counts[snp_base], pvalue))
+        #LOG.debug("pos %d coverage=%d base_counts[snp_base]=%d pvalue %f" % (
+        #        pos, coverage, base_counts[snp_base], pvalue))
     return snp_calls
 
 
@@ -351,10 +350,18 @@ class EmBasedSNPCaller(object):
 
 
 
-    def call_snp_in_column(self, col_coord, col_bases, ref_base=None):
+    def call_snp_in_column(self, col_coord, base_counts, ref_base):
         """Call SNP in a column given read bases. If ref_base is not
         given a consensus base will be derived.
         """
+
+        assert len(base_counts.keys())==4, (
+            "Expected exactly four bases as keys for base_qual_hist")
+        for base in base_counts.keys():
+            assert base in 'ACGT', (
+                "Only allowed bases/keys are A, C, G or T, but not %s" % base)
+        assert ref_base in 'ACGT', (
+            "consensus base must be one of A, C, G or T, but not %s" % cons_base)
 
         assert len(self.error_probs), (
             "Error probabilities haven't"
@@ -363,13 +370,7 @@ class EmBasedSNPCaller(object):
 
         snp_calls = []
 
-        (col_base_counts, cons_base_est) = count_bases(col_bases)
-        if not ref_base:
-            ref_base = cons_base_est
-        if col_base_counts.has_key('N'):
-            del col_base_counts['N']
-
-        coverage = sum(col_base_counts.values())
+        coverage = sum(base_counts.values())
         if coverage == 0:
             return []
 
@@ -383,7 +384,7 @@ class EmBasedSNPCaller(object):
 
         for from_base in from_bases:
             for (snp_base, error_prob) in self.error_probs[from_base].iteritems():
-                for (rel_pos, pvalue) in expectation([col_base_counts],
+                for (rel_pos, pvalue) in expectation([base_counts],
                                                      ref_base, snp_base, error_prob,
                                                      self.bonf_factor, self.sig_thresh,
                                                      from_base):
@@ -392,14 +393,13 @@ class EmBasedSNPCaller(object):
                     info_dict['em-error-prob-%s-to-%s' % (
                         from_base, snp_base)] = error_prob
                     info_dict['coverage'] = coverage
-                    for (k, v) in col_base_counts.iteritems():
+                    for (k, v) in base_counts.iteritems():
                         info_dict["basecount-%s" % k] = v
                     snpcall = snp.ExtSNP(col_coord,
                                          ref_base,
                                          snp_base,
-                                         col_base_counts[snp_base]/coverage,
+                                         base_counts[snp_base]/coverage,
                                          info_dict)
-                    LOG.info("LofreqNQ SNP %s." % (snpcall))
                     snp_calls.append(snpcall)
 
         return snp_calls
@@ -407,5 +407,4 @@ class EmBasedSNPCaller(object):
 
 
 if __name__ == "__main__":
-    # FIXME Add tests
     pass

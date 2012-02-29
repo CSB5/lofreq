@@ -29,7 +29,7 @@ else:
 #EXT_PATH = os.path.join("src", "ext")
 EXT_PATH = "lofreq_ext"
 EXT_SOURCES = [os.path.join(EXT_PATH, f)
-               for f in ["lofreq_ext.c",
+               for f in ["lofreq_ext.c", "fet.c",
                          os.path.join("cdflib90", "dcdflib.c"),
                          os.path.join("cdflib90", "ipmpar.c"),
                          ]
@@ -50,16 +50,29 @@ extension = Extension("lofreq_ext",
 package_dir = {'': 'lofreq'}
     
 setup(name = "lofreq_snpcaller",
-    version = "0.1",
-    description="Low frequency variant caller",
-    author="Andreas Wilm",
-    author_email='wilma@gis.a-star.edu.sg',
-    # long_description = """FIXME.""" 
-    url='http://www.gis.a-star.edu.sg/', # FIXME
-    # classifiers=[],
-    
-    scripts = ["lofreq_snpcaller.py"],
-    packages=['lofreq'],
-    ext_modules = [extension]
-    )
+      packages=['lofreq'],
+      version = "0.1",
+      description="Low frequency variant caller",
+      author="Andreas Wilm",
+      author_email='wilma@gis.a-star.edu.sg',
+      #long_description = """FIXME.""" 
+      url='http://www.gis.a-star.edu.sg/', # FIXME
+      scripts = ["lofreq_snpcaller.py"],
+      ext_modules = [extension],
+      # http://pypi.python.org/pypi?%3Aaction=list_classifiers
+      classifiers=['Development Status :: 4 - Beta',
+                   'Environment :: Console',
+                   'Intended Audience :: Science/Research',
+                   # FIXME 'License :: OSI Approved :: MIT License',
+                   #'License :: OSI Approved :: GNU General Public License (GPL)',
+                   #'License :: OSI Approved :: BSD License',
+                   'Natural Language :: English',
+                   'Operating System :: Unix',
+                   'Programming Language :: C',
+                   'Programming Language :: Python :: 2.6',
+                   'Programming Language :: Python :: 2.7',
+                   'Topic :: Scientific/Engineering :: Bio-Informatics',
+                   ],
+      keywords='bioinformatics'
+      )
 

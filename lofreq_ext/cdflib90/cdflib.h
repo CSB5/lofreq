@@ -42,16 +42,20 @@ void cumt(double*,double*,double*,double*);
 void cumtnc(double*,double*,double*,double*,double*);
 double devlpl(double [],int*,double*);
 double dinvnr(double *p,double *q);
+#ifdef AW_VOID_COMPILER_COMPLAINTS
 static void E0000(int,int*,double*,double*,unsigned long*,
                   unsigned long*,double*,double*,double*,
                   double*,double*,double*,double*);
+#endif
 void dinvr(int*,double*,double*,unsigned long*,unsigned long*);
 void dstinv(double*,double*,double*,double*,double*,double*,
             double*);
 double dt1(double*,double*,double*);
+#ifdef AW_AVOID_COMPILER_COMPLAINTS
 static void E0001(int,int*,double*,double*,double*,double*,
                   unsigned long*,unsigned long*,double*,double*,
                   double*,double*);
+#endif                 
 void dzror(int*,double*,double*,double*,double *,
            unsigned long*,unsigned long*);
 void dstzr(double *zxlo,double *zxhi,double *zabstl,double *zreltl);

@@ -193,26 +193,36 @@ def main():
         pcol = pileup.PileupColumn(line)
         # remove ambigious bases. will affect coverage and therefore
         # frequency otherwise
-        pcol.rem_ambiguities()
+        #pcol.rem_ambiguities()
         #pcol.rem_bases_below_qual(ign_bases_below_q)
 
         # skip processing of columns with ambigious reference bases
         # hoping that gatk will skip them anyway
         if pcol.ref_base not in 'ACGT':
-            LOG.debug(
+            LOG.info(
                 "Skipping col %d because of amibigous reference base %s" % (
-                pcol.coord+1, pcol.ref_base))
+                    pcol.coord+1, pcol.ref_base))
             continue
 
-        (base_counts, cons_base_est) = count_bases(pcol.read_bases)
-        coverage = sum(base_counts.values())
+        # count bases, ignore quality
+        base_counts = pcol.get_all_base_counts(min_qual=0)
+        # delete N's. counts otherwise affect coverage and
+        # frequency.
+        del base_counts['N']
+
+        # sum over each base, and strand
+        coverage = sum([sum(c) for c in base_counts.values()])
         if coverage == 0:
             continue
-        for (alt_base, count) in base_counts.iteritems():
+
+        for (alt_base, strand_counts) in base_counts.iteritems():
+            count = sum(strand_counts)
             if alt_base == pcol.ref_base:
                 continue
             freq = count/float(coverage)
             if freq > freq_threshold:
+                LOG.info("Variant position above threshold: %s %d %s>%s %f" % (
+                        pcol.chrom, pcol.coord, pcol.ref_base, alt_base, freq))
                 # need: chrom pos ref alt[|alt..]
                 var_pos = VarPos(pcol.chrom, pcol.coord,
                                  pcol.ref_base, alt_base)

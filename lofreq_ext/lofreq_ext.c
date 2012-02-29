@@ -16,6 +16,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include "cdflib.h"
+#include "fet.h"
 
 #if TIMING
 #include <time.h>
@@ -36,8 +37,6 @@
 #if 0
 #define DEBUG_PY2C
 #endif
-
-
 
 
 
@@ -139,6 +138,39 @@ py_binom_sf(PyObject *self, PyObject *args)
 
 
 
+/**
+ * @brief Python wrapper for kt_fisher_exact()
+ *
+ */
+static PyObject *
+py_kt_fisher_exact(PyObject *self, PyObject *args)
+{
+    double prob, left, right, twotail;
+	int n11, n12, n21, n22;
+    PyObject *py_pvalues;
+
+    if (!PyArg_ParseTuple(args, "(ii)(ii)",
+                          & n11, &n12, &n21, &n22)) {
+        PyErr_SetString(PyExc_TypeError, "Failed to parse arguments.");
+        return NULL;
+    }
+
+    if (n11<0 && n12<0 && n21<0 && n22<0) {
+        PyErr_SetString(PyExc_ValueError, "Arguments cannot be negative");
+        return NULL;
+    }
+
+
+    prob = kt_fisher_exact(n11, n12, n21, n22, &left, &right, &twotail);
+
+    py_pvalues = Py_BuildValue("(ddd)", 
+                               left, right, twotail);
+
+    return py_pvalues;
+}
+/* end of py_kt_fisher_exact() */
+
+
 
 /**
  * @brief Computes log(exp(log_a) + exp(log_b))
@@ -200,7 +232,7 @@ probvec_tailsum(double *probvec, int tail_startindex, int probvec_len)
 double *
 #if OPTIMIZE
 calc_prob_dist(const int *quals, int total_num_bases, int max_noncons_count, 
-               long int bonf_factor, double sig_level)
+               int bonf_factor, double sig_level)
 #else
 calc_prob_dist(const int *quals, int total_num_bases)
 #endif
@@ -259,7 +291,7 @@ calc_prob_dist(const int *quals, int total_num_bases)
             if (pvalue * (double)bonf_factor >= sig_level) {
 #ifdef DEBUG
                 fprintf(stderr,
-                        "DEBUG(%s:%s:%d): early exit at n=%d with max_noncons_count=%d, bonf_factor=%ld pvalue=%g sig_level=%f\n", 
+                        "DEBUG(%s:%s:%d): early exit at n=%d with max_noncons_count=%d, bonf_factor=%d pvalue=%g sig_level=%f\n", 
                          __FILE__, __FUNCTION__, __LINE__,
                         n, max_noncons_count, 
                         bonf_factor, pvalue, sig_level);
@@ -313,7 +345,7 @@ int
 snpcaller_qual(double *snp_pvalues, 
                const int *phred_quals, const int num_phred_quals, 
                const int *noncons_counts, 
-               const long int bonf_factor, const double sig_level)
+               const int bonf_factor, const double sig_level)
 {
     double *probvec;
     int i;
@@ -324,7 +356,7 @@ snpcaller_qual(double *snp_pvalues,
     int max_noncons_count = 0;
 
 #ifdef DEBUG
-            fprintf(stderr, "DEBUG(%s:%s():%d): num_phred_quals=%d bonf_factor=%ld sig_level=%f\n", 
+            fprintf(stderr, "DEBUG(%s:%s():%d): num_phred_quals=%d bonf_factor=%d sig_level=%f\n", 
                     __FILE__, __FUNCTION__, __LINE__, 
                     num_phred_quals, bonf_factor, sig_level);
 #endif
@@ -452,7 +484,7 @@ py_snpcaller_qual(PyObject *self, PyObject *args)
     int *phred_quals;
     int num_phred_quals;
     int noncons_counts[NUM_NONCONS_BASES];
-    long int bonf_factor;
+    int bonf_factor;
     double sig_level;
 
     /* out */
@@ -468,7 +500,8 @@ py_snpcaller_qual(PyObject *self, PyObject *args)
         return PyErr_NoMemory();    
     }
     
-    if (!PyArg_ParseTuple(args, "O(iii)ld",
+
+    if (!PyArg_ParseTuple(args, "O(iii)id",
                           & py_phred_quals,
                           & noncons_counts[0],
                           & noncons_counts[1],
@@ -752,6 +785,10 @@ LoFreqExtMethods[] = {
 
     {"binom_sf", py_binom_sf, 
      METH_VARARGS, "Survival function (1-cdf)"},
+
+    {"kt_fisher_exact", py_kt_fisher_exact,
+     METH_VARARGS, "Fisher's Exact Test"},
+
 
     /* only for testing */
     {"_calc_prob_dist", py_calc_prob_dist, 

@@ -2,10 +2,11 @@
 """Detection of very rare / low frequency variants.
 
 In a first stage an expectation-maximization will be used to get error
-probabilities for each possible base to base conversion. These can
-then be used to predict a first set of SNPs. This set can be further
-filtered using a quality based model.
+probabilities for each possible base to base conversion. These are
+then be used to predict a first set of SNPs. This set will then be
+re-evaulated by a quality aware model.
 """
+
 
 
 #--- standard library imports
@@ -20,7 +21,10 @@ import itertools
 
 #--- third-party imports
 #
-# /
+USE_SCIPY = False
+if USE_SCIPY:
+    from scipy.stats import fisher_exact
+
 
 #--- project specific imports
 #
@@ -28,8 +32,10 @@ from lofreq import pileup
 from lofreq import snp
 from lofreq import em
 from lofreq import qual
-from lofreq.utils import count_bases
+from lofreq.utils import phredqual_to_prob, prob_to_phredqual
 from lofreq import conf
+if not USE_SCIPY:
+    from lofreq_ext import kt_fisher_exact
 
 
 __author__ = "Andreas Wilm"
@@ -119,7 +125,7 @@ def cmdline_parser():
                       default='-',
                       help="Pileup input. Will read from stdin (default) if '-' or not set at all."
                       " Tip: Use '-d 100000' to prevent sample depth filtering by samtools."
-                      " Also consider using -B/-E to switch off/influence BAQ computation")
+                      " Also consider using -B/-E to influence BAQ computation")
     parser.add_option("-e", "--exclude",
                       dest="fexclude", # type="string|int|float"
                       help="Optional: Exclude positions listed in this file"
@@ -198,19 +204,21 @@ def cmdline_parser():
 
 
 def test_sensitivity():
-    """FIXME
+    """Simple sensitivity test with a mockup column and uniform quality
     """
     from lofreq import utils
 
     bonf = 1
 
-    lofreqnq = em.EmBasedSNPCaller(conf.DEFAULT_EM_NUM_PARAM, bonf, conf.DEFAULT_SIG_THRESH)
+    lofreqnq = em.EmBasedSNPCaller(
+        conf.DEFAULT_EM_NUM_PARAM, bonf, conf.DEFAULT_SIG_THRESH)
     lofreqnq.set_default_error_probs()
 
     lofreqq = qual.QualBasedSNPCaller(
-        conf.NONCONS_DEFAULT_QUAL, conf.NONCONS_FILTER_QUAL, bonf, conf.DEFAULT_SIG_THRESH)
+        conf.NONCONS_DEFAULT_QUAL, conf.NONCONS_FILTER_QUAL, conf.DEFAULT_IGN_BASES_BELOW_Q,
+        bonf, conf.DEFAULT_SIG_THRESH)
 
-    print "Testing default LoFreqQ/LofreqNQ detection limits on fake pileup" \
+    print "Testing default LoFreqQ/LoFreqNQ detection limits on fake pileup" \
         " with varying coverage and uniform quality / error probability" \
         " (sign.threshold = %f)" % conf.DEFAULT_SIG_THRESH
 
@@ -232,12 +240,18 @@ def test_sensitivity():
         print "%d" % cov,
         for q in quality_range:
 
+            # Q
+            #
             num_noncons = 1
             while [ True ]:
-                bases = (cov-num_noncons)*refbase + num_noncons*snpbase
-                quals = len(bases)*[q]
-                snps = lofreqq.call_snp_in_column(
-                    666, bases, quals, refbase)
+                base_qual_hist = dict(zip(
+                        ['A', 'C', 'G', 'T'],
+                        [dict(), dict(), dict(), dict()]
+                        ))
+                base_qual_hist[refbase][q] = cov-num_noncons
+                base_qual_hist[snpbase][q] = num_noncons
+
+                snps = lofreqq.call_snp_in_column(666, base_qual_hist, refbase)
                 if len(snps):
                     print "\t%d" % (num_noncons),
                     break
@@ -245,15 +259,19 @@ def test_sensitivity():
                 if num_noncons == cov:
                     break
     
+            # NQ
+            #
             num_noncons = 1
             # turn quality into uniform error probability
-            prob = utils.phredqual_to_prob(q)
-            lofreqnq.error_probs[refbase][snpbase] = prob#;/float(conf.DEFAULT_EM_NUM_PARAM)
+            prob = phredqual_to_prob(q)
+            lofreqnq.error_probs[refbase][snpbase] = prob
             #import pdb; pdb.set_trace()
             while [ True ]:
                 bases = (cov-num_noncons)*refbase + num_noncons*snpbase
-                snps = lofreqnq.call_snp_in_column(
-                    666, bases, refbase)
+                base_counts = dict(zip(['A', 'C', 'G', 'T'], 4*[0]))
+                base_counts[refbase] = cov-num_noncons
+                base_counts[snpbase] = num_noncons
+                snps = lofreqnq.call_snp_in_column(666, base_counts, refbase)
                 if len(snps):
                     print "/%d" % (num_noncons),
                     break
@@ -262,6 +280,43 @@ def test_sensitivity():
                     break
 
         print
+
+
+
+def add_strandbias_info(snpcall, pcol, ref_qf, var_qf):
+    """strand bias test
+    """
+
+    ref_counts = pcol.get_counts_for_base(
+        snpcall.wildtype, ref_qf, keep_strand_info=True)
+    var_counts = pcol.get_counts_for_base(
+        snpcall.variant, var_qf, keep_strand_info=True)
+
+    try:
+        if USE_SCIPY:
+            # alternative : two-sided, less, greater
+            # Which alternative hypothesis to the null hypothesis the test uses. Default is two-sided.
+            (oddsratio, fisher_twotail_pvalue) = fisher_exact(
+                [[ref_counts[0], ref_counts[1]],
+                 [var_counts[0], var_counts[1]]])
+        else:
+            # expects two tuples as input
+            # returns left, right, twotail pvalues
+            (left_pvalue, right_pvalue, fisher_twotail_pvalue) = kt_fisher_exact(
+                (ref_counts[0], ref_counts[1]),
+                (var_counts[0], var_counts[1]))
+
+    except ValueError:
+        fisher_twotail_pvalue = -1
+
+    # report extra phred scaled pvalue
+    snpcall.info['strandbias-pvalue-uncorr'] = fisher_twotail_pvalue
+    if fisher_twotail_pvalue == -1:
+        snpcall.info['strandbias-pvalue-uncorr-phred'] = "NA"
+    snpcall.info['strandbias-pvalue-uncorr-phred'] = prob_to_phredqual(fisher_twotail_pvalue)
+
+
+
 
 
 def main():
@@ -370,8 +425,8 @@ def main():
     lofreqq = qual.QualBasedSNPCaller(
         noncons_default_qual = noncons_default_qual,
         noncons_filter_qual = noncons_filter_qual,
-        bonf_factor = bonf_factor,
-        sig_thresh = sig_thresh)
+        ign_bases_below_q =  ign_bases_below_q,
+        bonf_factor = bonf_factor, sig_thresh = sig_thresh)
     
     
     # ################################################################
@@ -389,48 +444,47 @@ def main():
     
     # Get pileup data for EM training. Need base-counts and cons-bases
     #
-    # FIXME how does this behave if we have a perfect pileup (no errors?)
-    #
     if not opts.skip_em_stage and not opts.em_error_prob_file:
         cons_seq = []
         base_counts = []
         LOG.info("Processing pileup for EM training")
         num_lines = 0
         for line in pileup_fhandle:
-            num_lines += 1
-            pcol = pileup.PileupColumn(line)
-            pcol.rem_ambiguities()
-            pcol.rem_bases_below_qual(ign_bases_below_q)
-            pileup_line_buffer.append(line)
-            
             # note: not all columns will be present in pileup
-            
+            num_lines += 1
+            pileup_line_buffer.append(line)
+
+            pcol = pileup.PileupColumn(line)
+
             if pcol.coord in excl_pos:
                 LOG.debug("Skipping col %d because of exclusion" % (pcol.coord+1))
                 continue
             if pcol.ref_base not in 'ACGT':
-                LOG.debug("Skipping col %d because of amibigous reference base %s" % (
+                LOG.info("Skipping col %d because of amibigous reference base %s" % (
                     pcol.coord+1, pcol.ref_base))
                 continue
      
-            (col_base_counts, dummy_cons_base_est) = count_bases(pcol.read_bases)
-            if col_base_counts.has_key('N'):
-                del col_base_counts['N']
-     
-            if sum(col_base_counts.values()) < conf.EM_TRAINING_MIN_COVERAGE:
+            col_base_counts = pcol.get_all_base_counts(
+                min_qual=0, keep_strand_info=False)
+            del col_base_counts['N']
+
+            coverage = sum(col_base_counts.values())
+            if coverage < conf.EM_TRAINING_MIN_COVERAGE:
                 continue
      
             base_counts.append(col_base_counts)
             cons_seq.append(pcol.ref_base)
      
-            if len(base_counts) > conf.EM_TRAINING_SAMPLE_SIZE:
+            if len(base_counts) >= conf.EM_TRAINING_SAMPLE_SIZE:
                 break
         
         if num_lines == 0:
             LOG.fatal("Pileup was empty. Will exit now.")
             sys.exit(1)
+
         if len(base_counts) < conf.EM_TRAINING_SAMPLE_SIZE:
             LOG.warn("Insufficient data (%d) acquired from pileup for EM training." % len(base_counts))
+
         LOG.info("Using %d columns with an avg. coverage of %d for EM training " % (
             len(base_counts),
             sum([sum(c.values()) for c in base_counts])/len(base_counts)))
@@ -460,33 +514,33 @@ def main():
     num_lines = 0
     num_ambigious_ref = 0
     for line in itertools.chain(pileup_line_buffer, pileup_fhandle):
+        # note: not all columns will be present in pileup
         num_lines += 1
-        # note: pileup_column_generator will ignore empty columns, i.e
-        # it might skip some
-        pcol = pileup.PileupColumn(line)
-        #LOG.critical("Before filtering: bases = %s" % [(pcol.read_bases.count(b) ,b) for b in set(pcol.read_bases)])
-        #LOG.critical("Before filtering: quals = %s" % [(pcol.base_quals.count(q), q) for q in sorted(set(pcol.base_quals))])
-        pcol.rem_ambiguities()
-        pcol.rem_bases_below_qual(ign_bases_below_q)
-        #LOG.critical("After filtering: bases = %s" % [(pcol.read_bases.count(b), b) for b in set(pcol.read_bases)])
-        #LOG.critical("After filtering: quals = %s" % [(pcol.base_quals.count(q), q) for q in sorted(set(pcol.base_quals))])
 
-        if (pcol.coord+1) % 100000 == 0:
-            LOG.info("Calling SNPs in column %d" % (pcol.coord+1))
-            
+        pcol = pileup.PileupColumn(line)
+
         if pcol.coord in excl_pos:
             LOG.debug("Skipping col %d because of exclusion" % (pcol.coord+1))
             continue
-        
         if pcol.ref_base not in 'ACGT':
-            LOG.debug("Skipping col %d because of amibigous consensus %s" % (
-                pcol.coord+1, pcol.ref_base))
+            LOG.info("Skipping col %d because of amibigous consensus %s" % (
+                    pcol.coord+1, pcol.ref_base))
             num_ambigious_ref += 1
             continue
 
+        if (pcol.coord+1) % 100000 == 0:
+            LOG.info("Still alive...calling SNPs in column %d" % (pcol.coord+1))
+
+        base_counts = pcol.get_all_base_counts(
+            min_qual=0, keep_strand_info=False)
+        del base_counts['N']
+
+
         if not opts.skip_em_stage:
             new_snps = lofreqnq.call_snp_in_column(
-                pcol.coord, pcol.read_bases, pcol.ref_base)
+                pcol.coord, base_counts, pcol.ref_base)
+            for snpcall in new_snps:
+                LOG.info("LoFreq-NQ SNP %s." % (snpcall))
 
         # If a SNP was predicted by EM or if EM was skipped, then
         # predict SNPs with the quality based method (possibly
@@ -495,11 +549,33 @@ def main():
         #
         if not opts.skip_qual_stage:
             if opts.skip_em_stage or len(new_snps):
+                base_qual_hist = pcol.get_base_and_qual_hist(keep_strand_info=False)
+                del base_qual_hist['N']
                 new_snps = lofreqq.call_snp_in_column(
-                    pcol.coord, pcol.read_bases, pcol.base_quals, pcol.ref_base)
+                    pcol.coord, base_qual_hist, pcol.ref_base)
+                for snpcall in new_snps:
+                    LOG.info("LoFreq-Q SNP %s." % (snpcall))
 
-        if len(new_snps):
-            snp_list.extend(new_snps)
+        for snpcall in new_snps:
+
+            if opts.skip_em_stage or not opts.skip_qual_stage:
+                # Q
+                ref_qf = ign_bases_below_q
+                var_qf = max(ign_bases_below_q, noncons_filter_qual)
+            else:
+                # NQ
+                ref_qf = 0
+                var_qf = 0
+
+            add_strandbias_info(snpcall, pcol, ref_qf, var_qf)
+
+            # report extra phred scaled pvalue
+            snpcall.info['pvalue-phred'] = prob_to_phredqual(snpcall.info['pvalue'])
+
+            LOG.info("Final LoFreq SNP %s." % (snpcall))
+            snp_list.append(snpcall)
+
+
     if num_lines == 0:
         LOG.fatal("Pileup was empty. Will exit now.")
         sys.exit(1)
@@ -514,9 +590,6 @@ if __name__ == "__main__":
     
     main()
     LOG.warn("IMPROVEMENT Add support for vcf-output: quick and dirty or https://github.com/jamescasbon/PyVCF")
-    LOG.warn("IMPROVEMENT Write SNPs immediately.")
-    LOG.warn("IMPROVEMENT Return pvalues phred-scaled")
     LOG.warn("IMPROVEMENT Implement pruned DP properly")
-    LOG.warn("IMPROVEMENT Pileup parsing not opimized and slow at ultra high coverages (>100k X)")
     LOG.warn("IMPROVEMENT easy to run in parallel since calls are per column")
     LOG.info("Successful program exit")

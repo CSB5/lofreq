@@ -8,8 +8,8 @@ Helper functions for samtools' m/pileup
 import subprocess
 import logging
 import re
-import sys
-import os
+import copy
+from itertools import chain
 
 #--- third-party imports
 #
@@ -36,6 +36,7 @@ logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
 
+VALID_BASES = ['A', 'C', 'G', 'T', 'N']
         
     
 class PileupColumn():
@@ -48,11 +49,8 @@ class PileupColumn():
     namedtuple('PileupColumn', 'chrom coord refbase coverage read_bases base_quals')
     pileup_column = PileupColumn(*(line.split('\t')))
     pileup_column = PileupColumn._make((line.split('\t')))
-
-    NOTE: this class ignores indels
     """
 
-    # FIXME add quality_filter option
 
     def __init__(self, line=None):
         """
@@ -64,29 +62,26 @@ class PileupColumn():
         self.coord = None
         
         # reference base
-        # FIXME: seems to be N always even if ref file is given (-f)
         self.ref_base = None
         
         # the number of reads covering the site
         self.coverage = None
-        
-        # unprocessed read bases
-        self.read_bases_raw = None
-        
-        # the above without markup (mixed case)
-        self.read_bases = None
-        
-        # unprocessed base qualities string
-        self.base_quals_raw = None
-        
-        # the above but as list of phred scores (ints)
-        self.base_quals = None
-        
+
+        self._bases_and_quals = dict()
+        for b in VALID_BASES:
+            self._bases_and_quals[b.upper()] = dict()
+            self._bases_and_quals[b.lower()] = dict()
+
+        self.num_ins_events = 0
+        self.num_del_events = 0
+        self.num_read_starts = 0
+        self.num_read_ends = 0
+
         if line:
             self.parse_line(line)
 
-        
-    def parse_line(self, line, keep_strand_info=False, delete_raw_values=True):
+
+    def parse_line(self, line):
         """
         Split a line of pileup output and set values accordingly
 
@@ -124,6 +119,9 @@ class PileupColumn():
         selected.
         """
 
+        assert self.coord == None, (
+            "Seems like I already read some values")
+
         line_split = line.split('\t')
         assert len(line_split) == 6, (
             "Couldn't parse pileup line: '%s'" % line)
@@ -133,44 +131,37 @@ class PileupColumn():
         self.coord = int(line_split[1]) - 1
         self.ref_base = line_split[2].upper() # paranoia upper()
         self.coverage = int(line_split[3])
-        self.read_bases_raw = line_split[4]
-        # self.read_bases created below
-        self.base_quals_raw = line_split[5]
-        # self.base_quals created below
 
-        # Compute a Phred scale version of base_quals_raw
-        self.base_quals =  [ord(c)-33 for c in self.base_quals_raw]
+        bases = line_split[4]
 
-        # Create a clean version of read_bases_raw
-        self.read_bases = self.read_bases_raw
-        self.read_bases = self.rem_startend_markup(self.read_bases)
-        if keep_strand_info:
-            self.read_bases = self.read_bases.replace(".", self.ref_base.upper())
-            self.read_bases = self.read_bases.replace(",", self.ref_base.lower())
-        else:
-            self.read_bases = self.read_bases.replace(".", self.ref_base)
-            self.read_bases = self.read_bases.replace(",", self.ref_base)
-            self.read_bases = self.read_bases.upper()
+        # convert quals immediately to phred scale
+        quals = [ord(c)-33 for c in line_split[5]]
 
-        # note: deletion on reference ('*') have qualities which will
-        # be deleted as well
-        (self.read_bases, self.base_quals) = self.rem_indel_markup(
-            self.read_bases, self.base_quals)
+        # convert special reference markup to actual reference
+        bases = bases.replace(".", self.ref_base.upper())
+        bases = bases.replace(",", self.ref_base.lower())
 
-        assert len(self.read_bases) == len(self.base_quals), (
+        # NOTE: we are not using start/end info, so delete it to avoid
+        # confusion. we are not using indel info, so delete it to avoid
+        # confusion. deletion on reference ('*') have qualities which
+        # will be deleted as well.
+        bases = self.rem_startend_markup(bases)
+        (bases, quals) = self.rem_indel_markup(bases, quals)
+        assert len(bases) == len(quals), (
             "Mismatch between number of parsed bases and quality values at %s:%d\n"
             % (self.chrom, self.coord+1))
 
-        #if self.coord == 52-1:
-        #    import pdb; pdb.set_trace()
-            
-        if delete_raw_values:
-            self.read_bases_raw = None
-            self.base_quals_raw = None
-            
+        if len(bases) != self.coverage-self.num_del_events:
+            LOG.warn("Mismatch between number of bases (= %d) and samtools coverage value (= %d)."
+                     " Ins/del events: %d/%d. Cleaned base_str is '%s'. Line was '%s'" % (
+                    len(bases), self.coverage, self.num_ins_events, self.num_del_events, bases, line))
 
-    @staticmethod
-    def rem_startend_markup(read_bases_str):
+        for (i, b) in enumerate(bases):
+            q = quals[i]
+            self._bases_and_quals[b][q] = self._bases_and_quals[b].get(q, 0) + 1
+
+
+    def rem_startend_markup(self, bases_str):
         """
         Remove end and start (incl mapping) markup from read bases string
 
@@ -182,12 +173,19 @@ class PileupColumn():
         character following `^' minus 33 gives the mapping quality. A
         symbol `$' marks the end of a read segment.
         """
+        
+        org_len = len(bases_str)
+        bases_str = bases_str.replace('$', '')
+        self.num_read_ends = org_len-len(bases_str)
 
-        return re.sub('(\^.|\$)', '', read_bases_str)
+        org_len = len(bases_str)
+        bases_str = re.sub('\^.', '', bases_str)
+        self.num_read_starts = org_len-len(bases_str)
+
+        return bases_str
 
     
-    @staticmethod
-    def rem_indel_markup(bases, base_quals):
+    def rem_indel_markup(self, bases_str, quals):
         """
         Remove indel markup from read bases string
 
@@ -207,194 +205,97 @@ class PileupColumn():
         # nucleotides afterwards.
         #
         while True:
-            match = re.search('[-+][0-9]+', bases)
+            match = re.search('[-+][0-9]+', bases_str)
             if not match:
                 break
-            num = int(bases[match.start()+1:match.end()])
-            left = bases[:match.start()]
-            right = bases[match.end()+num:]
-            bases = left + right
+
+            if bases_str[match.start()] == '+':
+                self.num_ins_events += 1
+            else:
+                assert bases_str[match.start()] == '-'
+
+            num = int(bases_str[match.start()+1:match.end()])
+            left = bases_str[:match.start()]
+            right = bases_str[match.end()+num:]
+            bases_str = left + right
+
 
         # now delete the deletion on the reference marked as stars
         # (which have quality values; see also
         # http://seqanswers.com/forums/showthread.php?t=3388)
         # and return
-        base_quals = [(q) for (b, q) in zip(bases, base_quals)
+
+        self.num_del_events = bases_str.count('*')
+
+        quals = [(q) for (b, q) in zip(bases_str, quals)
                       if b != '*']
-        bases = ''.join([b for b in bases if b != '*'])
-        
-        return (bases, base_quals)
+        bases_str = ''.join([b for b in bases_str if b != '*'])
+
+        return (bases_str, quals)
 
 
-    def rem_bases_below_qual(self, ign_bases_below_q=3):
-        """Illumina 1.5+ indicates errors with Q2 (or lower). Those
-        bases should not be used for downstream analysis. Therefore we
-        use 3 as default cutoff. Also note that GATK did not use to
-        recalibrate bases Q<5.
+    def get_counts_for_base(self, base, min_qual=3, keep_strand_info=True):
+        """Count base (summarise histograms) and return as fw, rv
+        count dict. If keep_strand_info is false, then counts are
+        returned as sum of fw and rv
+        """
+
+        fw_count = 0
+        b = base.upper()
+        fw_count += sum([c for (q, c) in self._bases_and_quals[b].iteritems()
+                      if q >= min_qual])
+
+        rv_count = 0
+        b = base.lower()
+        rv_count += sum([c for (q, c) in self._bases_and_quals[b].iteritems()
+                      if q >= min_qual])
+        if keep_strand_info:
+            return (fw_count, rv_count)
+        else:
+            return sum([fw_count, rv_count])
+
+
+    def get_all_base_counts(self, min_qual=3, keep_strand_info=True):
+        """Frontend to get_count_for_base: Count bases (summarise
+        histograms) and return as dict with (uppercase) bases as keys.
+        Values will be an int (sum of fw and rv) unless
+        keep_strand_info is False (returns sum of both)
+        """
+
+        base_counts = dict()
+        for base in VALID_BASES:
+            base_counts[base] = self.get_counts_for_base(base, min_qual, keep_strand_info)
+    
+        return base_counts
+
+
+    def get_base_and_qual_hist(self, keep_strand_info=True):
+        """Return a copy of base/quality histograms. If
+        keep_strand_info is False, then only uppercase bases will be
+        used as keys and values are counts summarised for fw and rv
+        strand
         """
         
-        bases_and_quals = [(b, q)
-                           for (b, q) in zip(self.read_bases, self.base_quals)
-                           if q >= ign_bases_below_q]
-        #rem_bases = len(self.read_bases) - len(bases_and_quals)
-        #LOG.critical("rem_bases_below_qual %d: Removed %d bases from %s:%d" % (
-        #    ign_bases_below_q, rem_bases, self.chrom, self.coord+1))
-        self.read_bases = ''.join([b for (b, q) in bases_and_quals])
-        self.base_quals =  [q for (b, q) in bases_and_quals]
+        if keep_strand_info:
+            return copy.deepcopy(self._bases_and_quals)
 
-        
-    def rem_ambiguities(self, allowed_bases = 'ACGT'):
-        """Remove bases and their qualities if not in allowed_bases
-        """
-        
-        bases_and_quals = [(b, q)
-                           for(b, q) in zip(self.read_bases, self.base_quals)
-                           if b in allowed_bases]
-        #rem_bases = len(self.read_bases) - len(bases_and_quals)
-        #LOG.debug("rem_ambiguities: Removed %d bases from %s:%d" % (
-        #    rem_bases, self.chrom, self.coord+1))
-        self.read_bases = ''.join([b for (b, q) in bases_and_quals])
-        self.base_quals =  [q for (b, q) in bases_and_quals]
-        
-        
-
-def pileup_column_generator(fbam, seq, fref=None, start_pos=None, end_pos=None):
-    """
-    Generates pileup colums from BAM files. Uses mpileup and disables
-    all filtering.
-
-    FIXME: mpileup is the generator function
-    """
-
-    # 'samtools pileup' swallows some reads. Need to use mpileup
-    # instead *and* increase max sample depth (-d 1000000). BAQ
-    # computation can be influenced with -B and -E.
-    
-    mpileup_args = ['-d', ' 1000000']
-    # used to contain '-Q 0', but that only affects variant calling
-    
-    #import pdb; pdb.set_trace()
-    pileupcolumns = mpileup(fbam, seq, mpileup_args, fref, start_pos, end_pos)
-    if not pileupcolumns:
-        LOG.fatal("mpileup on '%s' failed (used args: %s)...Exiting" % (
-            fbam, mpileup_args))
-        sys.exit(1)
-    LOG.debug("Successfully piled-up '%s'." % (fbam))
-
-    return pileupcolumns
-
-        
-
-def mpileup(fbam, seq, extra_args, fref=None, start_pos=None, end_pos=None, samtools_binary="samtools"):
-    """
-    Generator! Calls 'samtools mpileup', parse output and returns the
-    pileup columns
-
-    Arguments:
-    - fbam:
-    is the bam file to parse
-    - seq:
-    The seq/chromosome to use
-    - extra_args:
-    is a string of extra arguments passed down to samtools mpileup.
-    - fref:
-    Path to index reference sequence file
-    - start_pos:
-    Start position for pileup. Directly handed down to mpileup so unit-offset
-    - end_pos:
-    End position for pileup. Directly handed down to mpileup so unit-offset
-    - samtools_binary:
-    samtools binary name/path
-    
-    Results:
-    Returns pileup columns as  list of PileupColumn instances
-    
-    NOTE:
-    Results might change or exeuction fail depending on used samtools version.
-    Tested on Version: 0.1.13 (r926:134)
-
-    This should be replaced once pysam support mpileup
-    """
-
-    bam_header = header(fbam)
-    step = 1000
-
-    assert any([seq in line for line in bam_header]), (
-        "Couldn't find seq '%s' in header of '%s'" % (
-        seq, fbam))
-    
-    if not start_pos:
-        # samtool binary uses unit-offset coordinates so start at 1    
-        start_pos = 1
-    cur_pos = start_pos        
-    if not end_pos:
-        if bam_header == False:
-            LOG.critical("samtools header parsing failed test")
-            raise ValueError
-        end_pos = len_for_sq(bam_header, seq)
-    assert '-r ' not in extra_args, (
-        "Was planning to use -r myself but you requested its use again in extra argument")
-    assert '-l ' not in extra_args, (
-        "Will use -r and am thus not sure if requested us of -l is allowed at the same time. Please test first")
-    if fref:
-        assert os.path.exists(fref), (
-            "Reference file '%s' does not exist" % fref)
-        assert '-f ' not in extra_args, (
-            "Already got a reference as argument, but you want to use it again with -f")
-
-    last_coord_seen = None
-    while cur_pos <= end_pos:
-        region_start = cur_pos
-        region_end = cur_pos+step-1
-        if region_end>end_pos:
-            region_end = end_pos
-        region_arg = "%s:%d-%d" % (seq, region_start, region_end)
-        cmd =  [samtools_binary, 'mpileup', '-r', region_arg]
-        if fref:
-            cmd.append('-f')
-            cmd.append(fref)
-        cmd.extend(extra_args)
-        cmd.append(fbam)
-        LOG.debug("calling: %s" % (' '.join(cmd)))
-        #import pdb; pdb.set_trace()
-        process = subprocess.Popen(cmd,
-                                   shell=False,
-                                   stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE)
-        (stdoutdata, stderrdata) =  process.communicate()
-     
-        retcode = process.returncode
-        if retcode != 0:
-            LOG.fatal("%s exited with error code '%d'." \
-                      " Command was '%s'. stderr was: '%s'" % (
-                          cmd[0], retcode, ' '.join(cmd), stderrdata))
-            raise OSError #StopIteration
-
-                           
-        for line in stderrdata.split("\n"):#[:-1]:# ignore empty last element
-            if not len(line):
+        # a bit more tricky...
+        base_and_qual_hists = dict()
+        for base in self._bases_and_quals:
+            # don't merge twice
+            if base.islower():
                 continue
-            if line == "[mpileup] 1 samples in 1 input files":
-                continue
-            elif line == "[fai_load] build FASTA index.":
-                continue
-            else:
-                LOG.warn("Unhandled line on stderr detected: %s" % (line))
+                
+            # like dict.update() but add instead of replace
+            fw_dict = self._bases_and_quals[base.upper()]
+            rv_dict = self._bases_and_quals[base.lower()]
+            qual_union = set(fw_dict.keys() + rv_dict.keys())
+            base_and_qual_hists[base] = dict([(q, fw_dict.get(q, 0) + rv_dict.get(q, 0))
+                                              for q in qual_union])
 
-        for line in stdoutdata.split("\n"):
-            # last element is an empty new line
-            if len(line)==0:
-                continue
+        return base_and_qual_hists
 
-            pileupcolumn = PileupColumn(line)
-
-            yield pileupcolumn
-
-        cur_pos += step
-    #LOG.critical("DEBUG reached the end")
-
-
-
+            
 def sq_from_header(header):
     """
     Parse sequence name/s from header. Will return a list. Not sure if
