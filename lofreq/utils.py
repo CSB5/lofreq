@@ -8,7 +8,7 @@
 #
 from __future__ import division
 from math import sqrt, log10
-from decimal import Decimal
+import sys
 
 #--- third-party imports
 #
@@ -63,7 +63,7 @@ def prob_to_phredqual(prob):
         return int(round(-10.0 * log10(prob)))
     except ValueError:
         # saw this happen. might be rounding.
-        return Decimal("Inf")
+        return sys.maxint
 
 
 def phredqual_to_prob(phredqual):
