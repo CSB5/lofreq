@@ -206,7 +206,6 @@ def cmdline_parser():
 def test_sensitivity():
     """Simple sensitivity test with a mockup column and uniform quality
     """
-    from lofreq import utils
 
     bonf = 1
 
@@ -267,7 +266,6 @@ def test_sensitivity():
             lofreqnq.error_probs[refbase][snpbase] = prob
             #import pdb; pdb.set_trace()
             while [ True ]:
-                bases = (cov-num_noncons)*refbase + num_noncons*snpbase
                 base_counts = dict(zip(['A', 'C', 'G', 'T'], 4*[0]))
                 base_counts[refbase] = cov-num_noncons
                 base_counts[snpbase] = num_noncons
@@ -313,7 +311,8 @@ def add_strandbias_info(snpcall, pcol, ref_qf, var_qf):
     snpcall.info['strandbias-pvalue-uncorr'] = fisher_twotail_pvalue
     if fisher_twotail_pvalue == -1:
         snpcall.info['strandbias-pvalue-uncorr-phred'] = "NA"
-    snpcall.info['strandbias-pvalue-uncorr-phred'] = prob_to_phredqual(fisher_twotail_pvalue)
+    else:
+        snpcall.info['strandbias-pvalue-uncorr-phred'] = prob_to_phredqual(fisher_twotail_pvalue)
 
 
 
@@ -464,8 +463,11 @@ def main():
                     pcol.coord+1, pcol.ref_base))
                 continue
      
+            # Even though NQ is quality agnostics, ignore the ones
+            # marked with Illumina's Read Segment Indicator Q2, since
+            # those are not supposed to be used according to Illumina
             col_base_counts = pcol.get_all_base_counts(
-                min_qual=0, keep_strand_info=False)
+                min_qual=3, keep_strand_info=False)
             del col_base_counts['N']
 
             coverage = sum(col_base_counts.values())
@@ -480,6 +482,10 @@ def main():
         
         if num_lines == 0:
             LOG.fatal("Pileup was empty. Will exit now.")
+            sys.exit(1)
+
+        if len(base_counts) == 0:
+            LOG.fatal("No data useable data acquired from pileup for EM training. Exiting" % len(base_counts))
             sys.exit(1)
 
         if len(base_counts) < conf.EM_TRAINING_SAMPLE_SIZE:
@@ -531,8 +537,11 @@ def main():
         if (pcol.coord+1) % 100000 == 0:
             LOG.info("Still alive...calling SNPs in column %d" % (pcol.coord+1))
 
+        # Even though NQ is quality agnostics, ignore the ones
+        # marked with Illumina's Read Segment Indicator Q2, since
+        # those are not supposed to be used according to Illumina
         base_counts = pcol.get_all_base_counts(
-            min_qual=0, keep_strand_info=False)
+            min_qual=3, keep_strand_info=False)
         del base_counts['N']
 
 

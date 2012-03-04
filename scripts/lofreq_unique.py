@@ -35,11 +35,10 @@ if not USE_SCIPY:
 from lofreq import conf
 
 # invocation of ipython on exceptions
-if False:
-    import sys, pdb
-    from IPython.core import ultratb
-    sys.excepthook = ultratb.FormattedTB(mode='Verbose',
-                                         color_scheme='Linux', call_pdb=1)
+#import sys, pdb
+#from IPython.core import ultratb
+#sys.excepthook = ultratb.FormattedTB(mode='Verbose',
+#                                     color_scheme='Linux', call_pdb=1)
 
 __author__ = "Andreas Wilm"
 __version__ = "0.0.1"
@@ -157,16 +156,16 @@ def main():
             sys.exit(1)
             
     if opts.uniform_freq or opts.uniform_freq == 0:
-        if opts.uniform_freq<1 or opts.uniform_freq>100:
+        if opts.uniform_freq < 1 or opts.uniform_freq > 100:
             LOG.fatal("Frequency out of valid range (1-100%)\n")
             sys.exit(1)
     if opts.freq_fac or opts.freq_fac == 0:
-        if opts.freq_fac<0.0 or opts.freq_fac>1.0:
+        if opts.freq_fac < 0.0 or opts.freq_fac > 1.0:
             LOG.fatal("Frequency factor out of valid range (0.0<x<=1.0)")
             sys.exit(1)
     if opts.freq_fac and opts.uniform_freq:
-            LOG.fatal("Can't use both, uniform frequency and frequency factor")
-            sys.exit(1)                    
+        LOG.fatal("Can't use both, uniform frequency and frequency factor")
+        sys.exit(1)                    
     snps = snp.parse_snp_file(opts.snpdiff_file)
     LOG.info("Parsed %d SNPs from %s" % (len(snps), opts.snpdiff_file))
 

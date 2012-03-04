@@ -98,9 +98,9 @@ def main():
         base_counts = pcol.get_all_base_counts(qual)
         for base in sorted(base_counts.keys()):
             print "%d\t%s\t\t%d\t%d\t%d" % (pcol.coord+1, base,
+                                            sum(base_counts[base]),
                                             base_counts[base][0],
-                                            base_counts[base][1],
-                                            sum(base_counts[base]))
+                                            base_counts[base][1])
 
     if fh != sys.stdin:
         fh.close()

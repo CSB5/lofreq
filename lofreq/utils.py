@@ -8,7 +8,7 @@
 #
 from __future__ import division
 from math import sqrt, log10
-
+from decimal import Decimal
 
 #--- third-party imports
 #
@@ -58,13 +58,20 @@ def prob_to_phredqual(prob):
     Turns an error probability into a phred value
     """
 
-    return int(round(-10.0 * log10(prob)))
+    assert prob>=0.0, ("Probability can't be smaller than 0")
+    try:
+        return int(round(-10.0 * log10(prob)))
+    except ValueError:
+        # saw this happen. might be rounding.
+        return Decimal("Inf")
 
 
 def phredqual_to_prob(phredqual):
     """
     Turns a phred quality into an error probability
     """
+
+    assert phredqual>=0, ("Phred-quality must be >= 0, but is %s" % phredqual)
     return 10**(-phredqual/10.0)
 
 

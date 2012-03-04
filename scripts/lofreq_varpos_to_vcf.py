@@ -22,7 +22,6 @@ from optparse import OptionParser
 #--- project specific imports
 #
 from lofreq import pileup
-from lofreq.utils import count_bases
 
 __author__ = "Andreas Wilm"
 __version__ = "0.0.1"
@@ -204,7 +203,7 @@ def main():
                     pcol.coord+1, pcol.ref_base))
             continue
 
-        # count bases, ignore quality
+        # count bases, ignore quality completely. GATK should be able to handle this
         base_counts = pcol.get_all_base_counts(min_qual=0)
         # delete N's. counts otherwise affect coverage and
         # frequency.

@@ -57,7 +57,13 @@ setup(name = "lofreq_snpcaller",
       author_email='wilma@gis.a-star.edu.sg',
       #long_description = """FIXME.""" 
       url='http://www.gis.a-star.edu.sg/', # FIXME
-      scripts = ["lofreq_snpcaller.py"],
+      scripts = ['scripts/lofreq_snpcaller.py',
+                 'scripts/lofreq_bonf.py',
+                 'scripts/lofreq_pileup_summary.py',
+                 'scripts/lofreq_strandbias.py',
+                 'scripts/lofreq_unique.py',
+                 'scripts/lofreq_varpos_to_vcf.py'
+                 ],
       ext_modules = [extension],
       # http://pypi.python.org/pypi?%3Aaction=list_classifiers
       classifiers=['Development Status :: 4 - Beta',
