@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """
 Helper functions for samtools' m/pileup
+
+Should be replaced with PySam in the future once mpileup and all its options are supported properly
 """
 
 #--- standard library imports
@@ -157,6 +159,8 @@ class PileupColumn():
                     len(bases), self.coverage, self.num_ins_events, self.num_del_events, bases, line))
 
         for (i, b) in enumerate(bases):
+            if b.upper() not in VALID_BASES: # paranoia. once encountered gaps in pileup
+                continue
             q = quals[i]
             self._bases_and_quals[b][q] = self._bases_and_quals[b].get(q, 0) + 1
 

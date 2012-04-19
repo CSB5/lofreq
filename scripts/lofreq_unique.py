@@ -2,6 +2,24 @@
 """FIXME: add doc string
 """
 
+# Copyright (C) 2011, 2012 Genome Institute of Singapore
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301 USA.
+
+
 
 #--- standard library imports
 #
@@ -190,6 +208,9 @@ def main():
     for line in process.stdout:
         pcol = pileup.PileupColumn(line)
 
+        # FIXME make sure we remove used up candidates from the list
+        # can use enum in list comphrehension to delete element later
+        # Also need to report left over SNPs at the end as no coverage SNPs
         snp_candidates = [s for s in snps if s.pos == pcol.coord]
         assert len(snp_candidates) != 0, (
             "Oups..pileup for column %d has no matching SNP" % (pcol.coord+1))
@@ -230,6 +251,7 @@ def main():
             else:
                 print "%s: not rejected" % (this_snp.identifier())
                 
+        # FIXME report left over SNPs at the end as no coverage SNPs
             
             
         

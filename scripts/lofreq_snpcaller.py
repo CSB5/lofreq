@@ -8,6 +8,25 @@ re-evaulated by a quality aware model.
 """
 
 
+# Copyright (C) 2011, 2012 Genome Institute of Singapore
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301 USA.
+
+
+
 
 #--- standard library imports
 #
@@ -203,30 +222,31 @@ def cmdline_parser():
     return parser
 
 
-def test_sensitivity():
+def test_sensitivity(mode):
     """Simple sensitivity test with a mockup column and uniform quality
     """
 
     bonf = 1
+    
+    assert mode in ['Q', 'NQ'], ("Mode must be one of Q or NQ")
 
-    lofreqnq = em.EmBasedSNPCaller(
-        conf.DEFAULT_EM_NUM_PARAM, bonf, conf.DEFAULT_SIG_THRESH)
-    lofreqnq.set_default_error_probs()
+    if mode == 'NQ':
+        lofreqnq = em.EmBasedSNPCaller(
+            conf.DEFAULT_EM_NUM_PARAM, bonf, conf.DEFAULT_SIG_THRESH)
+        lofreqnq.set_default_error_probs()
+    else:
+        lofreqq = qual.QualBasedSNPCaller(
+            conf.NONCONS_DEFAULT_QUAL, conf.NONCONS_FILTER_QUAL, conf.DEFAULT_IGN_BASES_BELOW_Q,
+            bonf, conf.DEFAULT_SIG_THRESH)
 
-    lofreqq = qual.QualBasedSNPCaller(
-        conf.NONCONS_DEFAULT_QUAL, conf.NONCONS_FILTER_QUAL, conf.DEFAULT_IGN_BASES_BELOW_Q,
-        bonf, conf.DEFAULT_SIG_THRESH)
-
-    print "Testing default LoFreqQ/LoFreqNQ detection limits on fake pileup" \
+    print "Testing default LoFreq%s detection limits on fake pileup" \
         " with varying coverage and uniform quality / error probability" \
-        " (sign.threshold = %f)" % conf.DEFAULT_SIG_THRESH
+        " (sign.threshold = %f)" % (mode, conf.DEFAULT_SIG_THRESH)
 
     refbase = 'A'
     snpbase = 'G'
-
     coverage_range = [10, 50, 100, 500, 1000, 5000, 10000]
     #coverage_range = [10]
-
     quality_range = [20, 25, 30, 35, 40]
     #quality_range = [40]
 
@@ -234,49 +254,48 @@ def test_sensitivity():
         print "\tQ=%d" % q,
     print
 
-
     for cov in coverage_range:
         print "%d" % cov,
         for q in quality_range:
 
-            # Q
-            #
             num_noncons = 1
-            while [ True ]:
-                base_qual_hist = dict(zip(
-                        ['A', 'C', 'G', 'T'],
-                        [dict(), dict(), dict(), dict()]
-                        ))
-                base_qual_hist[refbase][q] = cov-num_noncons
-                base_qual_hist[snpbase][q] = num_noncons
 
-                snps = lofreqq.call_snp_in_column(666, base_qual_hist, refbase)
-                if len(snps):
-                    print "\t%d" % (num_noncons),
-                    break
-                num_noncons += 1
-                if num_noncons == cov:
-                    break
+            if mode == 'Q':
+                while [ True ]:
+                    base_qual_hist = dict(zip(
+                            ['A', 'C', 'G', 'T'],
+                            [dict(), dict(), dict(), dict()]
+                            ))
+                    base_qual_hist[refbase][q] = cov-num_noncons
+                    base_qual_hist[snpbase][q] = num_noncons
     
-            # NQ
-            #
-            num_noncons = 1
-            # turn quality into uniform error probability
-            prob = phredqual_to_prob(q)
-            lofreqnq.error_probs[refbase][snpbase] = prob
-            #import pdb; pdb.set_trace()
-            while [ True ]:
-                base_counts = dict(zip(['A', 'C', 'G', 'T'], 4*[0]))
-                base_counts[refbase] = cov-num_noncons
-                base_counts[snpbase] = num_noncons
-                snps = lofreqnq.call_snp_in_column(666, base_counts, refbase)
-                if len(snps):
-                    print "/%d" % (num_noncons),
-                    break
-                num_noncons += 1
-                if num_noncons == cov:
-                    break
+                    snps = lofreqq.call_snp_in_column(666, base_qual_hist, refbase)
 
+                    if len(snps):
+                        print "\t%d" % (num_noncons),
+                        break
+                    num_noncons += 1
+                    if num_noncons == cov:
+                        break
+
+            else:
+                # turn quality into uniform error probability
+                prob = phredqual_to_prob(q)
+                lofreqnq.error_probs[refbase][snpbase] = prob
+
+                while [ True ]:
+                    base_counts = dict(zip(['A', 'C', 'G', 'T'], 4*[0]))
+                    base_counts[refbase] = cov-num_noncons
+                    base_counts[snpbase] = num_noncons
+                    snps = lofreqnq.call_snp_in_column(666, base_counts, refbase)
+
+                    if len(snps):
+                        print "\t%d" % (num_noncons),
+                        break
+                    num_noncons += 1
+                    if num_noncons == cov:
+                        break
+    
         print
 
 
@@ -332,7 +351,8 @@ def main():
         sys.exit(1)
 
     if opts.test_sensitivity:
-        test_sensitivity()
+        test_sensitivity('NQ')
+        test_sensitivity('Q')
         sys.exit(0)
 
     if opts.logfile:
