@@ -619,6 +619,5 @@ if __name__ == "__main__":
     
     main()
     LOG.warn("IMPROVEMENT Add support for vcf-output: quick and dirty or https://github.com/jamescasbon/PyVCF")
-    LOG.warn("IMPROVEMENT Implement pruned DP properly")
     LOG.warn("IMPROVEMENT easy to run in parallel since calls are per column")
     LOG.info("Successful program exit")

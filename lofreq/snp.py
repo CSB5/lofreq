@@ -223,8 +223,8 @@ def parse_snp_file(filename, extra_fieldname='pvalue', has_header=False):
         if len(line)==0 or line.startswith("#") or line.startswith("Pos"):
             continue
         
-        (pos, snp_str, freq, info_str) = line.split()
         try:
+            (pos, snp_str, freq, info_str) = line.split()
             pos = int(pos)-1 # internally zero offset
         except ValueError:
             sys.stderr.write(

@@ -6,7 +6,7 @@
 #endif
 
 #define TIMING 0
-#define OPTIMIZE 1
+#define PRUNED_DP 1
 #define DEFAULT_SIGLEVEL 0.05
 
 #include <stdlib.h>
@@ -27,7 +27,7 @@
 #define PHREDQUAL_VALID_RANGE(pq) ((pq)>1 && (pq)<100)
 
 /* Four nucleotides, with one consensus, makes three
-       non-consensus */
+   non-consensus bases */
 #define NUM_NONCONS_BASES 3
 
 #if 0
@@ -37,7 +37,6 @@
 #if 0
 #define DEBUG_PY2C
 #endif
-
 
 
 
@@ -230,7 +229,7 @@ probvec_tailsum(double *probvec, int tail_startindex, int probvec_len)
  *
  */
 double *
-#if OPTIMIZE
+#if PRUNED_DP
 calc_prob_dist(const int *quals, int total_num_bases, int max_noncons_count, 
                int bonf_factor, double sig_level)
 #else
@@ -262,45 +261,62 @@ calc_prob_dist(const int *quals, int total_num_bases)
 
     /* init */
     probvec_prev[0] = log(1.0); /* = 0.0 */
+
     for (n=1; n<total_num_bases+1; n++) {
         int k;
         double pn = PHREDQUAL_TO_PROB(quals[n-1]);
         double log_pn = log(pn);
         double log_1_pn = log(1.0 - pn);
+#if PRUNED_DP
+        double tailsum = 0.0;
+#endif
         /* test for valid phred quality boundaries */
         assert(PHREDQUAL_VALID_RANGE(quals[n-1]));
 
+        
+#if PRUNED_DP
+        k = n;
+        probvec[k] = probvec_prev[k-1] + log_pn;
+        tailsum =  probvec[k];
+        for (k=n-1; k>=1; k--) {
+            probvec[k] = log_sum(probvec_prev[k] + log_1_pn,
+                                 probvec_prev[k-1] + log_pn);
+            /* early exit? */
+            if (k==max_noncons_count && n%100==0) {
+                /* checking each time makes this function actually
+                 * slower, so check only every 100 rows.
+                 */
+                double pvalue = exp(probvec_tailsum(probvec, max_noncons_count, n));
+                if (pvalue * (double)bonf_factor >= sig_level) {
+                    probvec=NULL;
+                    /*fprintf(stderr,
+                            "DEBUG(%s:%s:%d): early exit at n=%d with max_noncons_count=%d, bonf_factor=%d pvalue=%g sig_level=%f\n", 
+                            __FILE__, __FUNCTION__, __LINE__,                
+                            n, max_noncons_count, 
+                            bonf_factor, pvalue, sig_level);*/
+                    break;
+                }
+            }
+        }
+        if (NULL==probvec) {
+            break;
+        }
+
         k = 0;
         probvec[k] = probvec_prev[k] + log_1_pn;
-        
+
+#else
+        k = 0;
+        probvec[k] = probvec_prev[k] + log_1_pn;
+
         for (k=1; k<n; k++) {
             probvec[k] = log_sum(probvec_prev[k] + log_1_pn,
                                  probvec_prev[k-1] + log_pn);
         }
-        
         k = n;
         probvec[k] = probvec_prev[k-1] + log_pn;
 
-#if OPTIMIZE
-        /* exit early if even the maximum number of noncons_counts are not
-         * significant. a more elegant, faster way would be to
-         * iterate from the end and keep the sum. but the modulo trick
-         * here works as well and required less testing */
-        if (n>max_noncons_count && n%100==0) {
-            double pvalue = exp(probvec_tailsum(probvec, max_noncons_count, n));
-            if (pvalue * (double)bonf_factor >= sig_level) {
-#ifdef DEBUG
-                fprintf(stderr,
-                        "DEBUG(%s:%s:%d): early exit at n=%d with max_noncons_count=%d, bonf_factor=%d pvalue=%g sig_level=%f\n", 
-                         __FILE__, __FUNCTION__, __LINE__,
-                        n, max_noncons_count, 
-                        bonf_factor, pvalue, sig_level);
-#endif
-                probvec=NULL;
-                break;
-            }
-        }
-#endif
+#endif        
 
         memcpy(probvec_prev, probvec, (total_num_bases+1) * sizeof(double));
     }
@@ -372,7 +388,7 @@ snpcaller_qual(double *snp_pvalues,
         }
     }
 
-#if OPTIMIZE
+#if PRUNED_DP
     probvec = calc_prob_dist(phred_quals, num_phred_quals, max_noncons_count,
                              bonf_factor, sig_level);
 #else
@@ -743,7 +759,7 @@ py_calc_prob_dist(PyObject *self, PyObject *args)
 
     /* compute probabilities and build result 
      */
-#if OPTIMIZE
+#if PRUNED_DP
     fprintf(stderr, "WARNING: %s not changed to new API yet\n", __FUNCTION__);
     exit(1);
 #else
