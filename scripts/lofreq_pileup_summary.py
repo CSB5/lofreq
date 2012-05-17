@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-"""
-Create summary of Base calls per pileup colum given by stdin filtered
+"""Create summary of Base calls per pileup colum given by stdin filtered
 at different quality levels
 """
 
@@ -15,21 +14,26 @@ at different quality levels
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 # General Public License for more details.
+
+#--- standard library imports
 #
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-# 02110-1301 USA.
-
-
 import sys
 import logging
 # optparse deprecated from Python 2.7 on
 from optparse import OptionParser
 
+#--- third-party imports
+#
+#/
 
+#--- project specific imports
+#
 from lofreq import pileup
 
+__author__ = "Andreas Wilm"
+__email__ = "wilma@gis.a-star.edu.sg"
+__copyright__ = "2011, 2012 Genome Institute of Singapore"
+__license__ = "GPL2"
 
 
 #global logger

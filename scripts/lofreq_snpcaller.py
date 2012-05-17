@@ -1,10 +1,19 @@
 #!/usr/bin/env python
 """Detection of very rare / low frequency variants.
 
-In a first stage an expectation-maximization will be used to get error
-probabilities for each possible base to base conversion. These are
-then be used to predict a first set of SNPs. This set will then be
-re-evaulated by a quality aware model.
+In a first stage (LoFreq-NQ) an expectation-maximization will be used
+to get error probabilities for each possible base to base conversion.
+These are then be used to predict a first set of SNPs. This set will
+then be re-evaulated by a quality aware model (LoFreq-Q). Both models
+can be used independently.
+
+Variant positions with pvalue*sig-level < bonferroni are not reported.
+Reported p-values are not Bonferroni corrected.
+
+Input is a samtools pileup (mpileup). It's best to increase samtools
+default coverage cap (-d). It's also recommended to quality
+recalibrated your BAM file.
+
 """
 
 
@@ -19,11 +28,6 @@ re-evaulated by a quality aware model.
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 # General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-# 02110-1301 USA.
 
 
 
@@ -47,27 +51,24 @@ if USE_SCIPY:
 
 #--- project specific imports
 #
+from lofreq import conf
+from lofreq.utils import phredqual_to_prob, prob_to_phredqual
 from lofreq import pileup
-from lofreq import snp
 from lofreq import em
 from lofreq import qual
-from lofreq.utils import phredqual_to_prob, prob_to_phredqual
-from lofreq import conf
+from lofreq import snp
+from lofreq import simple_vcf
 if not USE_SCIPY:
     from lofreq_ext import kt_fisher_exact
 
 
 __author__ = "Andreas Wilm"
-__version__ = "0.1.2012-02-25"
 __email__ = "wilma@gis.a-star.edu.sg"
-__copyright__ = ""
-__license__ = ""
-__credits__ = [""]
-__status__ = ""
+__copyright__ = "2011, 2012 Genome Institute of Singapore"
+__license__ = "GPL2"
 
 
-#global logger
-# http://docs.python.org/library/logging.html
+# global logger
 LOG = logging.getLogger("")
 logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
@@ -101,7 +102,8 @@ def read_exclude_pos_file(fexclude):
 
 
 def write_snps(snp_list, fname, append=False):
-    """Writes SNPs to file. Frontened to snp.write_snp_file
+    """Writes SNVs to file (SNP format). Frontened to
+    snp.write_snp_file
     """
 
     if append:
@@ -111,7 +113,7 @@ def write_snps(snp_list, fname, append=False):
         mode = 'w'
         write_header = True
 
-    LOG.info("Writing %d SNPs to %s" % (len(snp_list), fname))
+    LOG.info("Writing %d SNVs to %s" % (len(snp_list), fname))
     fhandle = open(fname, mode)
     snp.write_snp_file(fhandle, snp_list, write_header)
     fhandle.close()
@@ -152,11 +154,15 @@ def cmdline_parser():
                       " , with zero-based, half-open coordinates")
     parser.add_option("-o", "--out",
                       dest="fsnp", # type="string|int|float"
-                      help="SNP output file")
+                      help="Variant output file")
+    choices = ['snp', 'vcf']
+    parser.add_option("", "--format",
+                      dest="outfmt", choices=choices, default='vcf',
+                      help="Output file format. One of: %s" % ', '.join(choices))
     parser.add_option("", "--append",
                       dest="append", # type="string|int|float"
                       action="store_true",
-                      help="Append to SNP file")
+                      help="Append to variant file (not for VCF format)")
     
     parser.add_option("", "--em-only",
                       action="store_true", dest="skip_qual_stage",
@@ -168,9 +174,10 @@ def cmdline_parser():
                       " i.e. only use quality based predictions")
     
     parser.add_option("-b", "--bonf",
-                      dest="bonf", type="int",
-                      help="Bonferroni correction factor"
-                      " (best to set to (seqlen-minus-num-excl-pos)*3")
+                      dest="bonf", type="int", default=1,
+                      help="Optional: Bonferroni correction factor"
+                      " (e.g. seqlen-minus-num-excl-pos)*3 to be stringent)"
+                      " Higher values speed up LoFreq-Q in high coverage data.")
     parser.add_option("-s", "--sig-level",
                       dest="sig_thresh", type="float",
                       default=conf.DEFAULT_SIG_THRESH,
@@ -217,7 +224,7 @@ def cmdline_parser():
                       dest="test_sensitivity", action="store_true") 
 
     # no need for coverage filter option. snps on low coverage regions
-    # are easily called and easily filtered downstrea.
+    # are easily called and easily filtered downstream.
 
     return parser
 
@@ -236,7 +243,8 @@ def test_sensitivity(mode):
         lofreqnq.set_default_error_probs()
     else:
         lofreqq = qual.QualBasedSNPCaller(
-            conf.NONCONS_DEFAULT_QUAL, conf.NONCONS_FILTER_QUAL, conf.DEFAULT_IGN_BASES_BELOW_Q,
+            conf.NONCONS_DEFAULT_QUAL, conf.NONCONS_FILTER_QUAL, 
+            conf.DEFAULT_IGN_BASES_BELOW_Q,
             bonf, conf.DEFAULT_SIG_THRESH)
 
     print "Testing default LoFreq%s detection limits on fake pileup" \
@@ -298,16 +306,11 @@ def test_sensitivity(mode):
     
         print
 
+    
 
-
-def add_strandbias_info(snpcall, pcol, ref_qf, var_qf):
+def add_strandbias_info(snpcall, ref_counts, var_counts):
     """strand bias test
     """
-
-    ref_counts = pcol.get_counts_for_base(
-        snpcall.wildtype, ref_qf, keep_strand_info=True)
-    var_counts = pcol.get_counts_for_base(
-        snpcall.variant, var_qf, keep_strand_info=True)
 
     try:
         if USE_SCIPY:
@@ -375,7 +378,7 @@ def main():
         qual.LOG.setLevel(logging.DEBUG)
 
     if not opts.fsnp:
-        parser.error("SNP output file argument missing.")
+        parser.error("Variant output file argument missing.")
         sys.exit(1)
     if os.path.exists(opts.fsnp) and not opts.append:
         LOG.fatal(
@@ -399,7 +402,8 @@ def main():
         em_num_param = int(opts.em_num_param)
     if opts.em_error_prob_file:
         if not os.path.exists(opts.em_error_prob_file):
-            LOG.fatal("file '%s' does not exist.\n" % (opts.em_error_prob_file))
+            LOG.fatal("file '%s' does not exist.\n" % (
+                opts.em_error_prob_file))
             sys.exit(1)
 
     if opts.fpileup:
@@ -424,12 +428,9 @@ def main():
             len(excl_pos), opts.fexclude))
         LOG.debug("DEBUG: excl_pos = %s" % excl_pos)
 
-    # pvalue threshold and correction settings (needs exclude
-    # positions)
+    # pvalue threshold and correction settings
     #
-    if not opts.bonf:
-        LOG.fatal("Missing argument: Bonferroni factor")
-        sys.exit(1)
+    assert opts.bonf > 0
     bonf_factor = opts.bonf
 
     sig_thresh = opts.sig_thresh
@@ -450,8 +451,9 @@ def main():
     
     # ################################################################
     #
-    # Stage 1: run EM training to get error probabilities for each
-    # base turning into another bases (12 parameter model).
+    # Stage 1 (LoFreq-NQ training): run EM training to get error
+    # probabilities for each base turning into another bases (12
+    # parameter model).
     #
     # ################################################################
     
@@ -505,11 +507,15 @@ def main():
             sys.exit(1)
 
         if len(base_counts) == 0:
-            LOG.fatal("No data useable data acquired from pileup for EM training. Exiting" % len(base_counts))
+            LOG.fatal(
+                "No data useable data acquired from pileup for EM training. Exiting" % (
+                    len(base_counts)))
             sys.exit(1)
 
         if len(base_counts) < conf.EM_TRAINING_SAMPLE_SIZE:
-            LOG.warn("Insufficient data (%d) acquired from pileup for EM training." % len(base_counts))
+            LOG.warn(
+                "Insufficient data (%d) acquired from pileup for EM training." % (
+                    len(base_counts)))
 
         LOG.info("Using %d columns with an avg. coverage of %d for EM training " % (
             len(base_counts),
@@ -523,7 +529,9 @@ def main():
 
 
     elif opts.em_error_prob_file:
-        LOG.info("Skipping EM training and using probs from %s instead." % (opts.em_error_prob_file))
+        LOG.info(
+            "Skipping EM training and using probs from %s instead." % (
+                opts.em_error_prob_file))
         lofreqnq.load_error_probs(opts.em_error_prob_file)
 
 
@@ -531,15 +539,19 @@ def main():
     # ################################################################
     #
     # Stage 2 & 3: Call SNPs based on EM training probabilities. Use
-    # the quality based model on top of this.
+    # the quality based model (LoFreq-Q) on top of this.
     #
     # ################################################################
 
     snp_list = []
-    LOG.info("Processing pileup for SNP calls")
+    vcf_record_list = []
+    LOG.info("Processing pileup for variant calls")
     num_lines = 0
     num_ambigious_ref = 0
     for line in itertools.chain(pileup_line_buffer, pileup_fhandle):
+
+        # add parallel calls to loop
+        
         # note: not all columns will be present in pileup
         num_lines += 1
 
@@ -554,8 +566,8 @@ def main():
             num_ambigious_ref += 1
             continue
 
-        if (pcol.coord+1) % 100000 == 0:
-            LOG.info("Still alive...calling SNPs in column %d" % (pcol.coord+1))
+        #if (pcol.coord+1) % 100000 == 0:
+        #    LOG.info("Still alive...calling SNPs in column %d" % (pcol.coord+1))
 
         # Even though NQ is quality agnostics, ignore the ones
         # marked with Illumina's Read Segment Indicator Q2, since
@@ -569,7 +581,7 @@ def main():
             new_snps = lofreqnq.call_snp_in_column(
                 pcol.coord, base_counts, pcol.ref_base)
             for snpcall in new_snps:
-                LOG.info("LoFreq-NQ SNP %s." % (snpcall))
+                LOG.info("LoFreq-NQ SNV on chrom %s: %s." % (pcol.chrom, snpcall))
 
         # If a SNP was predicted by EM or if EM was skipped, then
         # predict SNPs with the quality based method (possibly
@@ -578,12 +590,14 @@ def main():
         #
         if not opts.skip_qual_stage:
             if opts.skip_em_stage or len(new_snps):
-                base_qual_hist = pcol.get_base_and_qual_hist(keep_strand_info=False)
+                base_qual_hist = pcol.get_base_and_qual_hist(
+                    keep_strand_info=False)
                 del base_qual_hist['N']
                 new_snps = lofreqq.call_snp_in_column(
                     pcol.coord, base_qual_hist, pcol.ref_base)
                 for snpcall in new_snps:
-                    LOG.info("LoFreq-Q SNP %s." % (snpcall))
+                    LOG.info("LoFreq-Q SNV on chrom %s: %s." % (
+                        pcol.chrom, snpcall))
 
         for snpcall in new_snps:
 
@@ -596,28 +610,62 @@ def main():
                 ref_qf = 0
                 var_qf = 0
 
-            add_strandbias_info(snpcall, pcol, ref_qf, var_qf)
+            ref_counts = pcol.get_counts_for_base(
+                snpcall.wildtype, ref_qf, keep_strand_info=True)
+            var_counts = pcol.get_counts_for_base(
+                snpcall.variant, var_qf, keep_strand_info=True)
+
+            add_strandbias_info(snpcall, ref_counts, var_counts)
 
             # report extra phred scaled pvalue
-            snpcall.info['pvalue-phred'] = prob_to_phredqual(snpcall.info['pvalue'])
+            snpcall.info['pvalue-phred'] = prob_to_phredqual(
+                snpcall.info['pvalue'])
 
-            LOG.info("Final LoFreq SNP %s." % (snpcall))
+            LOG.info("Final LoFreq SNV on chrom %s: %s." % (
+                pcol.chrom, snpcall))
             snp_list.append(snpcall)
 
+            
+            # to vcf: needs pcol, snpcall, ref_counts and var_counts
+            # should make this a function. than again, the snp module
+            # should be replaced by vcf anyway
+            #
+            vcf_info_dict = {
+                'AF':float("%.*f" % (len(str(pcol.coverage)), snpcall.freq)),
+                'DP':pcol.coverage, 
+                'DP4':'%d,%d,%d,%d' % (ref_counts[0], ref_counts[1],
+                                       var_counts[0], var_counts[1]),
+                'SB':snpcall.info['strandbias-pvalue-uncorr-phred']
+                }
+            vcf_record = simple_vcf.create_record(
+                pcol.chrom,
+                pcol.coord,
+                None,
+                snpcall.wildtype,
+                snpcall.variant,
+                snpcall.info['pvalue-phred'],
+                None,
+                vcf_info_dict
+                )
+            vcf_record_list.append(vcf_record)
 
+            
     if num_lines == 0:
         LOG.fatal("Pileup was empty. Will exit now.")
         sys.exit(1)
     if num_ambigious_ref > 0:
-        LOG.warn("%d positions skipped, because of amibigious reference in pileup." % num_ambigious_ref)
-        
-    write_snps(snp_list, opts.fsnp, opts.append)
-    
+        LOG.warn(
+            "%d positions skipped, because of amibigious reference in pileup." % (
+                num_ambigious_ref))
+    if opts.outfmt == 'snp':
+        write_snps(snp_list, opts.fsnp, opts.append)
+    else:
+        fhout = open(opts.fsnp, 'w')
+        simple_vcf.write(vcf_record_list, fhout)
+        fhout.close()
 
 
 if __name__ == "__main__":
-    
     main()
-    LOG.warn("IMPROVEMENT Add support for vcf-output: quick and dirty or https://github.com/jamescasbon/PyVCF")
     LOG.warn("IMPROVEMENT easy to run in parallel since calls are per column")
     LOG.info("Successful program exit")

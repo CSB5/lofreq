@@ -1,7 +1,20 @@
 #!/usr/bin/env python
 """Quality aware SNP caller.
-
 """
+
+
+# Copyright (C) 2011, 2012 Genome Institute of Singapore
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+
 
 
 #--- standard library imports
@@ -20,13 +33,11 @@ from lofreq_ext import snpcaller_qual
 from lofreq import snp
 from lofreq import conf
 
+
 __author__ = "Andreas Wilm"
-__version__ = "0.1"
 __email__ = "wilma@gis.a-star.edu.sg"
-__copyright__ = ""
-__license__ = ""
-__credits__ = [""]
-__status__ = ""
+__copyright__ = "2011, 2012 Genome Institute of Singapore"
+__license__ = "GPL2"
 
 
 #global logger
@@ -144,7 +155,7 @@ class QualBasedSNPCaller(object):
         # numerical stability. in practice I don't see a difference
         pvalues = snpcaller_qual(sorted(base_quals), noncons_counts,
                                  self.bonf_factor, self.sig_thresh)
-        # reported pvalues are already bonferroni corrected
+        # pvalues only reported if pvalue * bonf < sig
 
         # setup info dictionary shared between different alleles for
         # this position
@@ -162,7 +173,7 @@ class QualBasedSNPCaller(object):
         # check pvalues for all possible mutations and report if significant
         #
         for (base, count, pvalue) in zip(noncons_bases, noncons_counts, pvalues):
-            if pvalue < self.sig_thresh:
+            if pvalue * self.bonf_factor < self.sig_thresh:
                 info_dict['pvalue'] = pvalue
                 snpcall = snp.ExtSNP(col_coord, ref_base, base,
                                      count/float(coverage), info_dict)

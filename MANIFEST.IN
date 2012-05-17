@@ -1,3 +1,7 @@
 include lofreq_ext/cdflib90/cdflib.h
 include lofreq_ext/cdflib90.README
+include lofreq_ext/fet.c.AUTHORS
+include lofreq_ext/fet.c.COPYING
+include lofreq_ext/fet.h
+include COPYING
 prune tmp

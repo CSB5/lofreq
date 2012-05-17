@@ -5,6 +5,23 @@ Helper functions for samtools' m/pileup
 Should be replaced with PySam in the future once mpileup and all its options are supported properly
 """
 
+
+
+# Copyright (C) 2011, 2012 Genome Institute of Singapore
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+
+
+
+
 #--- standard library imports
 #
 import subprocess
@@ -23,12 +40,9 @@ from itertools import chain
 
 
 __author__ = "Andreas Wilm"
-__version__ = "0.1"
 __email__ = "wilma@gis.a-star.edu.sg"
-__copyright__ = ""
-__license__ = ""
-__credits__ = [""]
-__status__ = ""
+__copyright__ = "2011, 2012 Genome Institute of Singapore"
+__license__ = "GPL2"
 
 
 #global logger

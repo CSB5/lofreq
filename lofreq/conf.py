@@ -1,10 +1,7 @@
 __author__ = "Andreas Wilm"
-__version__ = "0.2"
 __email__ = "wilma@gis.a-star.edu.sg"
-__copyright__ = ""
-__license__ = ""
-__credits__ = [""]
-__status__ = ""
+__copyright__ = "2011, 2012 Genome Institute of Singapore"
+__license__ = "GPL2"
 
 
 # significance threshold

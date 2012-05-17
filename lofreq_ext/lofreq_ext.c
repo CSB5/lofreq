@@ -1,5 +1,22 @@
 /* -*- mode: c; tab-width: 4; c-basic-offset: 4;  indent-tabs-mode: nil -*- */
 
+/*********************************************************************
+ *
+ * Copyright (C) 2011, 2012 Genome Institute of Singapore
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the GNU
+ * General Public License for more details.
+ *
+ *********************************************************************/
+
+
 #ifndef MAIN
 /* must come first */
 #include <Python.h>
@@ -15,6 +32,8 @@
 #include <string.h>
 #include <assert.h>
 #include <ctype.h>
+#include <float.h>
+
 #include "cdflib.h"
 #include "fet.h"
 
@@ -351,10 +370,9 @@ calc_prob_dist(const int *quals, int total_num_bases)
  *
  * Call per pileup column
  *
- *
  * P-Values computed for each of the NUM_NONCONS_BASES noncons_counts
- * will be written to snp_pvalues in the same order.
- * P-Values are corrected by Bonferroni factor
+ * will be written to snp_pvalues in the same order. If pvalue was not
+ * computed (always insignificant) its value will be set to DBL_MAX
  * 
  */
 int
@@ -379,7 +397,7 @@ snpcaller_qual(double *snp_pvalues,
 
     /* initialise empty results so that we can return anytime */
     for (i=0; i<NUM_NONCONS_BASES; i++) {
-        snp_pvalues[i] = 1.0 * (double) bonf_factor;
+        snp_pvalues[i] = DBL_MAX;
     }
 
     for (i=0; i<NUM_NONCONS_BASES; i++) {
@@ -416,7 +434,7 @@ snpcaller_qual(double *snp_pvalues,
             /* fast enough: no need to optimize */
             tailsum = probvec_tailsum(probvec, noncons_counts[i], num_phred_quals);
             pvalue = exp(tailsum);
-            snp_pvalues[i] = pvalue * (double)bonf_factor;
+            snp_pvalues[i] = pvalue;
 #ifdef DEBUG
             fprintf(stderr, "DEBUG(%s:%s():%d): tailsum=%g pvalue=%g noncons_counts[i]=%d snp_pvalues[i]=%g bonf_factor=%d\n", 
                     __FILE__, __FUNCTION__, __LINE__, 

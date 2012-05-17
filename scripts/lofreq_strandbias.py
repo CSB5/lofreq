@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Exakt fisher test on strand bias on already called SNP positions.
+"""Exact fisher test on strand bias on already called SNP positions.
 P-Values are not Bonferroni corrected
 """
 
@@ -14,11 +14,7 @@ P-Values are not Bonferroni corrected
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 # General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-# 02110-1301 USA.
+
 
 
 
@@ -49,13 +45,9 @@ if not USE_SCIPY:
 
 
 __author__ = "Andreas Wilm"
-__version__ = "0.0.1"
 __email__ = "wilma@gis.a-star.edu.sg"
-__copyright__ = ""
-__license__ = ""
-__credits__ = [""]
-__status__ = ""
-
+__copyright__ = "2011, 2012 Genome Institute of Singapore"
+__license__ = "GPL2"
 
 
 BASES = ['A', 'C', 'G', 'T', 'N']

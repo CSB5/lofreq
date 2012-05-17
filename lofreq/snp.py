@@ -1,17 +1,25 @@
 #!/usr/bin/env python
-"""
-NOTE: see also older versions of this file
+"""Outdated, chromosome agnostic vcf alternative
 """
 
 
+
+# Copyright (C) 2011, 2012 Genome Institute of Singapore
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
 
 __author__ = "Andreas Wilm"
-__version__ = "0.1"
-__email__ = "andreas.wilm@ucd.ie"
-__copyright__ = ""
-__license__ = ""
-__credits__ = [""]
-__status__ = ""
+__email__ = "wilma@gis.a-star.edu.sg"
+__copyright__ = "2011, 2012 Genome Institute of Singapore"
+__license__ = "GPL2"
 
 
 # --- standard library imports
@@ -178,7 +186,7 @@ class ExtSNP(SNP):
                 
 class DengueSNP(ExtSNP):
     """
-    For backward compatibility when ExtSNP used to be called ExtSNP
+    For backward compatibility when ExtSNP used to be called DengueSNP
     """
     
     def __init__(self, pos, wildtype, variant, freq,

@@ -23,7 +23,16 @@ else:
     pass
 
 
+import sys
 
+if sys.version_info < (2 , 6):
+    sys.stderr.write("FATAL: sorry, Python versions below 2.6 are not supported\n")
+    sys.exit(1)
+if sys.version_info >= (2 , 8):
+    sys.stderr.write("FATAL: sorry, Python versions above 2.8 are not supported\n")
+    sys.exit(1)
+
+    
 # C extensions
 #
 #EXT_PATH = os.path.join("src", "ext")
@@ -69,9 +78,7 @@ setup(name = "lofreq_snpcaller",
       classifiers=['Development Status :: 4 - Beta',
                    'Environment :: Console',
                    'Intended Audience :: Science/Research',
-                   # FIXME 'License :: OSI Approved :: MIT License',
-                   #'License :: OSI Approved :: GNU General Public License (GPL)',
-                   #'License :: OSI Approved :: BSD License',
+                   'License :: OSI Approved :: GNU General Public License (GPL)',
                    'Natural Language :: English',
                    'Operating System :: Unix',
                    'Programming Language :: C',

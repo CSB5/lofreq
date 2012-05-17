@@ -2,6 +2,19 @@
 """Prediction of low frequency variants by Expectation-Maximization.
 """
 
+# Copyright (C) 2011, 2012 Genome Institute of Singapore
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+
+
 
 #--- standard library imports
 #
@@ -24,18 +37,13 @@ if USE_SCIPY:
 #
 # /
 from lofreq import snp
-from lofreq.utils import count_bases
 if not USE_SCIPY:
     from lofreq_ext import binom_sf
 
-
-__author__ = ["Grace Yeo", "Andreas Wilm"]
-__version__ = "0.1.20111004"
+__author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
-__copyright__ = ""
-__license__ = ""
-__credits__ = [""]
-__status__ = ""
+__copyright__ = "2011, 2012 Genome Institute of Singapore"
+__license__ = "GPL2"
 
 
 # initial error probabilities. usually converge real fast.
@@ -75,9 +83,9 @@ if USE_SCIPY:
 def expectation(base_counts, ref_seq, snp_base, snp_base_error_prob,
                 bonf_factor, sig_thresh, from_base='N'):
     """Returns SNP calls for seeing given snp-base at each position in
-    region. SNP-calls are tuples of pvalues and positions. P-Values
-    are Bonferroni corrected and filtered according to significance
-    threshold. Allowed SNP calls: from_base to N
+    region. SNP-calls are tuples of pvalues and positions. Variants
+    are only reported if their p-values * bonf < sig. Allowed SNP
+    calls: from_base to N
 
     Calculated pvalue is the tail of the binomial distribution,
     which is defined by the coverage at that position, and the
@@ -109,16 +117,16 @@ def expectation(base_counts, ref_seq, snp_base, snp_base_error_prob,
             # binom.sf
             #bdist = binom(coverage, snp_base_error_prob)
             # complementary cumulative distribution function
-            #pvalue = bdist.sf(base_counts[snp_base]) * bonf_factor
+            #pvalue = bdist.sf(base_counts[snp_base])
 
             pvalue = stats.binom.sf(base_counts[snp_base]-1,
-                coverage, snp_base_error_prob) * bonf_factor
+                coverage, snp_base_error_prob)
 
         else:
             pvalue  = binom_sf(coverage, base_counts[snp_base]-1,
-                               snp_base_error_prob) * bonf_factor
+                               snp_base_error_prob)
             
-        if pvalue < sig_thresh:
+        if pvalue * bonf_factor < sig_thresh:
             snp_calls.append((pos, pvalue))
         #LOG.debug("pos %d coverage=%d base_counts[snp_base]=%d pvalue %f" % (
         #        pos, coverage, base_counts[snp_base], pvalue))
@@ -361,7 +369,7 @@ class EmBasedSNPCaller(object):
             assert base in 'ACGT', (
                 "Only allowed bases/keys are A, C, G or T, but not %s" % base)
         assert ref_base in 'ACGT', (
-            "consensus base must be one of A, C, G or T, but not %s" % cons_base)
+            "consensus base must be one of A, C, G or T, but not %s" % ref_base)
 
         assert len(self.error_probs), (
             "Error probabilities haven't"
