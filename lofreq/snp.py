@@ -200,25 +200,34 @@ class DengueSNP(ExtSNP):
             
     
 
-
-def write_snp_file(fhandle, snp_list, write_header=True):
+def write_header(fh=sys.stdout):
     """
-    Writes SNP to a filehandle
     """
     
-    if write_header:
-        header = "Pos SNP Freq Info"
-        fhandle.write("%s\n" % header)
+    fh.write("%s\n" % "Pos SNP Freq Info")
+
+    
+def write_record(snp_record, fh=sys.stdout):
+    """write a single SNP to file
+    """
+
+    fh.write("%s\n" % snp_record)
+    
+
+def write_snp_file(fhandle, snp_list):
+    """Writes SNP to a filehandle
+    """
+    
+    write_header(None, fhandle)        
     for snp in sorted(snp_list, key=lambda s: s.pos):
-        fhandle.write("%s\n" % snp)
+        write_record(snp, fhandle)
 
-    
-  
+        
+
     
 
 def parse_snp_file(filename, extra_fieldname='pvalue', has_header=False):
-    """
-    Parses a Dengue SNP file and returns parsed SNPs as list of
+    """Parses a Dengue SNP file and returns parsed SNPs as list of
     ExtSNP instances. Missing wildtypes are allowed and replaced with N's.
     """
 

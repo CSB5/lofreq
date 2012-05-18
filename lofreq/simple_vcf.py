@@ -233,13 +233,11 @@ def create_record(rec_chrom, rec_pos, rec_id,
 
 
                      
-def write_header(header=None, fh=sys.stdout):
+def write_header(fh=sys.stdout):
     """Writes a VCF header to stream
     """
 
-    if not header:
-        header = new_header()
-    fh.write("%s\n" % header)
+    fh.write("%s\n" % new_header())
 
     
     
@@ -258,7 +256,7 @@ def write(records, fh=sys.stdout):
     """Simple wrapper for write_record, adding a header
     """
 
-    write_header(None, fh)
+    write_header(fh)
     for rec in records:
         write_record(rec, fh)
     

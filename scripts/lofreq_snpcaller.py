@@ -101,23 +101,6 @@ def read_exclude_pos_file(fexclude):
 
 
 
-def write_snps(snp_list, fname, append=False):
-    """Writes SNVs to file (SNP format). Frontened to
-    snp.write_snp_file
-    """
-
-    if append:
-        mode = 'a'
-        write_header = False
-    else:
-        mode = 'w'
-        write_header = True
-
-    LOG.info("Writing %d SNVs to %s" % (len(snp_list), fname))
-    fhandle = open(fname, mode)
-    snp.write_snp_file(fhandle, snp_list, write_header)
-    fhandle.close()
-
     
 
 
@@ -139,7 +122,7 @@ def cmdline_parser():
                       help="enable debugging")
     parser.add_option("", "--log",
                       dest="logfile",
-                      help="Optional: log to file")
+                      help="Log to file")
 
     parser.add_option("-i", "--input",
                       dest="fpileup", # type="string|int|float"
@@ -149,20 +132,16 @@ def cmdline_parser():
                       " Also consider using -B/-E to influence BAQ computation")
     parser.add_option("-e", "--exclude",
                       dest="fexclude", # type="string|int|float"
-                      help="Optional: Exclude positions listed in this file"
+                      help="Exclude positions listed in this file"
                       " format is: start end [comment ...]"
                       " , with zero-based, half-open coordinates")
     parser.add_option("-o", "--out",
-                      dest="fsnp", # type="string|int|float"
-                      help="Variant output file")
+                      dest="fsnp", default="-", # type="string|int|float"
+                      help="Variant output file or '-' for stdout (default)")
     choices = ['snp', 'vcf']
     parser.add_option("", "--format",
                       dest="outfmt", choices=choices, default='vcf',
-                      help="Output file format. One of: %s" % ', '.join(choices))
-    parser.add_option("", "--append",
-                      dest="append", # type="string|int|float"
-                      action="store_true",
-                      help="Append to variant file (not for VCF format)")
+                      help="Output format. One of: %s. SNP is chromsome agnostic!" % ', '.join(choices))
     
     parser.add_option("", "--em-only",
                       action="store_true", dest="skip_qual_stage",
@@ -175,18 +154,18 @@ def cmdline_parser():
     
     parser.add_option("-b", "--bonf",
                       dest="bonf", type="int", default=1,
-                      help="Optional: Bonferroni correction factor"
+                      help="Bonferroni correction factor"
                       " (e.g. seqlen-minus-num-excl-pos)*3 to be stringent)"
                       " Higher values speed up LoFreq-Q in high coverage data.")
     parser.add_option("-s", "--sig-level",
                       dest="sig_thresh", type="float",
                       default=conf.DEFAULT_SIG_THRESH,
-                      help="Optional: p-value significance value"
+                      help="p-value significance value"
                       " (default: %g)" % conf.DEFAULT_SIG_THRESH)
     parser.add_option("-Q", "--ignore-bases-below-q",
                           dest="ign_bases_below_q", type="int",
                           default=conf.DEFAULT_IGN_BASES_BELOW_Q,
-                          help="Optional: remove any base below this base call quality threshold from pileup"
+                          help="Remove any base below this base call quality threshold from pileup"
                           " (default: %d)" % conf.DEFAULT_IGN_BASES_BELOW_Q)
 
 
@@ -211,12 +190,12 @@ def cmdline_parser():
     qual_group.add_option("", "--noncons-default-qual",
                           dest="noncons_default_qual", type="int",
                           default=conf.NONCONS_DEFAULT_QUAL,
-                          help="Optional: Base call quality used for non-consensus bases"
+                          help="Base call quality used for non-consensus bases"
                           " (default: %d)" % conf.NONCONS_DEFAULT_QUAL)
     qual_group.add_option("", "--noncons-filter-qual",
                           dest="noncons_filter_qual", type="int",
                           default=conf.NONCONS_FILTER_QUAL,
-                          help="Optional: Non-consensus bases below this threshold will be filtered"
+                          help="Non-consensus bases below this threshold will be filtered"
                           " (default: %d)" % conf.NONCONS_FILTER_QUAL)
     parser.add_option_group(qual_group)
 
@@ -380,12 +359,22 @@ def main():
     if not opts.fsnp:
         parser.error("Variant output file argument missing.")
         sys.exit(1)
-    if os.path.exists(opts.fsnp) and not opts.append:
+    if opts.fsnp != '-' and os.path.exists(opts.fsnp):
         LOG.fatal(
             "Cowardly refusing to overwrite already existing file '%s'.\n" % (
                 opts.fsnp))
         sys.exit(1)
 
+    if opts.fsnp == '-':
+        fhout = sys.stdout
+    else:
+        fhout = open(opts.fsnp, 'w')
+    if opts.outfmt == 'snp':
+        snp.write_header(fhout)
+    else:
+        simple_vcf.write_header(fhout)
+
+        
     if opts.fexclude and not os.path.exists(opts.fexclude):
         LOG.fatal("file '%s' does not exist.\n" % (opts.fexclude))
         sys.exit(1)
@@ -543,8 +532,6 @@ def main():
     #
     # ################################################################
 
-    snp_list = []
-    vcf_record_list = []
     LOG.info("Processing pileup for variant calls")
     num_lines = 0
     num_ambigious_ref = 0
@@ -623,9 +610,8 @@ def main():
 
             LOG.info("Final LoFreq SNV on chrom %s: %s." % (
                 pcol.chrom, snpcall))
-            snp_list.append(snpcall)
 
-            
+                
             # to vcf: needs pcol, snpcall, ref_counts and var_counts
             # should make this a function. than again, the snp module
             # should be replaced by vcf anyway
@@ -647,25 +633,34 @@ def main():
                 None,
                 vcf_info_dict
                 )
-            vcf_record_list.append(vcf_record)
 
             
+            if opts.outfmt == 'snp':
+                snp.write_record(snpcall, fhout)
+            else:
+                simple_vcf.write_record(vcf_record, fhout)
+
+                
+
     if num_lines == 0:
         LOG.fatal("Pileup was empty. Will exit now.")
         sys.exit(1)
+        
     if num_ambigious_ref > 0:
         LOG.warn(
             "%d positions skipped, because of amibigious reference in pileup." % (
                 num_ambigious_ref))
-    if opts.outfmt == 'snp':
-        write_snps(snp_list, opts.fsnp, opts.append)
-    else:
-        fhout = open(opts.fsnp, 'w')
-        simple_vcf.write(vcf_record_list, fhout)
-        fhout.close()
+
+    LOG.info("SNVs written to %s" % fhout.name)
+    if fhout != sys.stdout:
+        fhout.close()  
+
+        
+        
+    
 
 
 if __name__ == "__main__":
     main()
-    LOG.warn("IMPROVEMENT easy to run in parallel since calls are per column")
+    LOG.info("FIXME Implement multi-processing (calls are per column!)")
     LOG.info("Successful program exit")
