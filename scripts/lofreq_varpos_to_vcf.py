@@ -246,5 +246,7 @@ def main():
 
         
 if __name__ == "__main__":
+    LOG.info("FIXME: use simple_vcf instead of VcfWriter")
     main()
     LOG.info("Successful program exit")
+    
