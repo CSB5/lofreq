@@ -109,7 +109,6 @@ def main():
     qual = int(opts.qual)
 
 
-    print "coord\tbases (Q>=%d)\ttotal\tfw\trv" % qual
     for line in fh:
         if len(line.strip())==0:
             continue
@@ -118,11 +117,20 @@ def main():
         pcol.parse_line(line)
         
         base_counts = pcol.get_all_base_counts(qual)
+        print "coord\tbases\ttotal\tfw\trv"
         for base in sorted(base_counts.keys()):
-            print "%d\t%s\t\t%d\t%d\t%d" % (pcol.coord+1, base,
-                                            sum(base_counts[base]),
-                                            base_counts[base][0],
-                                            base_counts[base][1])
+            print "%d\t%s\t%d\t%d\t%d" % (pcol.coord+1, base,
+                                          sum(base_counts[base]),
+                                          base_counts[base][0],
+                                          base_counts[base][1])
+
+        print "coord\tins\tdel\trstart\trend"
+        print "%d\t%d\t%d\t%d\t%d" % (
+            pcol.coord+1,
+            pcol.num_ins_events,
+            pcol.num_del_events,
+            pcol.num_read_starts,
+            pcol.num_read_ends)
 
     if fh != sys.stdin:
         fh.close()
