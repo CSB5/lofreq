@@ -1,5 +1,8 @@
 #!/usr/bin/env python
-"""FIXME: add doc string
+"""Test wether a SNV call uniquely made in one sample (e.g. tumour
+tissue), but not in another (e.g. normal/blood tissue), is 'unique' or
+significant'. Done by performing a binomial test on the prospective
+snp-base counts in the normal sample given the SNV-call frequency.
 """
 
 # Copyright (C) 2011, 2012 Genome Institute of Singapore
@@ -26,7 +29,7 @@ import os
 import tempfile
 import subprocess
 # optparse deprecated from Python 2.7 on
-from optparse import OptionParser
+from optparse import OptionParser, OptionGroup
 
 #--- third-party imports
 #
@@ -85,12 +88,6 @@ def cmdline_parser():
             + "\n" + __doc__
     parser = OptionParser(usage=usage)
 
-    parser.add_option("-v", "--verbose",
-                      action="store_true", dest="verbose",
-                      help="be verbose")
-    parser.add_option("", "--debug",
-                      action="store_true", dest="debug",
-                      help="enable debugging")
     parser.add_option("-d", "--snpdiff",
                       dest="snpdiff_file", # type="string|int|float"
                       help="List of SNPs, predicted from other sample and not predicted for this mapping (e.g. somatic calls)")
@@ -103,32 +100,44 @@ def cmdline_parser():
     parser.add_option("-c", "--chrom",
                       dest="chrom", # type="string|int|float"
                       help="Chromsome/sequence for pileup")
-    parser.add_option("-a", "--samtools_args",
+
+
+    opt_group = OptionGroup(parser, "Optional arguments", "")
+    opt_group.add_option("-v", "--verbose",
+                      action="store_true", dest="verbose",
+                      help="be verbose")
+    opt_group.add_option("", "--debug",
+                      action="store_true", dest="debug",
+                      help="enable debugging")
+
+    opt_group.add_option("-a", "--samtools_args",
                       dest="samtools_args", # type="string|int|float"
                       default=DEFAULT_SAMTOOLS_ARGS,
-                      help="Extra Samtools args (default: %s). Should be the same as used for the original SNP calling" % (DEFAULT_SAMTOOLS_ARGS))
-    parser.add_option("-q", "--ignore-bases-below-q",
+                      help="Optional: Extra Samtools args (default: %s). Should be the same as used for the original SNP calling" % (DEFAULT_SAMTOOLS_ARGS))
+    opt_group.add_option("-q", "--ignore-bases-below-q",
                       dest="ign_bases_below_q", type="int",
                       default=conf.DEFAULT_IGN_BASES_BELOW_Q,
                       help="Optional: remove any base below this base call quality threshold from pileup"
                       " (default: %d). Should be the same as used for the original SNP calling" % conf.DEFAULT_IGN_BASES_BELOW_Q)
-    parser.add_option("", "--noncons-filter-qual",
+    opt_group.add_option("", "--noncons-filter-qual",
                       dest="noncons_filter_qual", type="int",
                       default=0, #conf.NONCONS_FILTER_QUAL,
                       help="Optional: Non-consensus bases below this threshold will be filtered"
                           " (default: %d). Should be the same as used for the original SNP calling" % 0)#conf.NONCONS_FILTER_QUAL)
-    parser.add_option("", "--uniform-freq",
+    opt_group.add_option("", "--uniform-freq",
                       dest="uniform_freq", type="int",
                       help="Optional: Assume this uniform frequency [%] instead of original SNP frequency")
-    parser.add_option("", "--freq-factor",
+    opt_group.add_option("", "--freq-factor",
                       dest="freq_fac", type="float",
                       help="Optional: Apply this factor (0.0<x<=1.0) to original SNP frequency")
-    parser.add_option("-s", "--sig-level",
+    opt_group.add_option("-s", "--sig-level",
                       dest="sig_thresh", type="float",
                       default=conf.DEFAULT_SIG_THRESH,
                       help="Optional: p-value significance value"
                       " (default: %g)" % conf.DEFAULT_SIG_THRESH)
 
+    parser.add_option_group(opt_group)
+    
     return parser
 
 
@@ -245,8 +254,6 @@ def main():
                 print "%s: not rejected" % (this_snp.identifier())
                 
         # FIXME report left over SNPs at the end as no coverage SNPs
-            
-            
         
 
     #LOG.warn("Not deleting tmp file %s" % bed_region_file)
