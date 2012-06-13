@@ -67,9 +67,10 @@ setup(name = "lofreq_snpcaller",
       #long_description = """FIXME.""" 
       url='http://www.gis.a-star.edu.sg/', # FIXME
       scripts = ['scripts/lofreq_snpcaller.py',
-                 'scripts/lofreq_bonf.py',
+                 #'scripts/lofreq_bonf.py',
                  'scripts/lofreq_pileup_summary.py',
-                 'scripts/lofreq_strandbias.py',
+                 #'scripts/lofreq_strandbias.py',
+                 'scripts/lofreq_filter.py',
                  'scripts/lofreq_unique.py',
                  'scripts/lofreq_varpos_to_vcf.py'
                  ],
