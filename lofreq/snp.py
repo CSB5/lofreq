@@ -218,7 +218,7 @@ def write_snp_file(fhandle, snp_list):
     """Writes SNP to a filehandle
     """
     
-    write_header(None, fhandle)        
+    write_header(fhandle)        
     for snp in sorted(snp_list, key=lambda s: s.pos):
         write_record(snp, fhandle)
 
