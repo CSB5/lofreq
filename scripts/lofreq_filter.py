@@ -78,7 +78,7 @@ def cmdline_parser():
                       help="enable debugging")
     parser.add_option("-i", "--snp_infile",
                       dest="snp_infile",
-                      help="SNP input file")
+                      help="SNP input file (- for stdin)")
     parser.add_option("-o", "--outfile",
                       dest="snp_outfile",
                       default="-",
@@ -146,7 +146,7 @@ def main():
         if not in_file:
             parser.error("%s input file argument missing." % descr)
             sys.exit(1)
-        if not os.path.exists(in_file):
+        if not os.path.exists(in_file) and in_file != "-":
             sys.stderr.write(
                 "file '%s' does not exist.\n" % in_file)
             sys.exit(1)
@@ -254,5 +254,6 @@ def main():
 
     
 if __name__ == "__main__":
+    LOG.critical("WARN: phred value filtering might fail on type consensus-var (opposed to low-freq-var)")
     main()
     LOG.info("Successful program exit")

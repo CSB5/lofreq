@@ -92,7 +92,8 @@ def read_exclude_pos_file(fexclude):
         end = int(line.split()[1])
         # ignore the rest
 
-        assert start < end, ("Invalid position found in %s" % fexclude)
+        assert start < end, (
+            "Invalid position found in %s" % fexclude)
 
         excl_pos.extend(range(start, end))
     fhandle.close()
@@ -208,6 +209,7 @@ def cmdline_parser():
     return parser
 
 
+
 def test_sensitivity(mode):
     """Simple sensitivity test with a mockup column and uniform quality
     """
@@ -315,13 +317,42 @@ def add_strandbias_info(snpcall, ref_counts, var_counts):
     else:
         snpcall.info['strandbias-pvalue-uncorr-phred'] = prob_to_phredqual(fisher_twotail_pvalue)
 
+        
 
+def gen_vcf_record(pcol, ref, alt, phredqual, freq, dp4=None, sb_phred=None):
+    """
+    Wrapper to simple_vcf.create_record
+    """
 
-
+    if dp4:
+        assert len(dp4) == 4
+        
+    vcf_info_dict = {
+    'AF':float("%.*f" % (len(str(pcol.coverage)), freq)),
+    'DP':pcol.coverage, 
+    }
+    if dp4:
+        vcf_info_dict['DP4'] = '%d,%d,%d,%d' % (dp4)
+    if sb_phred != None:  # can be zero
+        vcf_info_dict['SB'] = sb_phred
+    if  phredqual == 'NA':
+        phredqual = None
+    vcf_record = simple_vcf.create_record(
+        pcol.chrom, pcol.coord,
+        None,
+        ref, alt,
+        phredqual,
+        None,
+        vcf_info_dict)
+    
+    return vcf_record
+    
 
 def main():
     """
     The main function
+
+    FIXME: cleanup and split into different functions
     """
 
     parser = cmdline_parser()
@@ -424,7 +455,8 @@ def main():
 
     sig_thresh = opts.sig_thresh
 
-    LOG.info("Commandline (workdir %s): %s" % (os.getcwd(), ' '.join(sys.argv)))
+    LOG.info("Commandline (workdir %s): %s" % (
+        os.getcwd(), ' '.join(sys.argv)))
 
     lofreqnq = em.EmBasedSNPCaller(
         num_param = em_num_param,
@@ -469,9 +501,9 @@ def main():
             if pcol.coord in excl_pos:
                 LOG.debug("Skipping col %d because of exclusion" % (pcol.coord+1))
                 continue
-            if pcol.ref_base not in 'ACGT':
-                LOG.info("Skipping col %d because of amibigous reference base %s" % (
-                    pcol.coord+1, pcol.ref_base))
+            if pcol.cons_base not in 'ACGT':
+                LOG.info("Skipping col %d because of ambigious consensus base %s" % (
+                    pcol.coord+1, pcol.cons_base))
                 continue
      
             # Even though NQ is quality agnostics, ignore the ones
@@ -486,7 +518,7 @@ def main():
                 continue
      
             base_counts.append(col_base_counts)
-            cons_seq.append(pcol.ref_base)
+            cons_seq.append(pcol.cons_base)
      
             if len(base_counts) >= conf.EM_TRAINING_SAMPLE_SIZE:
                 break
@@ -497,7 +529,7 @@ def main():
 
         if len(base_counts) == 0:
             LOG.fatal(
-                "No data useable data acquired from pileup for EM training. Exiting" % (
+                "No useable data data acquired from pileup for EM training. Exiting" % (
                     len(base_counts)))
             sys.exit(1)
 
@@ -513,8 +545,9 @@ def main():
         lofreqnq.em_training(base_counts, cons_seq)
         LOG.info("EM training completed.")
 
-        #LOG.critical("Saving provs to schmock.error_prob.")
-        #lofreqnq.save_error_probs("schmock.error_prob")
+        # fprobs="schmock.error_prob."
+        #LOG.critical("Saving provs to %s." % fprobs)
+        #lofreqnq.save_error_probs(fprobs)
 
 
     elif opts.em_error_prob_file:
@@ -522,7 +555,6 @@ def main():
             "Skipping EM training and using probs from %s instead." % (
                 opts.em_error_prob_file))
         lofreqnq.load_error_probs(opts.em_error_prob_file)
-
 
 
     # ################################################################
@@ -537,24 +569,22 @@ def main():
     num_ambigious_ref = 0
     for line in itertools.chain(pileup_line_buffer, pileup_fhandle):
 
-        # add parallel calls to loop
-        
         # note: not all columns will be present in pileup
         num_lines += 1
 
-        pcol = pileup.PileupColumn(line)
+        pcol = pileup.PileupColumn(line)            
+        #if (pcol.coord+1) % 100000 == 0:
+        #    LOG.info("Still alive...calling SNPs in column %d" % (pcol.coord+1))
 
         if pcol.coord in excl_pos:
             LOG.debug("Skipping col %d because of exclusion" % (pcol.coord+1))
             continue
-        if pcol.ref_base not in 'ACGT':
-            LOG.info("Skipping col %d because of amibigous consensus %s" % (
-                    pcol.coord+1, pcol.ref_base))
+
+        if pcol.cons_base not in 'ACGT':
+            LOG.info("Skipping col %d because of ambigious consensus %s" % (
+                    pcol.coord+1, pcol.cons_base))
             num_ambigious_ref += 1
             continue
-
-        #if (pcol.coord+1) % 100000 == 0:
-        #    LOG.info("Still alive...calling SNPs in column %d" % (pcol.coord+1))
 
         # Even though NQ is quality agnostics, ignore the ones
         # marked with Illumina's Read Segment Indicator Q2, since
@@ -562,11 +592,31 @@ def main():
         base_counts = pcol.get_all_base_counts(
             min_qual=3, keep_strand_info=False)
         del base_counts['N']
-
+        if sum(base_counts.values())==0:
+            LOG.info("Zero coverage in col %d" % (pcol.coord+1))
+            continue
+        
+        # consensus snp, i.e. we determine consensus different to
+        # initial pileup ref. always call against cons_base. if
+        # ref_base is called then drop silently later.
+        cons_var_snp = None
+        if pcol.cons_base != pcol.ref_base:
+            # FIXME: should become vcf record immediately
+            # SNP is deprecated and should be generated from vcf
+            info_dict = dict()
+            # reusing base_counts from above
+            for (k, v) in base_counts.iteritems():
+                info_dict["basecount-%s" % k] = v
+            coverage = sum(base_counts.values())
+            info_dict['coverage'] = coverage
+            info_dict["type"] = 'consensus-var'
+            cons_var_snp = snp.ExtSNP(pcol.coord, pcol.ref_base, pcol.cons_base,
+                                      base_counts[pcol.cons_base]/coverage,
+                                      info_dict)
 
         if not opts.skip_em_stage:
             new_snps = lofreqnq.call_snp_in_column(
-                pcol.coord, base_counts, pcol.ref_base)
+                pcol.coord, base_counts, pcol.cons_base)
             for snpcall in new_snps:
                 LOG.info("LoFreq-NQ SNV on chrom %s: %s." % (pcol.chrom, snpcall))
 
@@ -581,12 +631,28 @@ def main():
                     keep_strand_info=False)
                 del base_qual_hist['N']
                 new_snps = lofreqq.call_snp_in_column(
-                    pcol.coord, base_qual_hist, pcol.ref_base)
+                    pcol.coord, base_qual_hist, pcol.cons_base)
                 for snpcall in new_snps:
                     LOG.info("LoFreq-Q SNV on chrom %s: %s." % (
                         pcol.chrom, snpcall))
 
+
+        # all predictions in all stages done
+
         for snpcall in new_snps:
+            snpcall.info["type"] = 'low-freq-var'
+        if cons_var_snp:
+            LOG.warn("Got cons_var_snp %s" % cons_var_snp)
+            # exception: drop if we called against cons_base
+            # (cons_var_snp) and called the initial ref_base
+            new_snps = [s for s in new_snps if s.variant != cons_var_snp.wildtype]            
+            new_snps.append(cons_var_snp)
+
+            
+        for snpcall in new_snps:
+
+            LOG.info("Final LoFreq SNV on chrom %s: %s." % (
+                pcol.chrom, snpcall))
 
             if opts.skip_em_stage or not opts.skip_qual_stage:
                 # Q
@@ -602,38 +668,28 @@ def main():
             var_counts = pcol.get_counts_for_base(
                 snpcall.variant, var_qf, keep_strand_info=True)
 
+
+            # FIXME should become VCF record immediately
+            # SNP is deprecated and should be generated from vcf
             add_strandbias_info(snpcall, ref_counts, var_counts)
 
             # report extra phred scaled pvalue
-            snpcall.info['pvalue-phred'] = prob_to_phredqual(
-                snpcall.info['pvalue'])
-
-            LOG.info("Final LoFreq SNV on chrom %s: %s." % (
-                pcol.chrom, snpcall))
-
+            if snpcall.info['type'] == 'low-freq-var':
+                snpcall.info['pvalue-phred'] = prob_to_phredqual(
+                    snpcall.info['pvalue'])
+            else:
+                snpcall.info['pvalue-phred'] = 'NA'
                 
+            dp4 = (ref_counts[0], ref_counts[1], var_counts[0], var_counts[1])
+            # FIXME any way to mark the cons-variation?
+            vcf_record = gen_vcf_record(pcol, snpcall.wildtype, snpcall.variant, 
+                                        snpcall.info['pvalue-phred'], snpcall.freq, dp4,
+                                        snpcall.info['strandbias-pvalue-uncorr-phred'])
+            
             # to vcf: needs pcol, snpcall, ref_counts and var_counts
             # should make this a function. than again, the snp module
             # should be replaced by vcf anyway
             #
-            vcf_info_dict = {
-                'AF':float("%.*f" % (len(str(pcol.coverage)), snpcall.freq)),
-                'DP':pcol.coverage, 
-                'DP4':'%d,%d,%d,%d' % (ref_counts[0], ref_counts[1],
-                                       var_counts[0], var_counts[1]),
-                'SB':snpcall.info['strandbias-pvalue-uncorr-phred']
-                }
-            vcf_record = simple_vcf.create_record(
-                pcol.chrom,
-                pcol.coord,
-                None,
-                snpcall.wildtype,
-                snpcall.variant,
-                snpcall.info['pvalue-phred'],
-                None,
-                vcf_info_dict
-                )
-
             
             if opts.outfmt == 'snp':
                 snp.write_record(snpcall, fhout)
@@ -662,5 +718,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-    LOG.info("FIXME Implement multi-processing (calls are per column!)")
+    #LOG.info("FIXME Implement multi-processing (calls are per column!)")
     LOG.info("Successful program exit")
+    LOG.warn("You will want to use lofreq_filter.py to post-process the SNV calls predicted here.")
