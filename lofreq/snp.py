@@ -232,8 +232,11 @@ def parse_snp_file(filename, extra_fieldname='pvalue', has_header=False):
     """
 
     ret_snp_list = []
-    
-    fhandle = open(filename, 'r')
+
+    if filename == '-':
+        fhandle = sys.stdin
+    else:
+        fhandle = open(filename, 'r')
 
     for line in fhandle:
         line = line.rstrip(os.linesep)
@@ -260,8 +263,9 @@ def parse_snp_file(filename, extra_fieldname='pvalue', has_header=False):
             info = {"generic-info": info_str}
         new_snp = ExtSNP(pos, wildtype, variant, freq, info)
         ret_snp_list.append(new_snp)
-        
-    fhandle.close()
+
+    if fhandle != sys.stdin:
+        fhandle.close()
     return ret_snp_list
 
 
