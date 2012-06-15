@@ -36,7 +36,7 @@ from itertools import chain
 
 #--- project specific imports
 #
-# /
+from lofreq import utils
 
 
 __author__ = "Andreas Wilm"
@@ -62,7 +62,7 @@ class PileupColumn():
     See http://samtools.sourceforge.net/pileup.shtml
 
     Using namedtuples seemed too inflexible:
-    namedtuple('PileupColumn', 'chrom coord refbase coverage read_bases base_quals')
+    namedtuple('PileupColumn', 'chrom coord ref_base coverage read_bases base_quals')
     pileup_column = PileupColumn(*(line.split('\t')))
     pileup_column = PileupColumn._make((line.split('\t')))
     """
@@ -79,6 +79,9 @@ class PileupColumn():
         
         # reference base
         self.ref_base = None
+
+        # locally determined consensus base
+        self.cons_base = None
         
         # the number of reads covering the site
         self.coverage = None
@@ -96,7 +99,20 @@ class PileupColumn():
         if line:
             self.parse_line(line)
 
+            
+#    def determine_cons(self):
+#        """
+#        Quality aware
+#        """
+#        
+#        #cons_dict = dict()
+#        #for base in self._bases_and_quals.keys():
+#        #    for q in self._bases_and_quals[base]:
+#        #        cons_dict[b.upper()] = cons_dict[b.upper()].get(q, 0) + (1.0 - phredqual_to_prob(self._bases_and_quals[b][q]))
+#        #import pdb; pdb.set_trace()
+#        # FIXME untested, unfinished
 
+        
     def parse_line(self, line):
         """
         Split a line of pileup output and set values accordingly
@@ -178,7 +194,13 @@ class PileupColumn():
             q = quals[i]
             self._bases_and_quals[b][q] = self._bases_and_quals[b].get(q, 0) + 1
 
+        # FIXME: this doesn't take qualities into account
+        # implement function here and get rid of util import
+        (tmp_base_counts, cons_base) = utils.count_bases(bases.upper())
+        self.cons_base = cons_base
 
+        
+            
     def rem_startend_markup(self, bases_str):
         """
         Remove end and start (incl mapping) markup from read bases string
