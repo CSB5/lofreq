@@ -3,7 +3,6 @@
 """
 
 
-
 # Copyright (C) 2011, 2012 Genome Institute of Singapore
 #
 # This program is free software; you can redistribute it and/or modify
@@ -59,7 +58,7 @@ def cmdline_parser():
 
     # http://docs.python.org/library/optparse.html
     usage = "%prog [Options]\n" \
-            + "\n" + __doc__
+            + __doc__
     parser = OptionParser(usage=usage)
 
     parser.add_option("-v", "--verbose",
@@ -70,19 +69,16 @@ def cmdline_parser():
                       action="store_true", 
                       dest="debug",
                       help="enable debugging")
+    choices=['goto_2011', 'wright_2011']
     parser.add_option("-m", "--method",
                       dest="method", 
-                      choices=['goto_2011', 'wright_2011'],
-                      help="Which method to use")
+                      choices=choices,
+                      help="Which method to use (one of %s)" % (', '.join(choices)))
     parser.add_option("-e", "--exclude",
                       dest="fexclude",
                       help="Exclude positions listed in this file"
                       " format is: start end [comment ...]"
                       " , with zero-based, half-open coordinates")
-    parser.add_option("-p", "--pileup",
-                      dest="pileup",
-                      default="-",
-                      help="Pileup (- for stdin)")
     parser.add_option("-i", "--in",
                       dest="pileup", 
                       default="-",
@@ -258,17 +254,17 @@ def wright_2011(pcol):
     for snp_base in [b for b in BASES if b != pcol.ref_base]:
         snp_base_count =  sum(base_qual_hist[snp_base].values())
         if snp_base_count > bmean:
-            print "snp at pos %d %c>%c (counts=%d > bmean=%f)" % (
-                pcol.coord+1, pcol.ref_base, snp_base, snp_base_count, bmean)
-        #else:
-        #    print "no snp at pos %d %c>%c (counts=%d <= bmean=%f)" % (
-        #1        pcol.coord+1, pcol.ref_base, snp_base, snp_base_count, bmean)
+            #print "snp at pos %d %c>%c (counts=%d > bmean=%f)" % (
+            #    pcol.coord+1, pcol.ref_base, snp_base, snp_base_count, bmean)
             info_dict = dict()
             info_dict['coverage'] = coverage
             new_snp = snp.ExtSNP(pcol.coord, pcol.ref_base, snp_base,
                                  snp_base_count/float(coverage),
                                  info_dict)
             snps.append(new_snp)
+        #else:
+        #    print "no snp at pos %d %c>%c (counts=%d <= bmean=%f)" % (
+        #1        pcol.coord+1, pcol.ref_base, snp_base, snp_base_count, bmean)
                         
     return snps
 
@@ -385,6 +381,8 @@ def main():
         LOG.fatal("vcf writing not yet supported")
         sys.exit(1)
 
+    if not opts.method:
+        parser.error("Missing method argument")
         
     # exclude positions
     #
@@ -395,14 +393,14 @@ def main():
             len(excl_pos), opts.fexclude))
         LOG.debug("DEBUG: excl_pos = %s" % excl_pos)
 
-    LOG.info("Calling SNPs according to %s" % opts.method)
     if opts.method == 'goto_2011':
         snp_call_func = goto_2011
     elif opts.method == 'wright_2011':
         snp_call_func = wright_2011
     else:
-        raise ValueError, (
+        raise NotImplementedError, (
             "Unknown method '%s'" % opts.method)
+    LOG.info("Calling SNPs according to %s" % opts.method)
 
     
     snps = []
