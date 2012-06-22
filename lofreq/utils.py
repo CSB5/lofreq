@@ -93,6 +93,16 @@ def count_bases(bases, allowed_bases = "ACGT"):
     No case conversion will be done!
 
     Alternative collections.counter is only available in Python 2.7
+
+    doctest:
+    >>> count_bases("AAAA")[1]
+    'A'
+    >>> count_bases("AAAC")[1]
+    'A'
+    >>> count_bases("AACC")[1]
+    'N'
+    >>> count_bases("QQQQ")[1]
+    '-'
     """
 
     basecounts = dict()
@@ -101,13 +111,25 @@ def count_bases(bases, allowed_bases = "ACGT"):
 
     # sorted (ascending) list of key/value tuples. take last one
     # [-1] and only its key [0]
-    if sum(basecounts.values()) != 0:
-        cons_base = sorted(basecounts.items(),
-                           key=lambda x: x[1])[-1][0]
-    else:
+    #
+    if sum(basecounts.values()) == 0:
+        # empty? return gap
         cons_base = "-"
-        
+    else:
+        # ascending order
+        sorted_counts = sorted(basecounts.items(),
+                               key=lambda x: x[1])
+        if sorted_counts[-1][1] == sorted_counts[-2][1]:
+            # tie? return N
+            cons_base = 'N'
+        else:
+            # return "true" consensus
+            cons_base = sorted_counts[-1][0]
+            
     return (basecounts, cons_base)
 
 
-
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod()        
+            
