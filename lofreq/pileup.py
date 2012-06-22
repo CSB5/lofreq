@@ -196,7 +196,11 @@ class PileupColumn():
 
         # FIXME: this doesn't take qualities into account
         # implement function here and get rid of util import
-        (tmp_base_counts, cons_base) = utils.count_bases(bases.upper())
+        (base_counts, cons_base) = utils.count_bases(bases.upper())
+        # use pileup refbase on tie and ambigiouity 
+        if cons_base == '-' or cons_base == 'N':
+            cons_base = self.ref_base
+            
         self.cons_base = cons_base
 
         
