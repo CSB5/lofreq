@@ -28,7 +28,6 @@ import subprocess
 import logging
 import re
 import copy
-from itertools import chain
 
 #--- third-party imports
 #
@@ -54,7 +53,8 @@ logging.basicConfig(level=logging.WARN,
 
 VALID_BASES = ['A', 'C', 'G', 'T', 'N']
         
-    
+
+
 class PileupColumn():
     """
     Pileup column class. Parses samtools m/pileup output.
@@ -99,18 +99,48 @@ class PileupColumn():
         if line:
             self.parse_line(line)
 
+
             
-#    def determine_cons(self):
-#        """
-#        Quality aware
-#        """
-#        
-#        #cons_dict = dict()
-#        #for base in self._bases_and_quals.keys():
-#        #    for q in self._bases_and_quals[base]:
-#        #        cons_dict[b.upper()] = cons_dict[b.upper()].get(q, 0) + (1.0 - phredqual_to_prob(self._bases_and_quals[b][q]))
-#        #import pdb; pdb.set_trace()
-#        # FIXME untested, unfinished
+    def determine_cons(self):
+        """
+        Quality aware determination of consensus
+        """
+
+        # convert base-call qualities to probabilites/freqs (ignoring
+        # Q2) to determine consensus.
+        
+        base_qual_hist = self.get_base_and_qual_hist(keep_strand_info=False)        
+
+        base_probsum = dict() # actually sums of probs
+        for base in base_qual_hist.keys():
+            if base == 'N':
+                continue
+            assert base in 'ACGT', (
+                "Only allowed bases/keys are A, C, G or T, but not %s" % base)
+
+            probsum = 0
+            for (qual, count) in base_qual_hist[base].iteritems():
+                if qual <= 2: # 2 is not a quality
+                    continue
+                # A base-call with Q=20, means error-prob=0.01 means
+                # prob=1-0.01=0.99
+                probsum += count * (1.0 - utils.phredqual_to_prob(qual))
+
+            base_probsum[base] = probsum
+
+        # sort in ascending order                                                                                                                                               
+        sorted_probsum = sorted(base_probsum.items(), key=lambda x: x[1])
+        if sorted_probsum[-1][1] - sorted_probsum[-2][1] < 0.000001:
+            # cons is N if tied
+            cons_base = 'N'
+        else:
+            # return "true" consensus                                                                                                                                   
+            cons_base = sorted_probsum[-1][0]
+                                                                
+        #LOG.debug("cons_base=%s base_qual_hist=%s base_probsum=%s" % (
+        #    cons_base, base_qual_hist, base_probsum))
+                       
+        return cons_base
 
         
     def parse_line(self, line):
@@ -194,13 +224,9 @@ class PileupColumn():
             q = quals[i]
             self._bases_and_quals[b][q] = self._bases_and_quals[b].get(q, 0) + 1
 
-        # FIXME: this doesn't take qualities into account
-        # implement function here and get rid of util import
-        (base_counts, cons_base) = utils.count_bases(bases.upper())
-        # use pileup refbase on tie and ambigiouity 
+        cons_base = self.determine_cons()
         if cons_base == '-' or cons_base == 'N':
             cons_base = self.ref_base
-            
         self.cons_base = cons_base
 
         
@@ -300,7 +326,7 @@ class PileupColumn():
 
 
     def get_all_base_counts(self, min_qual=3, keep_strand_info=True):
-        """Frontend to get_count_for_base: Count bases (summarise
+        """Frontend to get_counts_for_base: Count bases (summarise
         histograms) and return as dict with (uppercase) bases as keys.
         Values will be an int (sum of fw and rv) unless
         keep_strand_info is False (returns sum of both)
