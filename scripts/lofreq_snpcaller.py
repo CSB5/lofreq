@@ -127,8 +127,7 @@ def cmdline_parser():
 
     parser.add_option("-i", "--input",
                       dest="fpileup", # type="string|int|float"
-                      default='-',
-                      help="Pileup input. Will read from stdin (default) if '-' or not set at all."
+                      help="Pileup input. Will read from stdin if '-' or not set at all."
                       " Tip: Use '-d 100000' to prevent sample depth filtering by samtools."
                       " Also consider using -B/-E to influence BAQ computation")
     parser.add_option("-e", "--exclude",
@@ -141,8 +140,10 @@ def cmdline_parser():
                       help="Variant output file or '-' for stdout (default)")
     choices = ['snp', 'vcf']
     parser.add_option("", "--format",
-                      dest="outfmt", choices=choices, default='vcf',
-                      help="Output format. One of: %s. SNP is chromsome agnostic!" % ', '.join(choices))
+                      dest="outfmt", 
+                      choices=choices,
+                      default='vcf',
+                      help="Output format. One of: %s. Note: 'snp' is unaware of chromsomes!" % ', '.join(choices))
     
     parser.add_option("", "--em-only",
                       action="store_true", dest="skip_qual_stage",
@@ -426,7 +427,10 @@ def main():
                 opts.em_error_prob_file))
             sys.exit(1)
 
-    if opts.fpileup:
+    if not opts.fpileup:
+        LOG.warn("No pileup file/stream specified. Will try stdin\n")
+        pileup_fhandle = sys.stdin
+    else:
         if opts.fpileup == '-':
             pileup_fhandle = sys.stdin
         else:
