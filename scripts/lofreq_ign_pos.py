@@ -25,7 +25,7 @@ import sys
 import logging
 import os
 # optparse deprecated from Python 2.7 on
-from optparse import OptionParser, OptionGroup, SUPPRESS_HELP
+from optparse import OptionParser
 
 #--- third-party imports
 #
@@ -35,7 +35,6 @@ from optparse import OptionParser, OptionGroup, SUPPRESS_HELP
 #--- project specific imports
 #
 from lofreq import pileup
-from lofreq import conf
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
@@ -122,7 +121,6 @@ def main():
             bed_fh = open(opts.fbed, 'w')
 
     num_lines = 0
-    num_ambigious_ref = 0
     for line in pileup_fh:
 
         # note: not all columns will be present in pileup
@@ -136,7 +134,6 @@ def main():
         if pcol.cons_base not in 'ACGT':
             LOG.info("Skipping col %d because of ambigious consensus %s" % (
                     pcol.coord+1, pcol.cons_base))
-            num_ambigious_ref += 1
             continue
 
         # Even though NQ is quality agnostics, ignore the ones
@@ -152,17 +149,13 @@ def main():
         # consensus snp, i.e. we determine consensus different to
         # initial pileup ref. always call against cons_base. if
         # ref_base is called then drop silently later.
-        cons_var_snp = None
         if pcol.cons_base != pcol.ref_base:
-            #cons_var_snp = snp.ExtSNP(pcol.coord, pcol.ref_base, pcol.cons_base,
-            #                          base_counts[pcol.cons_base]/coverage,
-            #                          info_dict)
             LOG.debug("Listing position %s:%d because ref %s != cons %s (base counts = %s)" % (
                 pcol.chrom, pcol.coord+1, 
                 pcol.ref_base, pcol.cons_base,
                 base_counts))
             # bed output (zero-based, exclusive)
-            print "%s\t%d\t%d" % (pcol.chrom, pcol.coord, pcol.coord+1)
+            bed_fh.write("%s\t%d\t%d\n" % (pcol.chrom, pcol.coord, pcol.coord+1))
                 
 
     if num_lines == 0:
