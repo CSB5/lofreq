@@ -68,7 +68,8 @@ def prob_to_phredqual(prob):
     Turns an error probability into a phred value
     """
 
-    assert prob >= 0.0, ("Probability can't be smaller than 0")
+    assert prob >= 0.0, (
+        "Probability can't be smaller than 0 but got %f" % prob)
     try:
         return int(round(-10.0 * log10(prob)))
     except ValueError:
@@ -86,48 +87,48 @@ def phredqual_to_prob(phredqual):
 
 
 
-def count_bases(bases, allowed_bases = "ACGT"):
-    """
-    Counts bases and return counts as dict with base as key and count
-    as value. Also returns consensus base. Only counts allowed_bases.
-    No case conversion will be done!
-
-    Alternative collections.counter is only available in Python 2.7
-
-    doctest:
-    >>> count_bases("AAAA")[1]
-    'A'
-    >>> count_bases("AAAC")[1]
-    'A'
-    >>> count_bases("AACC")[1]
-    'N'
-    >>> count_bases("QQQQ")[1]
-    '-'
-    """
-
-    basecounts = dict()
-    for b in allowed_bases:
-        basecounts[b] = bases.count(b)
-
-    # sorted (ascending) list of key/value tuples. take last one
-    # [-1] and only its key [0]
-    #
-    if sum(basecounts.values()) == 0:
-        # empty? return gap
-        cons_base = "-"
-    else:
-        # ascending order
-        sorted_counts = sorted(basecounts.items(),
-                               key=lambda x: x[1])
-        if sorted_counts[-1][1] == sorted_counts[-2][1]:
-            # tie? return N
-            cons_base = 'N'
-        else:
-            # return "true" consensus
-            cons_base = sorted_counts[-1][0]
-            
-    return (basecounts, cons_base)
-
+#def count_bases(bases, allowed_bases = "ACGT"):
+#    """
+#    Counts bases and return counts as dict with base as key and count
+#    as value. Also returns consensus base. Only counts allowed_bases.
+#    No case conversion will be done!
+#
+#    Alternative collections.counter is only available in Python 2.7
+#
+#    doctest:
+#    >>> count_bases("AAAA")[1]
+#    'A'
+#    >>> count_bases("AAAC")[1]
+#    'A'
+#    >>> count_bases("AACC")[1]
+#    'N'
+#    >>> count_bases("QQQQ")[1]
+#    '-'
+#    """
+#
+#    basecounts = dict()
+#    for b in allowed_bases:
+#        basecounts[b] = bases.count(b)
+#
+#    # sorted (ascending) list of key/value tuples. take last one
+#    # [-1] and only its key [0]
+#    #
+#    if sum(basecounts.values()) == 0:
+#        # empty? return gap
+#        cons_base = "-"
+#    else:
+#        # ascending order
+#        sorted_counts = sorted(basecounts.items(),
+#                               key=lambda x: x[1])
+#        if sorted_counts[-1][1] == sorted_counts[-2][1]:
+#            # tie? return N
+#            cons_base = 'N'
+#        else:
+#            # return "true" consensus
+#            cons_base = sorted_counts[-1][0]
+#            
+#    return (basecounts, cons_base)
+#
 
 if __name__ == '__main__':
     import doctest

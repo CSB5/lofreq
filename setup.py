@@ -20,7 +20,8 @@ else:
     EXTRA_COMPILE_ARGS.append('-ansi')
     EXTRA_COMPILE_ARGS.append('-O0')
     EXTRA_COMPILE_ARGS.append('-g')
-    pass
+    # NDEBUG seems to be always define through Python's OPT
+    EXTRA_COMPILE_ARGS.append('-UNDEBUG') 
 
 
 import sys
