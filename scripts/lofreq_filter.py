@@ -238,7 +238,7 @@ def main():
 
 
     if opts.window_size != None:  
-        raise ValueError, ("Not implemented")
+        raise NotImplementedError # FIXME
 
 
         

@@ -61,7 +61,7 @@ package_dir = {'': 'lofreq'}
     
 setup(name = "lofreq_snpcaller",
       packages=['lofreq'],
-      version = "0.1",
+      version = "0.2",
       description="Low frequency variant caller",
       author="Andreas Wilm",
       author_email='wilma@gis.a-star.edu.sg',

@@ -78,7 +78,7 @@ class VcfWriter(object):
 
 
     def write_header(self, source=None, reference=None):
-        """FIXME
+        """Print VCF header
         """
 
         self.fhandle.write("##fileformat=VCFv4.0\n")
@@ -96,7 +96,7 @@ class VcfWriter(object):
 
 
     def write_variants(self, var_pos_list):
-        """FIXME
+        """Print given variants
         """
         
         #for var_pos in sorted(var_pos_list, key = lambda v: v.pos):
@@ -249,4 +249,5 @@ if __name__ == "__main__":
     LOG.info("FIXME: use simple_vcf instead of VcfWriter")
     main()
     LOG.info("Successful program exit")
-    
+
+

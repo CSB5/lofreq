@@ -355,7 +355,7 @@ snpcaller_qual(double *snp_pvalues,
                const int *noncons_counts, 
                const int bonf_factor, const double sig_level)
 {
-    double *probvec;
+    double *probvec = NULL;
     int i;
 #if TIMING
     clock_t start = clock();
