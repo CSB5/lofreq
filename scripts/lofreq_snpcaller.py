@@ -1,19 +1,22 @@
 #!/usr/bin/env python
-"""Detection of very rare / low frequency variants.
-
-In a first stage (LoFreq-NQ) an expectation-maximization will be used
-to get error probabilities for each possible base to base conversion.
-These are then be used to predict a first set of SNPs. This set will
-then be re-evaulated by a quality aware model (LoFreq-Q). Both models
-can be used independently.
-
-Variant positions with pvalue*sig-level < bonferroni are not reported.
-Reported p-values are not Bonferroni corrected.
+"""Ultra-sensitive detection of very rare / low frequency variants.
 
 Input is a samtools pileup (mpileup). It's best to increase samtools
-default coverage cap (-d). It's also recommended to quality
-recalibrated your BAM file.
+default coverage cap (-d). It's also recommended to recalibrate
+base-call quality-scores of your BAM file, for example by means of
+GATK.
 
+If quality values are missing LoFreq can use it's quality agnostic
+module (LoFreq-NQ). Here, an expectation-maximization will be used to
+compute error probabilities for each possible base to base conversion.
+These are then be used to predict a first set of SNPs.
+
+The quality-aware (LoFreq-Q; default) and quality agnostic (LoFreq-NQ)
+models can be used independently.
+
+Things to note:
+* Variant positions with pvalue*sig-level < bonferroni are not reported.
+* Reported p-values are not Bonferroni corrected.
 """
 
 
@@ -101,8 +104,7 @@ def read_exclude_pos_file(fexclude):
     return excl_pos
 
 
-
-    
+  
 
 
 def cmdline_parser():
@@ -142,17 +144,31 @@ def cmdline_parser():
     parser.add_option("", "--format",
                       dest="outfmt", 
                       choices=choices,
-                      default='vcf',
-                      help="Output format. One of: %s. Note: 'snp' is unaware of chromsomes!" % ', '.join(choices))
+                      default='snp',
+                      help="Output format. One of: %s. Note: 'snp' is unaware of chromosomes!" % ', '.join(choices))
     
-    parser.add_option("", "--em-only",
-                      action="store_true", dest="skip_qual_stage",
-                      help="Skip quality based stage,"
-                      " i.e. terminate after first stage (EM)")
-    parser.add_option("", "--qual-only",
-                      action="store_true", dest="skip_em_stage",
-                      help="Skip EM stage,"
-                      " i.e. only use quality based predictions")
+    default = True
+    parser.add_option("", "--lofreq-q-on",
+                      action="store_true", 
+                      dest="lofreq_q_on",
+                      default=default,
+                      help="Activate quality aware SNV calling (LoFreq-Q; default = %s)" % default)
+    parser.add_option("", "--lofreq-q-off",
+                      action="store_false", 
+                      dest="lofreq_q_on",
+                      help="De-activate quality aware SNV calling (LoFreq-Q)")
+
+    default=False
+    parser.add_option("", "--lofreq-nq-on",
+                      action="store_true",
+                      dest="lofreq_nq_on",
+                      default=default,
+                      help="Activate quality-agnostic SNV calling (LoFreq-NQ; default = %s)" % default)
+    parser.add_option("", "--lofreq-nq-off",
+                      action="store_false",
+                      dest="lofreq_nq_on",
+                      help="De-activate quality-agnostic SNV calling (LoFreq-NQ)")
+
     
     parser.add_option("-b", "--bonf",
                       dest="bonf", type="int", default=1,
@@ -369,6 +385,7 @@ def main():
         test_sensitivity('Q')
         sys.exit(0)
 
+        
     if opts.logfile:
         hdlr = logging.FileHandler(opts.logfile)
         formatter = logging.Formatter(
@@ -397,10 +414,16 @@ def main():
                 opts.fsnp))
         sys.exit(1)
 
+    if not opts.lofreq_nq_on and not opts.lofreq_q_on:
+        parser.error("Nothing to do. LoFreq-Q and LoFreq-NQ both switched off.")
+        sys.exit(1)
+
+        
     if opts.fsnp == '-':
         fhout = sys.stdout
     else:
         fhout = open(opts.fsnp, 'w')
+
     if opts.outfmt == 'snp':
         snp.write_header(fhout)
     else:
@@ -490,7 +513,7 @@ def main():
     
     # Get pileup data for EM training. Need base-counts and cons-bases
     #
-    if not opts.skip_em_stage and not opts.em_error_prob_file:
+    if opts.lofreq_nq_on and not opts.em_error_prob_file:
         cons_seq = []
         base_counts = []
         LOG.info("Processing pileup for EM training")
@@ -617,8 +640,12 @@ def main():
             cons_var_snp = snp.ExtSNP(pcol.coord, pcol.ref_base, pcol.cons_base,
                                       base_counts[pcol.cons_base]/coverage,
                                       info_dict)
+            # add cons_var_snp to new_snps later, otherwise it gets
+            # re-evaluated by lofreq-q
 
-        if not opts.skip_em_stage:
+        new_snps = []
+        
+        if opts.lofreq_nq_on:
             new_snps = lofreqnq.call_snp_in_column(
                 pcol.coord, base_counts, pcol.cons_base)
             for snpcall in new_snps:
@@ -629,8 +656,10 @@ def main():
         # overwriting old SNPs). Do this here and not in a separate
         # stage to avoid having to call mpileup yet again.
         #
-        if not opts.skip_qual_stage:
-            if opts.skip_em_stage or len(new_snps):
+        if opts.lofreq_q_on:
+            # if nq is on and no snps were predicted then don't do
+            # anything
+            if not opts.lofreq_nq_on or len(new_snps)!=0:
                 base_qual_hist = pcol.get_base_and_qual_hist(
                     keep_strand_info=False)
                 del base_qual_hist['N']
@@ -646,7 +675,7 @@ def main():
         for snpcall in new_snps:
             snpcall.info["type"] = 'low-freq-var'
         if cons_var_snp:
-            LOG.warn("Got cons_var_snp %s" % cons_var_snp)
+            # LOG.warn("Got cons_var_snp %s" % cons_var_snp)
             # exception: drop if we called against cons_base
             # (cons_var_snp) and called the initial ref_base
             new_snps = [s for s in new_snps if s.variant != cons_var_snp.wildtype]            
@@ -658,7 +687,7 @@ def main():
             LOG.info("Final LoFreq SNV on chrom %s: %s." % (
                 pcol.chrom, snpcall))
 
-            if opts.skip_em_stage or not opts.skip_qual_stage:
+            if opts.lofreq_q_on:
                 # Q
                 ref_qf = ign_bases_below_q
                 var_qf = max(ign_bases_below_q, noncons_filter_qual)
@@ -682,6 +711,7 @@ def main():
                 snpcall.info['pvalue-phred'] = prob_to_phredqual(
                     snpcall.info['pvalue'])
             else:
+                # consensus-vars
                 snpcall.info['pvalue-phred'] = 'NA'
                 
             dp4 = (ref_counts[0], ref_counts[1], var_counts[0], var_counts[1])
