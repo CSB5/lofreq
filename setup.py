@@ -39,7 +39,8 @@ if sys.version_info >= (2 , 8):
 #EXT_PATH = os.path.join("src", "ext")
 EXT_PATH = "lofreq_ext"
 EXT_SOURCES = [os.path.join(EXT_PATH, f)
-               for f in ["lofreq_ext.c", "fet.c",
+               for f in ["lofreq_ext.c", 
+                         "fet.c",
                          os.path.join("cdflib90", "dcdflib.c"),
                          os.path.join("cdflib90", "ipmpar.c"),
                          ]
@@ -50,7 +51,8 @@ extension = Extension("lofreq_ext",
                       include_dirs=[os.path.join(EXT_PATH, 'cdflib90')],
                       define_macros=DEFINE_MACROS,
                       extra_compile_args=EXTRA_COMPILE_ARGS,
-                      depends=[os.path.join(EXT_PATH, "cdflib90", "cdflib.h")],
+                      depends=[os.path.join(EXT_PATH, "cdflib90", "cdflib.h"), 
+                          os.path.join(EXT_PATH, "fet.h")]
                       #library_dirs=[],
                       #libraries=[],
                       )
@@ -59,7 +61,7 @@ extension = Extension("lofreq_ext",
 # where modules reside:
 package_dir = {'': 'lofreq'}
     
-setup(name = "lofreq_snpcaller",
+setup(name = "LoFreq",
       packages=['lofreq'],
       version = "0.2",
       description="Low frequency variant caller",

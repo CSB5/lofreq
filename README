@@ -1,24 +1,13 @@
 LoFreq: A sequence-quality aware, ultra-sensitive variant caller for
 high-throughput sequencing datasets
 
-
-AUTHORS
--------
-
-- Andreas Wilm <wilma@gis.a-star.edu.sg>,
-- Grace Yeo
-- Niranjan Nagarajan <nagarajann@gis.a-star.edu.sg>
-
+See https://sourceforge.net/p/lofreq/ for help.
 
 HOWTO
 -----
 
 Map your short reads against a reference genome (even better: a
 consensus genome) using an aligner of your choice, e.g. BWA.
-
-Optional, but recommended: extract a consensus genome from your
-mapping and remap against ist.
-
 Recalibrate quality scores in your BAM file with GATK. GATK will
 expect a list of known SNPs as input, which you won't have in most
 cases. Use lofreq_varpos_to_vcf.py to create a vcf file which can be
@@ -29,12 +18,10 @@ your BAM file with samtools (pipe into lofreq_snpcaller.py to save
 some space). Since you're interested in very rare variants it's best
 to increase the samtools coverage cap to a very high value (e.g. -d
 100000). If you used a read mapping program that supports indels, you
-better use samtools BAQ (default), otherwise you might want to try -E
-or even -B.
-
+better use samtools BAQ (default) or -E, otherwise use -B.
 
 SNV predictions created with lofreq_snpcaller.py should be filtered
-afterwards with lofreq_filter.py, based on SNV quality/p-value,
+afterwards with lofreq_filter.py, for example based on SNV quality/p-value,
 strand-bias, coverage etc.
 
 
@@ -56,3 +43,13 @@ for help
 If you want to install lofreq into a different directory use the
 --prefix flag.
 
+
+VERSIONS
+--------
+
+0.2 (2012-07-12): Second release. Optimal LoFreq-Q implementation as described in
+publication. SNV calls always against consensus, which is determined on-the-fly.
+If consensus differs from ref, we call it consensus-variation.
+
+0.1 (2011-11-10): First release, initially on github. Used for producing
+results in FIXME
