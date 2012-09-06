@@ -19,7 +19,6 @@ snp-base counts in the normal sample given the SNV-call frequency.
 
 
 
-
 #--- standard library imports
 #
 from __future__ import division
@@ -36,10 +35,10 @@ from optparse import OptionParser, OptionGroup
 # default is to use our own binomial extension instead of introducing
 # a scipy dependency. but it's great for testing/validation
 #
-USE_SCIPY = True
+USE_SCIPY = False
 if USE_SCIPY:
-    from scipy import stats
-    #from scipy.stats.distributions import binom
+    from scipy.stats import binom
+    binom_cdf = binom.cdf
 
 
 #--- project specific imports
@@ -48,7 +47,7 @@ from lofreq import pileup
 #from lofreq.utils import count_bases
 from lofreq import snp
 if not USE_SCIPY:
-    from lofreq_ext import binom_sf
+    from lofreq_ext import binom_cdf
 from lofreq import conf
 
 # invocation of ipython on exceptions
@@ -72,9 +71,10 @@ LOG = logging.getLogger("")
 logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
+if USE_SCIPY:
+    LOG.warn("Using scipy functions instead of internal ones. Should only be used for debugging.")
+
 MYNAME = os.path.basename(sys.argv[0])
-
-
 
     
 
@@ -145,6 +145,7 @@ def cmdline_parser():
 def main():
     """
     The main function
+
     """
 
     parser = cmdline_parser()
@@ -243,11 +244,8 @@ def main():
                     pcol.coord+1, this_snp.wildtype, this_snp.variant, cmp_freq,
                     ref_count, alt_count, alt_count/float(cov)))
 
-            if USE_SCIPY:
-                pvalue = stats.binom.cdf(alt_count+1, cov, cmp_freq)
-            else:
-                # FIXME
-                raise ValueError, ("Haven't coded up cdf support yet. Use scipy")
+            pvalue = binom_cdf(alt_count+1, cov, cmp_freq)
+
             if pvalue < opts.sig_thresh:
                 print "%s: number of 'SNP' bases significantly low" % (this_snp.identifier())
             else:

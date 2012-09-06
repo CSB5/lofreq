@@ -29,8 +29,8 @@ import os
 #
 USE_SCIPY = False
 if USE_SCIPY:
-    from scipy import stats
-    #from scipy.stats.distributions import binom
+    from scipy.stats import binom
+    binom_sf = binom.sf
 
 
 #--- project specific imports
@@ -39,6 +39,7 @@ if USE_SCIPY:
 from lofreq import snp
 if not USE_SCIPY:
     from lofreq_ext import binom_sf
+
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
@@ -77,8 +78,7 @@ logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
 if USE_SCIPY:
-    LOG.warn("Using scipy functions instead of internal ones")
-
+    LOG.warn("Using scipy functions instead of internal ones. Should only be used for debugging.")
 
 def expectation(base_counts, ref_seq, snp_base, snp_base_error_prob,
                 bonf_factor, sig_thresh, from_base='N'):
@@ -108,23 +108,9 @@ def expectation(base_counts, ref_seq, snp_base, snp_base_error_prob,
         coverage = sum(base_counts.values())
         if coverage == 0:
             continue
-        
-        if USE_SCIPY:
-            # old (less accurate): complementary cumulative
-            # distribution function
-            # pvalue = (1 - bdist.cdf(base_counts[snp_base] - 1))
 
-            # binom.sf
-            #bdist = binom(coverage, snp_base_error_prob)
-            # complementary cumulative distribution function
-            #pvalue = bdist.sf(base_counts[snp_base])
-
-            pvalue = stats.binom.sf(base_counts[snp_base]-1,
-                coverage, snp_base_error_prob)
-
-        else:
-            pvalue  = binom_sf(coverage, base_counts[snp_base]-1,
-                               snp_base_error_prob)
+        pvalue = binom_sf(base_counts[snp_base]-1,
+                          coverage, snp_base_error_prob)        
             
         if pvalue * bonf_factor < sig_thresh:
             snp_calls.append((pos, pvalue))

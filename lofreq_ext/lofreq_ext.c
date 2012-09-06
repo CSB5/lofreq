@@ -486,8 +486,8 @@ py_binom_sf(PyObject *self, PyObject *args)
     double out_prob;
 
     if (!PyArg_ParseTuple(args, "iid",
-                          & num_trials,
                           & num_successes,
+                          & num_trials,
                           & prob_success)) {
         PyErr_SetString(PyExc_TypeError, "Failed to parse arguments.");
         return NULL;
@@ -515,6 +515,53 @@ py_binom_sf(PyObject *self, PyObject *args)
     return Py_BuildValue("d", out_prob);
 }
 /* end of py_binom_sf() */
+
+
+/**
+ * @brief CDF 1.0-binom_sf()
+ * 
+ * @warn this is just a hack which might not have same precision as if
+ * we used cdfbin directly
+ * 
+ */
+static PyObject *
+py_binom_cdf(PyObject *self, PyObject *args)
+{
+    int num_trials;
+    int num_successes; 
+    double prob_success;
+    double out_prob;
+
+    if (!PyArg_ParseTuple(args, "iid",
+                          & num_successes,
+                          & num_trials,
+                          & prob_success)) {
+        PyErr_SetString(PyExc_TypeError, "Failed to parse arguments.");
+        return NULL;
+    }
+
+    if (num_successes<1) {
+         return Py_BuildValue("d", 1.0);
+    }
+
+    if ((num_trials<num_successes) 
+        ||
+        (num_trials<0) 
+        ||
+        (prob_success>1.0 || prob_success<0.0)
+        ) {
+        PyErr_SetString(PyExc_ValueError, "Arguments for binom_cdf() don't make sense");
+        return NULL;        
+    }
+
+    if (binom_sf(&out_prob, num_trials, num_successes, prob_success)) {
+        PyErr_SetString(PyExc_TypeError, "binom_sf() failed");
+        return NULL;
+    }
+    
+    return Py_BuildValue("d", 1.0-out_prob);
+}
+/* end of py_binom_cdf() */
 
 
 
@@ -721,6 +768,8 @@ LoFreqExtMethods[] = {
      METH_VARARGS, "Calculate SNPs for one pileup columns"},
     {"binom_sf", py_binom_sf, 
      METH_VARARGS, "Survival function (1-cdf)"},
+    {"binom_cdf", py_binom_cdf, 
+     METH_VARARGS, "Cumulative density function."},
     {"kt_fisher_exact", py_kt_fisher_exact,
      METH_VARARGS, "Fisher's Exact Test"},
 
