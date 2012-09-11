@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 """Create a vcf file from variant positions in a pileup. Mainly used
-as input for GATK quality recalibration
+as input for GATK quality recalibration.
+
+Make sure to use a reference when creating the pileup. Otherwise all
+reference bases in the pileup will appear to be N, which makes them
+unusable.
 """
 
 # Copyright (C) 2011, 2012 Genome Institute of Singapore
@@ -199,25 +203,23 @@ def main():
     vcfwriter.write_header(MYNAME)
     
     freq_threshold = opts.threshold
+    num_skipped = 0
+    num_total = 0
     for line in pileup_fhandle:
         pcol = pileup.PileupColumn(line)
-        # remove ambigious bases. will affect coverage and therefore
-        # frequency otherwise
-        #pcol.rem_ambiguities()
-        #pcol.rem_bases_below_qual(ign_bases_below_q)
+        num_total += 1
 
         # skip processing of columns with ambigious reference bases
         # hoping that gatk will skip them anyway
         if pcol.ref_base not in 'ACGT':
             LOG.info(
-                "Skipping col %d because of amibigous reference base %s" % (
+                "Skipping col %d because of ambigious reference base %s" % (
                     pcol.coord+1, pcol.ref_base))
+            num_skipped += 1
             continue
 
         # count bases, ignore quality completely. GATK should be able to handle this
         base_counts = pcol.get_all_base_counts(min_qual=0)
-        # delete N's. counts otherwise affect coverage and
-        # frequency.
         del base_counts['N']
 
         # sum over each base, and strand
@@ -243,6 +245,14 @@ def main():
                 
     if opts.fpileup != '-':
         pileup_fhandle.close()
+
+    if num_total == 0:
+        LOG.critical("No pileup information seen!?") 
+        sys.exit(1)
+    elif num_skipped/float(num_total) > 0.5:
+        LOG.critical("%d%% of all pileup columns contained unusable information"
+                     " (probably all refs were N?!)" % (num_skipped/float(num_total)*100)) 
+        sys.exit(1)
 
         
 if __name__ == "__main__":

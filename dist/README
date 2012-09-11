@@ -1,0 +1,2 @@
+To create a new dist type:
+Update version in setup.py and use 'python setup.py sdist'

@@ -15,7 +15,6 @@
 # General Public License for more details.
 
 
-
 #--- standard library imports
 #
 from __future__ import division
@@ -90,6 +89,16 @@ def expectation(base_counts, ref_seq, snp_base, snp_base_error_prob,
     Calculated pvalue is the tail of the binomial distribution,
     which is defined by the coverage at that position, and the
     assumed error probability for the snp_base.
+
+
+    doctest for our own SF function
+    >>> from scipy.stats import binom
+    >>> x = binom.sf(10, 1000, 0.01)
+    >>> from lofreq_ext import binom_sf
+    >>> y = binom_sf(10, 1000, 0.01)
+    >>> '%.6f' % x == '%.6f' % y
+    True
+
     """
 
     assert len(base_counts) == len(ref_seq)
@@ -401,4 +410,6 @@ class EmBasedSNPCaller(object):
 
 
 if __name__ == "__main__":
-    pass
+     import doctest
+     doctest.testmod()
+     

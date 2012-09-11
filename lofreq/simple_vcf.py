@@ -262,7 +262,7 @@ def write(records, fh=sys.stdout):
     
     
 
-if __name__ == "__main__":
+def test():
 
     print "just testing..."
 
@@ -301,3 +301,9 @@ if __name__ == "__main__":
     print "# testing write()"
 
     write(records)
+
+
+
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()

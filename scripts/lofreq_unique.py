@@ -146,6 +146,14 @@ def main():
     """
     The main function
 
+    doctest for our own cdf function
+    >>> from scipy.stats import binom
+    >>> x = binom.cdf(10, 1000, 0.01)
+    >>> from lofreq_ext import binom_cdf
+    >>> y = binom_cdf(10, 1000, 0.01)
+    >>> print '%.6f' % x == '%.6f' % y
+    True
+    
     """
 
     parser = cmdline_parser()

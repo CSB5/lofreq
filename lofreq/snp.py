@@ -296,14 +296,6 @@ def test(fsnp_in=None, fsnp_out=None):
 
 
 if __name__ == "__main__":
-    import sys
-    try:
-        fsnp_in = sys.argv[1]
-    except IndexError:
-        fsnp_in = None
-    try:
-        fsnp_out = sys.argv[2]
-    except IndexError:
-        fsnp_out = None
-    test(fsnp_in, fsnp_out)
-    sys.exit(0)
+    import doctest
+    doctest.testmod()
+    

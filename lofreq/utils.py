@@ -66,6 +66,10 @@ __license__ = "GPL2"
 def prob_to_phredqual(prob):
     """
     Turns an error probability into a phred value
+    
+    >>> prob_to_phredqual(0.01)
+    20
+    
     """
 
     assert prob >= 0.0, (
@@ -80,6 +84,10 @@ def prob_to_phredqual(prob):
 def phredqual_to_prob(phredqual):
     """
     Turns a phred quality into an error probability
+
+    >>> '%.2f' % phredqual_to_prob(20)
+    '0.01'
+
     """
 
     assert phredqual >= 0, ("Phred-quality must be >= 0, but is %s" % phredqual)
