@@ -68,7 +68,7 @@ setup(name = "LoFreq",
       author="Andreas Wilm",
       author_email='wilma@gis.a-star.edu.sg',
       #long_description = """FIXME.""" 
-      url='http://www.gis.a-star.edu.sg/', # FIXME
+      url='https://sourceforge.net/p/lofreq/', # FIXME
       scripts = ['scripts/lofreq_snpcaller.py',
                  #'scripts/lofreq_bonf.py',
                  'scripts/lofreq_pileup_summary.py',
