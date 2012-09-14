@@ -198,7 +198,10 @@ def main():
             pileup_fhandle = open(opts.fpileup, 'r')
 
 
-    vcf_handle = open(opts.fvcf, 'w')
+    if opts.fvcf == '-':
+        vcf_handle = sys.stdout
+    else:
+        vcf_handle = open(opts.fvcf, 'w')
     vcfwriter = VcfWriter(vcf_handle)
     vcfwriter.write_header(MYNAME)
     
@@ -240,8 +243,8 @@ def main():
                                  pcol.ref_base, alt_base)
                 vcfwriter.write_variants([var_pos])
 
-
-    vcf_handle.close()
+    if vcf_handle != sys.stdout:
+        vcf_handle.close()
                 
     if opts.fpileup != '-':
         pileup_fhandle.close()
