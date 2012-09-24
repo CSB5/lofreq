@@ -497,15 +497,15 @@ py_binom_sf(PyObject *self, PyObject *args)
          return Py_BuildValue("d", 1.0);
     }
 
-    if ((num_trials<num_successes) 
-        ||
-        (num_trials<0) 
+    /*if ((num_trials<num_successes) 
+        || -> 1.0!
+    if ((num_trials<0)
         ||
         (prob_success>1.0 || prob_success<0.0)
         ) {
         PyErr_SetString(PyExc_ValueError, "Arguments for binom_sf() don't make sense");
         return NULL;        
-    }
+    }*/
 
     if (binom_sf(&out_prob, num_trials, num_successes, prob_success)) {
         PyErr_SetString(PyExc_TypeError, "binom_sf() failed");
@@ -540,18 +540,19 @@ py_binom_cdf(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    if (num_successes<1) {
-         return Py_BuildValue("d", 1.0);
-    }
-
-    if ((num_trials<num_successes) 
-        ||
-        (num_trials<0) 
-        ||
-        (prob_success>1.0 || prob_success<0.0)
-        ) {
-        PyErr_SetString(PyExc_ValueError, "Arguments for binom_cdf() don't make sense");
+    /* mimick behaviour of scipy even though I don't understand their decisions */
+    if (prob_success>1.0 || prob_success<0.0) {
+        PyErr_SetString(PyExc_ValueError, "probability values passed to binom_cdf() don't make sense");
         return NULL;        
+    }
+    if (num_trials<0) {
+         return Py_BuildValue("d", 1.0);
+    }    
+    if (num_successes<0) {
+         return Py_BuildValue("d", 0.0);
+    }
+    if (num_successes>=num_trials) {
+         return Py_BuildValue("d", 1.0);    
     }
 
     if (binom_sf(&out_prob, num_trials, num_successes, prob_success)) {
