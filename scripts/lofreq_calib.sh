@@ -128,6 +128,10 @@ else
 fi
 
 
+# Expecting version 2 of GATK
+# See http://www.broadinstitute.org/gatk/gatkdocs/org_broadinstitute_sting_gatk_walkers_bqsr_BaseRecalibrator.html
+# and http://gatkforums.broadinstitute.org/discussion/44/base-quality-score-recalibrator
+
 recal=$(dirname $bam_out)/$(basename $bam_in .bam)_recal.csv
 if [ -s $recal ]; then
 	echo "Reusing existing recal file $recal" 1>&2

@@ -3,8 +3,8 @@
 
 Input is a samtools pileup (mpileup). It's best to increase samtools
 default coverage cap (-d). It's also recommended to recalibrate
-base-call quality-scores of your BAM file, for example by means of
-GATK.
+base-call quality-scores and realign indels (both can be done with
+GATK).
 
 If quality values are missing LoFreq can use it's quality agnostic
 module (LoFreq-NQ). Here, an expectation-maximization will be used to
@@ -300,8 +300,7 @@ def test_sensitivity(mode):
                         break
                     num_noncons += 1
                     if num_noncons == cov:
-                        break
-    
+                        break    
         print
 
     
@@ -639,7 +638,7 @@ def main():
             info_dict["type"] = 'consensus-var'
             cons_var_snp = snp.ExtSNP(pcol.coord, pcol.ref_base, pcol.cons_base,
                                       base_counts[pcol.cons_base]/coverage,
-                                      info_dict)
+                                      info_dict, pcol.chrom)
             # add cons_var_snp to new_snps later, otherwise it gets
             # re-evaluated by lofreq-q
 
@@ -683,10 +682,13 @@ def main():
 
             
         for snpcall in new_snps:
+            # the calling routines don't know about chrom, so add it here
+            snpcall.chrom  = pcol.chrom
 
-            LOG.info("Final LoFreq SNV on chrom %s: %s." % (
-                pcol.chrom, snpcall))
+            LOG.info("Final LoFreq SNV: %s." % (
+                snpcall))
 
+            
             if opts.lofreq_q_on:
                 # Q
                 ref_qf = ign_bases_below_q

@@ -52,6 +52,19 @@ class SNP(object):
     Original used http://www.hgvs.org/mutnomen/recs.html as template but than got rid of seqtype
     """
 
+        
+    def __init__(self, pos, wildtype, variant, chrom=None):
+        """
+        pos should be zero-offset
+        """
+
+        assert wildtype != variant        
+        self.pos = pos
+        self.wildtype = wildtype
+        self.variant = variant
+        self.chrom = chrom
+        
+
     def __eq__(self, other):
         """
         if you define __eq__ you better implement __ne__ as well
@@ -59,7 +72,8 @@ class SNP(object):
 
         if self.pos == other.pos and \
            self.wildtype == other.wildtype and \
-           self.variant == other.variant:
+           self.variant == other.variant and \
+           self.chrom == other.chrom:
             return True
         else:
             return False
@@ -72,16 +86,6 @@ class SNP(object):
 
         return not self.__eq__(other)
 
-        
-    def __init__(self, pos, wildtype, variant):
-        """
-        pos should be zero-offset
-        """
-
-        assert wildtype != variant        
-        self.pos = pos
-        self.wildtype = wildtype
-        self.variant = variant
     
 
     def __str__(self):
@@ -92,14 +96,16 @@ class SNP(object):
         """
 
         outstr = "%d %s>%s" % (self.pos+1, self.wildtype, self.variant)
+        if self.chrom:
+            outstr = "%s %s" % (self.chrom, outstr)
         return outstr
 
 
     def __hash__(self):
         """
-        Needed for sets
+        Needed for sets. FIXME why not just use __str__?
         """
-        return hash("%d %s>%s" % (self.pos+1, self.wildtype, self.variant))
+        return hash("%s %d %s>%s" % (self.chrom, self.pos+1, self.wildtype, self.variant))
 
 
 
@@ -120,12 +126,12 @@ class ExtSNP(SNP):
     ie only the basic SNP class comparison will be used.
     """
  
-    def __init__(self, pos, wildtype, variant, freq, info=dict()):
+    def __init__(self, pos, wildtype, variant, freq, info=dict(), chrom=None):
         """
         pos should be zero offset
         """
  
-        SNP.__init__(self, pos, wildtype, variant)
+        SNP.__init__(self, pos, wildtype, variant, chrom)
 
         self.freq = freq
         if info:
@@ -152,8 +158,11 @@ class ExtSNP(SNP):
         #   outstr = "%s %f" % (outstr, self.pvalue)
 
         outstr = '%d %s>%s %g' % (self.pos+1,
-                                    self.wildtype, self.variant,
-                                    self.freq)
+                                  self.wildtype, self.variant,
+                                  self.freq)
+        if self.chrom:
+            outstr = '%s %s' % (self.chrom, outstr)
+
         if self.info:
             info_str = ';'.join(["%s:%s"  % (k, v)
                                  for k, v in sorted(self.info.iteritems())])
@@ -200,12 +209,15 @@ class DengueSNP(ExtSNP):
             
     
 
-def write_header(fh=sys.stdout):
+def write_header(fh=sys.stdout, has_chrom=False):
     """
     """
-    
-    fh.write("%s\n" % "Pos SNP Freq Info")
 
+    if has_chrom:
+        fh.write("%s\n" % "Chrom Pos SNP Freq Info")
+    else:
+        fh.write("%s\n" % "Pos SNP Freq Info")
+    
     
 def write_record(snp_record, fh=sys.stdout):
     """write a single SNP to file
@@ -214,15 +226,13 @@ def write_record(snp_record, fh=sys.stdout):
     fh.write("%s\n" % snp_record)
     
 
-def write_snp_file(fhandle, snp_list):
+def write_snp_file(fhandle, snp_list, has_chrom=False):
     """Writes SNP to a filehandle
     """
     
-    write_header(fhandle)        
+    write_header(fhandle, has_chrom)        
     for snp in sorted(snp_list, key=lambda s: s.pos):
         write_record(snp, fhandle)
-
-        
 
     
 
@@ -240,16 +250,21 @@ def parse_snp_file(filename, extra_fieldname='pvalue', has_header=False):
 
     for line in fhandle:
         line = line.rstrip(os.linesep)
-        if len(line)==0 or line.startswith("#") or line.startswith("Pos"):
+        if len(line)==0 or line.startswith("#") or line.startswith("Pos") or line.startswith("Chrom"):
             continue
-        
-        try:
-            (pos, snp_str, freq, info_str) = line.split()
-            pos = int(pos)-1 # internally zero offset
-        except ValueError:
-            sys.stderr.write(
-                "WARN: Failed to parse line from %s. Line was '%s'" % (filename, line))
+        line_split = line.split()
+        if len(line_split) == 5:
+            (chrom, pos, snp_str, freq, info_str) = line_split
+        elif len(line_split) == 4:
+            chrom = None
+            (pos, snp_str, freq, info_str) = line_split
+        else:
+            raise ValueError, (
+                "Failed to parse line from %s. Line was '%s'" % (filename, line))
+
+        pos = int(pos)-1
         freq = float(freq)
+        
         # old versions don't contain the wildtype. use 'N' instead.
         if ">" in snp_str:
             (wildtype, variant) = snp_str.split(">")
@@ -261,7 +276,7 @@ def parse_snp_file(filename, extra_fieldname='pvalue', has_header=False):
             info = dict([e.split(':') for e in info_str.split(';')])
         except ValueError:
             info = {"generic-info": info_str}
-        new_snp = ExtSNP(pos, wildtype, variant, freq, info)
+        new_snp = ExtSNP(pos, wildtype, variant, freq, info, chrom)
         ret_snp_list.append(new_snp)
 
     if fhandle != sys.stdin:

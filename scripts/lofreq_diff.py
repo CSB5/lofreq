@@ -89,6 +89,7 @@ def run_diff(snv_file_1, snv_file_2, mode):
         out_snvs = []
         # can't reuse the original SNV entries: need to compute avg freqs etc.
         for s in out_snvs_ids:
+            chrom = snvs_1_dict[s].chrom
             pos = snvs_1_dict[s].pos
             wt = snvs_1_dict[s].wildtype
             var = snvs_1_dict[s].variant
@@ -96,7 +97,7 @@ def run_diff(snv_file_1, snv_file_2, mode):
             d = dict()
             d['common-snv-src-1'] = snv_file_1
             d['common-snv-src-2'] = snv_file_2
-            out_snvs.append(snp.ExtSNP(pos, wt, var, freq, d))
+            out_snvs.append(snp.ExtSNP(pos, wt, var, freq, d, chrom))
     else:
         raise ValueError, "Unknown mode of action %s" % mode
 
@@ -143,7 +144,7 @@ def main():
     """
     The main function
     """
-
+    
     parser = cmdline_parser()
     (opts, args) = parser.parse_args()
 

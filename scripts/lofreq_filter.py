@@ -221,7 +221,7 @@ def main():
 
     if opts.min_snp_phred != None:  
         tests.append((
-            lambda s: int(s.info['pvalue-phred']) >= opts.min_snp_phred,
+            lambda s: s.info['pvalue-phred'] == 'NA' or int(s.info['pvalue-phred']) >= opts.min_snp_phred,
             "minimum SNP phred"
             ))
 
@@ -254,6 +254,5 @@ def main():
 
     
 if __name__ == "__main__":
-    LOG.critical("WARN: phred value filtering might fail on type consensus-var (opposed to low-freq-var)")
     main()
     LOG.info("Successful program exit")

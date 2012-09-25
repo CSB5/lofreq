@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 """
-Helper functions for samtools' m/pileup
+Helper functions for samtools' [m]pileup
 
-Should be replaced with PySam in the future once mpileup and all its options are supported properly
+Should be replaced with PySam in the future once mpileup and all its
+options are supported properly
 """
 
 
@@ -267,6 +268,10 @@ class PileupColumn():
         '-[0-9]+[ACGTNacgtn]+' represents a deletion from the
         reference. The deleted bases will be presented as '*' in the
         following lines.
+
+
+        FIXME: this is slow (makes up a fifth of the cummulative time of
+        parse_line)
         """
        
         # First the initial +- markup for which no quality value

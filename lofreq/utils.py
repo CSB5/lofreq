@@ -16,6 +16,8 @@
 # General Public License for more details.
 
 
+# FIXME: get rid of this altogether by using the functions in lofreq_ext. Just make them behave identically first and check timing benchmarks
+
 
 #--- standard library imports
 #

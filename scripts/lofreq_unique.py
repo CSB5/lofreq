@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/local/python-2.7.2/bin/python
 """Test wether a SNV call uniquely made in one sample (e.g. tumour
 tissue), but not in another (e.g. normal/blood tissue), is 'unique' or
 significant'. Done by performing a binomial test on the prospective
@@ -90,16 +90,20 @@ def cmdline_parser():
 
     parser.add_option("-d", "--snpdiff",
                       dest="snpdiff_file", # type="string|int|float"
-                      help="List of SNPs, predicted from other sample and not predicted for this mapping (e.g. somatic calls)")
+                      help="List of SNPs, predicted from other sample and not predicted for this mapping/BAM-file (e.g. somatic calls)")
     parser.add_option("-b", "--bam",
                       dest="bam_file", # type="string|int|float"
-                      help="BAM file to check")
+                      help="BAM file to check (i.e. given SNVs where unique to another sample")
     parser.add_option("-r", "--reffa",
                       dest="ref_fasta_file", # type="string|int|float"
                       help="Reference fasta file")
     parser.add_option("-c", "--chrom",
                       dest="chrom", # type="string|int|float"
                       help="Chromsome/sequence for pileup")
+    parser.add_option("-o", "--out",
+                      dest="out", # type="string|int|float"
+                      default="-",
+                      help="Output file ('-' for stdout, which is default)")
 
 
     opt_group = OptionGroup(parser, "Optional arguments", "")
@@ -184,6 +188,15 @@ def main():
                 "file '%s' does not exist.\n" % in_file)
             sys.exit(1)
             
+    if opts.out == '-':
+        fh_out = sys.stdout
+    else:
+        if os.path.exists(opts.out):
+            sys.stderr.write(
+                "Refusing to overwrite existing file '%s'.\n" % opts.out)
+            sys.exit(1)
+        fh_out = open(opts.out, 'w')
+            
     if opts.uniform_freq or opts.uniform_freq == 0:
         if opts.uniform_freq < 1 or opts.uniform_freq > 100:
             LOG.fatal("Frequency out of valid range (1-100%)\n")
@@ -209,6 +222,7 @@ def main():
         fh_bed_region.write("%s\t%d\n" % (opts.chrom, s.pos+1))
     fh_bed_region.close()
 
+    
     cmd_args = ["samtools", "mpileup", "-l", bed_region_file, '-f', opts.ref_fasta_file]
     cmd_args.extend(opts.samtools_args.split())
     cmd_args.append(opts.bam_file)
@@ -239,7 +253,7 @@ def main():
             alt_count = nonref_counts[this_snp.variant]
 
             if cov == 0:
-                print "%s: not rejected (no coverage)" % (this_snp)
+                fh_out.write("%s: not rejected (no coverage)\n" % (this_snp))
                 continue
 
             if opts.uniform_freq:
@@ -255,9 +269,9 @@ def main():
             pvalue = binom_cdf(alt_count+1, cov, cmp_freq)
 
             if pvalue < opts.sig_thresh:
-                print "%s: number of 'SNP' bases significantly low" % (this_snp.identifier())
+                fh_out.write("%s: unique (number of 'SNP' bases significantly low)\n" % (this_snp.identifier()))
             else:
-                print "%s: not rejected" % (this_snp.identifier())
+                fh_out.write("%s: not necessarily unique (not rejected)\n" % (this_snp.identifier()))
                 
         # FIXME report left over SNPs at the end as no coverage SNPs
         
@@ -266,6 +280,8 @@ def main():
     os.unlink(bed_region_file)
     #if len(snps):
     #    LOG.warn("Unremoved SNPs left")
+    if fh_out != sys.stdout:
+        fh_out.close()
         
 if __name__ == "__main__":
     main()
