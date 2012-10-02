@@ -1,0 +1,7 @@
+# indeces
+denv2-pseudoclonal.bam.bai
+denv2-pseudoclonal_cons.fa.fai
+
+# temp output from test.sh
+denv2-pseudoclonal_lofreq-raw.snp
+denv2-pseudoclonal_lofreq-sbf.snp

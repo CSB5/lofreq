@@ -101,7 +101,7 @@ def read_exclude_pos_file(fexclude):
         excl_pos.extend(range(start, end))
     fhandle.close()
 
-    return excl_pos
+    return set(excl_pos)
 
 
   
@@ -134,7 +134,8 @@ def cmdline_parser():
                       " Also consider using -B/-E to influence BAQ computation")
     parser.add_option("-e", "--exclude",
                       dest="fexclude", # type="string|int|float"
-                      help="Exclude positions listed in this file"
+                      help="Deprecated (Use bed file as pileup argument -l instead)."
+                      " Exclude positions listed in this file"
                       " format is: start end [comment ...]"
                       " , with zero-based, half-open coordinates")
     parser.add_option("-o", "--out",
@@ -173,8 +174,9 @@ def cmdline_parser():
     parser.add_option("-b", "--bonf",
                       dest="bonf", type="int", default=1,
                       help="Bonferroni correction factor"
-                      " (e.g. seqlen-minus-num-excl-pos)*3 to be stringent)"
-                      " Higher values speed up LoFreq-Q in high coverage data.")
+                      " (e.g. seqlen*3 to be stringent)"
+                      " Higher values might speed up LoFreq-Q in high coverage data."
+                      " Alternatively filter based on SNV qualities later")
     parser.add_option("-s", "--sig-level",
                       dest="sig_thresh", type="float",
                       default=conf.DEFAULT_SIG_THRESH,
@@ -424,7 +426,9 @@ def main():
         fhout = open(opts.fsnp, 'w')
 
     if opts.outfmt == 'snp':
-        snp.write_header(fhout)
+        # No wan'a
+        #snp.write_header(fhout)
+        pass
     else:
         simple_vcf.write_header(fhout)
 
@@ -754,6 +758,5 @@ def main():
 
 if __name__ == "__main__":
     main()
-    #LOG.info("FIXME Implement multi-processing (calls are per column!)")
     LOG.info("Successful program exit")
-    LOG.warn("You will want to use lofreq_filter.py to post-process the SNV calls predicted here.")
+    LOG.warn("Use lofreq_filter.py to post-process the just produced SNV calls.")
