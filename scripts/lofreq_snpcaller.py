@@ -78,6 +78,164 @@ logging.basicConfig(level=logging.WARN,
 
 
 
+
+def process_pileup_line(line, lofreq_nq=None, lofreq_q=None,
+                        excl_pos=None, what='snp'):
+    """Will use lofreq_nq and then lofreq_q in that order (if not
+    None) to process a pileup column to call SNVs.
+
+    return type is define by what, which can be snp or vcf
+    
+    excl_pos is deprecated. Use "samtools mpileup -l bedfile" instead
+    to define regions to use.
+    """
+
+    assert lofreq_nq or lofreq_q
+    assert what in ['snp', 'vcf']
+    
+    pcol = pileup.PileupColumn(line)
+
+    # return if we are supposed to ignore this position
+    if pcol.coord in excl_pos:
+        LOG.debug("Skipping col %d because of exclusion" % (pcol.coord+1))
+        return
+
+    # return if we don't have a consensus (nothing to call against)
+    if pcol.cons_base not in 'ACGT':
+        LOG.info("Skipping col %d because of ambigious consensus %s" % (
+                pcol.coord+1, pcol.cons_base))
+        return
+
+
+    # derive base counts and coverage
+    #
+    base_counts = pcol.get_all_base_counts(
+        min_qual=3, keep_strand_info=False)
+    # Even though NQ is quality agnostic, ignore the ones marked with
+    # Illumina's Read Segment Indicator Q2, since those are not
+    # supposed to be used according to Illumina
+    del base_counts['N']
+    # exit early if no bases found
+    if sum(base_counts.values())==0:
+        LOG.info("Zero coverage in col %d" % (pcol.coord+1))
+        return
+
+
+    # deal with "consensus variants"
+    #
+    # consensus snp, i.e. we determine consensus different to initial
+    # pileup ref (ref_base). Always call against cons_base. If
+    # ref_base is called then drop silently later.
+    #
+    cons_var_snp = None
+    if pcol.cons_base != pcol.ref_base:
+        # FIXME: should become vcf record immediately
+        # SNP is deprecated and should be generated from vcf
+        info_dict = dict()
+        # reusing base_counts from above
+        for (k, v) in base_counts.iteritems():
+            info_dict["basecount-%s" % k] = v
+        coverage = sum(base_counts.values())
+        info_dict['coverage'] = coverage
+        info_dict["type"] = 'consensus-var'
+        cons_var_snp = snp.ExtSNP(pcol.coord, pcol.ref_base, pcol.cons_base,
+                                  base_counts[pcol.cons_base]/coverage,
+                                  info_dict)
+        # add cons_var_snp to new_snps later, otherwise it gets
+        # re-evaluated by lofreq-q
+
+        
+    new_snps = []
+    # use lofreq-nq if activated
+    if lofreq_nq:
+        new_snps = lofreq_nq.call_snp_in_column(
+            pcol.coord, base_counts, pcol.cons_base)
+        for snpcall in new_snps:
+            LOG.info("LoFreq-NQ SNV: %s." % (snpcall))
+            
+    # use lofreq-q if lofreq-nq was off or to re-evaluate its
+    # predictions (overwriting the originals)
+    #
+    if lofreq_q:
+        # if nq is off or if some snps were predicted, than
+        # re-evaluate
+        if not lofreq_nq or len(new_snps) != 0:
+            base_qual_hist = pcol.get_base_and_qual_hist(
+                keep_strand_info=False)
+            del base_qual_hist['N']
+            new_snps = lofreq_q.call_snp_in_column(
+                pcol.coord, base_qual_hist, pcol.cons_base)
+            for snpcall in new_snps:
+                LOG.info("LoFreq-Q SNV: %s." % (snpcall))
+
+                
+    # ---
+    #  predictions in all stages done. the rest is stupid formatting
+    # ---
+
+    
+    for snpcall in new_snps:
+        snpcall.info["type"] = 'low-freq-var'
+        
+    # merge in consensus variants (but drop if we called the ref_base
+    # a snv)
+    if cons_var_snp:
+        new_snps = [s for s in new_snps
+                    if s.variant != cons_var_snp.wildtype]            
+        new_snps.append(cons_var_snp)
+
+
+    ret = []    
+    for snpcall in new_snps:
+        # the calling routines don't know about chrom, so add it here
+        snpcall.chrom  = pcol.chrom
+        LOG.info("Final LoFreq SNV: %s." % (snpcall))
+
+        # add phred quality
+        #
+        if snpcall.info['type'] == 'low-freq-var':
+            snpcall.info['pvalue-phred'] = prob_to_phredqual(
+                snpcall.info['pvalue'])
+        else:
+            # consensus-vars
+            snpcall.info['pvalue-phred'] = 'NA'
+
+        # add strand-bias info
+        #
+        if lofreq_q:
+            # Q
+            ref_qf = lofreq_q.ign_bases_below_q
+            var_qf = max(lofreq_q.ign_bases_below_q, 
+                         lofreq_q.noncons_filter_qual)
+        else:
+            # NQ
+            ref_qf = 0
+            var_qf = 0
+
+        ref_counts = pcol.get_counts_for_base(
+            snpcall.wildtype, ref_qf, keep_strand_info=True)
+        var_counts = pcol.get_counts_for_base(
+            snpcall.variant, var_qf, keep_strand_info=True)
+        # FIXME should become VCF record immediately
+        # SNP is deprecated and should be generated from vcf
+        add_strandbias_info(snpcall, ref_counts, var_counts)
+        # report extra phred scaled pvalue
+
+
+        if what == 'vcf':
+            dp4 = (ref_counts[0], ref_counts[1], var_counts[0], var_counts[1])
+            # FIXME any way to mark the cons-variation?
+            vcf_record = gen_vcf_record(pcol, snpcall.wildtype, snpcall.variant, 
+                                        snpcall.info['pvalue-phred'], snpcall.freq, dp4,
+                                        snpcall.info['strandbias-pvalue-uncorr-phred'])
+            ret.append(vcf_record)
+        else:
+            ret.append(snpcall)
+
+    return ret
+
+
+
 def read_exclude_pos_file(fexclude):
     """Parse file containing ranges of positions to exclude and return
     positions as list.
@@ -134,7 +292,8 @@ def cmdline_parser():
                       " Also consider using -B/-E to influence BAQ computation")
     parser.add_option("-e", "--exclude",
                       dest="fexclude", # type="string|int|float"
-                      help="Deprecated (Use bed file as pileup argument -l instead)."
+                      help="Deprecated (Use samtools mpileup -l bedfile instead"
+                      " to define regions to use)."
                       " Exclude positions listed in this file"
                       " format is: start end [comment ...]"
                       " , with zero-based, half-open coordinates")
@@ -366,6 +525,8 @@ def gen_vcf_record(pcol, ref, alt, phredqual, freq, dp4=None, sb_phred=None):
     return vcf_record
     
 
+
+
 def main():
     """
     The main function
@@ -453,6 +614,8 @@ def main():
                 opts.em_error_prob_file))
             sys.exit(1)
 
+    # pileup src
+    #
     if not opts.fpileup:
         LOG.warn("No pileup file/stream specified. Will try stdin\n")
         pileup_fhandle = sys.stdin
@@ -469,10 +632,12 @@ def main():
     pileup_line_buffer = []
 
 
-    # exclude positions
+    # exclude positions (deprecated)
     #
     excl_pos = []
     if opts.fexclude:
+        LOG.warn("Usage of exclude positions is deprecated."
+                 " Use samtools mpileup -l bedfile instead to define regions to use")
         excl_pos = read_exclude_pos_file(opts.fexclude)
         LOG.info("Ignoring %d positions found in %s" % (
             len(excl_pos), opts.fexclude))
@@ -482,23 +647,28 @@ def main():
     #
     assert opts.bonf > 0
     bonf_factor = opts.bonf
-
     sig_thresh = opts.sig_thresh
 
+    
+
+    lofreq_nq = None
+    if opts.lofreq_nq_on:
+        lofreq_nq = em.EmBasedSNPCaller(
+            num_param = em_num_param,
+            bonf_factor= bonf_factor,
+            sig_thresh = sig_thresh)
+    
+    lofreq_q = None
+    if opts.lofreq_q_on:
+        lofreq_q = qual.QualBasedSNPCaller(
+            noncons_default_qual = noncons_default_qual,
+            noncons_filter_qual = noncons_filter_qual,
+            ign_bases_below_q =  ign_bases_below_q,
+            bonf_factor = bonf_factor, sig_thresh = sig_thresh)
+        
     LOG.info("Commandline (workdir %s): %s" % (
         os.getcwd(), ' '.join(sys.argv)))
 
-    lofreqnq = em.EmBasedSNPCaller(
-        num_param = em_num_param,
-        bonf_factor= bonf_factor,
-        sig_thresh = sig_thresh)
-    
-    lofreqq = qual.QualBasedSNPCaller(
-        noncons_default_qual = noncons_default_qual,
-        noncons_filter_qual = noncons_filter_qual,
-        ign_bases_below_q =  ign_bases_below_q,
-        bonf_factor = bonf_factor, sig_thresh = sig_thresh)
-    
     
     # ################################################################
     #
@@ -572,19 +742,19 @@ def main():
             len(base_counts),
             sum([sum(c.values()) for c in base_counts])/len(base_counts)))
             
-        lofreqnq.em_training(base_counts, cons_seq)
+        lofreq_nq.em_training(base_counts, cons_seq)
         LOG.info("EM training completed.")
 
         # fprobs="schmock.error_prob."
         #LOG.critical("Saving provs to %s." % fprobs)
-        #lofreqnq.save_error_probs(fprobs)
+        #lofreq_nq.save_error_probs(fprobs)
 
 
     elif opts.em_error_prob_file:
         LOG.info(
             "Skipping EM training and using probs from %s instead." % (
                 opts.em_error_prob_file))
-        lofreqnq.load_error_probs(opts.em_error_prob_file)
+        lofreq_nq.load_error_probs(opts.em_error_prob_file)
 
 
     # ################################################################
@@ -594,169 +764,29 @@ def main():
     #
     # ################################################################
 
-    LOG.info("Processing pileup for variant calls")
     num_lines = 0
-    num_ambigious_ref = 0
     for line in itertools.chain(pileup_line_buffer, pileup_fhandle):
-
         # note: not all columns will be present in pileup
         num_lines += 1
 
-        pcol = pileup.PileupColumn(line)            
-        #if (pcol.coord+1) % 100000 == 0:
-        #    LOG.info("Still alive...calling SNPs in column %d" % (pcol.coord+1))
-
-        if pcol.coord in excl_pos:
-            LOG.debug("Skipping col %d because of exclusion" % (pcol.coord+1))
-            continue
-
-        if pcol.cons_base not in 'ACGT':
-            LOG.info("Skipping col %d because of ambigious consensus %s" % (
-                    pcol.coord+1, pcol.cons_base))
-            num_ambigious_ref += 1
-            continue
-
-        # Even though NQ is quality agnostics, ignore the ones
-        # marked with Illumina's Read Segment Indicator Q2, since
-        # those are not supposed to be used according to Illumina
-        base_counts = pcol.get_all_base_counts(
-            min_qual=3, keep_strand_info=False)
-        del base_counts['N']
-        if sum(base_counts.values())==0:
-            LOG.info("Zero coverage in col %d" % (pcol.coord+1))
-            continue
-        
-        # consensus snp, i.e. we determine consensus different to
-        # initial pileup ref. always call against cons_base. if
-        # ref_base is called then drop silently later.
-        cons_var_snp = None
-        if pcol.cons_base != pcol.ref_base:
-            # FIXME: should become vcf record immediately
-            # SNP is deprecated and should be generated from vcf
-            info_dict = dict()
-            # reusing base_counts from above
-            for (k, v) in base_counts.iteritems():
-                info_dict["basecount-%s" % k] = v
-            coverage = sum(base_counts.values())
-            info_dict['coverage'] = coverage
-            info_dict["type"] = 'consensus-var'
-            cons_var_snp = snp.ExtSNP(pcol.coord, pcol.ref_base, pcol.cons_base,
-                                      base_counts[pcol.cons_base]/coverage,
-                                      info_dict, pcol.chrom)
-            # add cons_var_snp to new_snps later, otherwise it gets
-            # re-evaluated by lofreq-q
-
-        new_snps = []
-        
-        if opts.lofreq_nq_on:
-            new_snps = lofreqnq.call_snp_in_column(
-                pcol.coord, base_counts, pcol.cons_base)
-            for snpcall in new_snps:
-                LOG.info("LoFreq-NQ SNV on chrom %s: %s." % (pcol.chrom, snpcall))
-
-        # If a SNP was predicted by EM or if EM was skipped, then
-        # predict SNPs with the quality based method (possibly
-        # overwriting old SNPs). Do this here and not in a separate
-        # stage to avoid having to call mpileup yet again.
-        #
-        if opts.lofreq_q_on:
-            # if nq is on and no snps were predicted then don't do
-            # anything
-            if not opts.lofreq_nq_on or len(new_snps)!=0:
-                base_qual_hist = pcol.get_base_and_qual_hist(
-                    keep_strand_info=False)
-                del base_qual_hist['N']
-                new_snps = lofreqq.call_snp_in_column(
-                    pcol.coord, base_qual_hist, pcol.cons_base)
-                for snpcall in new_snps:
-                    LOG.info("LoFreq-Q SNV on chrom %s: %s." % (
-                        pcol.chrom, snpcall))
-
-
-        # all predictions in all stages done
-
+        new_snps = process_pileup_line(line, lofreq_nq, lofreq_q, excl_pos, opts.outfmt)
         for snpcall in new_snps:
-            snpcall.info["type"] = 'low-freq-var'
-        if cons_var_snp:
-            # LOG.warn("Got cons_var_snp %s" % cons_var_snp)
-            # exception: drop if we called against cons_base
-            # (cons_var_snp) and called the initial ref_base
-            new_snps = [s for s in new_snps if s.variant != cons_var_snp.wildtype]            
-            new_snps.append(cons_var_snp)
-
-            
-        for snpcall in new_snps:
-            # the calling routines don't know about chrom, so add it here
-            snpcall.chrom  = pcol.chrom
-
-            LOG.info("Final LoFreq SNV: %s." % (
-                snpcall))
-
-            
-            if opts.lofreq_q_on:
-                # Q
-                ref_qf = ign_bases_below_q
-                var_qf = max(ign_bases_below_q, noncons_filter_qual)
-            else:
-                # NQ
-                ref_qf = 0
-                var_qf = 0
-
-            ref_counts = pcol.get_counts_for_base(
-                snpcall.wildtype, ref_qf, keep_strand_info=True)
-            var_counts = pcol.get_counts_for_base(
-                snpcall.variant, var_qf, keep_strand_info=True)
-
-
-            # FIXME should become VCF record immediately
-            # SNP is deprecated and should be generated from vcf
-            add_strandbias_info(snpcall, ref_counts, var_counts)
-
-            # report extra phred scaled pvalue
-            if snpcall.info['type'] == 'low-freq-var':
-                snpcall.info['pvalue-phred'] = prob_to_phredqual(
-                    snpcall.info['pvalue'])
-            else:
-                # consensus-vars
-                snpcall.info['pvalue-phred'] = 'NA'
-                
-            dp4 = (ref_counts[0], ref_counts[1], var_counts[0], var_counts[1])
-            # FIXME any way to mark the cons-variation?
-            vcf_record = gen_vcf_record(pcol, snpcall.wildtype, snpcall.variant, 
-                                        snpcall.info['pvalue-phred'], snpcall.freq, dp4,
-                                        snpcall.info['strandbias-pvalue-uncorr-phred'])
-            
-            # to vcf: needs pcol, snpcall, ref_counts and var_counts
-            # should make this a function. than again, the snp module
-            # should be replaced by vcf anyway
-            #
-            
             if opts.outfmt == 'snp':
                 snp.write_record(snpcall, fhout)
             else:
-                simple_vcf.write_record(vcf_record, fhout)
-
-                
+                simple_vcf.write_record(snpcall, fhout)                
 
     if num_lines == 0:
         LOG.fatal("Pileup was empty. Will exit now.")
         sys.exit(1)
         
-    if num_ambigious_ref > 0:
-        LOG.warn(
-            "%d positions skipped, because of amibigious reference in pileup." % (
-                num_ambigious_ref))
-
     LOG.info("SNVs written to %s" % fhout.name)
     if fhout != sys.stdout:
         fhout.close()  
 
         
-        
-    
-
-
 if __name__ == "__main__":
     main()
+    LOG.info("Use lofreq_filter.py to post-process the just produced SNV calls.")    
     LOG.info("Successful program exit")
-    LOG.warn("Use lofreq_filter.py to post-process the just produced SNV calls.")
+
