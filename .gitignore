@@ -7,3 +7,5 @@
 build/
 lofreq/.fuse_hidden*
 .fuse_hidden*
+
+tmp/

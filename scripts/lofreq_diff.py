@@ -68,7 +68,7 @@ def snvs_to_dict(snv_file):
 
 
 def run_diff(snv_file_1, snv_file_2, mode):
-    """FIXME:missing-doc-str
+    """FIXME:add-missing-doc-str
     """
 
     snvs_1_dict = snvs_to_dict(snv_file_1)
@@ -123,7 +123,8 @@ def cmdline_parser():
                       help="enable debugging")
     parser.add_option("-o", "--output",
                       dest="out", # type="string|int|float"
-                      help="Output file name")
+                      default='-',
+                      help="Output file name ('-' for stdout; default)")
     parser.add_option("-s", "--snv1",
                       dest="snv_file_1", # type="string|int|float",
                       help="SNV file 1")
@@ -198,7 +199,7 @@ def main():
 
         
 if __name__ == "__main__":
-    LOG.info("FIXME: supoprt vcf in and out")
+    LOG.debug("FIXME: add support for vcf in and out")
     main()
     LOG.info("Successful program exit")
 
