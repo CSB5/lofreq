@@ -370,7 +370,8 @@ class PileupColumn():
 
         return base_and_qual_hists
 
-            
+
+    
 def sq_from_header(header):
     """
     Parse sequence name/s from header. Will return a list. Not sure if
@@ -467,4 +468,84 @@ def header(fbam, samtools_binary="samtools"):
             LOG.warn("Unhandled line on stderr detected: %s" % (line))
 
     return stdoutdata.split("\n")
+
+
+def samtools_version(samtools):
+    """
+    """
+    
+    try:
+        p = subprocess.Popen([samtools], 
+                             stdout=subprocess.PIPE, 
+                             stderr=subprocess.PIPE)
+    except OSError:
+        LOG.error("Can't execute '%s'" % samtools)
+        raise
+    
+    lines = p.stderr.readlines()
+    try:
+        version_line = [l for l in  lines if "Version:" in l][0]
+        version_str = version_line.split()[1]
+        (majorv, minorv, patchlevel) = [int(x) for x in version_str.split(".")]            
+    except IndexError:
+        LOG.warn("Couldn't determine samtools version")
+        return None
+    
+    return (majorv, minorv, patchlevel)
+
+
+
+class Pileup(object):
+    """Front end to samtools mpileup
+    """
+    
+    def __init__(self, bam, ref_fa, samtools="samtools"):
+        """init
+        """
+
+        self.bam = bam
+        self.ref_fa = ref_fa
+        self.samtools = samtools
+        self.samtools_version = None        
+        self.samtools_version = samtools_version(samtools)
+        if self.samtools_version and self.samtools_version < (0, 1, 13):
+            LOG.warn("Your samtools installation looks too old."
+                     " Will try to continue anyway")
+
+        
+    
+    def generate_pileup(self, baq='extended', 
+                        max_depth=100000, region_bed=None):
+        """Pileup line generator
+        """
+        
+        cmd_list = [self.samtools, 'mpileup']
+        
+        cmd_list.extend(['-d', "%d" % max_depth])
+        
+        if baq == 'off':
+            cmd_list.append('-B')
+        elif baq == 'extended':
+            cmd_list.append('-E')
+        elif baq != 'on':
+            raise ValueError, ("Unknown BAQ option '%s'" % (baq))        
+        
+        if region_bed:
+            cmd_list.extend(['-l', region_bed])
+            
+        cmd_list.extend(['-f', self.ref_fa])
+                    
+        cmd_list.append(self.bam)
+            
+        LOG.info("Executing %s" % (cmd_list))
+        try:
+            p = subprocess.Popen(cmd_list, 
+                                 stdout=subprocess.PIPE, 
+                                 stderr=subprocess.PIPE)
+        except:
+            LOG.fatal("Executing following cmd list failed: %s" % (cmd_list))
+            raise
+        for line in p.stdout:
+            yield PileupColumn(line)
+
         

@@ -32,9 +32,7 @@ if [ $bonfexp -ne $bonf ]; then
     exit 1
 fi
 if [ ! -s denv2-10haplo_lofreq-raw.snp ]; then
-    samtools mpileup -d 100000 -E -f $reffa $bam | \
-        lofreq_snpcaller.py -i - -b $bonf \
-        -o $snv_out_raw || exit 1
+    lofreq_snpcaller.py --bonf $bonf -f $reffa -b $bam -o $snv_out_raw || exit 1
 else
     echowarn "Reusing snv_out_raw (only useful for debugging)"
 fi
