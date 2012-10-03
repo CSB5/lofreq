@@ -1,22 +1,15 @@
 #!/usr/bin/env python
 """Ultra-sensitive detection of very rare / low frequency variants.
 
-Input is a samtools pileup (mpileup). It's best to increase samtools
-default coverage cap (-d). It's also recommended to recalibrate
-base-call quality-scores and realign indels (both can be done with
-GATK).
+We recommended to recalibrate base-call quality-scores and realign
+indels (both can be done with GATK).
 
-If quality values are missing LoFreq can use it's quality agnostic
-module (LoFreq-NQ). Here, an expectation-maximization will be used to
-compute error probabilities for each possible base to base conversion.
-These are then be used to predict a first set of SNPs.
-
-The quality-aware (LoFreq-Q; default) and quality agnostic (LoFreq-NQ)
-models can be used independently.
-
-Things to note:
-* Variant positions with pvalue*sig-level < bonferroni are not reported.
+NOTE:
 * Reported p-values are not Bonferroni corrected.
+* Use lofreq_filter.py for filtering the variant candidates produced
+  here
+* Variant positions with pvalue*sig-level<bonferroni are not
+  reported.
 """
 
 
@@ -79,7 +72,7 @@ logging.basicConfig(level=logging.WARN,
 
 
 
-def process_pileup_line(line, lofreq_nq=None, lofreq_q=None,
+def process_pileup_line(pcol, lofreq_nq=None, lofreq_q=None,
                         excl_pos=None, what='snp'):
     """Will use lofreq_nq and then lofreq_q in that order (if not
     None) to process a pileup column to call SNVs.
@@ -93,7 +86,6 @@ def process_pileup_line(line, lofreq_nq=None, lofreq_q=None,
     assert lofreq_nq or lofreq_q
     assert what in ['snp', 'vcf']
     
-    pcol = pileup.PileupColumn(line)
 
     # return if we are supposed to ignore this position
     if pcol.coord in excl_pos:
@@ -283,72 +275,93 @@ def cmdline_parser():
                       help="enable debugging")
     parser.add_option("", "--log",
                       dest="logfile",
-                      help="Log to file")
+                      help="Log messages to file")
 
-    parser.add_option("-i", "--input",
-                      dest="fpileup", # type="string|int|float"
-                      help="Pileup input. Will read from stdin if '-' or not set at all."
-                      " Tip: Use '-d 100000' to prevent sample depth filtering by samtools."
-                      " Also consider using -B/-E to influence BAQ computation")
-    parser.add_option("-e", "--exclude",
-                      dest="fexclude", # type="string|int|float"
-                      help="Deprecated (Use samtools mpileup -l bedfile instead"
-                      " to define regions to use)."
-                      " Exclude positions listed in this file"
-                      " format is: start end [comment ...]"
-                      " , with zero-based, half-open coordinates")
-    parser.add_option("-o", "--out",
+    plp_group = OptionGroup(parser, "Pileup Options", "")
+    plp_group.add_option("-b", "--bam",
+                      dest="fbam", # type="string|int|float"
+                      help="BAM file containing your stringently mapped reads")
+    plp_group.add_option("-f", "--reffa",
+                      dest = "freffa", # type="string|int|float"
+                      help = "Reference fasta file")
+    choices = ['on', 'off', 'extended']
+    plp_group.add_option("", "--baq",
+                         dest = "baq",
+                         choices = choices,
+                         default=conf.DEFAULT_BAQ_SETTING,
+                         help="Optional: BAQ setting for pileup."
+                         " One of %s. Default %s"% (', '.join(choices), conf.DEFAULT_BAQ_SETTING))
+    plp_group.add_option("-l", "--regions",
+                         dest = "fregion_bed",
+                         help = "Optional: bed file containing regions to limit analysis to."
+                         " One of %s. Default %s"% (', '.join(choices), conf.DEFAULT_BAQ_SETTING))
+    plp_group.add_option("-d", "--maxdepth",
+                         dest = "max_depth",
+                         type=int,
+                         default = conf.DEFAULT_MAX_PLP_DEPTH,
+                         help = "Optional: maximum depth. Default %d"% (conf.DEFAULT_MAX_PLP_DEPTH))
+    parser.add_option_group(plp_group)
+
+    
+    output_group = OptionGroup(parser, "Output Options", "")
+    output_group.add_option("-o", "--out",
                       dest="fsnp", default="-", # type="string|int|float"
                       help="Variant output file or '-' for stdout (default)")
     choices = ['snp', 'vcf']
-    parser.add_option("", "--format",
+    output_group.add_option("", "--format",
                       dest="outfmt", 
                       choices=choices,
                       default='snp',
-                      help="Output format. One of: %s. Note: 'snp' is unaware of chromosomes!" % ', '.join(choices))
-    
+                      help="Output format. One of: %s."
+                      " Note: 'snp' is unaware of chromosomes!" % ', '.join(choices))
+    parser.add_option_group(output_group)
+
+
+    model_group = OptionGroup(parser, "Model Options", "")
     default = True
-    parser.add_option("", "--lofreq-q-on",
+    model_group.add_option("", "--lofreq-q-on",
                       action="store_true", 
                       dest="lofreq_q_on",
                       default=default,
-                      help="Activate quality aware SNV calling (LoFreq-Q; default = %s)" % default)
-    parser.add_option("", "--lofreq-q-off",
+                      help="Activate quality-aware SNV calling (LoFreq-Q; default = %s)" % default)
+    model_group.add_option("", "--lofreq-q-off",
                       action="store_false", 
                       dest="lofreq_q_on",
-                      help="De-activate quality aware SNV calling (LoFreq-Q)")
-
-    default=False
-    parser.add_option("", "--lofreq-nq-on",
+                      help="De-activate quality-aware SNV calling (LoFreq-Q)")
+    
+    default = False
+    model_group.add_option("", "--lofreq-nq-on",
                       action="store_true",
                       dest="lofreq_nq_on",
                       default=default,
                       help="Activate quality-agnostic SNV calling (LoFreq-NQ; default = %s)" % default)
-    parser.add_option("", "--lofreq-nq-off",
+    model_group.add_option("", "--lofreq-nq-off",
                       action="store_false",
                       dest="lofreq_nq_on",
                       help="De-activate quality-agnostic SNV calling (LoFreq-NQ)")
-
+    parser.add_option_group(model_group)
     
-    parser.add_option("-b", "--bonf",
+    filter_group = OptionGroup(parser, "Filtering Options", "")
+    filter_group.add_option("-Q", "--ignore-bases-below-q",
+                          dest="ign_bases_below_q", type="int",
+                          default=conf.DEFAULT_IGN_BASES_BELOW_Q,
+                          help="Remove any base below this base call quality threshold from pileup"
+                          " (default: %d)" % conf.DEFAULT_IGN_BASES_BELOW_Q)
+    filter_group.add_option("", "--bonf",
                       dest="bonf", type="int", default=1,
                       help="Bonferroni correction factor"
                       " (e.g. seqlen*3 to be stringent)"
                       " Higher values might speed up LoFreq-Q in high coverage data."
                       " Alternatively filter based on SNV qualities later")
-    parser.add_option("-s", "--sig-level",
+    filter_group.add_option("-s", "--sig-level",
                       dest="sig_thresh", type="float",
                       default=conf.DEFAULT_SIG_THRESH,
                       help="p-value significance value"
                       " (default: %g)" % conf.DEFAULT_SIG_THRESH)
-    parser.add_option("-Q", "--ignore-bases-below-q",
-                          dest="ign_bases_below_q", type="int",
-                          default=conf.DEFAULT_IGN_BASES_BELOW_Q,
-                          help="Remove any base below this base call quality threshold from pileup"
-                          " (default: %d)" % conf.DEFAULT_IGN_BASES_BELOW_Q)
+    parser.add_option_group(filter_group)
 
 
-    em_group = OptionGroup(parser, "Advanced Options for EM-based Stage", "")
+    em_group = OptionGroup(parser, "Advanced Options for quality-agnostic stage", "")
     em_group.add_option('', '--num-param', dest='em_num_param',
                         choices = ['4', '12'],
                         default=conf.DEFAULT_EM_NUM_PARAM,
@@ -365,7 +378,7 @@ def cmdline_parser():
     parser.add_option_group(em_group)
 
     
-    qual_group = OptionGroup(parser, "Advanced Options for Quality-Based Stage", "")
+    qual_group = OptionGroup(parser, "Advanced Options for quality-aware stage", "")
     qual_group.add_option("", "--noncons-default-qual",
                           dest="noncons_default_qual", type="int",
                           default=conf.NONCONS_DEFAULT_QUAL,
@@ -378,11 +391,25 @@ def cmdline_parser():
                           " (default: %d)" % conf.NONCONS_FILTER_QUAL)
     parser.add_option_group(qual_group)
 
+
+    # deprecated options
+    #
+    depr_group = OptionGroup(parser, "Deprecated Options", "")
+    depr_group.add_option("-e", "--exclude",
+                      dest="fexclude", # type="string|int|float"
+                      help="Deprecated (Use samtools mpileup -l bedfile instead"
+                      " to define regions to use)."
+                      " Exclude positions listed in this file"
+                      " format is: start end [comment ...]"
+                      " , with zero-based, half-open coordinates")
+    parser.add_option_group(depr_group)
+
+
+    # hidden options
+    #
     parser.add_option("--test-sensitivity", help=SUPPRESS_HELP,
                       dest="test_sensitivity", action="store_true") 
 
-    # no need for coverage filter option. snps on low coverage regions
-    # are easily called and easily filtered downstream.
 
     return parser
 
@@ -530,8 +557,6 @@ def gen_vcf_record(pcol, ref, alt, phredqual, freq, dp4=None, sb_phred=None):
 def main():
     """
     The main function
-
-    FIXME: cleanup and split into different functions
     """
 
     parser = cmdline_parser()
@@ -580,24 +605,35 @@ def main():
         parser.error("Nothing to do. LoFreq-Q and LoFreq-NQ both switched off.")
         sys.exit(1)
 
+
+    # file check
+    for (filename, descr, direction, mandatory) in [
+            (opts.fsnp, "Output file", 'out', True),
+            (opts.fbam, "BAM file", 'in', True),
+            (opts.freffa, "Reference fasta file", 'in', True),
+            (opts.fexclude, "Exclude file", 'in', False),
+            (opts.fregion_bed, "Region BED-file", 'in', False)
+            ]:
+
+        if not mandatory and not filename:
+            continue
+            
+        if not filename:
+            parser.error("%s argument missing." % descr)
+            sys.exit(1)
+        if filename == '-':
+            continue
         
-    if opts.fsnp == '-':
-        fhout = sys.stdout
-    else:
-        fhout = open(opts.fsnp, 'w')
-
-    if opts.outfmt == 'snp':
-        # No wan'a
-        #snp.write_header(fhout)
-        pass
-    else:
-        simple_vcf.write_header(fhout)
-
-        
-    if opts.fexclude and not os.path.exists(opts.fexclude):
-        LOG.fatal("file '%s' does not exist.\n" % (opts.fexclude))
-        sys.exit(1)
-
+        if direction == 'in' and not os.path.exists(filename):
+            LOG.fatal(
+                "file '%s' does not exist.\n" % filename)
+            sys.exit(1)
+        if direction == 'out' and os.path.exists(filename):
+            LOG.fatal(
+                "Refusing to overwrite existing file '%s'.\n" % filename)
+            sys.exit(1)
+                
+       
     # quality filter settings (for quality based method)
     #
     noncons_filter_qual = opts.noncons_filter_qual
@@ -614,23 +650,14 @@ def main():
                 opts.em_error_prob_file))
             sys.exit(1)
 
-    # pileup src
+    # pileup
     #
-    if not opts.fpileup:
-        LOG.warn("No pileup file/stream specified. Will try stdin\n")
-        pileup_fhandle = sys.stdin
-    else:
-        if opts.fpileup == '-':
-            pileup_fhandle = sys.stdin
-        else:
-            if not os.path.exists(opts.fpileup):
-                LOG.fatal("file '%s' does not exist.\n" % (opts.fpileup))
-                sys.exit(1)
-            else:
-                pileup_fhandle = open(opts.fpileup, 'r')
+    pileup_obj = pileup.Pileup(opts.fbam, opts.freffa)
+    pileup_gen = pileup_obj.generate_pileup(
+        opts.baq, opts.max_depth, opts.fregion_bed)
     # a buffer for pushing back those pileup lines used up for training
     pileup_line_buffer = []
-
+    
 
     # exclude positions (deprecated)
     #
@@ -649,7 +676,6 @@ def main():
     bonf_factor = opts.bonf
     sig_thresh = opts.sig_thresh
 
-    
 
     lofreq_nq = None
     if opts.lofreq_nq_on:
@@ -691,12 +717,10 @@ def main():
         base_counts = []
         LOG.info("Processing pileup for EM training")
         num_lines = 0
-        for line in pileup_fhandle:
+        for pcol in pileup_gen:
             # note: not all columns will be present in pileup
             num_lines += 1
-            pileup_line_buffer.append(line)
-
-            pcol = pileup.PileupColumn(line)
+            pileup_line_buffer.append(pcol)
 
             if pcol.coord in excl_pos:
                 LOG.debug("Skipping col %d because of exclusion" % (pcol.coord+1))
@@ -764,12 +788,25 @@ def main():
     #
     # ################################################################
 
+    if opts.fsnp == '-':
+        fhout = sys.stdout
+    else:
+        fhout = open(opts.fsnp, 'w') 
+        
+    if opts.outfmt == 'snp':
+        # No wan'a
+        #snp.write_header(fhout)
+        pass
+    else:
+        simple_vcf.write_header(fhout)
+
+
     num_lines = 0
-    for line in itertools.chain(pileup_line_buffer, pileup_fhandle):
+    for pcol in itertools.chain(pileup_line_buffer, pileup_gen):
         # note: not all columns will be present in pileup
         num_lines += 1
 
-        new_snps = process_pileup_line(line, lofreq_nq, lofreq_q, excl_pos, opts.outfmt)
+        new_snps = process_pileup_line(pcol, lofreq_nq, lofreq_q, excl_pos, opts.outfmt)
         for snpcall in new_snps:
             if opts.outfmt == 'snp':
                 snp.write_record(snpcall, fhout)

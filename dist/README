@@ -1,2 +1,8 @@
-To create a new dist type:
-Update version in setup.py and use 'python setup.py sdist'
+To create a new distribution:
+
+- Update version in setup.py
+- Install and run tests to check if things work as expected
+- Update top-level README
+- Run 'python setup.py sdist'
+- git commit and tag
+- Upload source and update sourceforge website

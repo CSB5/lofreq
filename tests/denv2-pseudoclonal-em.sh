@@ -33,8 +33,7 @@ if [ $bonfexp -ne $bonf ]; then
     exit 1
 fi
 if [ ! -s $snv_out_raw ]; then
-    samtools mpileup -d 100000 -f $reffa -l $bed $bam | \
-        lofreq_snpcaller.py -i - -b $bonf \
+    lofreq_snpcaller.py -f $reffa -l $bed -b $bam  --bonf $bonf \
         -o $snv_out_raw || exit 1
 else
     echowarn "Reusing $snv_out_raw (only useful for debugging)"
@@ -43,7 +42,7 @@ echook "Predictions completed."
 
 # test raw output
 nmissing=$(lofreq_diff.py -s $snv_ref -t $snv_out_raw -m uniq_to_1 | wc -l)
-nexp=63
+nexp=58
 if [ $nexp -ne $nmissing ]; then
     echoerror "Number of missing SNVs differs (expected $nexp got $nmissing)"
 else
@@ -58,7 +57,7 @@ else
     echook "Got expected number of extra SNVs"
 fi
 ncommon=$(lofreq_diff.py -s $snv_ref -t $snv_out_raw -m common | wc -l)
-nexp=224
+nexp=229
 if [ $nexp -ne $ncommon ]; then
     echoerror "Number of common SNVs differs (expected $nexp got $ncommon)"
 else
