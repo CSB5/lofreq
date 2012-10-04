@@ -61,22 +61,23 @@ extension = Extension("lofreq_ext",
 # where modules reside:
 package_dir = {'': 'lofreq'}
     
-setup(name = "LoFreq",
+setup(name = 'LoFreq',
       packages=['lofreq'],
-      version = "0.2",
+      version = '0.31',
       description="Low frequency variant caller",
       author="Andreas Wilm",
       author_email='wilma@gis.a-star.edu.sg',
       #long_description = """FIXME.""" 
       url='https://sourceforge.net/p/lofreq/', # FIXME
-      scripts = ['scripts/lofreq_snpcaller.py',
-      'scripts/lofreq_calib.sh',
-      'scripts/lofreq_diff.py',
-      'scripts/lofreq_bonf.py',
-      'scripts/lofreq_pileup_summary.py',
-      'scripts/lofreq_filter.py',
-      'scripts/lofreq_unique.py',
-      'scripts/lofreq_varpos_to_vcf.py'
+      scripts = [
+          'scripts/lofreq_bonf.py',
+          'scripts/lofreq_diff.py',
+          'scripts/lofreq_filter.py',
+          'scripts/lofreq_pileup_summary.py',
+          'scripts/lofreq_snpcaller.py',
+          'scripts/lofreq_unique.py',
+          'scripts/lofreq_varpos_to_vcf.py',
+          'scripts/lofreq_version.py'
       ],
       ext_modules = [extension],
       # http://pypi.python.org/pypi?%3Aaction=list_classifiers

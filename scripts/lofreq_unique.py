@@ -1,8 +1,11 @@
-#!/usr/local/python-2.7.2/bin/python
-"""Test wether a SNV call uniquely made in one sample (e.g. tumour
-tissue), but not in another (e.g. normal/blood tissue), is 'unique' or
+#!/usr/bin/env python
+"""Test wether a SNV call only made in one sample (e.g. tumour
+tissue), but not in another (e.g. normal/blood tissue) is 'unique' or
 significant'. Done by performing a binomial test on the prospective
 snp-base counts in the normal sample given the SNV-call frequency.
+
+NOTE: assuming that the initial SNV calls were made with default
+pileup parameters
 """
 
 # Copyright (C) 2011, 2012 Genome Institute of Singapore
@@ -26,7 +29,6 @@ import sys
 import logging
 import os
 import tempfile
-import subprocess
 # optparse deprecated from Python 2.7 on
 from optparse import OptionParser, OptionGroup
 
@@ -62,7 +64,7 @@ __copyright__ = "2011, 2012 Genome Institute of Singapore"
 __license__ = "GPL2"
 
 
-DEFAULT_SAMTOOLS_ARGS = "-d 100000"
+#DEFAULT_SAMTOOLS_ARGS = "-d 100000"
 
 
 #global logger
@@ -97,9 +99,6 @@ def cmdline_parser():
     parser.add_option("-r", "--reffa",
                       dest="ref_fasta_file", # type="string|int|float"
                       help="Reference fasta file")
-    parser.add_option("-c", "--chrom",
-                      dest="chrom", # type="string|int|float"
-                      help="Chromsome/sequence for pileup")
     parser.add_option("-o", "--out",
                       dest="out", # type="string|int|float"
                       default="-",
@@ -114,10 +113,10 @@ def cmdline_parser():
                       action="store_true", dest="debug",
                       help="enable debugging")
 
-    opt_group.add_option("-a", "--samtools_args",
-                      dest="samtools_args", # type="string|int|float"
-                      default=DEFAULT_SAMTOOLS_ARGS,
-                      help="Optional: Extra Samtools args (default: %s). Should be the same as used for the original SNP calling" % (DEFAULT_SAMTOOLS_ARGS))
+    #opt_group.add_option("-a", "--samtools_args",
+    #                  dest="samtools_args", # type="string|int|float"
+    #                  default=DEFAULT_SAMTOOLS_ARGS,
+    #                  help="Optional: Extra Samtools args (default: %s). Should be the same as used for the original SNP calling" % (DEFAULT_SAMTOOLS_ARGS))
     opt_group.add_option("-q", "--ignore-bases-below-q",
                       dest="ign_bases_below_q", type="int",
                       default=conf.DEFAULT_IGN_BASES_BELOW_Q,
@@ -139,6 +138,9 @@ def cmdline_parser():
                       default=conf.DEFAULT_SIG_THRESH,
                       help="Optional: p-value significance value"
                       " (default: %g)" % conf.DEFAULT_SIG_THRESH)
+    opt_group.add_option("-c", "--chrom",
+                      dest="chrom", # type="string|int|float"
+                      help="Deprecated: chromsome/sequence for pileup. Only if SNVs don't have chrom markup")
 
     parser.add_option_group(opt_group)
     
@@ -172,10 +174,6 @@ def main():
         LOG.setLevel(logging.INFO)
     if opts.debug:
         LOG.setLevel(logging.DEBUG)
-
-    if not opts.chrom:
-        parser.error("Chromosome argument argument.")
-        sys.exit(1)
 
     for (in_file, descr) in [(opts.snpdiff_file, "SNP diff"), 
                              (opts.bam_file, "BAM"),
@@ -211,34 +209,37 @@ def main():
     snps = snp.parse_snp_file(opts.snpdiff_file)
     LOG.info("Parsed %d SNPs from %s" % (len(snps), opts.snpdiff_file))
 
+    # fix chromosome info if necessary
+    if set([s.chrom for s in snps if s.chrom]) == 0:
+        if opts.chrom:
+            for s in snps:
+               s.chrom = opts.chrom
+        else:
+            LOG.fatal("SNV file did not contain chromosome info and none given on command line")
+            sys.exit(1)
 
     LOG.info("Removing any base with quality below %d and non-cons bases with quality below %d" % (
             opts.ign_bases_below_q, opts.noncons_filter_qual))
-    
+
+    # drop a bed-file only containing regions of interest
+    #
     fh_bed_region = tempfile.NamedTemporaryFile(delete=False)
     bed_region_file = fh_bed_region.name
     LOG.info("Creating region file samtools: %s" % bed_region_file)
     for s in snps:
-        fh_bed_region.write("%s\t%d\n" % (opts.chrom, s.pos+1))
+        fh_bed_region.write("%s\t%d\t%d\n" % (s.chrom, s.pos, s.pos+1))
     fh_bed_region.close()
 
-    
-    cmd_args = ["samtools", "mpileup", "-l", bed_region_file, '-f', opts.ref_fasta_file]
-    cmd_args.extend(opts.samtools_args.split())
-    cmd_args.append(opts.bam_file)
-    LOG.info("Calling: %s" % (' '.join(cmd_args)))
-    process = subprocess.Popen(cmd_args, stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE)
-    #(p_stdout, p_stderr) =  process.communicate()
-    for line in process.stdout:
-        pcol = pileup.PileupColumn(line)
 
-        # FIXME make sure we remove used up candidates from the list
-        # can use enum in list comphrehension to delete element later
-        # Also need to report left over SNPs at the end as no coverage SNPs
-        snp_candidates = [s for s in snps if s.pos == pcol.coord]
+    pileup_obj = pileup.Pileup(opts.bam_file, opts.ref_fasta_file)
+    pileup_gen = pileup_obj.generate_pileup(
+        conf.DEFAULT_BAQ_SETTING, conf.DEFAULT_MAX_PLP_DEPTH, bed_region_file)
+    for pcol in pileup_gen:
+        
+        snp_candidates = [s for s in snps if
+                          s.pos == pcol.coord and s.chrom == pcol.chrom]
         assert len(snp_candidates) != 0, (
-            "Oups..pileup for column %d has no matching SNP" % (pcol.coord+1))
+            "Oups..pileup for %s:%d has no matching SNP" % (pcol.chrom, pcol.coord+1))
 
         for this_snp in snp_candidates:
             ref_count = sum(pcol.get_counts_for_base(
@@ -253,7 +254,7 @@ def main():
             alt_count = nonref_counts[this_snp.variant]
 
             if cov == 0:
-                fh_out.write("%s: not rejected (no coverage)\n" % (this_snp))
+                fh_out.write("%s: not necessarily unique (not rejected)\n" % (this_snp))
                 continue
 
             if opts.uniform_freq:
@@ -272,8 +273,12 @@ def main():
                 fh_out.write("%s: unique (number of 'SNP' bases significantly low)\n" % (this_snp.identifier()))
             else:
                 fh_out.write("%s: not necessarily unique (not rejected)\n" % (this_snp.identifier()))
-                
-        # FIXME report left over SNPs at the end as no coverage SNPs
+
+            snps.remove(this_snp)
+
+            
+    if len(snps):
+        LOG.error("Oups...some SNVs left after processing. This shouldn't happen")
         
 
     #LOG.warn("Not deleting tmp file %s" % bed_region_file)

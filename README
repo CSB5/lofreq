@@ -1,7 +1,6 @@
 LoFreq: A sequence-quality aware, ultra-sensitive variant caller for
 high-throughput sequencing datasets
 
-See https://sourceforge.net/p/lofreq/ for help.
 
 INSTALLATION
 ------------
@@ -19,15 +18,31 @@ $ python setup.py
 for help
 
 If you want to install lofreq into a different directory use the
---prefix flag.
+--prefix flag. You might then need to adjust your PYTHONPATH
+environment variable as well.
 
 
-VERSIONS
---------
+USAGE
+-----
 
-0.2 (2012-07-12): Second release. Optimal LoFreq-Q implementation as described in
-publication. SNV calls always against consensus, which is determined on-the-fly.
-If consensus differs from ref, we call it consensus-variation. Used for producing
-results in the Wilm (2012).
+See https://sourceforge.net/p/lofreq/
+
+
+VERSION HISTORY
+---------------
+
+0.3 (2012-10-03):
+- Made LoFreq chromosome aware
+- Samtools pileup is now generated internally
+- Added lofreq_diff.py script (input for lofreq_unique.py)
+- Fixed bug in lofreq_bonf.py that would count exclude positions twice
+- Added support for region bed files
+- Removed scipy dependency
+
+0.2 (2012-07-12): Optimal LoFreq-Q implementation as described in
+publication. SNV calls always against consensus, which is determined
+on-the-fly. If consensus differs from ref, we call it
+consensus-variation. Used for producing results in the Wilm et al.
+(2012).
 
 0.1 (2011-11-10): First release, initially hosted on github.
