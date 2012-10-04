@@ -86,17 +86,18 @@ def process_pileup_line(pcol, lofreq_nq=None, lofreq_q=None,
     assert lofreq_nq or lofreq_q
     assert what in ['snp', 'vcf']
     
-
+    ret = []
+    
     # return if we are supposed to ignore this position
     if pcol.coord in excl_pos:
         LOG.debug("Skipping col %d because of exclusion" % (pcol.coord+1))
-        return
+        return ret
 
     # return if we don't have a consensus (nothing to call against)
     if pcol.cons_base not in 'ACGT':
         LOG.info("Skipping col %d because of ambigious consensus %s" % (
                 pcol.coord+1, pcol.cons_base))
-        return
+        return ret
 
 
     # derive base counts and coverage
@@ -110,7 +111,7 @@ def process_pileup_line(pcol, lofreq_nq=None, lofreq_q=None,
     # exit early if no bases found
     if sum(base_counts.values())==0:
         LOG.info("Zero coverage in col %d" % (pcol.coord+1))
-        return
+        return ret
 
 
     # deal with "consensus variants"
@@ -806,7 +807,8 @@ def main():
         # note: not all columns will be present in pileup
         num_lines += 1
 
-        new_snps = process_pileup_line(pcol, lofreq_nq, lofreq_q, excl_pos, opts.outfmt)
+        new_snps = process_pileup_line(
+            pcol, lofreq_nq, lofreq_q, excl_pos, opts.outfmt)
         for snpcall in new_snps:
             if opts.outfmt == 'snp':
                 snp.write_record(snpcall, fhout)
