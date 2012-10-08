@@ -63,7 +63,7 @@ package_dir = {'': 'lofreq'}
     
 setup(name = 'LoFreq',
       packages=['lofreq'],
-      version = '0.31',
+      version = '0.3.1',
       description="Low frequency variant caller",
       author="Andreas Wilm",
       author_email='wilma@gis.a-star.edu.sg',
