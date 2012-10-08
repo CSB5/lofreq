@@ -78,7 +78,7 @@ fi
 #
 echo -e "$snp_diff_1 $ref_1 $bam_1 1st\n$snp_diff_2 $ref_2 $bam_2 2nd" | \
     while read diff ref bam what; do
-    nuniq=$(lofreq_unique.py -d $diff -r $ref -b $bam | grep -c ': unique')
+    nuniq=$(lofreq_uniq.py -d $diff -r $ref -b $bam | wc -l)
     if [ 0 -ne $nuniq ]; then
         echoerror "Number of unique SNVs in sanity check on $what file differ (got $nuniq instead of 0)"
     else
@@ -92,11 +92,11 @@ done
 #
 echo -e "$snp_diff_1 $ref_2 $bam_2 7 1st\n$snp_diff_2 $ref_1 $bam_1 8 2nd" | \
     while read diff ref bam nexp what; do
-    nuniq=$(lofreq_unique.py -d $diff -r $ref -b $bam | grep -c ': unique')
+    nuniq=$(lofreq_uniq.py -d $diff -r $ref -b $bam | wc -l)
     if [ $nexp -ne $nuniq ]; then
-        echoerror "Number of unique SNVs differ first $what diff (got $nuniq expected $nexp)"
+        echoerror "Number of unique SNVs differ in $what file (got $nuniq expected $nexp)"
     else
-        echook "Got expected number of unique SNVs in $what diff"
+        echook "Got expected number of unique SNVs from $what file"
     fi
 done
 
