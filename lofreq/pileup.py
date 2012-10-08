@@ -372,7 +372,7 @@ class PileupColumn():
 
 
     
-def sq_from_header(header):
+def sq_list_from_header(header):
     """
     Parse sequence name/s from header. Will return a list. Not sure if
     several names are allowed.

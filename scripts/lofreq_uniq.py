@@ -254,7 +254,7 @@ def main():
             alt_count = nonref_counts[this_snp.variant]
 
             if cov == 0:
-                fh_out.write("%s: not necessarily unique (not rejected)\n" % (this_snp))
+                LOG.info("%s: not necessarily unique (not rejected)\n" % (this_snp))
                 continue
 
             if opts.uniform_freq:
@@ -270,9 +270,10 @@ def main():
             pvalue = binom_cdf(alt_count+1, cov, cmp_freq)
 
             if pvalue < opts.sig_thresh:
-                fh_out.write("%s: unique (number of 'SNP' bases significantly low)\n" % (this_snp.identifier()))
+                LOG.info("%s: unique (number of 'SNP' bases significantly low)\n" % (this_snp.identifier()))
+                snp.write_record(this_snp, fh_out)
             else:
-                fh_out.write("%s: not necessarily unique (not rejected)\n" % (this_snp.identifier()))
+                LOG.info("%s: not necessarily unique (not rejected)\n" % (this_snp.identifier()))
 
             snps.remove(this_snp)
 

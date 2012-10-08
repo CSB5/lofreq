@@ -1,5 +1,12 @@
 #!/usr/bin/env python
 """Determine Bonferoni factor for lofreq_snpcaller.py
+
+Bonferroni factor is either determined from:
+- A bed file listing regions to analyse
+or
+- the header of a BAM file
+
+A deprecated way was to give an exclude file and one chromosome
 """
 
 # Copyright (C) 2011, 2012 Genome Institute of Singapore
@@ -33,7 +40,7 @@ from optparse import OptionParser
 #--- project specific imports
 #
 from lofreq import pileup
-
+from lofreq import utils
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
@@ -47,39 +54,6 @@ LOG = logging.getLogger("")
 logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
-
-
-def read_bed_coords(fbed):
-    """Reads coordinates from bed file and returns them in a dict with
-    chromsomes as key. Ranges are a tuple of start and end pos
-    (0-based; half-open just like bed and python ranges)
-    """
-
-    bed_coords = dict()
-    
-    fh = open(fbed, 'r')
-    for line in fh:
-        if line.startswith('#'):
-            continue
-        if len(line.strip()) == 0:
-            continue
-        try:
-            (chrom, start, end) = line.split("\t")[0:3]
-        except IndexError:
-            sys.stderr.write(
-                "FATAL: Failed to parse bed line: %s\n" % line)
-            raise ValueError
-        start = int(start)
-        end = int(end)
-        assert end >= start, (
-            "Start value (%d) not lower equal end value (%d)."
-            " Parsed from file %s" % (
-                start, end, fbed))
-        if not bed_coords.has_key(chrom):
-            bed_coords[chrom] = []
-        bed_coords[chrom].append((start, end))
-    fh.close()
-    return bed_coords
 
     
 
@@ -125,7 +99,7 @@ def sum_chrom_len(fbam, chrom_list=None):
     if bam_header == False:
         LOG.critical("samtools header parsing failed test")
         raise ValueError
-    sq = pileup.sq_from_header(bam_header)
+    sq = pileup.sq_list_from_header(bam_header)
 
     # use all if not set
     if not chrom_list:
@@ -137,6 +111,7 @@ def sum_chrom_len(fbam, chrom_list=None):
             chrom, fbam))
         
         sq_len = pileup.len_for_sq(bam_header, chrom)
+        LOG.info("Adding length %d for chrom %s" % (sq_len, chrom))
         sum_sq_len += sq_len
         
     return sum_sq_len
@@ -162,23 +137,23 @@ def cmdline_parser():
                       action="store_true", dest="debug",
                       help="enable debugging")
 
-    parser.add_option("-i", "--input",
+    parser.add_option("", "--bam",
                       dest="fbam", # type="string|int|float"
                       help="BAM input.")
-    parser.add_option("-e", "--exclude",
+    parser.add_option("", "--exclude",
                       dest="fexclude", # type="string|int|float"
-                      help="Optional: Exclude positions listed in this file"
+                      help="Optional/Deprecated: Exclude positions listed in this file"
                       " format is: start end [comment ...]"
                       " , with zero-based, half-open coordinates"
                       " (clashes with --bed)")
-    parser.add_option("-c", "--chrom",
+    parser.add_option("", "--chrom",
                       dest="chrom", # type="string|int|float"
                       help="Optional: Chromsome to use from BAM"
                       " (needed for --exclude)")
-    parser.add_option("-b", "--bed",
+    parser.add_option("", "--bed",
                       dest="fbed", # type="string|int|float"
                       help="Optional: Bed file listing positions used"
-                      " in later pileup (clashes with --exclude)")
+                      " in later pileup (clashes with --exclude and bam)")
     return parser
 
 
@@ -204,10 +179,10 @@ def main():
         LOG.setLevel(logging.DEBUG)
         pileup.LOG.setLevel(logging.DEBUG)
 
-    if not opts.fbam:
-        parser.error("BAM input file argument missing.")
+    if not opts.fbam and not opts.fbed:
+        parser.error("BAM input file and bed input file argument missing.")
         sys.exit(1)
-    if not os.path.exists(opts.fbam):
+    if opts.fbam and not os.path.exists(opts.fbam):
         LOG.fatal("%s does not exist'.\n" % (opts.fbam))
         sys.exit(1)
 
@@ -216,10 +191,12 @@ def main():
         parser.error("Chromosome argument missing." 
                      " Needed when using exclude file")
         sys.exit(1)
+
     if opts.fbed and opts.fexclude:
         parser.error("Can only use either exclude file or"
                      " bed file ('include')")
         sys.exit(1)
+
     if opts.fbed and opts.chrom:
         parser.error("chrom argument should only be used "
                      " with exclude file, not with bed file ('include')")
@@ -240,7 +217,7 @@ def main():
 
     elif opts.fbed:
 
-        bed_coords = read_bed_coords(opts.fbed)
+        bed_coords = utils.read_bed_coords(opts.fbed)
         sum_sq_len = 0
         for (chrom, ranges) in bed_coords.iteritems():
             for r in ranges:

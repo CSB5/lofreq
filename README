@@ -31,10 +31,11 @@ See https://sourceforge.net/p/lofreq/
 VERSION HISTORY
 ---------------
 
-0.3 (2012-10-03):
+0.31 (2012-10-08):
 - Made LoFreq chromosome aware
 - Samtools pileup is now generated internally
 - Added lofreq_diff.py script (input for lofreq_unique.py)
+- Added lofreq_verison.py script
 - Fixed bug in lofreq_bonf.py that would count exclude positions twice
 - Added support for region bed files
 - Removed scipy dependency

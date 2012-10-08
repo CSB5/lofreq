@@ -27,7 +27,7 @@ fi
 test -s ${bam}.bai || samtools index $bam
 
 # determine bonferroni factors; run LoFreq and filter predictions
-bonf=$(lofreq_bonf.py -i $bam -b $bed) || exit 1
+bonf=$(lofreq_bonf.py --bam $bam --bed $bed) || exit 1
 bonfexp=29727
 if [ $bonfexp -ne $bonf ]; then
     echoerror "Expected bonferroni factor to be $bonfexp, but got $bonf. Can't continue" 1>&2

@@ -16,7 +16,6 @@
 # General Public License for more details.
 
 
-# FIXME: get rid of this altogether by using the functions in lofreq_ext. Just make them behave identically first and check timing benchmarks
 
 
 #--- standard library imports
@@ -97,48 +96,40 @@ def phredqual_to_prob(phredqual):
 
 
 
-#def count_bases(bases, allowed_bases = "ACGT"):
-#    """
-#    Counts bases and return counts as dict with base as key and count
-#    as value. Also returns consensus base. Only counts allowed_bases.
-#    No case conversion will be done!
-#
-#    Alternative collections.counter is only available in Python 2.7
-#
-#    doctest:
-#    >>> count_bases("AAAA")[1]
-#    'A'
-#    >>> count_bases("AAAC")[1]
-#    'A'
-#    >>> count_bases("AACC")[1]
-#    'N'
-#    >>> count_bases("QQQQ")[1]
-#    '-'
-#    """
-#
-#    basecounts = dict()
-#    for b in allowed_bases:
-#        basecounts[b] = bases.count(b)
-#
-#    # sorted (ascending) list of key/value tuples. take last one
-#    # [-1] and only its key [0]
-#    #
-#    if sum(basecounts.values()) == 0:
-#        # empty? return gap
-#        cons_base = "-"
-#    else:
-#        # ascending order
-#        sorted_counts = sorted(basecounts.items(),
-#                               key=lambda x: x[1])
-#        if sorted_counts[-1][1] == sorted_counts[-2][1]:
-#            # tie? return N
-#            cons_base = 'N'
-#        else:
-#            # return "true" consensus
-#            cons_base = sorted_counts[-1][0]
-#            
-#    return (basecounts, cons_base)
-#
+def read_bed_coords(fbed):
+    """Reads coordinates from bed file and returns them in a dict with
+    chromsomes as key. Ranges are a tuple of start and end pos
+    (0-based; half-open just like bed and python ranges)
+    """
+
+    bed_coords = dict()
+    
+    fh = open(fbed, 'r')
+    for line in fh:
+        if line.startswith('#'):
+            continue
+        if len(line.strip()) == 0:
+            continue
+        try:
+            (chrom, start, end) = line.split("\t")[0:3]
+        except IndexError:
+            sys.stderr.write(
+                "FATAL: Failed to parse bed line: %s\n" % line)
+            raise ValueError
+        start = int(start)
+        end = int(end)
+        assert end >= start, (
+            "Start value (%d) not lower equal end value (%d)."
+            " Parsed from file %s" % (
+                start, end, fbed))
+        if not bed_coords.has_key(chrom):
+            bed_coords[chrom] = []
+        bed_coords[chrom].append((start, end))
+    fh.close()
+    return bed_coords
+
+
+
 
 if __name__ == '__main__':
     import doctest
