@@ -1,6 +1,10 @@
+# auto generated files
+MANIFEST
+
 # backup files
 *~
 *#
+
 # objects
 *.so
 *.pyc
@@ -8,4 +12,5 @@ build/
 lofreq/.fuse_hidden*
 .fuse_hidden*
 
+# tmp
 tmp/

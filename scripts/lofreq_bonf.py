@@ -55,37 +55,7 @@ logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
 
-    
-
-def read_exclude_pos_file(fexclude):
-    """Parse file containing ranges of positions to exclude and return
-    positions as list.
-    """
-
-    excl_pos = []
-    fhandle = open(fexclude, 'r')
-    for line in fhandle:
-        if line.startswith('#'):
-            continue
-        if len(line.strip()) == 0:
-            continue
-
-        start = int(line.split()[0])
-        end = int(line.split()[1])
-        # ignore the rest
-        assert start < end, (
-            "Invalid position found in %s" % fexclude)        
-        excl_pos.extend(range(start, end))
-        LOG.debug("got excl pos: %d-%d" % (start, end))
-    fhandle.close()
-
-
-    # remove duplicate ones (F and R)
-    excl_pos = set(excl_pos)
-
-    return excl_pos
-
-    
+       
 
 def sum_chrom_len(fbam, chrom_list=None):
     """
@@ -208,7 +178,7 @@ def main():
     #
     if opts.fexclude:
         excl_pos = []
-        excl_pos = read_exclude_pos_file(opts.fexclude)
+        excl_pos = utils.read_exclude_pos_file(opts.fexclude)
         LOG.info("Parsed %d positions from %s" % (
             len(excl_pos), opts.fexclude))
         

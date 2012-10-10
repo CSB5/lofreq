@@ -229,35 +229,6 @@ def process_pileup_line(pcol, lofreq_nq=None, lofreq_q=None,
 
 
 
-def read_exclude_pos_file(fexclude):
-    """Parse file containing ranges of positions to exclude and return
-    positions as list.
-    """
-
-    excl_pos = []
-    fhandle = open(fexclude, 'r')
-    for line in fhandle:
-        if line.startswith('#'):
-            continue
-        if len(line.strip()) == 0:
-            continue
-
-        start = int(line.split()[0])
-        end = int(line.split()[1])
-        # ignore the rest
-
-        assert start < end, (
-            "Invalid position found in %s" % fexclude)
-
-        excl_pos.extend(range(start, end))
-    fhandle.close()
-
-    return set(excl_pos)
-
-
-  
-
-
 def cmdline_parser():
     """
     creates an OptionParser instance
@@ -666,7 +637,7 @@ def main():
     if opts.fexclude:
         LOG.warn("Usage of exclude positions is deprecated."
                  " Use samtools mpileup -l bedfile instead to define regions to use")
-        excl_pos = read_exclude_pos_file(opts.fexclude)
+        excl_pos = utils.read_exclude_pos_file(opts.fexclude)
         LOG.info("Ignoring %d positions found in %s" % (
             len(excl_pos), opts.fexclude))
         LOG.debug("DEBUG: excl_pos = %s" % excl_pos)
