@@ -116,6 +116,8 @@ def read_bed_coords(fbed):
             sys.stderr.write(
                 "FATAL: Failed to parse bed line: %s\n" % line)
             raise ValueError
+        # http://genome.ucsc.edu/FAQ/FAQformat.html#format1
+        # 4: name, score, strand...
         start = int(start)
         end = int(end)
         assert end >= start, (
@@ -128,6 +130,32 @@ def read_bed_coords(fbed):
     fh.close()
     return bed_coords
 
+
+
+def read_exclude_pos_file(fexclude):
+    """Parse file containing ranges of positions to exclude and return
+    positions as list.
+    
+    Orientation agnostic!
+    """
+    
+    excl_pos = []
+    fhandle = open(fexclude, 'r')
+    for line in fhandle:
+        if line.startswith('#'):
+            continue
+        if len(line.strip()) == 0:
+            continue
+        
+        start = int(line.split()[0])
+        end = int(line.split()[1])
+        # ignore  rest of line        
+        assert start < end, (
+            "Invalid position found in %s" % fexclude)
+        excl_pos.extend(range(start, end))
+    fhandle.close()
+    # remove duplicates (on F and R)
+    return set(excl_pos)
 
 
 

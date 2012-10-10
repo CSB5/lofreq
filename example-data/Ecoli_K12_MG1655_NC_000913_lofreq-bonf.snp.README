@@ -1,0 +1,1 @@
+	 grep '^[0-9]' ~/snpcaller/paper/ecoli_clone/bwa/snps/Ecoli_K12_MG1655_NC_000913_bwa-sampe-unique_lofreq-q072012-b-13919025-plp-d100k.snp | sed -e 's,^,NC_000913 ,' > Ecoli_K12_MG1655_NC_000913_lofreq-bonf.snp

@@ -37,8 +37,7 @@ import shutil
 
 #--- project specific imports
 #
-from lofreq import utils
-
+# /
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
@@ -87,12 +86,12 @@ def cmdline_parser():
                       dest="sbfilter",
                       action="store_true",
                       help="Optional: Apply strand-bias filtering")
-    MIN_COV=10
+    MIN_COV = 10
     parser.add_option("", "--min-cov",
                       dest="mincov",
                       type="int",
                       default=MIN_COV,
-                      help="Optional: Coverage filter."
+                      help="Coverage filter."
                       " Ignore SNVs with coverage below this value"
                       " (default is %d)" % (MIN_COV))
     parser.add_option("-o", "--outdir",
@@ -134,14 +133,21 @@ def get_bonf(regionbed):
         p = subprocess.Popen(cmd_list, 
                              stdout=subprocess.PIPE, 
                              stderr=subprocess.PIPE)
+        (stdout, stderr) = p.communicate()
     except OSError:
-        LOG.error("Can't execute '%s'" % cmd_list)
+        LOG.error("Couldn't execute '%s'" % (stderr))
         raise
-    lines = p.stdout.readlines()
+    
+    if p.returncode != 0:
+        LOG.fatal("%s failed and produced the following on stderr: %s" % (
+            cmd_list[0], stderr))
+        LOG.fatal("Could your bed file be malformatted,"
+                  " e.g. use space instead of tabs as delimiter?")
+        sys.exit(1)
     try:
-        bonf = int(lines[0])
+        bonf = int(stdout)
     except:
-        LOG.error("Couldn't parse result from '%s'" % lines)
+        LOG.error("Couldn't parse result from '%s'" % stdout)
         raise
     return bonf
 
@@ -152,7 +158,7 @@ def snv_call_wrapper(bam, snv_raw, reffa, regionbed):
     """
 
     if os.path.exists(snv_raw):
-        LOG.info("Reusing %s" % snv_raw)
+        LOG.warn("Reusing %s." % snv_raw)
         return snv_raw
 
     bonf = get_bonf(regionbed)
@@ -178,7 +184,7 @@ def snv_filter_wrapper(snv_raw, snv_filt, mincov=None, sbfilter=None):
     """
 
     if os.path.exists(snv_filt):
-        LOG.info("Reusing %s" % snv_filt)
+        LOG.warn("Reusing %s" % snv_filt)
         return snv_filt
 
     if not mincov and not sbfilter:
@@ -207,7 +213,7 @@ def snv_diff_wrapper(snv_to_diff, snv_ref, snv_diff_out):
     """
 
     if os.path.exists(snv_diff_out):
-        LOG.info("Reusing %s" % snv_diff_out)
+        LOG.warn("Reusing %s" % snv_diff_out)
         return snv_diff_out
             
     cmd_list = ['lofreq_diff.py', '-s', snv_to_diff, '-t', snv_ref, 
