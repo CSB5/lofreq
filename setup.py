@@ -1,12 +1,15 @@
 from distutils.core import setup, Extension
 import os
+import sys
+import subprocess
 
 # see also http://docs.python.org/distutils/setupscript.html
-
 
 DEBUG = False
 #DEBUG = True
 
+
+                
 DEFINE_MACROS = []
 EXTRA_COMPILE_ARGS = []
 if not DEBUG:
@@ -24,15 +27,6 @@ else:
     EXTRA_COMPILE_ARGS.append('-UNDEBUG') 
 
 
-import sys
-
-if sys.version_info < (2 , 6):
-    sys.stderr.write("FATAL: sorry, Python versions below 2.6 are not supported\n")
-    sys.exit(1)
-if sys.version_info >= (2 , 8):
-    sys.stderr.write("FATAL: sorry, Python versions above 2.8 are not supported\n")
-    sys.exit(1)
-
     
 # C extensions
 #
@@ -45,6 +39,35 @@ EXT_SOURCES = [os.path.join(EXT_PATH, f)
                          os.path.join("cdflib90", "ipmpar.c"),
                          ]
                ]
+
+
+
+def which(prog):
+    """make sure prog can be run
+    """
+        
+    try:
+        subprocess.call([prog], 
+                        stderr=subprocess.PIPE, 
+                        stdout=subprocess.PIPE,)
+        return True
+    except OSError:
+        return False
+
+# checks
+#
+if sys.version_info < (2 , 6):
+    sys.stderr.write("FATAL: sorry, Python versions below 2.6 are not supported\n")
+    sys.exit(1)
+if sys.version_info >= (2 , 8):
+    sys.stderr.write("FATAL: sorry, Python versions above 2.8 are not supported\n")
+    sys.exit(1)
+
+for prog in ['samtools']:
+    if not which(prog):
+        sys.stderr.write("#\nWARNING: cannot find '%s',"
+                         " which is required to run LoFreq\n#\n" % prog)
+        raw_input("Press Enter to continue anyway.")
 
 extension = Extension("lofreq_ext",
                       EXT_SOURCES,
