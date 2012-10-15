@@ -335,8 +335,12 @@ def main():
             bam_to_diff, 'uniq-snv', opts.outdir)
         snv_uniq_wrapper(snv_diff, snv_uniq_out, opts.reffa, bam_ref)
 
-            
-        
+    print "Done. %s will now contain the result files, which are" % (opts.outdir)
+    print " *-raw.snp: Unfiltered SNV predictions"
+    print " *.snp: Filtered SNV predictions"
+    print " *-diff.snp: SNVs only predicted in one file (possibly due to coverage etc.)"
+    print " *-uniq.snp: SNVs uniquely predicted in one file (the main result)"
+
 if __name__ == "__main__":
     main()
     LOG.info("Successful program exit")
