@@ -45,7 +45,7 @@ if USE_SCIPY:
 
 #--- project specific imports
 #
-from lofreq import pileup
+from lofreq import sam
 #from lofreq.utils import count_bases
 from lofreq import snp
 if not USE_SCIPY:
@@ -231,7 +231,7 @@ def main():
     fh_bed_region.close()
 
 
-    pileup_obj = pileup.Pileup(opts.bam_file, opts.ref_fasta_file)
+    pileup_obj = sam.Pileup(opts.bam_file, opts.ref_fasta_file)
     pileup_gen = pileup_obj.generate_pileup(
         conf.DEFAULT_BAQ_SETTING, conf.DEFAULT_MAX_PLP_DEPTH, bed_region_file)
     for pcol in pileup_gen:
@@ -245,7 +245,7 @@ def main():
             ref_count = sum(pcol.get_counts_for_base(
                 this_snp.wildtype, opts.ign_bases_below_q))
             nonref_counts = dict()
-            for base in pileup.VALID_BASES:
+            for base in sam.VALID_BASES:
                 if base == this_snp.wildtype or base == 'N':
                     continue
                 nonref_counts[base] = sum(pcol.get_counts_for_base(

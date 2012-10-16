@@ -48,8 +48,8 @@ if USE_SCIPY:
 #--- project specific imports
 #
 from lofreq import conf
-from lofreq.utils import phredqual_to_prob, prob_to_phredqual
-from lofreq import pileup
+from lofreq import utils
+from lofreq import sam
 from lofreq import em
 from lofreq import qual
 from lofreq import snp
@@ -72,15 +72,11 @@ logging.basicConfig(level=logging.WARN,
 
 
 
-def process_pileup_line(pcol, lofreq_nq=None, lofreq_q=None,
-                        excl_pos=None, what='snp'):
+def process_pileup_line(pcol, lofreq_nq=None, lofreq_q=None, what='snp'):
     """Will use lofreq_nq and then lofreq_q in that order (if not
     None) to process a pileup column to call SNVs.
 
-    return type is define by what, which can be snp or vcf
-    
-    excl_pos is deprecated. Use "samtools mpileup -l bedfile" instead
-    to define regions to use.
+    return type is define by what, which can be snp or vcf    
     """
 
     assert lofreq_nq or lofreq_q
@@ -88,10 +84,6 @@ def process_pileup_line(pcol, lofreq_nq=None, lofreq_q=None,
     
     ret = []
     
-    # return if we are supposed to ignore this position
-    if pcol.coord in excl_pos:
-        LOG.debug("Skipping col %d because of exclusion" % (pcol.coord+1))
-        return ret
 
     # return if we don't have a consensus (nothing to call against)
     if pcol.cons_base not in 'ACGT':
@@ -187,7 +179,7 @@ def process_pileup_line(pcol, lofreq_nq=None, lofreq_q=None,
         # add phred quality
         #
         if snpcall.info['type'] == 'low-freq-var':
-            snpcall.info['pvalue-phred'] = prob_to_phredqual(
+            snpcall.info['pvalue-phred'] = utils.prob_to_phredqual(
                 snpcall.info['pvalue'])
         else:
             # consensus-vars
@@ -284,8 +276,7 @@ def cmdline_parser():
                       dest="outfmt", 
                       choices=choices,
                       default='snp',
-                      help="Output format. One of: %s."
-                      " Note: 'snp' is unaware of chromosomes!" % ', '.join(choices))
+                      help="Output format. One of: %s." % ', '.join(choices))
     parser.add_option_group(output_group)
 
 
@@ -320,11 +311,11 @@ def cmdline_parser():
                           help="Remove any base below this base call quality threshold from pileup"
                           " (default: %d)" % conf.DEFAULT_IGN_BASES_BELOW_Q)
     filter_group.add_option("", "--bonf",
-                      dest="bonf", type="int", default=1,
-                      help="Bonferroni correction factor"
-                      " (e.g. seqlen*3 to be stringent)"
-                      " Higher values might speed up LoFreq-Q in high coverage data."
-                      " Alternatively filter based on SNV qualities later")
+                            dest="bonf", 
+                            default='auto',
+                            help="Bonferroni correction factor."
+                            " Set to an integer or 'auto'. 'auto' is default will use a stringent"
+                            " and recommmended seqlen*3.")
     filter_group.add_option("-s", "--sig-level",
                       dest="sig_thresh", type="float",
                       default=conf.DEFAULT_SIG_THRESH,
@@ -362,19 +353,6 @@ def cmdline_parser():
                           help="Non-consensus bases below this threshold will be filtered"
                           " (default: %d)" % conf.NONCONS_FILTER_QUAL)
     parser.add_option_group(qual_group)
-
-
-    # deprecated options
-    #
-    depr_group = OptionGroup(parser, "Deprecated Options", "")
-    depr_group.add_option("-e", "--exclude",
-                      dest="fexclude", # type="string|int|float"
-                      help="Deprecated (Use samtools mpileup -l bedfile instead"
-                      " to define regions to use)."
-                      " Exclude positions listed in this file"
-                      " format is: start end [comment ...]"
-                      " , with zero-based, half-open coordinates")
-    parser.add_option_group(depr_group)
 
 
     # hidden options
@@ -446,7 +424,7 @@ def test_sensitivity(mode):
 
             else:
                 # turn quality into uniform error probability
-                prob = phredqual_to_prob(q)
+                prob = utils.phredqual_to_prob(q)
                 lofreqnq.error_probs[refbase][snpbase] = prob
 
                 while [ True ]:
@@ -491,7 +469,7 @@ def add_strandbias_info(snpcall, ref_counts, var_counts):
     if fisher_twotail_pvalue == -1:
         snpcall.info['strandbias-pvalue-uncorr-phred'] = "NA"
     else:
-        snpcall.info['strandbias-pvalue-uncorr-phred'] = prob_to_phredqual(fisher_twotail_pvalue)
+        snpcall.info['strandbias-pvalue-uncorr-phred'] = utils.prob_to_phredqual(fisher_twotail_pvalue)
 
         
 
@@ -554,13 +532,13 @@ def main():
 
     if opts.verbose:
         LOG.setLevel(logging.INFO)
-        pileup.LOG.setLevel(logging.INFO)
+        sam.LOG.setLevel(logging.INFO)
         em.LOG.setLevel(logging.INFO)
         qual.LOG.setLevel(logging.INFO)
 
     if opts.debug:
         LOG.setLevel(logging.DEBUG)
-        pileup.LOG.setLevel(logging.DEBUG)
+        sam.LOG.setLevel(logging.DEBUG)
         em.LOG.setLevel(logging.DEBUG)
         qual.LOG.setLevel(logging.DEBUG)
 
@@ -583,7 +561,6 @@ def main():
             (opts.fsnp, "Output file", 'out', True),
             (opts.fbam, "BAM file", 'in', True),
             (opts.freffa, "Reference fasta file", 'in', True),
-            (opts.fexclude, "Exclude file", 'in', False),
             (opts.fregion_bed, "Region BED-file", 'in', False)
             ]:
 
@@ -624,31 +601,29 @@ def main():
 
     # pileup
     #
-    pileup_obj = pileup.Pileup(opts.fbam, opts.freffa)
+    pileup_obj = sam.Pileup(opts.fbam, opts.freffa)
     pileup_gen = pileup_obj.generate_pileup(
         opts.baq, opts.max_depth, opts.fregion_bed)
     # a buffer for pushing back those pileup lines used up for training
     pileup_line_buffer = []
     
 
-    # exclude positions (deprecated)
-    #
-    excl_pos = []
-    if opts.fexclude:
-        LOG.warn("Usage of exclude positions is deprecated."
-                 " Use samtools mpileup -l bedfile instead to define regions to use")
-        excl_pos = utils.read_exclude_pos_file(opts.fexclude)
-        LOG.info("Ignoring %d positions found in %s" % (
-            len(excl_pos), opts.fexclude))
-        LOG.debug("DEBUG: excl_pos = %s" % excl_pos)
-
     # pvalue threshold and correction settings
     #
-    assert opts.bonf > 0
-    bonf_factor = opts.bonf
     sig_thresh = opts.sig_thresh
-
-
+    if opts.bonf == "auto":
+        bonf_factor = sam.auto_bonf_factor(
+               opts.fbam, opts.fregion_bed)
+        LOG.info("Will use an automatically determined Bonferroni"
+                 " factor of %d." % (bonf_factor))
+    else:
+        try:
+            bonf_factor = int(opts.bonf)
+            assert opts.bonf > 0
+        except:
+            LOG.critical("Something's wrong with the Bonferroni factor you provided...")
+            sys.exit(1)
+    
     lofreq_nq = None
     if opts.lofreq_nq_on:
         lofreq_nq = em.EmBasedSNPCaller(
@@ -676,7 +651,7 @@ def main():
     #
     # ################################################################
     
-    # Sample from total columns minus exclude positions. Take first
+    # Sample from total columns. Take first
     # conf.EM_TRAINING_SAMPLE_SIZE pileup columns (if possible given
     # start_pos and end_pos), with a non-ambigious reference and a
     # coverage of at least conf.EM_TRAINING_MIN_COVERAGE
@@ -694,9 +669,6 @@ def main():
             num_lines += 1
             pileup_line_buffer.append(pcol)
 
-            if pcol.coord in excl_pos:
-                LOG.debug("Skipping col %d because of exclusion" % (pcol.coord+1))
-                continue
             if pcol.cons_base not in 'ACGT':
                 LOG.info("Skipping col %d because of ambigious consensus base %s" % (
                     pcol.coord+1, pcol.cons_base))
@@ -779,7 +751,7 @@ def main():
         num_lines += 1
 
         new_snps = process_pileup_line(
-            pcol, lofreq_nq, lofreq_q, excl_pos, opts.outfmt)
+            pcol, lofreq_nq, lofreq_q, opts.outfmt)
         for snpcall in new_snps:
             if opts.outfmt == 'snp':
                 snp.write_record(snpcall, fhout)

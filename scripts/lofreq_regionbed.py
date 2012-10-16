@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Creates a bed file listing all chromsomes and there lengths which
-can be used as an input to samtools mpileup -l.
+can be used as an input to lofreq_snpcaller.py -l (i.e. samtools
+mpileup -l)
 """
 
 # Copyright (C) 2011, 2012 Genome Institute of Singapore
@@ -33,7 +34,7 @@ from optparse import OptionParser
 
 #--- project specific imports
 #
-from lofreq import pileup
+from lofreq import sam
 
 
 __author__ = "Andreas Wilm"
@@ -59,13 +60,13 @@ def chrom_and_len_from_bam(bam):
     """
 
     ret = []
-    bam_header = pileup.header(bam)
-    if bam_header == False:
+    header = sam.sam_header(bam)
+    if header == False:
         LOG.critical("parsing samtools header from %s failed" % bam)
         raise ValueError
-    sq_list = pileup.sq_list_from_header(bam_header)
+    sq_list = sam.sq_list_from_header(header)
     for sq in sq_list:
-        sq_len = pileup.len_for_sq(bam_header, sq)
+        sq_len = sam.len_for_sq(header, sq)
         ret.append((sq, sq_len))
     return ret
 

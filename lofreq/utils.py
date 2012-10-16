@@ -31,8 +31,9 @@ import sys
 
 #--- project specific imports
 #
-# /
+# nothing should go here by definition
 
+    
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
 __copyright__ = "2011, 2012 Genome Institute of Singapore"
@@ -93,7 +94,6 @@ def phredqual_to_prob(phredqual):
 
     assert phredqual >= 0, ("Phred-quality must be >= 0, but is %s" % phredqual)
     return 10**(-phredqual/10.0)
-
 
 
 def read_bed_coords(fbed):
@@ -159,6 +159,7 @@ def read_exclude_pos_file(fexclude):
 
 
 
+    
 if __name__ == '__main__':
     import doctest
     doctest.testmod()        

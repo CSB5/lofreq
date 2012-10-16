@@ -39,7 +39,7 @@ from optparse import OptionParser
 
 #--- project specific imports
 #
-from lofreq import pileup
+from lofreq import sam
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
@@ -170,7 +170,7 @@ def main():
 
     if opts.debug:
         LOG.setLevel(logging.DEBUG)
-        pileup.LOG.setLevel(logging.DEBUG)
+        sam.LOG.setLevel(logging.DEBUG)
 
     if not opts.threshold:
         parser.error("threshold argument missing\n")
@@ -209,7 +209,7 @@ def main():
     num_skipped = 0
     num_total = 0
     for line in pileup_fhandle:
-        pcol = pileup.PileupColumn(line)
+        pcol = sam.PileupColumn(line)
         num_total += 1
 
         # skip processing of columns with ambigious reference bases

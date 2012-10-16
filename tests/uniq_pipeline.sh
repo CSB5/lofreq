@@ -24,7 +24,7 @@ rm $bed 2>/dev/null
 
 lofreq_regionbed.py -i $bam1 > $bed || exit 1
 lofreq_uniq_pipeline.py --bam1 $bam1 --bam2 $bam2 \
-    --bed $bed --ref $ref -o $outdir || exit 1
+    --bed $bed --ref $ref -o $outdir >/dev/null || exit 1
 
 # lazy: just check total number of uniq snvs
 nuniq=$(cat $outdir/*uniq.snp | wc -l)

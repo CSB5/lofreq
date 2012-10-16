@@ -28,7 +28,7 @@ from optparse import OptionParser
 
 #--- project specific imports
 #
-from lofreq import pileup
+from lofreq import sam
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
@@ -92,11 +92,11 @@ def main():
 
     if opts.verbose:
         LOG.setLevel(logging.INFO)
-        pileup.LOG.setLevel(logging.INFO)
+        sam.LOG.setLevel(logging.INFO)
 
     if opts.debug:
         LOG.setLevel(logging.DEBUG)
-        pileup.LOG.setLevel(logging.DEBUG)
+        sam.LOG.setLevel(logging.DEBUG)
 
 
     if opts.pileup == "-":
@@ -113,7 +113,7 @@ def main():
         if len(line.strip())==0:
             continue
         
-        pcol = pileup.PileupColumn()
+        pcol = sam.PileupColumn()
         pcol.parse_line(line)
         
         base_counts = pcol.get_all_base_counts(qual)
