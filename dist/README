@@ -1,11 +1,13 @@
 To create a new distribution:
 
+- Install and test changes by running test/run_all.sh
 - Update version in setup.py
-- Install and run tests to check if things work as expected
 - Update top-level README
+- Commit your changes:
+  commit
+  tag .e.g git tag -a v0.3.1 -m 'my version 0.3.1')
+  push and push origin --tags
 - Run 'python setup.py sdist'
-- git 
-  - commit,
-  - tag e.g.  git tag -a v0.31 -m 'my version 0.31')
-  -  push and push origin --tags
 - Upload source and update sourceforge website
+  keeping the old usage somewhere
+
