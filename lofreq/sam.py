@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """
-Helper functions for samtools' [m]pileup
+Helper functions for sam format, most importantly [m]pileup
 
 Should be replaced with PySam in the future once mpileup and all its
-options are supported properly
+options are supported fully (e.g. BAQ, depth etc)
 """
 
 
@@ -371,6 +371,61 @@ class PileupColumn():
         return base_and_qual_hists
 
 
+
+class Pileup(object):
+    """Frontend to samtools mpileup
+    """
+    
+    def __init__(self, bam, ref_fa, samtools="samtools"):
+        """init
+        """
+
+        self.bam = bam
+        self.ref_fa = ref_fa
+        self.samtools = samtools
+        self.samtools_version = None        
+        self.samtools_version = samtools_version(samtools)
+        if self.samtools_version and self.samtools_version < (0, 1, 13):
+            LOG.warn("Your samtools installation looks too old."
+                     " Will try to continue anyway")
+
+        
+    
+    def generate_pileup(self, baq='extended', 
+                        max_depth=100000, region_bed=None):
+        """Pileup line generator
+        """
+        
+        cmd_list = [self.samtools, 'mpileup']
+        
+        cmd_list.extend(['-d', "%d" % max_depth])
+        
+        if baq == 'off':
+            cmd_list.append('-B')
+        elif baq == 'extended':
+            cmd_list.append('-E')
+        elif baq != 'on':
+            raise ValueError, ("Unknown BAQ option '%s'" % (baq))        
+        
+        if region_bed:
+            cmd_list.extend(['-l', region_bed])
+            
+        cmd_list.extend(['-f', self.ref_fa])
+                    
+        cmd_list.append(self.bam)
+            
+        LOG.info("Executing %s" % (cmd_list))
+        try:
+            p = subprocess.Popen(cmd_list, 
+                                 stdout=subprocess.PIPE, 
+                                 stderr=subprocess.PIPE)
+        except:
+            LOG.fatal("Executing following cmd list failed: %s" % (cmd_list))
+            raise
+        for line in p.stdout:
+            yield PileupColumn(line)
+
+        
     
 def sq_list_from_header(header):
     """
@@ -418,7 +473,7 @@ def len_for_sq(header, sq):
         
             
     
-def header(fbam, samtools_binary="samtools"):
+def sam_header(fbam, samtools_binary="samtools"):
     """
     Calls 'samtools -H view', parse output and return
     
@@ -494,58 +549,74 @@ def samtools_version(samtools):
     return (majorv, minorv, patchlevel)
 
 
-
-class Pileup(object):
-    """Front end to samtools mpileup
+def sum_chrom_len(fbam, chrom_list=None):
+    """
+    Return length of all chromsomes. If chrom_list is not empty then
+    only consider those. Length is extracted from BAM file (fbam)
+    header
     """
     
-    def __init__(self, bam, ref_fa, samtools="samtools"):
-        """init
-        """
+    sum_sq_len = 0
+    header = sam_header(fbam)
+    if header == False:
+        LOG.critical("samtools header parsing failed test")
+        raise ValueError
+    sq = sq_list_from_header(header)
 
-        self.bam = bam
-        self.ref_fa = ref_fa
-        self.samtools = samtools
-        self.samtools_version = None        
-        self.samtools_version = samtools_version(samtools)
-        if self.samtools_version and self.samtools_version < (0, 1, 13):
-            LOG.warn("Your samtools installation looks too old."
-                     " Will try to continue anyway")
-
+    # use all if not set
+    if not chrom_list:
+        chrom_list = sq
         
+    for chrom in chrom_list:
+        assert chrom in sq, (
+        "Couldn't find chromosome '%s' in BAM file '%s'" % (
+            chrom, fbam))
+        
+        sq_len = len_for_sq(header, chrom)
+        LOG.info("Adding length %d for chrom %s" % (sq_len, chrom))
+        sum_sq_len += sq_len
+        
+    return sum_sq_len
+
     
-    def generate_pileup(self, baq='extended', 
-                        max_depth=100000, region_bed=None):
-        """Pileup line generator
-        """
-        
-        cmd_list = [self.samtools, 'mpileup']
-        
-        cmd_list.extend(['-d', "%d" % max_depth])
-        
-        if baq == 'off':
-            cmd_list.append('-B')
-        elif baq == 'extended':
-            cmd_list.append('-E')
-        elif baq != 'on':
-            raise ValueError, ("Unknown BAQ option '%s'" % (baq))        
-        
-        if region_bed:
-            cmd_list.extend(['-l', region_bed])
-            
-        cmd_list.extend(['-f', self.ref_fa])
-                    
-        cmd_list.append(self.bam)
-            
-        LOG.info("Executing %s" % (cmd_list))
-        try:
-            p = subprocess.Popen(cmd_list, 
-                                 stdout=subprocess.PIPE, 
-                                 stderr=subprocess.PIPE)
-        except:
-            LOG.fatal("Executing following cmd list failed: %s" % (cmd_list))
-            raise
-        for line in p.stdout:
-            yield PileupColumn(line)
+def auto_bonf_factor(bam, bed_file=None, excl_file=None, chrom=None):
+    """Automatically determine Bonferroni factor to use for SNV
+    predictions on BAM file. Note: excl-file/chrom are deprecated. Use
+    bed-file instead"""
 
+    if excl_file or chrom:
+        assert excl_file and chrom, (
+            "If exclude file is given I also need a chromosome, vice versa")
+
+    if bed_file:
+        assert not excl_file, ("Can only use either bed or excl-file")
+
+    # exclude positions
+    #
+    if excl_file:
+        excl_pos = []
+        excl_pos = read_exclude_pos_file(excl_file)
+        LOG.info("Parsed %d positions from %s" % (
+            len(excl_pos), excl_file))
         
+        sum_sq_len = sum_chrom_len(bam, [chrom])
+        sum_sq_len -= len(excl_pos)
+
+    elif bed_file:
+
+        bed_coords = utils.read_bed_coords(bed_file)
+        sum_sq_len = 0
+        for (chrom, ranges) in bed_coords.iteritems():
+            for r in ranges:
+                LOG.debug("bed coord range for %s: %d-%d" % (
+                    chrom, r[0], r[1]))
+                diff = r[1]-r[0]
+                assert diff > 0
+                sum_sq_len += diff
+    else:
+        # look at all
+        sum_sq_len = sum_chrom_len(bam)
+
+    bonf_factor = sum_sq_len * 3
+    return bonf_factor
+

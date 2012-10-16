@@ -5,8 +5,6 @@ Bonferroni factor is either determined from:
 - A bed file listing regions to analyse
 or
 - the header of a BAM file
-
-A deprecated way was to give an exclude file and one chromosome
 """
 
 # Copyright (C) 2011, 2012 Genome Institute of Singapore
@@ -31,7 +29,7 @@ import sys
 import logging
 import os
 # optparse deprecated from Python 2.7 on
-from optparse import OptionParser
+from optparse import OptionParser, SUPPRESS_HELP
 
 #--- third-party imports
 #
@@ -39,8 +37,7 @@ from optparse import OptionParser
 
 #--- project specific imports
 #
-from lofreq import pileup
-from lofreq import utils
+from lofreq import sam
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
@@ -53,41 +50,6 @@ __license__ = "GPL2"
 LOG = logging.getLogger("")
 logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
-
-
-       
-
-def sum_chrom_len(fbam, chrom_list=None):
-    """
-    Return length of all chromsomes. If chrom_list is not empty then
-    only consider those. Length is extracted from BAM file (fbam)
-    header
-    """
-    
-    sum_sq_len = 0
-    bam_header = pileup.header(fbam)
-    if bam_header == False:
-        LOG.critical("samtools header parsing failed test")
-        raise ValueError
-    sq = pileup.sq_list_from_header(bam_header)
-
-    # use all if not set
-    if not chrom_list:
-        chrom_list = sq
-        
-    for chrom in chrom_list:
-        assert chrom in sq, (
-        "Couldn't find chromosome '%s' in BAM file '%s'" % (
-            chrom, fbam))
-        
-        sq_len = pileup.len_for_sq(bam_header, chrom)
-        LOG.info("Adding length %d for chrom %s" % (sq_len, chrom))
-        sum_sq_len += sq_len
-        
-    return sum_sq_len
-
-    
-
 
 
 def cmdline_parser():
@@ -112,18 +74,21 @@ def cmdline_parser():
                       help="BAM input.")
     parser.add_option("", "--exclude",
                       dest="fexclude", # type="string|int|float"
-                      help="Optional/Deprecated: Exclude positions listed in this file"
-                      " format is: start end [comment ...]"
-                      " , with zero-based, half-open coordinates"
-                      " (clashes with --bed)")
+                      help=SUPPRESS_HELP)
+    #help="Optional/Deprecated: Exclude positions listed in this file"
+    #                  " format is: start end [comment ...]"
+    #                  " , with zero-based, half-open coordinates"
+    #                  " (clashes with --bed)")
     parser.add_option("", "--chrom",
                       dest="chrom", # type="string|int|float"
-                      help="Optional: Chromsome to use from BAM"
-                      " (needed for --exclude)")
+                      help=SUPPRESS_HELP)
+    #help="Optional: Chromsome to use from BAM"
+    #                  " (needed for --exclude)")
     parser.add_option("", "--bed",
                       dest="fbed", # type="string|int|float"
                       help="Optional: Bed file listing positions used"
-                      " in later pileup (clashes with --exclude and bam)")
+                      " in later pileup")
+    #                    (clashes with --exclude and bam)")
     return parser
 
 
@@ -143,11 +108,11 @@ def main():
 
     if opts.verbose:
         LOG.setLevel(logging.INFO)
-        pileup.LOG.setLevel(logging.INFO)
+        sam.LOG.setLevel(logging.INFO)
 
     if opts.debug:
         LOG.setLevel(logging.DEBUG)
-        pileup.LOG.setLevel(logging.DEBUG)
+        sam.LOG.setLevel(logging.DEBUG)
 
     if not opts.fbam and not opts.fbed:
         parser.error("BAM input file and bed input file argument missing.")
@@ -172,35 +137,9 @@ def main():
                      " with exclude file, not with bed file ('include')")
         sys.exit(1)
         
-
     
-    # exclude positions
-    #
-    if opts.fexclude:
-        excl_pos = []
-        excl_pos = utils.read_exclude_pos_file(opts.fexclude)
-        LOG.info("Parsed %d positions from %s" % (
-            len(excl_pos), opts.fexclude))
-        
-        sum_sq_len = sum_chrom_len(opts.fbam, [opts.chrom])
-        sum_sq_len -= len(excl_pos)
-
-    elif opts.fbed:
-
-        bed_coords = utils.read_bed_coords(opts.fbed)
-        sum_sq_len = 0
-        for (chrom, ranges) in bed_coords.iteritems():
-            for r in ranges:
-                LOG.debug("bed coord range for %s: %d-%d" % (
-                    chrom, r[0], r[1]))
-                diff = r[1]-r[0]
-                assert diff > 0
-                sum_sq_len += diff
-    else:
-        # look at all
-        sum_sq_len = sum_chrom_len(opts.fbam)
-
-    bonf_factor = sum_sq_len * 3
+    bonf_factor = sam.auto_bonf_factor(
+        opts.fbam, opts.fbed, opts.fexclude, opts.chrom)
     print bonf_factor
 
 

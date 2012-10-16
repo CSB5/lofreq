@@ -31,6 +31,10 @@ See https://sourceforge.net/p/lofreq/
 VERSION HISTORY
 ---------------
 
+0.3.2 (2012-10-17):
+- Bonferroni factor now determined automatically by default in
+  lofreq_snpcaller.py
+
 0.3.1 (2012-10-10); Main changes:
 - Made LoFreq chromosome aware
 - Samtools pileup is now generated internally
