@@ -1,15 +1,24 @@
 #!/bin/bash
 
+
+echoerror() {
+    echo "ERROR: $1" 1>&2
+}
+echook() {
+    echo "OK: $1" 1>&2
+}
+
 scripts2test=$(grep 'scripts/' ../setup.py | tr -d ",'" | sed -e 's,^,../,')
 log=$(mktemp -t pylint.XXXXX)
 for f in $scripts2test; do
     pylint -E --rcfile pylint.rc $f >> $log
 done 
 if [ -s $log ]; then
+    echoerror "pylint produced errors:"
     cat $log
     exit 1
 else
-    echo "pylint produced no errors"
+    echook "pylint produced no errors"
 fi
 rm $log
 

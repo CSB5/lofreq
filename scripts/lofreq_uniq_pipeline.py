@@ -103,7 +103,7 @@ def cmdline_parser():
 
 
 def bam_to_result_filename(bam, what, outdir=None):
-    """FIXME
+    """Derive result filename for step 'what' from BAM filename.
     """
     
     basename = os.path.splitext(os.path.basename(bam))[0]
@@ -154,7 +154,7 @@ def get_bonf(regionbed):
 
 
 def snv_call_wrapper(bam, snv_raw, reffa, regionbed):
-    """FIXME
+    """Wrapper for lofreq_snpvaller.py
     """
 
     if os.path.exists(snv_raw):
@@ -180,7 +180,7 @@ def snv_call_wrapper(bam, snv_raw, reffa, regionbed):
 
 
 def snv_filter_wrapper(snv_raw, snv_filt, mincov=None, sbfilter=None):
-    """FIXME
+    """Wrapper for lofreq_filter.py
     """
 
     if os.path.exists(snv_filt):
@@ -209,7 +209,7 @@ def snv_filter_wrapper(snv_raw, snv_filt, mincov=None, sbfilter=None):
 
 
 def snv_diff_wrapper(snv_to_diff, snv_ref, snv_diff_out):
-    """FIXME
+    """Wrapper for lofreq_diff.py
     """
 
     if os.path.exists(snv_diff_out):
@@ -229,7 +229,7 @@ def snv_diff_wrapper(snv_to_diff, snv_ref, snv_diff_out):
 
 
 def snv_uniq_wrapper(snv_diff, snv_uniq, reffa, ref_bam):
-    """FIXME
+    """Wraper for lofreq_uniq.py
     """
 
     if os.path.exists(snv_uniq):
