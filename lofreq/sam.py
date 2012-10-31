@@ -512,7 +512,7 @@ def sam_header(fbam, samtools_binary="samtools"):
                       cmd.split()[0], retcode, cmd, stderrdata))
         raise OSError
                        
-    for line in stderrdata.split("\n"):
+    for line in str.splitlines(stderrdata):
         if not len(line):
             continue
         if line == "[mpileup] 1 samples in 1 input files":
@@ -522,7 +522,7 @@ def sam_header(fbam, samtools_binary="samtools"):
         else:
             LOG.warn("Unhandled line on stderr detected: %s" % (line))
 
-    return stdoutdata.split("\n")
+    return str.splitlines(stdoutdata)
 
 
 def samtools_version(samtools):
@@ -595,7 +595,7 @@ def auto_bonf_factor(bam, bed_file=None, excl_file=None, chrom=None):
     #
     if excl_file:
         excl_pos = []
-        excl_pos = read_exclude_pos_file(excl_file)
+        excl_pos = utils.read_exclude_pos_file(excl_file)
         LOG.info("Parsed %d positions from %s" % (
             len(excl_pos), excl_file))
         
