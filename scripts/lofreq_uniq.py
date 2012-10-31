@@ -213,7 +213,7 @@ def main():
     if set([s.chrom for s in snps if s.chrom]) == 0:
         if opts.chrom:
             for s in snps:
-               s.chrom = opts.chrom
+                s.chrom = opts.chrom
         else:
             LOG.fatal("SNV file did not contain chromosome info and none given on command line")
             sys.exit(1)
