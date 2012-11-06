@@ -29,6 +29,7 @@ import subprocess
 import logging
 import re
 import copy
+import os
 
 #--- third-party imports
 #
@@ -87,6 +88,7 @@ class PileupColumn():
         # the number of reads covering the site
         self.coverage = None
 
+        # only VALID_BASES allowed
         self._bases_and_quals = dict()
         for b in VALID_BASES:
             self._bases_and_quals[b.upper()] = dict()
@@ -110,7 +112,8 @@ class PileupColumn():
         # convert base-call qualities to probabilites/freqs (ignoring
         # Q2) to determine consensus.
         
-        base_qual_hist = self.get_base_and_qual_hist(keep_strand_info=False)        
+        base_qual_hist = self.get_base_and_qual_hist(
+            keep_strand_info=False)        
 
         base_probsum = dict() # actually sums of probs
         for base in base_qual_hist.keys():
@@ -130,7 +133,8 @@ class PileupColumn():
             base_probsum[base] = probsum
 
         # sort in ascending order                                                                                                                                               
-        sorted_probsum = sorted(base_probsum.items(), key=lambda x: x[1])
+        sorted_probsum = sorted(base_probsum.items(), 
+                                key=lambda x: x[1])
         if sorted_probsum[-1][1] - sorted_probsum[-2][1] < 0.000001:
             # cons is N if tied
             cons_base = 'N'
@@ -145,8 +149,7 @@ class PileupColumn():
 
         
     def parse_line(self, line):
-        """
-        Split a line of pileup output and set values accordingly
+        """Split a line of pileup output and set values accordingly
 
         From http://samtools.sourceforge.net/pileup.shtml:
         
@@ -211,16 +214,20 @@ class PileupColumn():
         bases = self.rem_startend_markup(bases)
         (bases, quals) = self.rem_indel_markup(bases, quals)
         assert len(bases) == len(quals), (
-            "Mismatch between number of parsed bases and quality values at %s:%d\n"
-            % (self.chrom, self.coord+1))
+            "Mismatch between number of parsed bases and"
+            " quality values at %s:%d\n" % (self.chrom, self.coord+1))
 
         if len(bases) != self.coverage-self.num_del_events:
-            LOG.warn("Mismatch between number of bases (= %d) and samtools coverage value (= %d)."
-                     " Ins/del events: %d/%d. Cleaned base_str is '%s'. Line was '%s'" % (
-                    len(bases), self.coverage, self.num_ins_events, self.num_del_events, bases, line))
+            LOG.warn("Mismatch between number of bases (= %d) and"
+                     " samtools coverage value (= %d)."
+                     " Ins/del events: %d/%d. Cleaned base_str is '%s'."
+                     " Line was '%s'" % (
+                         len(bases), self.coverage, self.num_ins_events, 
+                         self.num_del_events, bases, line))
 
         for (i, b) in enumerate(bases):
-            if b.upper() not in VALID_BASES: # paranoia. once encountered gaps in pileup
+            # paranoia. have seen gaps in pileup
+            if b.upper() not in VALID_BASES: 
                 continue
             q = quals[i]
             self._bases_and_quals[b][q] = self._bases_and_quals[b].get(q, 0) + 1
@@ -315,6 +322,13 @@ class PileupColumn():
         returned as sum of fw and rv
         """
 
+
+        if not self._bases_and_quals.has_key(base):
+            if keep_strand_info:
+                return (0, 0)
+            else:
+                return 0
+        
         fw_count = 0
         b = base.upper()
         fw_count += sum([c for (q, c) in self._bases_and_quals[b].iteritems()
@@ -324,6 +338,7 @@ class PileupColumn():
         b = base.lower()
         rv_count += sum([c for (q, c) in self._bases_and_quals[b].iteritems()
                       if q >= min_qual])
+        
         if keep_strand_info:
             return (fw_count, rv_count)
         else:
@@ -339,7 +354,8 @@ class PileupColumn():
 
         base_counts = dict()
         for base in VALID_BASES:
-            base_counts[base] = self.get_counts_for_base(base, min_qual, keep_strand_info)
+            base_counts[base] = self.get_counts_for_base(
+                base, min_qual, keep_strand_info)
     
         return base_counts
 
@@ -365,8 +381,9 @@ class PileupColumn():
             fw_dict = self._bases_and_quals[base.upper()]
             rv_dict = self._bases_and_quals[base.lower()]
             qual_union = set(fw_dict.keys() + rv_dict.keys())
-            base_and_qual_hists[base] = dict([(q, fw_dict.get(q, 0) + rv_dict.get(q, 0))
-                                              for q in qual_union])
+            base_and_qual_hists[base] = dict(
+                [(q, fw_dict.get(q, 0) + rv_dict.get(q, 0))
+                 for q in qual_union])
 
         return base_and_qual_hists
 
@@ -526,7 +543,8 @@ def sam_header(fbam, samtools_binary="samtools"):
 
 
 def samtools_version(samtools):
-    """
+    """Returns samtools version as a tuples of major-, minor-version and
+    patch-level
     """
     
     try:
@@ -541,7 +559,8 @@ def samtools_version(samtools):
     try:
         version_line = [l for l in  lines if "Version:" in l][0]
         version_str = version_line.split()[1]
-        (majorv, minorv, patchlevel) = [int(x) for x in version_str.split(".")]            
+        (majorv, minorv, patchlevel) = [
+            int(x) for x in version_str.split(".")]            
     except IndexError:
         LOG.warn("Couldn't determine samtools version")
         return None
@@ -578,7 +597,7 @@ def sum_chrom_len(fbam, chrom_list=None):
         
     return sum_sq_len
 
-    
+
 def auto_bonf_factor(bam, bed_file=None, excl_file=None, chrom=None):
     """Automatically determine Bonferroni factor to use for SNV
     predictions on BAM file. Note: excl-file/chrom are deprecated. Use
@@ -620,3 +639,37 @@ def auto_bonf_factor(bam, bed_file=None, excl_file=None, chrom=None):
     bonf_factor = sum_sq_len * 3
     return bonf_factor
 
+
+
+def auto_bonf_factor_from_depth(bam, bed_file=None,
+                                min_base_q=3, min_map_q=0):
+    """Uses samtools depth to figure out Bonferroni factor
+    automatically. Will ignore zero-coverage regions as opposed to
+    auto_bonf_factor
+    """
+
+    assert os.path.exists(bam)
+    if bed_file:
+        assert os.path.exists(bed_file)
+
+    samtools_depth = ['samtools', 'depth', 
+                      '-q', "%d" % min_base_q, 
+                      '-Q', "%d" % min_map_q]
+    if bed_file:
+        samtools_depth.extend(['-b', bed_file])
+    samtools_depth.append(bam)
+    
+    try:
+        p1 = subprocess.Popen(samtools_depth, 
+                              stdout=subprocess.PIPE)
+        p2 = subprocess.Popen(["wc", "-l"], 
+                              stdin=p1.stdout, stdout=subprocess.PIPE)
+    except OSError:
+        LOG.error("Can't execute either samtools or wc")
+        raise
+    
+    p1.stdout.close()# allow p1 to receive a SIGPIPE if p2 exits.
+    num_cov_cols = p2.communicate()[0]
+   
+    bonf_factor = int(num_cov_cols) * 3
+    return bonf_factor

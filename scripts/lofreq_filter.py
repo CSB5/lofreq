@@ -24,7 +24,7 @@ import sys
 import logging
 import os
 # optparse deprecated from Python 2.7 on
-from optparse import OptionParser
+from optparse import OptionParser, SUPPRESS_HELP
 
 #--- third-party imports
 #
@@ -87,15 +87,18 @@ def cmdline_parser():
     parser.add_option("", "--strandbias-bonf",
                       dest="strandbias_bonf", 
                       action="store_true",
-                      help="Optional: Bonferroni corrected strand bias value has to be 0.05 (applied first!)")
+                      help="Optional: Bonferroni corrected strand bias"
+                      " value has to be 0.05 (applied first!)")
     parser.add_option("", "--strandbias-holmbonf",
                       dest="strandbias_holmbonf", 
                       action="store_true",
-                      help="Optional: Holm-Bonferroni corrected strand bias value has to be 0.05 (applied first!)")
+                      help="Optional: Holm-Bonferroni corrected strand"
+                      " bias value has to be 0.05 (applied first!)")
     parser.add_option("", "--strandbias-phred",
                       dest="max_strandbias_phred", 
                       type='int',
-                      help="Optional: Ignore SNPs with strandbias phred score above this value")
+                      help="Optional: Ignore SNPs with strandbias"
+                      " phred-score above this value")
     parser.add_option("", "--min-freq",
                       dest="min_freq", 
                       type="float",
@@ -109,16 +112,22 @@ def cmdline_parser():
                       dest="min_cov", 
                       type='int',
                       #default=1, type=int,
-                      help="Optional: Ignore variants sites if coverage is below this value")    
+                      help="Optional: Ignore variants sites if coverage"
+                      " is below this value")    
     parser.add_option("", "--snp-phred", 
                       dest="min_snp_phred",
                       type='int',
                       #default=1, type=int,
-                      help="Optional: Ignore variants sites if SNP phred score is below this (float) value")
+                      help="Optional: Ignore variants sites if SNP"
+                      " phred score is below this (float) value")
     parser.add_option("", "--window-size",
                       dest="window_size",
                       type='int',
-                      help="Optional: Ignore any variants if at least one more was called within this window size")
+                      help="Optional: Ignore any variants if at least"
+                      " one more was called within this window size")
+
+    parser.add_option("--force", help=SUPPRESS_HELP,
+                      dest="force_overwrite", action="store_true") 
 
     return parser
 
