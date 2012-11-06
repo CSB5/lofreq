@@ -5,11 +5,8 @@ We recommended to recalibrate base-call quality-scores and realign
 indels (both can be done with GATK).
 
 NOTE:
-* Reported p-values are not Bonferroni corrected.
 * Use lofreq_filter.py for filtering the variant candidates produced
-  here
-* Variant positions with pvalue*sig-level<bonferroni are not
-  reported.
+* Variants with pvalue*sig-level<bonferroni are not reported.
 """
 
 
@@ -66,6 +63,7 @@ __license__ = "GPL2"
 
 # global logger
 LOG = logging.getLogger("")
+
 logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
@@ -314,8 +312,9 @@ def cmdline_parser():
                             dest="bonf", 
                             default='auto',
                             help="Bonferroni correction factor."
-                            " Set to an integer or 'auto'. 'auto' is default will use a stringent"
-                            " and recommmended seqlen*3.")
+                            " Set to an integer, 'auto' (default) or 'auto-ign-zero-cov'."
+                            " 'auto' will use a stringent and recommmended seqlen*3."
+                            " 'auto-ign-zero-cov' is the same as 'auto' but ignores zero coverage columns (slower)")
     filter_group.add_option("-s", "--sig-level",
                       dest="sig_thresh", type="float",
                       default=conf.DEFAULT_SIG_THRESH,
@@ -359,6 +358,8 @@ def cmdline_parser():
     #
     parser.add_option("--test-sensitivity", help=SUPPRESS_HELP,
                       dest="test_sensitivity", action="store_true") 
+    parser.add_option("--force", help=SUPPRESS_HELP,
+                      dest="force_overwrite", action="store_true") 
 
 
     return parser
@@ -542,14 +543,6 @@ def main():
         em.LOG.setLevel(logging.DEBUG)
         qual.LOG.setLevel(logging.DEBUG)
 
-    if not opts.fsnp:
-        parser.error("Variant output file argument missing.")
-        sys.exit(1)
-    if opts.fsnp != '-' and os.path.exists(opts.fsnp):
-        LOG.fatal(
-            "Cowardly refusing to overwrite already existing file '%s'.\n" % (
-                opts.fsnp))
-        sys.exit(1)
 
     if not opts.lofreq_nq_on and not opts.lofreq_q_on:
         parser.error("Nothing to do. LoFreq-Q and LoFreq-NQ both switched off.")
@@ -577,7 +570,7 @@ def main():
             LOG.fatal(
                 "file '%s' does not exist.\n" % filename)
             sys.exit(1)
-        if direction == 'out' and os.path.exists(filename):
+        if direction == 'out' and os.path.exists(filename) and not opts.force_overwrite:
             LOG.fatal(
                 "Refusing to overwrite existing file '%s'.\n" % filename)
             sys.exit(1)
@@ -599,22 +592,19 @@ def main():
                 opts.em_error_prob_file))
             sys.exit(1)
 
-    # pileup
-    #
-    pileup_obj = sam.Pileup(opts.fbam, opts.freffa)
-    pileup_gen = pileup_obj.generate_pileup(
-        opts.baq, opts.max_depth, opts.fregion_bed)
-    # a buffer for pushing back those pileup lines used up for training
-    pileup_line_buffer = []
-    
 
     # pvalue threshold and correction settings
     #
     sig_thresh = opts.sig_thresh
     if opts.bonf == "auto":
+        bonf_factor = sam.auto_bonf_factor_from_depth(
+            opts.fbam, opts.fregion_bed, opts.ign_bases_below_q)
+        LOG.info("Will use an automatically determined (len*3) Bonferroni"
+                 " factor of %d." % (bonf_factor))
+    elif opts.bonf == 'auto-ign-zero-cov':
         bonf_factor = sam.auto_bonf_factor(
-               opts.fbam, opts.fregion_bed)
-        LOG.info("Will use an automatically determined Bonferroni"
+            opts.fbam, opts.fregion_bed)
+        LOG.info("Will use an automatically determined (non-zero-cov-len*3) Bonferroni"
                  " factor of %d." % (bonf_factor))
     else:
         try:
@@ -623,7 +613,8 @@ def main():
         except:
             LOG.critical("Something's wrong with the Bonferroni factor you provided...")
             sys.exit(1)
-    
+
+            
     lofreq_nq = None
     if opts.lofreq_nq_on:
         lofreq_nq = em.EmBasedSNPCaller(
@@ -638,10 +629,18 @@ def main():
             noncons_filter_qual = noncons_filter_qual,
             ign_bases_below_q =  ign_bases_below_q,
             bonf_factor = bonf_factor, sig_thresh = sig_thresh)
+
+    # pileup
+    #
+    pileup_obj = sam.Pileup(opts.fbam, opts.freffa)
+    pileup_gen = pileup_obj.generate_pileup(
+        opts.baq, opts.max_depth, opts.fregion_bed)
+    # a buffer for pushing back those pileup lines used up for training
+    pileup_line_buffer = []
+   
         
     LOG.info("Commandline (workdir %s): %s" % (
         os.getcwd(), ' '.join(sys.argv)))
-
     
     # ################################################################
     #
