@@ -31,6 +31,14 @@ See https://sourceforge.net/p/lofreq/
 VERSION HISTORY
 ---------------
 
+0.4.0 (2012-11-08):
+- Overflow fix for very large Bonferroni factors (relevant for auto
+  Bonferroni on WGS of HG for example)
+- Reported base-counts and frequencies are now before filtering, with
+  the exception of Q<3 which is always removed
+- Added Bonferroni option 'auto-ign-zero-cov'
+- Added --force option for forced overwriting of files
+
 0.3.2 (2012-10-17):
 - Bonferroni factor now determined automatically by default in
   lofreq_snpcaller.py
