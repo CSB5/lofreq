@@ -70,6 +70,29 @@
 #endif
 
 
+int binom_sf(double *q, int num_trials, int num_successes,
+             double prob_success);
+double log_sum(double log_a, double log_b);
+double log_diff(double log_a, double log_b);
+double probvec_tailsum(double *probvec, int tail_startindex,
+                       int probvec_len);
+double *naive_calc_prob_dist(const int *quals, int N, int K);
+double *pruned_calc_prob_dist(const int *quals, int N, int K, 
+                      unsigned long int bonf_factor, double sig_level);
+int snpcaller_qual(double *snp_pvalues, const int *phred_quals,
+                   const int num_phred_quals, const int *noncons_counts,
+                   const unsigned long int bonf_factor,
+                   const double sig_level);
+static PyObject *py_binom_sf(PyObject *self, PyObject *args);
+static PyObject *py_binom_cdf(PyObject *self, PyObject *args);
+static PyObject *py_kt_fisher_exact(PyObject *self, PyObject *args);
+static PyObject *py_snpcaller_qual(PyObject *self, PyObject *args);
+static PyObject *py_phredqual_to_prob(PyObject *self, PyObject *args);
+static PyObject *py_prob_to_phredqual(PyObject *self, PyObject *args);
+
+
+
+
 
 /**
  * @brief Survival function (1-cdf) computed by means of DCDFLIB to get rid of scipy
