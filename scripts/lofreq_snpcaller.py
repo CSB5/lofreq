@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 """Ultra-sensitive detection of very rare / low frequency variants.
 
-We recommended to recalibrate base-call quality-scores and realign
+We recommend to recalibrate base-call quality-scores and realign
 indels (both can be done with GATK).
 
 NOTE:
-* Use lofreq_filter.py for filtering the variant candidates produced
 * Variants with pvalue*sig-level<bonferroni are not reported.
+* Use lofreq_filter.py for filtering the variant candidates produced
 """
 
 
@@ -256,45 +256,44 @@ def cmdline_parser():
 
     plp_group = OptionGroup(parser, "Pileup Options", "")
     plp_group.add_option("-b", "--bam",
-                      dest="fbam", # type="string|int|float"
-                      help="BAM file containing your stringently mapped reads")
+                      dest="bam", # type="string|int|float"
+                      help="BAM file with (stringently) mapped reads")
     plp_group.add_option("-f", "--reffa",
-                      dest = "freffa", # type="string|int|float"
+                      dest = "ref_fasta", # type="string|int|float"
                       help = "Reference fasta file")
     choices = ['on', 'off', 'extended']
     plp_group.add_option("", "--baq",
                          dest = "baq",
                          choices = choices,
                          default=conf.DEFAULT_BAQ_SETTING,
-                         help="Optional: BAQ setting for pileup."
-                         " One of %s. Default %s"% (
+                         help="BAQ setting for pileup."
+                         " One of: %s (default: %s)"% (
                              ', '.join(choices), conf.DEFAULT_BAQ_SETTING))
     plp_group.add_option("-l", "--regions",
-                         dest = "fregion_bed",
+                         dest = "region_bed",
                          help = "Optional: bed file containing regions"
-                         " to limit analysis to. One of %s."
-                         " Default %s"% (
-                             ', '.join(choices), 
-                             conf.DEFAULT_BAQ_SETTING))
+                         " to limit analysis to.")
     plp_group.add_option("-d", "--maxdepth",
                          dest = "max_depth",
                          type=int,
                          default = conf.DEFAULT_MAX_PLP_DEPTH,
-                         help = "Optional: maximum depth. Default %d"% (
+                         help = "Maximum pileup depth (default: %d)"% (
                              conf.DEFAULT_MAX_PLP_DEPTH))
     parser.add_option_group(plp_group)
 
     
     output_group = OptionGroup(parser, "Output Options", "")
     output_group.add_option("-o", "--out",
-                      dest="fsnp", default="-", # type="string|int|float"
+                      dest="snp_out", default="-", # type="string|int|float"
                       help="Variant output file or '-' for stdout (default)")
     choices = ['snp', 'vcf']
+    default = "snp"
     output_group.add_option("", "--format",
                       dest="outfmt", 
                       choices=choices,
                       default='snp',
-                      help="Output format. One of: %s." % ', '.join(choices))
+                      help="Output format. One of: %s"
+                      " (default: '%s')." % (', '.join(choices), default))
     parser.add_option_group(output_group)
 
 
@@ -304,25 +303,24 @@ def cmdline_parser():
                       action="store_true", 
                       dest="lofreq_q_on",
                       default=default,
-                      help="Activate quality-aware SNV calling"
-                      " (LoFreq-Q; default = %s)" % default)
+                      help="Activate quality-aware SNV calling,"
+                      " i.e. LoFreq-Q (default: %s)" % default)
     model_group.add_option("", "--lofreq-q-off",
                       action="store_false", 
                       dest="lofreq_q_on",
-                      help="De-activate quality-aware SNV calling (LoFreq-Q)")
+                      help="De-activate quality-aware SNV calling")
     
     default = False
     model_group.add_option("", "--lofreq-nq-on",
                       action="store_true",
                       dest="lofreq_nq_on",
                       default=default,
-                      help="Activate quality-agnostic SNV calling"
-                      " (LoFreq-NQ; default = %s)" % default)
+                      help="Activate quality-agnostic SNV calling,"
+                      " i.e. LoFreq-NQ (default: %s)" % default)
     model_group.add_option("", "--lofreq-nq-off",
                       action="store_false",
                       dest="lofreq_nq_on",
-                      help="De-activate quality-agnostic SNV calling"
-                      " (LoFreq-NQ)")
+                      help="De-activate quality-agnostic SNV calling")
     parser.add_option_group(model_group)
     
     filter_group = OptionGroup(parser, "Filtering Options", "")
@@ -331,8 +329,8 @@ def cmdline_parser():
                           default=conf.DEFAULT_IGN_BASES_BELOW_Q,
                           help="Remove any base below this base call"
                           " quality threshold from pileup."
-                          " (will also be reflected in reported freqs."
-                          " default: %d)" % conf.DEFAULT_IGN_BASES_BELOW_Q)
+                          " This will also be reflected in reported freqs"
+                          " (default: %d)" % conf.DEFAULT_IGN_BASES_BELOW_Q)
     filter_group.add_option("", "--bonf",
                             dest="bonf", 
                             default='auto',
@@ -341,7 +339,7 @@ def cmdline_parser():
                             " 'auto-ign-zero-cov'. 'auto' will use a"
                              " stringent and recommmended seqlen*3."
                             " 'auto-ign-zero-cov' is the same as 'auto'"
-                            " but ignores zero coverage columns (slower)")
+                            " but ignores zero coverage columns")
     filter_group.add_option("-s", "--sig-level",
                       dest="sig_thresh", type="float",
                       default=conf.DEFAULT_SIG_THRESH,
@@ -351,7 +349,7 @@ def cmdline_parser():
 
 
     em_group = OptionGroup(parser,
-                           "Advanced Options for quality-agnostic stage", "")
+                           "Advanced Options for quality-agnostic stage (LoFreq-NQ)", "")
     em_group.add_option('', '--num-param', dest='em_num_param',
                         choices = ['4', '12'],
                         default=conf.DEFAULT_EM_NUM_PARAM,
@@ -360,9 +358,9 @@ def cmdline_parser():
     em_group.add_option('', '--error-prob-file', dest='em_error_prob_file',
                         help='Read EM error probs from this file'
                         ' (skips training).'
-                        ' General format is: "<ref-base> <snp-base-1> <eprob-1> ...".'
+                        ' General format is: "<ref-base> <snp-base-1> <errprob-1> ...".'
                         ' 4-parameter model needs only one line:'
-                        ' "N A <eprob> C <eprob> <eprob> G T <eprob>".'
+                        ' "N A <errprob> C <errprob> <errprob> G T <errprob>".'
                         ' 12-parameter model needs one line for each nucleotide.')
     #em_group.add_option('', '--convergence',
     #                    dest='conv_epsilon', type=float, default=conf.DEFAULT_CONVERGENCE_EPSILON,
@@ -370,7 +368,7 @@ def cmdline_parser():
     parser.add_option_group(em_group)
 
     
-    qual_group = OptionGroup(parser, "Advanced Options for quality-aware stage", "")
+    qual_group = OptionGroup(parser, "Advanced Options for quality-aware stage (LoFreq-Q)", "")
     qual_group.add_option("", "--noncons-default-qual",
                           dest="noncons_default_qual", type="int",
                           default=conf.NONCONS_DEFAULT_QUAL,
@@ -381,8 +379,8 @@ def cmdline_parser():
                           default=conf.NONCONS_FILTER_QUAL,
                           help="Non-consensus bases below this threshold"
                           " will be removed before SNV calling"
-                          " (but go into reported freqs.)"
-                          " (default: %d)" % conf.NONCONS_FILTER_QUAL)
+                          " (but go into reported freqs;"
+                          " default: %d)" % conf.NONCONS_FILTER_QUAL)
     parser.add_option_group(qual_group)
 
 
@@ -465,7 +463,8 @@ def test_sensitivity(mode):
                     base_counts = dict(zip(['A', 'C', 'G', 'T'], 4*[0]))
                     base_counts[refbase] = cov-num_noncons
                     base_counts[snpbase] = num_noncons
-                    snps = lofreqnq.call_snp_in_column(666, base_counts, refbase)
+                    snps = lofreqnq.call_snp_in_column(
+                        666, base_counts, refbase)
 
                     if len(snps):
                         print "\t%d" % (num_noncons),
@@ -483,15 +482,17 @@ def add_strandbias_info(snpcall, ref_counts, var_counts):
 
     try:
         if USE_SCIPY:
-            # alternative : two-sided, less, greater
-            # Which alternative hypothesis to the null hypothesis the test uses. Default is two-sided.
+            # alternative : two-sided, less, greater. Which
+            # alternative hypothesis to the null hypothesis the test
+            # uses. Default is two-sided.
             (oddsratio, fisher_twotail_pvalue) = fisher_exact(
                 [[ref_counts[0], ref_counts[1]],
                  [var_counts[0], var_counts[1]]])
         else:
             # expects two tuples as input
             # returns left, right, twotail pvalues
-            (left_pvalue, right_pvalue, fisher_twotail_pvalue) = kt_fisher_exact(
+            (left_pvalue, right_pvalue, 
+             fisher_twotail_pvalue) = kt_fisher_exact(
                 (ref_counts[0], ref_counts[1]),
                 (var_counts[0], var_counts[1]))
 
@@ -585,10 +586,10 @@ def main():
 
     # file check
     for (filename, descr, direction, mandatory) in [
-            (opts.fsnp, "Output file", 'out', True),
-            (opts.fbam, "BAM file", 'in', True),
-            (opts.freffa, "Reference fasta file", 'in', True),
-            (opts.fregion_bed, "Region BED-file", 'in', False)
+            (opts.snp_out, "Output file", 'out', True),
+            (opts.bam, "BAM file", 'in', True),
+            (opts.ref_fasta, "Reference fasta file", 'in', True),
+            (opts.region_bed, "Region BED-file", 'in', False)
             ]:
 
         if not mandatory and not filename:
@@ -633,13 +634,14 @@ def main():
     sig_thresh = opts.sig_thresh
     if opts.bonf == "auto":
         bonf_factor = sam.auto_bonf_factor_from_depth(
-            opts.fbam, opts.fregion_bed, opts.ign_bases_below_q)
+            opts.bam, opts.region_bed, opts.ign_bases_below_q)
         LOG.info("Will use an automatically determined (len*3) Bonferroni"
                  " factor of %d." % (bonf_factor))
     elif opts.bonf == 'auto-ign-zero-cov':
         bonf_factor = sam.auto_bonf_factor(
-            opts.fbam, opts.fregion_bed)
-        LOG.info("Will use an automatically determined (non-zero-cov-len*3) Bonferroni"
+            opts.bam, opts.region_bed)
+        LOG.info("Will use an automatically determined"
+                 " (non-zero-cov-len*3) Bonferroni"
                  " factor of %d." % (bonf_factor))
     else:
         try:
@@ -668,9 +670,9 @@ def main():
 
     # pileup
     #
-    pileup_obj = sam.Pileup(opts.fbam, opts.freffa)
+    pileup_obj = sam.Pileup(opts.bam, opts.ref_fasta)
     pileup_gen = pileup_obj.generate_pileup(
-        opts.baq, opts.max_depth, opts.fregion_bed)
+        opts.baq, opts.max_depth, opts.region_bed)
     # a buffer for pushing back those pileup lines used up for training
     pileup_line_buffer = []
    
@@ -743,7 +745,8 @@ def main():
 
         LOG.info("Using %d columns with an avg. coverage of %d for"
                  " EM training " % (len(base_counts), 
-                                    sum([sum(c.values()) for c in base_counts])/len(base_counts)))
+                                    sum([sum(c.values()) 
+                                         for c in base_counts])/len(base_counts)))
             
         lofreq_nq.em_training(base_counts, cons_seq)
         LOG.info("EM training completed.")
@@ -767,10 +770,10 @@ def main():
     #
     # ################################################################
 
-    if opts.fsnp == '-':
+    if opts.snp_out == '-':
         fhout = sys.stdout
     else:
-        fhout = open(opts.fsnp, 'w') 
+        fhout = open(opts.snp_out, 'w') 
         
     if opts.outfmt == 'snp':
         # No wan'a
