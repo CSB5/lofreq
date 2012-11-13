@@ -1,23 +1,21 @@
 LoFreq: A sequence-quality aware, ultra-sensitive variant caller for
-high-throughput sequencing datasets
+high-throughput sequencing data
 
 
 INSTALLATION
 ------------
 
 You will need Python 2.6 or 2.7 including header files and a C
-compiler to install LoFreq (some helper scripts in addition rely
-scipy)
+compiler to install LoFreq.
 
-Simply try:
+The following will build the source and install LoFreq:
 $ python setup.py install
-which will build the source and install the necessary files
 
 Type
 $ python setup.py
 for help
 
-If you want to install lofreq into a different directory use the
+If you want to install LoFreq into a different directory use the
 --prefix flag. You might then need to adjust your PYTHONPATH
 environment variable as well.
 
@@ -25,16 +23,20 @@ environment variable as well.
 USAGE
 -----
 
-See https://sourceforge.net/p/lofreq/
+All script-names start with lofreq_ and print a simple help message
+when invoked with -h.
+
+For a full description see https://sourceforge.net/p/lofreq/
+
 
 
 VERSION HISTORY
 ---------------
 
 0.4.0 (2012-11-08):
-- Overflow fix for very large Bonferroni factors (relevant for auto
+- Fixed overflow for very large Bonferroni factors (relevant for auto
   Bonferroni on WGS of HG for example)
-- Reported base-counts and frequencies are now before filtering, with
+- Reported base-counts and frequencies are now before filtering with
   the exception of Q<3 which is always removed
 - Added Bonferroni option 'auto-ign-zero-cov'
 - Added --force option for forced overwriting of files
@@ -43,19 +45,20 @@ VERSION HISTORY
 - Bonferroni factor now determined automatically by default in
   lofreq_snpcaller.py
 - Check for samtools during installation
-- lofreq_uniq_pipeline.py summarizes what result files 
+- lofreq_uniq_pipeline.py summarizes result files
 
-0.3.1 (2012-10-10); Main changes:
+0.3.1 (2012-10-10):
 - Made LoFreq chromosome aware
 - Samtools pileup is now generated internally
 - Added LoFreq uniq pipeline
 - Added support for region bed files
 - Added more helper scripts
 
-0.2 (2012-07-12): Optimal LoFreq-Q implementation as described in
-publication. SNV calls always against consensus, which is determined
-on-the-fly. If consensus differs from ref, we call it
-consensus-variation. Used for producing results in the Wilm et al.
-(2012).
+0.2 (2012-07-12):
+- Used for producing results in the Wilm et al. (2012)
+- Optimal implementation of LoFreq-Q as described in publication
+- SNV calls always against consensus, which is determined on-the-fly
+- If consensus differs from ref, we call it consensus-variant
 
-0.1 (2011-11-10): First release, initially hosted on github.
+0.1 (2011-11-10):
+- First public release. Initially hosted on github.
