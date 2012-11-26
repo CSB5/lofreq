@@ -4,8 +4,11 @@ tissue), but not in another (e.g. normal/blood tissue) is 'unique' or
 significant'. Done by performing a binomial test on the prospective
 snp-base counts in the normal sample given the SNV-call frequency.
 
-NOTE: assuming that the initial SNV calls were made with default
-pileup parameters
+The script is assuming that the initial SNV calls were made with
+default pileup parameters.
+
+WARNING: the two files obviously have to be on the same coordinate
+system, i.e. you can't use this for different reference sequences.
 """
 
 # Copyright (C) 2011, 2012 Genome Institute of Singapore
@@ -140,7 +143,7 @@ def cmdline_parser():
                       " (default: %g)" % conf.DEFAULT_SIG_THRESH)
     opt_group.add_option("-c", "--chrom",
                       dest="chrom", # type="string|int|float"
-                      help="Deprecated: chromsome/sequence for pileup. Only if SNVs don't have chrom markup")
+                      help="Expert only: override snp chrom/seq-name for pileup")
 
     parser.add_option_group(opt_group)
     
@@ -217,7 +220,11 @@ def main():
         else:
             LOG.fatal("SNV file did not contain chromosome info and none given on command line")
             sys.exit(1)
-
+    elif opts.chrom:
+        LOG.warn("Overriding SNV chromsomes with %s" % opts.chrom)
+        for s in snps:
+            s.chrom = opts.chrom
+        
     LOG.info("Removing any base with quality below %d and non-cons bases with quality below %d" % (
             opts.ign_bases_below_q, opts.noncons_filter_qual))
 
@@ -239,7 +246,7 @@ def main():
         snp_candidates = [s for s in snps if
                           s.pos == pcol.coord and s.chrom == pcol.chrom]
         assert len(snp_candidates) != 0, (
-            "Oups..pileup for %s:%d has no matching SNP" % (pcol.chrom, pcol.coord+1))
+            "Oops..pileup for %s:%d has no matching SNP" % (pcol.chrom, pcol.coord+1))
 
         for this_snp in snp_candidates:
             ref_count = sum(pcol.get_counts_for_base(
@@ -279,13 +286,14 @@ def main():
 
             
     if len(snps):
-        LOG.error("Oups...some SNVs left after processing. This shouldn't happen")
+        LOG.warn("%d SNVs left after processing. Pileup potentially"
+                 " empty for these regions. Not deleting bed-file (%s)"
+                 " to make debugging easier. Left SNVs are: %s" % (
+                     len(snps), bed_region_file, ','.join([s.identifier() for s in snps])))
+    else:
+        #LOG.warn("Not deleting tmp file %s" % bed_region_file)
+        os.unlink(bed_region_file)
         
-
-    #LOG.warn("Not deleting tmp file %s" % bed_region_file)
-    os.unlink(bed_region_file)
-    #if len(snps):
-    #    LOG.warn("Unremoved SNPs left")
     if fh_out != sys.stdout:
         fh_out.close()
         
