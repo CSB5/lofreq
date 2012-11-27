@@ -54,7 +54,7 @@ MYNAME = os.path.basename(sys.argv[0])
 
 
 
-def snvs_to_dict(snv_file):
+def snvs_to_dict(snv_file, ign_chrom=False):
     """
     Load SNVs from file and convert to a dictionary with identifiers
     as keys and the complete entry as value
@@ -64,17 +64,23 @@ def snvs_to_dict(snv_file):
     LOG.info("Parsed %d SNVs from %s" % (len(snvs), snv_file))
     snvs_dict = dict()
     for s in snvs:
-        snvs_dict[s.identifier()] = s
+        if ign_chrom:
+            key = "%d %s>%s" % (s.pos+1, s.wildtype, s.variant)
+        else:
+            key = s.identifier()
+        snvs_dict[key] = s
+    
     return snvs_dict
 
 
 
-def run_diff(snv_file_1, snv_file_2, mode):
+def run_diff(snv_file_1, snv_file_2, mode, ign_chrom=False):
     """FIXME:add-missing-doc-str
     """
 
-    snvs_1_dict = snvs_to_dict(snv_file_1)
-    snvs_2_dict = snvs_to_dict(snv_file_2)
+    
+    snvs_1_dict = snvs_to_dict(snv_file_1, ign_chrom)
+    snvs_2_dict = snvs_to_dict(snv_file_2, ign_chrom)
 
     snvs_1_ids = set(snvs_1_dict.keys())
     snvs_2_ids = set(snvs_2_dict.keys())
@@ -123,6 +129,9 @@ def cmdline_parser():
     parser.add_option("", "--debug",
                       action="store_true", dest="debug",
                       help="enable debugging")
+    parser.add_option("", "--chrom",
+                      dest="chrom", # type="string|int|float",
+                      help="Expert only: Ignore chromsomes and set this as default")
     parser.add_option("-o", "--output",
                       dest="out", # type="string|int|float"
                       default='-',
@@ -185,8 +194,17 @@ def main():
         parser.error("No mode of action chosen\n")
         sys.exit(1)
 
+    if opts.chrom:
+        ign_chrom = True
+    else:
+        ign_chrom = False
+        
+    out_snvs = run_diff(opts.snv_file_1, opts.snv_file_2, 
+                        opts.mode, ign_chrom)
 
-    out_snvs = run_diff(opts.snv_file_1, opts.snv_file_2, opts.mode)
+    if opts.chrom:
+        for s in out_snvs:
+            s.chrom = opts.chrom
 
     if opts.out == '-':
         fh = sys.stdout

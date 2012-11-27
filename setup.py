@@ -93,6 +93,7 @@ setup(name = 'LoFreq',
       #long_description = """FIXME.""" 
       url='https://sourceforge.net/p/lofreq/', # FIXME
       scripts = [
+          'scripts/lofreq_alnoffset.py',
           'scripts/lofreq_bonf.py',
           'scripts/lofreq_diff.py',
           'scripts/lofreq_filter.py',
