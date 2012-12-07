@@ -258,8 +258,11 @@ class PileupColumn():
 
         org_len = len(bases_str)
         bases_str = re.sub('\^.', '', bases_str)
-        self.num_read_starts = org_len-len(bases_str)
+        # we delete the insertion markup plus the inserted base,
+        # therefore divide by two
+        self.num_read_starts = (org_len-len(bases_str))/2
 
+        
         return bases_str
 
     
