@@ -1,0 +1,11 @@
+This code is based on Heng Li's samtools version 0.1.18 (r982:295).
+
+Parts of it where adapted for use in LoFreq (see
+http://sourceforge.net/projects/lofreq/), especially the mpileup
+functions.
+
+Where changes were made the original file was copied to
+basename.org.ext
+
+The misc and examples sub-directories were deleted to save some space.
+
