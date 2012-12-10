@@ -1,0 +1,9 @@
+# backup files
+*~
+*#
+
+# objects
+*.o
+*.a
+
+bcftools

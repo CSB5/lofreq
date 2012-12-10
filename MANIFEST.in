@@ -1,7 +1,16 @@
+include COPYING
+include README
+
 include lofreq_ext/cdflib90/cdflib.h
 include lofreq_ext/cdflib90.README
 include lofreq_ext/fet.c.AUTHORS
 include lofreq_ext/fet.c.COPYING
 include lofreq_ext/fet.h
-include COPYING
-prune tmp
+
+# find lofreq_samtools/ -name \*\.h -or -name \*\.c -or -name Makefile\* -or -name [A-Z]\*
+recursive-include lofreq_samtools *.c *.h * Makefile*
+
+#prune build
+#prune example-data
+#prune tests
+#prune tmp

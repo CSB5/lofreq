@@ -237,6 +237,14 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 	n_plp = calloc(n, sizeof(int*));
 	sm = bam_smpl_init();
 
+	fprintf(stderr, "[%s] Note, the output differs from regular pileup (see http://samtools.sourceforge.net/pileup.shtml) in the following way\n", __func__, sm->n, n);
+	fprintf(stderr, "[%s] - bases and qualities are merged into one field", __func__);
+    fprintf(stderr, "[%s] - (each base is immediately followed by its quality\n", __func__);
+	fprintf(stderr, "[%s] - on request mapping and base call quality are merged (P_joined = P_mq * + (1-P_mq) P_bq\n", __func__);
+	fprintf(stderr, "[%s] - indel events are removed from bases and qualities and summarized in an additional field\n", __func__);
+	fprintf(stderr, "[%s] - reference matches are not replaced with , or .\n", __func__);
+
+
 	// read the header and initialize data
 	for (i = 0; i < n; ++i) {
 		bam_header_t *h_tmp;
@@ -459,7 +467,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 
                           putchar(bq);
                       }
-                      putchar(' ');
+                      /*putchar(' ');*/
                       
 					} /* end: for (j = 0; j < n_plp[i]; ++j) { */
                     printf("\t#heads=%d #tails=%d #ins=%d ins_len=%.1f #del=%d del_len=%.1f\n",
@@ -468,7 +476,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
                            num_dels, num_dels ? sum_dels/(float)num_dels : 0);
 				}
 			}
-			putchar('\n');
+			/*putchar('\n');*/
 		}
 	}
 
@@ -674,6 +682,8 @@ int bam_mpileup(int argc, char *argv[])
 #ifdef MAIN
 int main(int argc, char **argv)
 {
-    return bam_mpileup(argc, argv);
+     fprintf(stderr, "FIXME: make -Q work\n");
+     fprintf(stderr, "FIXME: doc changes\n");
+     return bam_mpileup(argc, argv);
 }
 #endif
