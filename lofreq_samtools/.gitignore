@@ -1,0 +1,11 @@
+# backup files
+*~
+*#
+
+# objects
+*.o
+*.a
+
+lofreq_samtools
+
+Makefile.log

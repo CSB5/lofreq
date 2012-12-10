@@ -20,3 +20,5 @@ EM_TRAINING_MIN_COVERAGE = 10
 # pileup setting
 DEFAULT_BAQ_SETTING = 'extended'
 DEFAULT_MAX_PLP_DEPTH = 100000
+
+SAMTOOLS = 'lofreq_samtools'

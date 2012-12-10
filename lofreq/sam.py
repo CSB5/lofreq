@@ -38,6 +38,7 @@ import os
 #--- project specific imports
 #
 from lofreq import utils
+from lofreq import conf
 
 
 __author__ = "Andreas Wilm"
@@ -95,7 +96,9 @@ class PileupColumn():
             self._bases_and_quals[b.lower()] = dict()
 
         self.num_ins_events = 0
+        self.avg_ins_len = 0
         self.num_del_events = 0
+        self.avg_del_len = 0
         self.num_read_starts = 0
         self.num_read_ends = 0
 
@@ -390,13 +393,95 @@ class PileupColumn():
 
         return base_and_qual_hists
 
+    
+def tokenizer(s, c):
+    """From http://stackoverflow.com/questions/4586026/splitting-a-string-into-an-iterator"""
+    i = 0
+    while True:
+        try:
+            j = s.index(c, i)
+        except ValueError:
+            yield s[i:]
+            return
+        yield s[i:j]
+        i = j + 1
 
+         
+class LoFreqPileupColumn(PileupColumn):
+    """lofreq_samtools specific pileup parser"""
+
+    
+    def parse_line(self, line):
+        """FIXME"""
+        pos = 0
+
+        line = line.rstrip()
+        if len(line) == 0:
+            raise ValueError, ("Empty pileup line detected")
+        
+        for (field_no, field_val) in enumerate(tokenizer(line, '\t')):
+            if field_no == 0:
+                self.chrom = field_val
+            elif field_no == 1:
+                # in: 1-based coordinate
+                self.coord = int(field_val) - 1
+            elif field_no == 2:
+                self.ref_base = field_val.upper() # paranoia upper()
+            elif field_no == 3:
+                self.coverage = int(field_val)
+            elif field_no == 4:
+                for p in xrange(0, len(field_val), 2):
+                    (b,q) = field_val[p:p+2]
+                    # convert quals to phred scale
+                    q = ord(q)-33
+                    self._bases_and_quals[b][q] = self._bases_and_quals[b].get(q, 0) + 1
+                    
+                # NOTE: this assumes there is no filtering done on the pileup level
+                num_bq = sum(sum(self._bases_and_quals[b].values()) 
+                             for b in self._bases_and_quals.keys())
+                assert num_bq == self.coverage, (
+                    "Pileup paring error: Coverage (%d) and"
+                    " number of bases differ (%d)" % (num_bq, self.coverage))
+                
+                for b in self._bases_and_quals.keys():
+                    assert b.upper() in VALID_BASES
+                
+            elif field_no == 5:
+                # Example: heads=0 #tails=13 #ins=0 ins_len=0.0 #del=0 del_len=0.0
+                field_dict = dict([x.split('=') 
+                                   for x in field_val.split(' ')])
+                try:
+                    self.num_read_starts = field_dict['#heads']
+                    self.num_read_ends = field_dict['#tails']
+                    self.num_ins_events = field_dict['#ins']
+                    self.avg_ins_len = field_dict['ins_len']
+                    self.num_del_events = field_dict['#del']
+                    self.avg_del_len = field_dict['del_len']
+                except KeyError:
+                    "Couldn't parse indel markup from pileup"
+                    "  (which was '%s')" % (field_val)
+                    raise
+            else:
+                LOG.warn("More fields than expected in pileup line."
+                         " Will try to continue anyway. Line was '%s'" % line)
+
+        """
+        FIXME
+        assert num unfiltered bases = coverage (won't work if we implement -Q; but either way num<=coverage)
+        """
+        
+        cons_base = self.determine_cons()
+        if cons_base == '-' or cons_base == 'N':
+            cons_base = self.ref_base
+        self.cons_base = cons_base
+        
+    
 
 class Pileup(object):
     """Frontend to samtools mpileup
     """
     
-    def __init__(self, bam, ref_fa, samtools="samtools"):
+    def __init__(self, bam, ref_fa, samtools=conf.SAMTOOLS):
         """init
         """
 
@@ -443,7 +528,10 @@ class Pileup(object):
             LOG.fatal("Executing following cmd list failed: %s" % (cmd_list))
             raise
         for line in p.stdout:
-            yield PileupColumn(line)
+            if self.samtools.endswith("lofreq_samtools"):
+                yield LoFreqPileupColumn(line)
+            else:
+                yield PileupColumn(line)
 
         
     
@@ -493,7 +581,7 @@ def len_for_sq(header, sq):
         
             
     
-def sam_header(fbam, samtools_binary="samtools"):
+def sam_header(fbam, samtools=conf.SAMTOOLS):
     """
     Calls 'samtools -H view', parse output and return
     
@@ -512,7 +600,7 @@ def sam_header(fbam, samtools_binary="samtools"):
     """
     
     cmd = '%s view -H %s' % (
-        samtools_binary, fbam)
+        samtools, fbam)
 
     # http://samtools.sourceforge.net/pileup.shtml
     LOG.debug("calling: %s" % (cmd))
@@ -645,7 +733,7 @@ def auto_bonf_factor(bam, bed_file=None, excl_file=None, chrom=None):
 
 
 def auto_bonf_factor_from_depth(bam, bed_file=None,
-                                min_base_q=3, min_map_q=0):
+                                min_base_q=3, min_map_q=0, samtools=conf.SAMTOOLS):
     """Uses samtools depth to figure out Bonferroni factor
     automatically. Will ignore zero-coverage regions as opposed to
     auto_bonf_factor
@@ -655,7 +743,7 @@ def auto_bonf_factor_from_depth(bam, bed_file=None,
     if bed_file:
         assert os.path.exists(bed_file)
 
-    samtools_depth = ['samtools', 'depth', 
+    samtools_depth = [samtools, 'depth', 
                       '-q', "%d" % min_base_q, 
                       '-Q', "%d" % min_map_q]
     if bed_file:
@@ -668,7 +756,7 @@ def auto_bonf_factor_from_depth(bam, bed_file=None,
         p2 = subprocess.Popen(["wc", "-l"], 
                               stdin=p1.stdout, stdout=subprocess.PIPE)
     except OSError:
-        LOG.error("Can't execute either samtools or wc")
+        LOG.error("Can't execute either %s or wc" % samtools)
         raise
     
     p1.stdout.close()# allow p1 to receive a SIGPIPE if p2 exits.
