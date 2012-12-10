@@ -9,12 +9,16 @@ echook() {
 echowarn() {
     echo "WARN: $1" 1>&2
 }
-bam=../example-data/denv2-simulation/denv2-10haplo.bam
-reffa=../example-data/denv2-simulation/denv2-refseq.fa
 
-snv_out_raw=../example-data/denv2-simulation/denv2-10haplo_lofreq-raw.snp
-snv_out_sbf=../example-data/denv2-simulation/denv2-10haplo_lofreq-sbf.snp
-snv_ref=../example-data/denv2-simulation/denv2-10haplo_true-snp.snp
+# md5sum is md5 on mac
+md5=$(which md5sum 2>/dev/null || which md5)
+
+bam=../../lofreq-test-data/denv2-simulation/denv2-10haplo.bam
+reffa=../../lofreq-test-data/denv2-simulation/denv2-refseq.fa
+
+snv_out_raw=../../lofreq-test-data/denv2-simulation/denv2-10haplo_lofreq-raw.snp
+snv_out_sbf=../../lofreq-test-data/denv2-simulation/denv2-10haplo_lofreq-sbf.snp
+snv_ref=../../lofreq-test-data/denv2-simulation/denv2-10haplo_true-snp.snp
 
 # delete output files from previous run
 DEBUG=0
@@ -72,8 +76,8 @@ fi
 # SBF filtering doesn't do anything here since the simulation doesn't
 # introduce strandbias lofreq_filter does correction and changes info.
 # Only look at first four fields therefore
-md5raw=$(cut -f1-4 -d ' ' $snv_out_raw | md5sum)
-md5sbf=$(cut -f1-4 -d ' ' $snv_out_sbf | md5sum)
+md5raw=$(cut -f1-4 -d ' ' $snv_out_raw | $md5)
+md5sbf=$(cut -f1-4 -d ' ' $snv_out_sbf | $md5)
 if [ "$md5raw" != "$md5raw" ]; then
     echoerror "SB-filtering changed number of SNVs"
 else

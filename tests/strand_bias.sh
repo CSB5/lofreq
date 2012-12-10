@@ -11,7 +11,7 @@ echowarn() {
 }
 
 
-snv_raw=../example-data/Ecoli_K12_MG1655_NC_000913_lofreq-bonf.snp
+snv_raw=../../lofreq-test-data/Ecoli_K12_MG1655_NC_000913_lofreq-bonf.snp
 
 
 npassfilter_all=$(lofreq_filter.py --strandbias-holmbonf -i $snv_raw | \

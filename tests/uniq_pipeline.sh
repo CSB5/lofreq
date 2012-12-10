@@ -11,11 +11,11 @@ echowarn() {
 }
 
 
-bam1=../example-data/denv2-ngc-replicates/CTTGTA_2_remap_razers-i92_peakrem_corr.bam
-bam2=../example-data/denv2-ngc-replicates/GGCTAC_2_remap_razers-i92_peakrem_corr.bam
+bam1=../../lofreq-test-data/denv2-ngc-replicates/CTTGTA_2_remap_razers-i92_peakrem_corr.bam
+bam2=../../lofreq-test-data/denv2-ngc-replicates/GGCTAC_2_remap_razers-i92_peakrem_corr.bam
 # choose either as ref (they are identical)
-ref=../example-data/denv2-ngc-replicates/GGCTAC_2_remap_razers-i92_peakrem.covcons.fa
-outdir=../example-data/denv2-ngc-replicates-uniq-pipeline/
+ref=../../lofreq-test-data/denv2-ngc-replicates/GGCTAC_2_remap_razers-i92_peakrem.covcons.fa
+outdir=../../lofreq-test-data/denv2-ngc-replicates-uniq-pipeline/
 
 bed=$outdir/region.bed
 # keep original snv calls but delete all others

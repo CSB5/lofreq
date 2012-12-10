@@ -11,7 +11,7 @@ echowarn() {
 }
 
 
-bam=../example-data/gastric-cancer-wgs/WHG001-final.bam
+bam=../../lofreq-test-data/gastric-cancer-wgs/WHG001-final.bam
 bed=${bam%.bam}.bed
 
 rm $bed 2>/dev/null

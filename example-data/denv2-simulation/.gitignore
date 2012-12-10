@@ -1,7 +1,0 @@
-# indeces
-denv2-10haplo.bam.bai
-denv2-refseq.fa.fai
-
-# temp files
-denv2-10haplo_lofreq-raw.snp
-denv2-10haplo_lofreq-sbf.snp

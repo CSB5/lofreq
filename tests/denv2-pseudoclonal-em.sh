@@ -9,12 +9,12 @@ echook() {
 echowarn() {
     echo "WARN: $1" 1>&2
 }
-bam=../example-data/denv2-pseudoclonal/denv2-pseudoclonal.bam
-reffa=../example-data/denv2-pseudoclonal/denv2-pseudoclonal_cons.fa
-bed=../example-data/denv2-pseudoclonal/denv2-pseudoclonal_incl.bed
+bam=../../lofreq-test-data/denv2-pseudoclonal/denv2-pseudoclonal.bam
+reffa=../../lofreq-test-data/denv2-pseudoclonal/denv2-pseudoclonal_cons.fa
+bed=../../lofreq-test-data/denv2-pseudoclonal/denv2-pseudoclonal_incl.bed
 
-snv_out_raw=../example-data/denv2-pseudoclonal/denv2-pseudoclonal_lofreq-nq-raw.snp
-snv_ref=../example-data/denv2-pseudoclonal/denv2-pseudoclonal_true-snp.snp
+snv_out_raw=../../lofreq-test-data/denv2-pseudoclonal/denv2-pseudoclonal_lofreq-nq-raw.snp
+snv_ref=../../lofreq-test-data/denv2-pseudoclonal/denv2-pseudoclonal_true-snp.snp
 
 # delete output files from previous run
 DEBUG=0
