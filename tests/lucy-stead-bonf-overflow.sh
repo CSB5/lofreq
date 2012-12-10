@@ -11,7 +11,7 @@ echowarn() {
 }
 
 ref=/projects/delrosariorc/Bcells/Mapping_Reference/human_g1k_v37.fasta
-bam=../example-data/lucy-stead-2012-11-08_smalltesting.bam
+bam=../../lofreq-test-data/lucy-stead-2012-11-08_smalltesting.bam
 # used to crash with
 # Traceback (most recent call last):
 # ...

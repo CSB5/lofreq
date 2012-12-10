@@ -9,11 +9,11 @@ echook() {
 echowarn() {
     echo "WARN: $1" 1>&2
 }
-bam=../example-data/denv2-simulation/denv2-10haplo.bam
-reffa=../example-data/denv2-simulation/denv2-refseq.fa
+bam=../../lofreq-test-data/denv2-simulation/denv2-10haplo.bam
+reffa=../../lofreq-test-data/denv2-simulation/denv2-refseq.fa
 
-snv_out_raw=../example-data/denv2-simulation/denv2-10haplo_lofreq-nq-raw.snp
-snv_ref=../example-data/denv2-simulation/denv2-10haplo_true-snp.snp
+snv_out_raw=../../lofreq-test-data/denv2-simulation/denv2-10haplo_lofreq-nq-raw.snp
+snv_ref=../../lofreq-test-data/denv2-simulation/denv2-10haplo_true-snp.snp
 
 # delete output files from previous run
 DEBUG=0

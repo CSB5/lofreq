@@ -9,9 +9,9 @@ echook() {
 echowarn() {
     echo "WARN: $1" 1>&2
 }
-bam=../example-data/denv2-pseudoclonal/denv2-pseudoclonal.bam
-reffa=../example-data/denv2-pseudoclonal/denv2-pseudoclonal_cons.fa
-bed=../example-data/denv2-pseudoclonal/denv2-pseudoclonal_incl.bed
+bam=../../lofreq-test-data/denv2-pseudoclonal/denv2-pseudoclonal.bam
+reffa=../../lofreq-test-data/denv2-pseudoclonal/denv2-pseudoclonal_cons.fa
+bed=../../lofreq-test-data/denv2-pseudoclonal/denv2-pseudoclonal_incl.bed
 
 # index bam if necessary
 test -s ${bam}.bai || samtools index $bam

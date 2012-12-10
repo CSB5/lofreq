@@ -9,9 +9,13 @@ echook() {
 echowarn() {
     echo "WARN: $1" 1>&2
 }
-bam=../example-data/denv2-multiplex-replicates/ATCACG_1.bam
-reffa=../example-data/denv2-multiplex-replicates/ref.fa
-bed=../example-data/denv2-multiplex-replicates/region.bed
+
+# md5sum is md5 on mac
+md5=$(which md5sum 2>/dev/null || which md5)
+
+bam=../../lofreq-test-data/denv2-multiplex-replicates/ATCACG_1.bam
+reffa=../../lofreq-test-data/denv2-multiplex-replicates/ref.fa
+bed=../../lofreq-test-data/denv2-multiplex-replicates/region.bed
 
 snv_out_bauto=${bam%.bam}_bauto.snp
 snv_out_bset=${bam%.bam}_bset.snp
@@ -34,9 +38,9 @@ lofreq_snpcaller.py \
 lofreq_snpcaller.py --bonf 1\
    -f $reffa -b $bam -o $snv_out_b1 || exit 1
 
-md5bset=$(cat $snv_out_bset | md5sum)
-md5bauto=$(cat $snv_out_bauto | md5sum)
-md5b1=$(cat $snv_out_b1 | md5sum)
+md5bset=$(cat $snv_out_bset | $md5)
+md5bauto=$(cat $snv_out_bauto | $md5)
+md5b1=$(cat $snv_out_b1 | $md5)
 
 if [ "$md5bset" != "$md5bauto" ]; then
     echoerror "SNVs predicted using internally computed Bonf factor differ from the ones predicted with manually set factor"

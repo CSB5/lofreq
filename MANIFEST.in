@@ -1,14 +1,15 @@
 include COPYING
 include README
 
-include lofreq_ext/cdflib90/cdflib.h
-include lofreq_ext/cdflib90.README
-include lofreq_ext/fet.c.AUTHORS
-include lofreq_ext/fet.c.COPYING
-include lofreq_ext/fet.h
+recursive-include lofreq_ext *.h *.c *README *readme *AUTHORS *COPYING
 
-# find lofreq_samtools/ -name \*\.h -or -name \*\.c -or -name Makefile\* -or -name [A-Z]\*
-recursive-include lofreq_samtools *.c *.h * Makefile*
+recursive-include lofreq_samtools *.c *.h * [A-Z]*
+exclude lofreq_samtools/lofreq_samtools
+exclude lofreq_samtools/bcftools/bcftools
+
+global-exclude *.o *.a lib* \#* *\~ *.gitignore
+
+
 
 #prune build
 #prune example-data
