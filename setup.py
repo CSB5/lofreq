@@ -91,10 +91,7 @@ class MyInstall(DistutilsInstall):
             sys.stderr.write("\nERROR: Looks like"
                 " lofreq_samtools installation failed.")
             sys.exit(1)
-
         
-sys.stderr.write("FIXME: test if lofreq_samtools is packed for dist as well\n")
-
 
 # checks
 #

@@ -245,10 +245,12 @@ def cmdline_parser():
     parser = OptionParser(usage=usage)
 
     parser.add_option("-v", "--verbose",
-                      action="store_true", dest="verbose",
+                      dest="verbose",
+                      action="store_true", 
                       help="be verbose")
     parser.add_option("", "--debug",
-                      action="store_true", dest="debug",
+                      dest="debug",
+                      action="store_true",
                       help="enable debugging")
     parser.add_option("", "--log",
                       dest="logfile",
@@ -269,6 +271,10 @@ def cmdline_parser():
                          help="BAQ setting for pileup."
                          " One of: %s (default: %s)"% (
                              ', '.join(choices), conf.DEFAULT_BAQ_SETTING))
+    plp_group.add_option("-j", "--join-mapq-and-baseq",
+                         dest = "join_mapq_and_baseq",
+                         action="store_true",
+                         help = "Join mapping and base quality")
     plp_group.add_option("-l", "--regions",
                          dest = "region_bed",
                          help = "Optional: bed file containing regions"
@@ -672,7 +678,7 @@ def main():
     #
     pileup_obj = sam.Pileup(opts.bam, opts.ref_fasta)
     pileup_gen = pileup_obj.generate_pileup(
-        opts.baq, opts.max_depth, opts.region_bed)
+        opts.baq, opts.max_depth, opts.region_bed, opts.join_mapq_and_baseq)
     # a buffer for pushing back those pileup lines used up for training
     pileup_line_buffer = []
    
