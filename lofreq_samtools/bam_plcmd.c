@@ -237,7 +237,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 	n_plp = calloc(n, sizeof(int*));
 	sm = bam_smpl_init();
 
-	fprintf(stderr, "[%s] Note, the output differs from regular pileup (see http://samtools.sourceforge.net/pileup.shtml) in the following way\n", __func__, sm->n, n);
+	fprintf(stderr, "[%s] Note, the output differs from regular pileup (see http://samtools.sourceforge.net/pileup.shtml) in the following way\n", __func__);
 	fprintf(stderr, "[%s] - bases and qualities are merged into one field", __func__);
     fprintf(stderr, "[%s] - (each base is immediately followed by its quality\n", __func__);
 	fprintf(stderr, "[%s] - on request mapping and base call quality are merged (P_joined = P_mq * + (1-P_mq) P_bq\n", __func__);

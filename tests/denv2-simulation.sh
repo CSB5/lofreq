@@ -17,13 +17,14 @@ bam=../../lofreq-test-data/denv2-simulation/denv2-10haplo.bam
 reffa=../../lofreq-test-data/denv2-simulation/denv2-refseq.fa
 
 snv_out_raw=../../lofreq-test-data/denv2-simulation/denv2-10haplo_lofreq-raw.snp
+snv_out_joined_raw=../../lofreq-test-data/denv2-simulation/denv2-10haplo_lofreq-joined-raw.snp
 snv_out_sbf=../../lofreq-test-data/denv2-simulation/denv2-10haplo_lofreq-sbf.snp
 snv_ref=../../lofreq-test-data/denv2-simulation/denv2-10haplo_true-snp.snp
 
 # delete output files from previous run
 DEBUG=0
 if [ $DEBUG -ne 1 ]; then
-    rm -f $snv_out_raw $snv_out_sbf 2>/dev/null
+    rm -f $snv_out_raw $snv_out_joined_raw $snv_out_sbf 2>/dev/null
 fi
 # index bam if necessary
 test -s ${bam}.bai || samtools index $bam
@@ -40,6 +41,20 @@ if [ ! -s denv2-10haplo_lofreq-raw.snp ]; then
 else
     echowarn "Reusing snv_out_raw (only useful for debugging)"
 fi
+
+
+lofreq_snpcaller.py -j --bonf $bonf -f $reffa -b $bam -o $snv_out_joined_raw || exit 1
+njoined=$(cat $snv_out_joined_raw | wc -l)
+norig=$(cat $snv_out_raw | wc -l)
+if [ $njoined -gt $norig ]; then
+    echoerror "Was expecting less SNVs when using joined-baseq-mapq"
+elif [ $njoined -eq 0 ]; then
+    echoerror "Got 0 SNVs when using joined-baseq-mapq"
+else
+    echook "Got Joined-BaseQ-MapQ results look ok"
+fi
+
+
 if [ ! -s $snv_out_sbf ]; then
     lofreq_filter.py --strandbias-holmbonf \
         -i $snv_out_raw \

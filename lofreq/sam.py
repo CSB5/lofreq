@@ -412,8 +412,8 @@ class LoFreqPileupColumn(PileupColumn):
 
     
     def parse_line(self, line):
-        """FIXME"""
-        pos = 0
+        """Overwriting PileupColumn.parse_line() with a version that
+        parses lofreq_samtools mpileup output"""
 
         line = line.rstrip()
         if len(line) == 0:
@@ -431,7 +431,7 @@ class LoFreqPileupColumn(PileupColumn):
                 self.coverage = int(field_val)
             elif field_no == 4:
                 for p in xrange(0, len(field_val), 2):
-                    (b,q) = field_val[p:p+2]
+                    (b, q) = field_val[p:p+2]
                     # convert quals to phred scale
                     q = ord(q)-33
                     self._bases_and_quals[b][q] = self._bases_and_quals[b].get(q, 0) + 1
@@ -447,7 +447,8 @@ class LoFreqPileupColumn(PileupColumn):
                     assert b.upper() in VALID_BASES
                 
             elif field_no == 5:
-                # Example: heads=0 #tails=13 #ins=0 ins_len=0.0 #del=0 del_len=0.0
+                # Example: 
+                # heads=0 #tails=13 #ins=0 ins_len=0.0 #del=0 del_len=0.0
                 field_dict = dict([x.split('=') 
                                    for x in field_val.split(' ')])
                 try:
@@ -465,11 +466,6 @@ class LoFreqPileupColumn(PileupColumn):
                 LOG.warn("More fields than expected in pileup line."
                          " Will try to continue anyway. Line was '%s'" % line)
 
-        """
-        FIXME
-        assert num unfiltered bases = coverage (won't work if we implement -Q; but either way num<=coverage)
-        """
-        
         cons_base = self.determine_cons()
         if cons_base == '-' or cons_base == 'N':
             cons_base = self.ref_base
@@ -496,8 +492,8 @@ class Pileup(object):
 
         
     
-    def generate_pileup(self, baq='extended', 
-                        max_depth=100000, region_bed=None):
+    def generate_pileup(self, baq='extended', max_depth=100000,
+                        region_bed=None, join_mapq_and_baseq=False):
         """Pileup line generator
         """
         
@@ -512,6 +508,10 @@ class Pileup(object):
         elif baq != 'on':
             raise ValueError, ("Unknown BAQ option '%s'" % (baq))        
         
+        if join_mapq_and_baseq:
+            cmd_list.append('-j')
+            
+
         if region_bed:
             cmd_list.extend(['-l', region_bed])
             
