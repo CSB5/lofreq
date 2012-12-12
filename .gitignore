@@ -14,3 +14,15 @@ lofreq/.fuse_hidden*
 
 # tmp
 tmp/
+
+# automake stuff which gets rebuild after autoreconf
+Makefile
+Makefile.in
+aclocal.m4
+autom4te.cache/
+config.*
+configure
+install-sh
+libtool
+ltmain.sh
+missing
