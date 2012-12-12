@@ -1,0 +1,9 @@
+See http://www.ncbi.nlm.nih.gov/pubmed/23066108
+
+- Grace Hui Ting Yeo implemented an early prototype of the EM (NQ) SNV caller
+- Niranjan Nagarajan sketched out the core algorithm and implemented
+the pruned DP properly
+- Andreas Wilm did the rest
+
+See respective sub-directories for a list of authors whose software we
+incorporate

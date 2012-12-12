@@ -125,7 +125,7 @@ package_dir = {'': 'lofreq'}
     
 setup(name = 'LoFreq',
       packages=['lofreq'],
-      version = '0.4.0',
+      version = '0.5.0',
       description="Low frequency variant caller",
       author="Andreas Wilm",
       author_email='wilma@gis.a-star.edu.sg',
