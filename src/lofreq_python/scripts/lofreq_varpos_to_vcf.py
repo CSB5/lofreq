@@ -21,7 +21,6 @@ unusable.
 
 
 
-
 #--- standard library imports
 #
 from __future__ import division
@@ -31,7 +30,7 @@ import os
 import datetime
 from collections import namedtuple
 # optparse deprecated from Python 2.7 on
-from optparse import OptionParser
+from optparse import OptionParser, SUPPRESS_HELP
 
 #--- third-party imports
 #
@@ -60,7 +59,6 @@ VarPos = namedtuple('VarPos',
                     ['chrom', 'pos', 'refbase', 'altbase'])
 
 
-
 class VcfWriter(object):
     """
     Based on function in coverage_profile_to_vcf.py
@@ -75,7 +73,7 @@ class VcfWriter(object):
 
     
     def __init__(self, fhandle = None):
-        """FIXME
+        """init function
         """
 
         self.fhandle = fhandle
@@ -131,22 +129,34 @@ def cmdline_parser():
     parser = OptionParser(usage=usage)
 
     parser.add_option("-v", "--verbose",
-                      action="store_true", dest="verbose",
+                      action="store_true", 
+                      dest="verbose",
                       help="be verbose")
     parser.add_option("", "--debug",
-                      action="store_true", dest="debug",
+                      action="store_true", 
+                      dest="debug",
                       help="enable debugging")
     parser.add_option("-o", "--output",
-                      dest="fvcf", # type="string|int|float"
+                      dest="fvcf",
                       help="vcf output file name")
     parser.add_option("-t", "--threshold",
                       dest="threshold", type="float",
-                      help="report variants if frequencey is bigger than this threshold")
-    parser.add_option("-i", "--input",
-                      dest="fpileup", # type="string|int|float",
-                      default="-",
-                      help="Pileup input (default: -, i.e. stdin)")
-
+                      help="report variants if frequencey is bigger"
+                      " than this threshold")
+    parser.add_option("-b", "--bam",
+                      dest="bam_file",
+                      help="BAM input")
+    parser.add_option("-r", "--ref",
+                      dest="ref_fa",
+                      help="Reference fasta input")
+    # FIXME implement if needed
+    parser.add_option("", "--region_bed",
+                      dest="region_bed",
+                      help=SUPPRESS_HELP)#"Optional: bed-file giving region to analyze (chrom:start-end)")
+    # FIXME implement if needed
+    parser.add_option("-p", "--pileup",
+                      dest="fpileup",
+                      help=SUPPRESS_HELP)#Optional: Pileup instead of BAM input (- for stdin)")
     
     return parser
 
@@ -183,20 +193,52 @@ def main():
         parser.error("vcf output file argument missing\n")
         sys.exit(1)
     if os.path.exists(opts.fvcf):
-        sys.stderr.write(
-            "Cowardly refusig to overwrite already existing file '%s'.\n" % (
-                opts.fvcf))
+        LOG.fatal("Cowardly refusig to overwrite already existing"
+                  " file '%s'.\n" % (opts.fvcf))
         sys.exit(1)
 
-    if opts.fpileup == '-':
-        pileup_fhandle = sys.stdin
-    else:
-        if not os.path.exists(opts.fpileup):
-            LOG.fatal("file '%s' does not exist.\n" % (opts.fpileup))
-            sys.exit(1)
-        else:
-            pileup_fhandle = open(opts.fpileup, 'r')
+    # sanity checks
+    #
+    if opts.fpileup and opts.bam_file:
+        print opts.fpileup, opts.bam_file
+        LOG.fatal("Can't use pileup and BAM at the same time.\n")
+        sys.exit(1)
+    if not opts.fpileup and not opts.bam_file:
+        LOG.fatal("Need either pileup or BAM\n")
+        sys.exit(1)        
+    if opts.bam_file and not opts.ref_fa:
+        LOG.fatal("Need reference fasta with a BAM file\n")
+        sys.exit(1)        
 
+    if opts.fpileup and opts.fpileup != '-':
+        if not os.path.exists(opts.fpileup):
+            LOG.fatal("Pileup file %s does not exist" % opts.fpileup)
+            sys.exit(1)
+    if opts.bam_file and opts.bam_file != '-':
+        if not os.path.exists(opts.bam_file):
+            LOG.fatal("BAM file %s does not exist" % opts.bam_file)
+            sys.exit(1)
+    if opts.ref_fa and opts.ref_fa != '-':
+        if not os.path.exists(opts.ref_fa):
+            LOG.fatal("Ref fasta file %s does not exist" % opts.ref_fa)
+            sys.exit(1)
+
+    if opts.region_bed:
+        raise NotImplementedError, (
+            "Region bed input not supported yet")
+    if opts.fpileup:
+        raise NotImplementedError, (
+            "Pileup input not supported")
+        # FIXME see pileup_summary for how to handle lofreq_samtools 
+        # and samtools input
+        #if opts.fpileup == '-':
+        #    pileup_fhandle = sys.stdin
+        #else:
+        #    if not os.path.exists(opts.fpileup):
+        #        LOG.fatal("file '%s' does not exist.\n" % (opts.fpileup))
+        #        sys.exit(1)
+        #    else:
+        #        pileup_fhandle = open(opts.fpileup, 'r')
 
     if opts.fvcf == '-':
         vcf_handle = sys.stdout
@@ -208,8 +250,13 @@ def main():
     freq_threshold = opts.threshold
     num_skipped = 0
     num_total = 0
-    for line in pileup_fhandle:
-        pcol = sam.PileupColumn(line)
+
+    pileup_obj = sam.Pileup(opts.bam_file, opts.ref_fa)
+    # baq off. only need counts anyway
+    pileup_gen = pileup_obj.generate_pileup(baq='off')
+    #for line in pileup_fhandle:
+        #pcol = sam.PileupColumn(line)
+    for pcol in pileup_gen:
         num_total += 1
 
         # skip processing of columns with ambigious reference bases
@@ -221,7 +268,8 @@ def main():
             num_skipped += 1
             continue
 
-        # count bases, ignore quality completely. GATK should be able to handle this
+        # count bases, ignore quality completely. 
+        # GATK should be able to handle this
         base_counts = pcol.get_all_base_counts(min_qual=0)
         del base_counts['N']
 
@@ -246,20 +294,22 @@ def main():
     if vcf_handle != sys.stdout:
         vcf_handle.close()
                 
-    if opts.fpileup != '-':
-        pileup_fhandle.close()
+    #if opts.fpileup != '-':
+        #pileup_fhandle.close()
 
     if num_total == 0:
         LOG.critical("No pileup information seen!?") 
         sys.exit(1)
     elif num_skipped/float(num_total) > 0.5:
-        LOG.critical("%d%% of all pileup columns contained unusable information"
-                     " (probably all refs were N?!)" % (num_skipped/float(num_total)*100)) 
+        LOG.critical("%d%% of all pileup columns contained unusable"
+                     " information (probably all refs were N?!)" % (
+                         num_skipped/float(num_total)*100)) 
         sys.exit(1)
 
         
+        
 if __name__ == "__main__":
-    LOG.info("FIXME: use simple_vcf instead of VcfWriter")
+    # FIXME: use simple_vcf instead of VcfWriter"
     main()
     LOG.info("Successful program exit")
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Create summary of Base calls per pileup colum given by stdin filtered
+"""Create summary of base calls per pileup colum given by stdin filtered
 at different quality levels
 """
 
@@ -29,6 +29,7 @@ from optparse import OptionParser
 #--- project specific imports
 #
 from lofreq import sam
+from lofreq import conf
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
@@ -56,20 +57,28 @@ def cmdline_parser():
     parser = OptionParser(usage=usage)
 
     parser.add_option("-v", "--verbose",
-                      action="store_true", dest="verbose",
+                      dest="verbose",
+                      action="store_true",
                       help="be verbose")
     parser.add_option("", "--debug",
-                      action="store_true", dest="debug",
+                      dest="debug",
+                      action="store_true",
                       help="enable debugging")
-
+    parser.add_option("", "--orig-samtools",
+                      dest="orig_samtools",
+                      action="store_true",
+                      help="Pileup comes from samtools instead of lofreq_samtools")
     parser.add_option("-i", "--input",
-                      dest="pileup", # type="string|int|float"
+                      dest="pileup",
                       default="-",
-                      help="Pileup (- for stdin)")
+                      help="Pileup (- for stdin). Use of lofreq_samtools is recommended."
+                      " If you use samtools you need --orig-samtools as well")
     parser.add_option("-q", "--qual",
                       dest="qual",
+                      default=conf.DEFAULT_IGN_BASES_BELOW_Q,
                       type="int",
-                      help="Quality threshold")
+                      help="Quality threshold (default: %d)" % (
+                          conf.DEFAULT_IGN_BASES_BELOW_Q))
     return parser
 
 
@@ -112,10 +121,12 @@ def main():
     for line in fh:
         if len(line.strip())==0:
             continue
-        
-        pcol = sam.PileupColumn()
-        pcol.parse_line(line)
-        
+
+        if opts.orig_samtools:
+            pcol = sam.PileupColumn(line)
+        else:
+            pcol = sam.LoFreqPileupColumn(line)
+
         base_counts = pcol.get_all_base_counts(qual)
         print "coord\tbases\ttotal\tfw\trv"
         for base in sorted(base_counts.keys()):
@@ -124,14 +135,26 @@ def main():
                                           base_counts[base][0],
                                           base_counts[base][1])
 
-        print "coord\tins\tdel\trstart\trend"
-        print "%d\t%d\t%d\t%d\t%d" % (
-            pcol.coord+1,
-            pcol.num_ins_events,
-            pcol.num_del_events,
-            pcol.num_read_starts,
-            pcol.num_read_ends)
+        if opts.orig_samtools:
+            print "coord\tins\tdel\trstart\trend"
+            print "%d\t%d\t%d\t%d\t%d" % (
+                pcol.coord+1,
+                pcol.num_ins_events,
+                pcol.num_del_events,
+                pcol.num_read_starts,
+                pcol.num_read_ends)
+        else:
+            print "coord\tins\tins-len\tdel\tdel-len\trstart\trend"
+            print "%d\t%d\t%.1f\t%d\t%.1f\t%d\t%d" % (
+                pcol.coord+1,
+                pcol.num_ins_events,
+                pcol.avg_ins_len,
+                pcol.num_del_events,
+                pcol.avg_del_len,
+                pcol.num_read_starts,
+                pcol.num_read_ends)
 
+        
     if fh != sys.stdin:
         fh.close()
     

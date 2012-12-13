@@ -5,19 +5,28 @@ high-throughput sequencing data
 INSTALLATION
 ------------
 
+See INSTALL for generic installation instructions.
+
 You will need Python 2.6 or 2.7 including header files and a C
 compiler to install LoFreq.
 
 The following will build the source and install LoFreq:
-$ python setup.py install
+$ ./configure
+$ make
+$ make install
 
-Type
-$ python setup.py
-for help
+You will likely need to use sudo for the last step. If you however
+don't have admin rights or want to install LoFreq into a non-standard
+directory use the --prefix flag for configure. You will then very
+likely have to adjust your PATH and/or PYTHONPATH environment variable
+as well. An example:
 
-If you want to install LoFreq into a different directory use the
---prefix flag. You might then need to adjust your PYTHONPATH
-environment variable as well.
+$ ./configure --prefix $HOME/local/
+$ make
+$ make install
+$ export PYTHONPATH=$PYTHONPATH:$HOME/local/lib/python2.7/site-packages/
+# or 2.6 if you use Pyhton 2.6
+$ export PATH=$PATH:$HOME/local/bin
 
 
 USAGE
@@ -27,7 +36,7 @@ All script-names start with lofreq_ and print a simple help message
 when invoked with -h.
 
 For a full description see https://sourceforge.net/p/lofreq/
-
+and also read the publication (www.ncbi.nlm.nih.gov/pubmed/23066108)
 
 
 VERSION HISTORY

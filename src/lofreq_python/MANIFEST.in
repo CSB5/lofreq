@@ -17,8 +17,7 @@
 # on Windows anything except backslash or colon.
 
 # top dir
-include COPYING
-include README
+#
 
 # lofreq_ext
 recursive-include lofreq_ext *.c *.h [A-Z]* *[A-Z] readme
@@ -29,11 +28,6 @@ recursive-include lofreq_ext *.c *.h [A-Z]* *[A-Z] readme
 #include lofreq_ext/cdflib90.README
 #include lofreq_ext/cdflib90/readme
 #graft lofreq_ext/cdflib90/
-
-# lofreq_samtools
-recursive-include lofreq_samtools *.c *.h [A-Z]* *[A-Z]
-exclude lofreq_samtools/lofreq_samtools
-exclude lofreq_samtools/bcftools/bcftools
 
 # excludes come last
 # note: lib* matches cdflib for some reason so don't include
