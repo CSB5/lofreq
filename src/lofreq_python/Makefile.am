@@ -36,3 +36,5 @@ all:
 install:
 	 $(PYTHON) setup.py install --prefix '$(prefix)'
 
+clean-local:
+	 -$(PYTHON) setup.py clean

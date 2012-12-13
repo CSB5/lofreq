@@ -452,12 +452,12 @@ class LoFreqPileupColumn(PileupColumn):
                 field_dict = dict([x.split('=') 
                                    for x in field_val.split(' ')])
                 try:
-                    self.num_read_starts = field_dict['#heads']
-                    self.num_read_ends = field_dict['#tails']
-                    self.num_ins_events = field_dict['#ins']
-                    self.avg_ins_len = field_dict['ins_len']
-                    self.num_del_events = field_dict['#del']
-                    self.avg_del_len = field_dict['del_len']
+                    self.num_read_starts = int(field_dict['#heads'])
+                    self.num_read_ends = int(field_dict['#tails'])
+                    self.num_ins_events = int(field_dict['#ins'])
+                    self.avg_ins_len = float(field_dict['ins_len'])
+                    self.num_del_events = int(field_dict['#del'])
+                    self.avg_del_len = float(field_dict['del_len'])
                 except KeyError:
                     "Couldn't parse indel markup from pileup"
                     "  (which was '%s')" % (field_val)
@@ -477,7 +477,7 @@ class Pileup(object):
     """Frontend to samtools mpileup
     """
     
-    def __init__(self, bam, ref_fa, samtools=conf.SAMTOOLS):
+    def __init__(self, bam, ref_fa=None, samtools=conf.SAMTOOLS):
         """init
         """
 
@@ -514,8 +514,9 @@ class Pileup(object):
 
         if region_bed:
             cmd_list.extend(['-l', region_bed])
-            
-        cmd_list.extend(['-f', self.ref_fa])
+
+        if self.ref_fa:
+            cmd_list.extend(['-f', self.ref_fa])
                     
         cmd_list.append(self.bam)
             
