@@ -9,7 +9,7 @@ echook() {
     echo "OK: $1" 1>&2
 }
 
-scripts2test=$(grep 'scripts/' ../setup.py | tr -d ",'" | sed -e 's,^,../,')
+scripts2test=$(grep 'scripts/' ../src/lofreq_python/setup.py | tr -d ",'" | sed -e 's,^,../,')
 log=$(mktemp -t pylint.XXXXX)
 for f in $scripts2test; do
     $pylint -E --rcfile pylint.rc $f >> $log

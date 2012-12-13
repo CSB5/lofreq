@@ -6,13 +6,13 @@ errorecho() {
     echo "ERROR: $@" 1>&2
 }
 
-for f in $(find ../lofreq/ -name \*py \
+for f in $(find ../src/lofreq_python/lofreq/ -name \*py \
     -not -name _\* -not -name \*20[0-9][0-9]\*); do
     echo "$myname: testing $f"
     python $f || errorecho "testing $f failed"
 done
 
-for f in $(find ../scripts/ -name \*py \
+for f in $(find ../src/lofreq_python/scripts/ -name \*py \
     -not -name _\* -not -name \*20[0-9][0-9]\*); do
     echo "$myname: testing $f"
 	python -m doctest $f || errorecho "testing $f failed"
