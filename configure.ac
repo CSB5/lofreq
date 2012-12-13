@@ -113,7 +113,8 @@ AC_C_INLINE
 # FIXME explicit libm check
 #AC_CHECK_LIB(m, log,, AC_MSG_ERROR([Could not find libm]))
 #AC_CHECK_LIB(m, log2, AC_DEFINE(HAVE_LOG2, 1, [Has log2()]))
-
+AC_CHECK_LIB(m, log,, AC_MSG_ERROR([Could not find libm]))
+AC_CHECK_LIB(z, gzread,, AC_MSG_ERROR([Could not find libz]))
 
 # ---    argtable header and library check
 #
@@ -172,6 +173,9 @@ AC_SUBST([AM_LDFLAGS])
 
 
 AC_CONFIG_FILES(Makefile
+        src/lofreq_samtools/bcftools/Makefile
+        src/lofreq_samtools/Makefile
+        src/lofreq_python/setup_conf.py        
         src/lofreq_python/Makefile)
 # FIXME src/lofreq_samtools/Makefile should go here eventually as well
 AC_OUTPUT

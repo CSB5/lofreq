@@ -6,4 +6,6 @@
 *.o
 *.a
 
+Makefile
+
 bcftools

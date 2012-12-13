@@ -67,8 +67,6 @@ __copyright__ = "2011, 2012 Genome Institute of Singapore"
 __license__ = "GPL2"
 
 
-#DEFAULT_SAMTOOLS_ARGS = "-d 100000"
-
 
 #global logger
 # http://docs.python.org/library/logging.html
@@ -116,10 +114,6 @@ def cmdline_parser():
                       action="store_true", dest="debug",
                       help="enable debugging")
 
-    #opt_group.add_option("-a", "--samtools_args",
-    #                  dest="samtools_args", # type="string|int|float"
-    #                  default=DEFAULT_SAMTOOLS_ARGS,
-    #                  help="Optional: Extra Samtools args (default: %s). Should be the same as used for the original SNP calling" % (DEFAULT_SAMTOOLS_ARGS))
     opt_group.add_option("-q", "--ignore-bases-below-q",
                       dest="ign_bases_below_q", type="int",
                       default=conf.DEFAULT_IGN_BASES_BELOW_Q,
