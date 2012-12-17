@@ -8,6 +8,7 @@ EXTRA_DIST = ./lofreq/__init__.py \
 	./lofreq/sam.py \
 	./lofreq/simple_vcf.py \
 	./lofreq/snp.py \
+	./lofreq/posmap.py \
 	./lofreq/utils.py \
 	./lofreq_ext/cdflib90/cdflib.h \
 	./lofreq_ext/cdflib90/dcdflib.c \

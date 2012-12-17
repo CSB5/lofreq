@@ -439,9 +439,9 @@ class LoFreqPileupColumn(PileupColumn):
                 # NOTE: this assumes there is no filtering done on the pileup level
                 num_bq = sum(sum(self._bases_and_quals[b].values()) 
                              for b in self._bases_and_quals.keys())
-                assert num_bq == self.coverage, (
-                    "Pileup paring error: Coverage (%d) and"
-                    " number of bases differ (%d)" % (num_bq, self.coverage))
+                assert self.coverage >= num_bq , (
+                    "Pileup parsing error: (raw) coverage (%d) smaller"
+                    " than number of bases (%d)" % (num_bq, self.coverage))
                 
                 for b in self._bases_and_quals.keys():
                     assert b.upper() in VALID_BASES

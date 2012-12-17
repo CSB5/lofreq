@@ -8,7 +8,7 @@ AC_PREREQ(2.6) # 2.60 needed for AC_USE_SYSTEM_EXTENSIONS
 
 # FIXME set version here and replace in setup.py and samtools Makefile
 # or any .h
-AC_INIT([Lofreq], [0.5.0], [wilma@gis.a-star.edu.sg])
+AC_INIT([Lofreq], [0.5.0a], [wilma@gis.a-star.edu.sg])
 
 # The AC_INIT macro can take any source file as an argument. It just
 # checks that the file is there, which should, in turn, mean that the
