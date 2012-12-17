@@ -229,6 +229,14 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 	kstring_t buf;
 	mplp_pileup_t gplp;
 
+    /* paranoid exit. not sure if the stuff would work. the lofreq
+     * parsing certainly wouldn't */
+    if (n != 1) {
+         fprintf(stderr, "FATAL(%s:%s): need exactly one BAM files as input\n",
+                 __FILE__, __FUNCTION__);
+         exit(1);
+    }
+
 	memset(&gplp, 0, sizeof(mplp_pileup_t));
 	memset(&buf, 0, sizeof(kstring_t));
 	memset(&bc, 0, sizeof(bcf_call_t));
@@ -237,8 +245,8 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 	n_plp = calloc(n, sizeof(int*));
 	sm = bam_smpl_init();
 
-	fprintf(stderr, "[%s] Note, the output differs from regular pileup (see http://samtools.sourceforge.net/pileup.shtml) in the following way\n", __func__);
-	fprintf(stderr, "[%s] - bases and qualities are merged into one field", __func__);
+	fprintf(stderr, "[%s] Note, the output differs from regular pileup (see http://samtools.sourceforge.net/pileup.shtml) in the following ways\n", __func__);
+	fprintf(stderr, "[%s] - bases and qualities are merged into one field\n", __func__);
     fprintf(stderr, "[%s] - (each base is immediately followed by its quality\n", __func__);
 	fprintf(stderr, "[%s] - on request mapping and base call quality are merged (P_joined = P_mq * + (1-P_mq) P_bq\n", __func__);
 	fprintf(stderr, "[%s] - indel events are removed from bases and qualities and summarized in an additional field\n", __func__);
@@ -374,6 +382,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 		} else {
 			printf("%s\t%d\t%c", h->target_name[tid], pos + 1, (ref && pos < ref_len)? ref[pos] : 'N');
 			for (i = 0; i < n; ++i) {
+
 				int j;
 				printf("\t%d\t", n_plp[i]);
                 /* AW: n_plp[i] = number of reads covering the site */
@@ -398,6 +407,52 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
                       int nt, mq, bq, jq; /* sanger phred scores */
                       double mp, bp, jp; /* corresponding probs */
 
+
+                      if (! p->is_del) {
+                           if (p->is_head) num_heads += 1;
+                           if (p->is_tail) num_tails += 1;
+
+                           nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos)];
+                           nt = bam1_strand(p->b)? tolower(nt) : toupper(nt);
+                           
+                           bq = bam1_qual(p->b)[p->qpos] + 33;
+                           if (bq > 126) bq = 126; /* Sanger max */
+
+                           /* mapping quality. originally:
+                            * conf->flag & MPLP_PRINT_MAPQ
+                            * c = plp[i][j].b->core.qual + 33;
+                            */
+                           mq = p->b->core.qual + 33;
+                           if (mq > 126) mq = 126; /* Sanger max? */
+                           
+                           putchar(nt);
+                           /* "Merge" MQ and BQ if requested and if
+                            *  MAQP not 255 (not available):
+                            * P_jq = P_mq * + (1-P_mq) P_bq.
+                            */
+                           if ((conf->flag & MPLP_JOIN_BQ_AND_MQ) && (mq-33) != 255) {
+                                /* Careful: q's are all ready to print
+                                 * sanger phred-scores. No need to do
+                                 * computation in phred-space as numbers
+                                 * won't get small enough.
+                                 */
+                                mp = PHREDQUAL_TO_PROB(mq - 33);
+                                bp = PHREDQUAL_TO_PROB(bq - 33);
+                                jp = mp + (1.0 - mp) * bp;
+                                jq = PROB_TO_PHREDQUAL(jp) + 33;
+#if DEBUG
+                                printf("P_M + (1-P_M) P_B:   %g + (1.0 - %g) * %g = %g  ==  Q%d + (1.0 - Q%d) * Q%d  =  Q%d\n",
+                                       mp, mp, bp, jp,  mq-33, mq-33, bq-33, jq-33);
+#endif
+                                putchar(jq);
+                                
+                           } else {
+                                
+                                putchar(bq);
+                           }
+                           /*putchar(' ');*/
+                      } /* ! p->is_del */
+
                      /* A pattern \+[0-9]+[ACGTNacgtn]+' indicates there is an
                       * insertion between this reference position and the next
                       * reference position. The length of the insertion is
@@ -407,7 +462,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
                       * reference. The deleted bases will be presented as ‘*’
                       * in the following lines.
                       */
-                      if ((p->indel != 0) || p->is_del) {
+                      if (p->indel != 0) {
                           if (p->indel > 0) {
                              /* originally: + */
                              num_ins += 1;
@@ -416,58 +471,12 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
                              /* originally: - */
                              num_dels += 1;
                              sum_dels -= p->indel;
-                          } else {
-                             /* originally: * */
-                             assert(p->is_del);
                           }
-                          continue; /* right? */
-                          /* as an aside, if we wanted to include
-                             them, do we need to keep track of heads
+                          /* as an aside, if we wanted to include the
+                             indels, do we need to keep track of heads
                              and tails as well?! */
                       }
 
-                      if (p->is_head) num_heads += 1;
-                      if (p->is_tail) num_tails += 1;
-
-                      nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos)];
-                      nt = bam1_strand(p->b)? tolower(nt) : toupper(nt);
-
-                      bq = bam1_qual(p->b)[p->qpos] + 33;
-					  if (bq > 126) bq = 126; /* Sanger max */
-
-                      /* mapping quality. originally:
-                       * conf->flag & MPLP_PRINT_MAPQ
-                       * c = plp[i][j].b->core.qual + 33;
-                       */
-                      mq = p->b->core.qual + 33;
-                      if (mq > 126) mq = 126; /* Sanger max? */
-                      
-                      putchar(nt);
-                      /* "Merge" MQ and BQ if requested and if
-                       *  MAQP not 255 (not available):
-                       * P_jq = P_mq * + (1-P_mq) P_bq.
-                       */
-                      if ((conf->flag & MPLP_JOIN_BQ_AND_MQ) && (mq-33) != 255) {
-						   /* Careful: q's are all ready to print
-                            * sanger phred-scores. No need to do
-                            * computation in phred-space as numbers
-                            * won't get small enough.
-                            */
-                           mp = PHREDQUAL_TO_PROB(mq - 33);
-                           bp = PHREDQUAL_TO_PROB(bq - 33);
-                           jp = mp + (1.0 - mp) * bp;
-                           jq = PROB_TO_PHREDQUAL(jp) + 33;
-#if DEBUG
-                      printf("P_M + (1-P_M) P_B:   %g + (1.0 - %g) * %g = %g  ==  Q%d + (1.0 - Q%d) * Q%d  =  Q%d\n",
-                             mp, mp, bp, jp,  mq-33, mq-33, bq-33, jq-33);
-#endif
-                          putchar(jq);
-
-                      } else {
-
-                          putchar(bq);
-                      }
-                      /*putchar(' ');*/
                       
 					} /* end: for (j = 0; j < n_plp[i]; ++j) { */
                     printf("\t#heads=%d #tails=%d #ins=%d ins_len=%.1f #del=%d del_len=%.1f\n",
