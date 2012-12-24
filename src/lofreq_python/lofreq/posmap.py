@@ -68,8 +68,12 @@ class PosMap(object):
             self.generate(seqrecs)
 
     @staticmethod
-    def isgap(res, gap_chars = "-~."):
+    def isgap(res, gap_chars = "-"):
         """Return true if given residue is a gap character
+
+        Don't use . or ~ here. . is often used in literature so denote
+        consensus and ~ is often used by us internally to signify
+        'dunno', which is different from N.
         """
         return (res in gap_chars)
     

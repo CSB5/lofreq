@@ -34,6 +34,8 @@ import difflib
 #import Bio
 from Bio import SeqIO
 from lofreq import snp
+from lofreq import posmap
+
 
 #--- project specific imports
 #
@@ -50,141 +52,10 @@ __license__ = "The MIT License (MIT)"
 # global logger
 # http://docs.python.org/library/logging.html
 LOG = logging.getLogger("")
-logging.basicConfig(level=logging.INFO,
+logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
-
-
-
  
-
-class PosMap(object):
-    """Position map class
-
-    NOTE: all unit-offset!
-    """
-
-    
-    def __init__(self, seqrecs=None):
-        """
-        """
-
-        self.seq_ids = []
-        self.pos_map = dict()
-
-        if seqrecs:
-            self.generate(seqrecs)
-
-    @staticmethod
-    def isgap(res, gap_chars = "-~."):
-        """Return true if given residue is a gap character
-        """
-        return (res in gap_chars)
-    
-
-    def generate(self, seqrecs):
-        """Computes a position map, which is a dict with aligned
-        positions as main key. Sequence ids are 2nd dim key and their
-        corresponding unaligned position is the value
-        
-        NOTE: if a residue is aligned to a gap, the previous position
-        is used
-    
-        NOTE: the format is terribly inefficient. Should rather be
-        spit out as blocks/ranges for liftover chains (troublesome for
-        >2 though)")
-        """
-       
-        self.pos_map = dict()
-        self.seq_ids = [s.id for s in seqrecs]
-        
-        aln_len = len(seqrecs[0].seq)
-        for s in seqrecs:
-            assert len(s.seq) == aln_len, (
-                "Looks like your seqs are not aligned")
-
-        # all offset one
-        cur_unaligned_pos = len(seqrecs) * [0]
-        for aln_pos in xrange(aln_len):
-            for s in xrange(len(seqrecs)):
-                res = seqrecs[s][aln_pos]
-                if not self.isgap(res):
-                    cur_unaligned_pos[s] += 1
-            self.pos_map[aln_pos+1] = dict()
-            for (pos, sid) in zip(cur_unaligned_pos, 
-                                 [s.id for s in seqrecs]):
-                self.pos_map[aln_pos+1][sid] = pos
-
-                
-    
-    def output(self, handle=sys.stdout):
-        """Print position map
-        """
-
-        print "aln-pos\t%s" % ('\t'.join(self.seq_ids))
-        for aln_pos in sorted(self.pos_map.keys()):
-            line = "%d" % aln_pos
-            for s in self.seq_ids:
-                line += " %d" % (self.pos_map[aln_pos][s])
-            handle.write("%s\n" % (line))
-            
-
-            
-    def parse(self, pos_map_file):
-        """Parse position map from file
-        """
-
-        LOG.critical("Untested function")
-        handle = open(pos_map_file, 'r')
-        line = handle.readline()
-        header = line.rstrip().split('\t')
-        assert header[0] == 'aln-pos', (
-            "Was expecting first field to be aln-pos, but it's '%s'" % (
-                header[0]))
-    
-        self.pos_map = dict()
-        for line in handle:
-            # note: offset untouched, i.e. as in file (unit-offset)
-            positions = [int(x) for x in line.rstrip().split('\t')]
-            assert len(positions) == len(header)
-    
-            aln_pos = positions[0]
-            self.pos_map[aln_pos] = dict()
-            for (pos, sid) in zip(positions[1:], header[1:]):
-                self.pos_map[aln_pos][sid] = pos
-        handle.close()
-    
-    
-
-    def convert(self, src=None, query=None):
-        """Mangles input pos_map and returns a dict containing
-        unaligned position matching between src and query ids.
-
-        If query is None, then aligned positions for src are returned.
-        Likewise if src is None, then unaligned positions for aligned
-        pos are returned
-        """
-    
-        # FIXME Would this break if we had gap vs gap alignment and
-        # some residues following?
-                
-        if query and src:
-            pos_map = dict([(v[src], v[query]) 
-                      for (k, v) in self.pos_map.iteritems()])
-        elif src:
-            pos_map = dict([(v[src], k) 
-                      for (k, v) in self.pos_map.iteritems()])
-            #for (k, v) in d.iteritems():
-            #    assert k<=v
-        elif query:            
-            pos_map = dict([(k, v[query]) 
-                         for (k, v) in self.pos_map.iteritems()])            
-        else:
-            raise ValueError
-            
-        return pos_map
-
-
     
 def cmdline_parser():
     """
@@ -217,7 +88,7 @@ def cmdline_parser():
     parser.add_option("-s", "--seqid",
                       dest="seq_id",
                       help="Sequence id of interest (for which SNP"
-                      " file was produced)")
+                      " file was produced). If empty aligned positions are assumed!")
     parser.add_option("-m", "--map-to-id",
                       dest="map_to_id",
                       help="Convert SNP positions to unaligned"
@@ -236,18 +107,24 @@ def cmdline_parser():
     return parser
 
 
+
 def map_pos_of_snps(snp_list_in, seq_id, map_to_id, pos_map): 
     """The actual main function which will convert snp positions of
     snps in snp_list_in coming from seq_id to map_to_id (or alignment
-    if None) based on PosMap pos_map """
+    if None) based on PosMap pos_map. If seq_id is empty positions are
+    assumed to be aligned
+    """
+
+    assert seq_id or map_to_id, ("Need src or dst id")
     
     conv_pos_map = pos_map.convert(seq_id, map_to_id)
-    
+            
     snp_list_offset = []
     for s in snp_list_in:
         try:
             LOG.debug("Changing pos from %d to %d for %s" % (
                 s.pos, conv_pos_map[s.pos], s))
+            s.info['orig-pos'] = s.pos+1
             s.pos = conv_pos_map[s.pos]
         except KeyError:
             if map_to_id:
@@ -275,6 +152,7 @@ def main():
     The main function
     """
 
+
     parser = cmdline_parser()
     (opts, args) = parser.parse_args()
 
@@ -282,7 +160,9 @@ def main():
         LOG.setLevel(logging.INFO)
     if opts.debug:
         LOG.setLevel(logging.DEBUG)
-        
+
+    #LOG.critical(opts.verbose, opts.debug, LOG.isEnabledFor(logging.INFO), LOG.getEffectiveLevel())
+
     if len(args) != 0:
         parser.error("Unrecognized args found")
         sys.exit(1)
@@ -313,31 +193,36 @@ def main():
                 "Refusing to overwrite existing file '%s'.\n" % filename)
             sys.exit(1)
 
-
     fh_in = open(opts.msa_file, 'r')
     msa_seqs = SeqIO.to_dict(SeqIO.parse(fh_in, opts.aln_fmt))
     fh_in.close()
+    if len(msa_seqs)<2:
+        LOG.fatal("%s contains only one sequence\n" % (opts.msa_file))
+        sys.exit(1)
+        
+        
 
-    seq_ids_to_check = [opts.seq_id]
+    seq_ids_to_check = []
+    if opts.seq_id:
+        seq_ids_to_check.append(opts.seq_id)
     if opts.map_to_id:
         seq_ids_to_check.append(opts.map_to_id)
     for seq_id in seq_ids_to_check:
         if not seq_id in msa_seqs.keys():
+            bestmatch = None
             matches = difflib.get_close_matches(
                 seq_id, msa_seqs.keys(), 1, 0.5)
-            bestmatch = None
             if matches:
                 bestmatch = matches[0]
-
             LOG.fatal("Couldn't find seq '%s' in MSA file"
             " (best match was: %s)" % (
                 seq_id, bestmatch))
             sys.exit(1)
         
-        
-    pos_map = PosMap(msa_seqs.values())
+    pos_map = posmap.PosMap(msa_seqs.values())
     snp_list = snp.parse_snp_file(opts.snp_in)
-
+    if opts.debug:
+        pos_map.output()
     snp_list_offset = map_pos_of_snps(
         snp_list, opts.seq_id, opts.map_to_id, pos_map)
 
@@ -347,7 +232,7 @@ def main():
         fh_out = open(opts.snp_out, 'w')
     snp.write_snp_file(fh_out, snp_list_offset)
     if fh_out != sys.stdout:
-        fh_out.close()       
+        fh_out.close()
 
     
 if __name__ == "__main__":
