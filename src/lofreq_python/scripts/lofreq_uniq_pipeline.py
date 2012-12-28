@@ -1,8 +1,5 @@
 #!/usr/bin/env python
-"""Create a diff of two SNV files, i.e. extract SNVs uniquely
-predicted in only one or the other, or alternatively common to both.
-This is a pre-processing step for 'somatic' calls, which should then
-be completed by lofreq_uniq.py
+"""A somatic SNV caller: uses the whole LoFreq shebang
 """
 
 # Copyright (C) 2011, 2012 Genome Institute of Singapore
@@ -135,7 +132,7 @@ def get_bonf(regionbed):
                              stderr=subprocess.PIPE)
         (stdout, stderr) = p.communicate()
     except OSError:
-        LOG.error("Couldn't execute '%s'" % (stderr))
+        LOG.error("Couldn't execute '%s'" % (' '.join(cmd_list)))
         raise
     
     if p.returncode != 0:
