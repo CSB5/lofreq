@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-"""Class for converting alignmed positions or unaligned positions between
-source to target sequence"""
+"""Class for converting alignmed positions or unaligned positions
+between source to target sequence"""
 
 
 # Copyright (C) 2011, 2012 Genome Institute of Singapore
@@ -37,8 +37,9 @@ from optparse import OptionParser, SUPPRESS_HELP
                                                         
 __author__ = "Andreas Wilm"
 __version__ = "0.1"
-__email__ = "andreas.wilm@gmail.com"
-__license__ = "The MIT License (MIT)"
+__email__ = "wilma@gis.a-star.edu.sg"
+__copyright__ = "2011, 2012 Genome Institute of Singapore"
+__license__ = "GPL2"
 
 
 
@@ -53,10 +54,39 @@ logging.basicConfig(level=logging.INFO,
 class PosMap(object):
     """Position map class
 
-    NOTE: all unit-offset!
+    All zero offset. Gapped pos translate into -1 (instead of None to
+    avoid mixup with 0)
+
+    >>> from lofreq import posmap
+    >>> from Bio.Seq import Seq
+    >>> from Bio.SeqRecord import SeqRecord
+    >>> sr1 = SeqRecord(Seq("GA-TC-G"))
+    >>> sr1.id = "s1"
+    >>> sr2 = SeqRecord(Seq("--GATCG"))
+    >>> sr2.id = "s2"
+    >>> pm = posmap.PosMap([sr1, sr2])
+    >>> 
+    >>> aln_to_s1 = pm.convert(None, "s1")
+    >>> aln_to_s1
+    {0: 0, 1: 1, 2: -1, 3: 2, 4: 3, 5: -1, 6: 4}
+    >>>
+    >>> aln_to_s2 = pm.convert(None, "s2")
+    >>> aln_to_s2
+    {0: -1, 1: -1, 2: 0, 3: 1, 4: 2, 5: 3, 6: 4}
+    >>>
+    >>> s1_to_s2 = pm.convert("s1", "s2")
+    >>> s1_to_s2
+    {0: -1, 1: -1, 2: 1, 3: 2, 4: 4}
+    >>> sorted(s1_to_s2.keys()) == range(len(sr1.seq.ungap("-")))
+    True
+    >>>
+    >>> s2_to_s1 = pm.convert("s2", "s1")
+    >>> s2_to_s1 
+    {0: -1, 1: 2, 2: 3, 3: -1, 4: 4}
+    >>> sorted(s2_to_s1.keys()) == range(len(sr2.seq.ungap("-")))
+    True
     """
 
-    
     def __init__(self, seqrecs=None):
         """
         """
@@ -67,6 +97,7 @@ class PosMap(object):
         if seqrecs:
             self.generate(seqrecs)
 
+            
     @staticmethod
     def isgap(res, gap_chars = "-"):
         """Return true if given residue is a gap character
@@ -81,11 +112,9 @@ class PosMap(object):
     def generate(self, seqrecs):
         """Computes a position map, which is a dict with aligned
         positions as main key. Sequence ids are 2nd dim key and their
-        corresponding unaligned position is the value
+        corresponding unaligned position is the value. Gapped
+        positions get a -1 assigned.
         
-        NOTE: if a residue is aligned to a gap, the previous position
-        is used
-    
         NOTE: the format is terribly inefficient. Should rather be
         spit out as blocks/ranges for liftover chains (troublesome for
         >2 though)")
@@ -98,36 +127,42 @@ class PosMap(object):
         for s in seqrecs:
             assert len(s.seq) == aln_len, (
                 "Looks like your seqs are not aligned")
-
-        # all offset one
-        cur_unaligned_pos = len(seqrecs) * [0]
-        for aln_pos in xrange(aln_len):
-            for s in xrange(len(seqrecs)):
-                res = seqrecs[s][aln_pos]
+        # we use the ids as identifiers so they have to be unique
+        assert len(set([s.id for s in seqrecs])) == len(seqrecs)
+            
+        for apos in xrange(aln_len):
+            self.pos_map[apos] = dict()
+        for sr in seqrecs:
+            # running count of gaps for this seqrec
+            gap_count = 0
+            for apos in xrange(aln_len):
+                res = sr.seq[apos]  
                 if not self.isgap(res):
-                    cur_unaligned_pos[s] += 1
-            self.pos_map[aln_pos+1] = dict()
-            for (pos, sid) in zip(cur_unaligned_pos, 
-                                 [s.id for s in seqrecs]):
-                self.pos_map[aln_pos+1][sid] = pos
-
-                
+                    self.pos_map[apos][sr.id] = apos - gap_count
+                else:
+                    self.pos_map[apos][sr.id] = -1
+                    gap_count += 1
+                    
     
     def output(self, handle=sys.stdout):
         """Print position map
         """
 
+        print "pos map: all pos zero-offset"
         print "aln-pos\t%s" % ('\t'.join(self.seq_ids))
         for aln_pos in sorted(self.pos_map.keys()):
             line = "%d" % aln_pos
             for s in self.seq_ids:
-                line += " %d" % (self.pos_map[aln_pos][s])
+                p = self.pos_map[aln_pos][s]
+                line += " %d" % (p)
             handle.write("%s\n" % (line))
             
 
             
     def parse(self, pos_map_file):
         """Parse position map from file
+
+        NOTE: offset is untouched, i.e. as in file
         """
 
         LOG.critical("Untested function")
@@ -140,7 +175,6 @@ class PosMap(object):
     
         self.pos_map = dict()
         for line in handle:
-            # note: offset untouched, i.e. as in file (unit-offset)
             positions = [int(x) for x in line.rstrip().split('\t')]
             assert len(positions) == len(header)
     
@@ -160,9 +194,6 @@ class PosMap(object):
         Likewise if src is None, then unaligned positions for aligned
         pos are returned
         """
-    
-        # FIXME Would this break if we had gap vs gap alignment and
-        # some residues following?
                 
         if query and src:
             pos_map = dict([(v[src], v[query]) 
@@ -174,13 +205,20 @@ class PosMap(object):
             #    assert k<=v
         elif query:            
             pos_map = dict([(k, v[query]) 
-                         for (k, v) in self.pos_map.iteritems()])            
+                         for (k, v) in self.pos_map.iteritems()])
         else:
             raise ValueError
+
+        # remove gapped positions
+        if pos_map.has_key(-1):
+            del pos_map[-1]
             
         return pos_map
 
     
 if __name__ == "__main__":
-    main()
-    LOG.info("Successful exit")
+    import doctest
+    doctest.testmod()        
+
+
+    
