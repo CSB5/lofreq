@@ -298,6 +298,11 @@ def main():
             base_pos = pos_map_aln_to_other[s.pos]
         else:
             base_pos = s.pos
+        if base_pos == -1:
+            # FIXME
+            LOG.fatal("No match for this SNP. This needs to be fixed by the developers")
+            sys.exit(1)
+
         LOG.debug("bed entry: %s\t%d (orig %d; %s mapped))\t%d\n" % (
             s.chrom, base_pos, s.pos, 
             "is" if pos_map_aln_to_other else "not",
@@ -317,6 +322,11 @@ def main():
             offset_pos = pos_map_other_to_aln[pcol.coord]
         else:
             offset_pos = pcol.coord
+
+        if offset_pos == -1:
+            # FIXME
+            LOG.fatal("No match for this SNP. This needs to be fixed by the developers")
+            sys.exit(1)
 
         snp_candidates = [s for s in snps if
                           s.pos == offset_pos and 
