@@ -26,26 +26,21 @@ import logging
 from optparse import OptionParser, SUPPRESS_HELP
 import difflib
 
-#from collections import namedtuple
-#Annotation = namedtuple('Annotation', ['start', 'end', 'type', 'descr'])
-
 #--- third-party imports
 #
 #import Bio
 from Bio import SeqIO
-from lofreq import snp
-from lofreq import posmap
-
 
 #--- project specific imports
 #
-# /
+from lofreq import snp
+from lofreq import posmap
 
                                                         
 __author__ = "Andreas Wilm"
 __version__ = "0.1"
-__email__ = "andreas.wilm@gmail.com"
-__license__ = "The MIT License (MIT)"
+__email__ = "wilma@gis.a-star.edu.sg"
+__license__ = "GPL2"
 
 
 
@@ -54,7 +49,6 @@ __license__ = "The MIT License (MIT)"
 LOG = logging.getLogger("")
 logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
-
  
     
 def cmdline_parser():
@@ -161,7 +155,6 @@ def main():
     if opts.debug:
         LOG.setLevel(logging.DEBUG)
 
-    #LOG.critical(opts.verbose, opts.debug, LOG.isEnabledFor(logging.INFO), LOG.getEffectiveLevel())
 
     if len(args) != 0:
         parser.error("Unrecognized args found")
@@ -237,4 +230,9 @@ def main():
     
 if __name__ == "__main__":
     main()
-    LOG.info("Successful exit")
+    LOG.debug("Successful exit")
+    # FIXME in all other scripts LOG.info works but here it's always
+    # printed. Couldn't find out why
+    #LOG.critical("v=%s d=%s" % (opts.verbose, opts.debug))
+    #LOG.critical("LOG.isEnabledFor(logging.INFO)=%s" % LOG.isEnabledFor(logging.INFO))
+    #LOG.critical("LOG.getEffectiveLevel()=%s" % LOG.getEffectiveLevel())
