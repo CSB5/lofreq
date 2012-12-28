@@ -3,6 +3,10 @@
 predicted in only one or the other, or alternatively common to both.
 This is a pre-processing step for 'somatic' calls, which should then
 be completed by lofreq_unique.py
+
+NOTE: the two files should be on the same coordinate system i.e. you
+should have used the same ref sequences. If that is not the case use
+lofreq_alnoffset.py first.
 """
 
 # Copyright (C) 2011, 2012 Genome Institute of Singapore
