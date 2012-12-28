@@ -526,7 +526,8 @@ class Pileup(object):
                                  stdout=subprocess.PIPE, 
                                  stderr=subprocess.PIPE)
         except:
-            LOG.fatal("Executing following cmd list failed: %s" % (cmd_list))
+            LOG.fatal("The following command failed: %s" % (
+                ' '.join(cmd_list)))
             raise
         for line in p.stdout:
             if self.samtools.endswith("lofreq_samtools"):
@@ -644,7 +645,8 @@ def samtools_version(samtools):
                              stdout=subprocess.PIPE, 
                              stderr=subprocess.PIPE)
     except OSError:
-        LOG.error("Can't execute '%s'" % samtools)
+        LOG.error("The following command failed: %s" % (
+            samtools))
         raise
     
     lines = p.stderr.readlines()
