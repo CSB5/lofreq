@@ -127,6 +127,12 @@ def map_pos_of_snps(snp_list_in, seq_id, map_to_id, pos_map):
             else:
                 LOG.fatal("INTERNAL ERROR: Position %d in %s seems invalid."
                           % (s.pos+1, seq_id))
+            raise
+        #FIXME
+        if s.pos == -1:
+            LOG.fatal("No match for this SNP. This needs to be fixed by the developers")
+            sys.exit(1)
+            
         if map_to_id:
             s.info['offset'] = map_to_id
         else: 
