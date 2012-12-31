@@ -11,8 +11,11 @@ basedir=../../lofreq-test-data//alnoffset/
 gotmd5=$(lofreq_alnoffset.py -s 'consensus-fake' -o - \
     -i $basedir/fake_paired_sample.snp -a $basedir/fake_aln.fa | \
     lofreq_alnoffset.py -a $basedir/fake_aln.fa -m 'consensus-fake'  -i - -o - | \
-    cut -f 1-3 -d ' ' | $md5)
-expmd5=$(cat $basedir/fake_paired_sample.snp | cut -f 1-3 -d ' ' | $md5)
+    cut -f 1-3 -d ' ' | $md5 | cut -f 1 -d ' ')
+expmd5=$(cat $basedir/fake_paired_sample.snp | cut -f 1-3 -d ' ' | $md5 | cut -f 1 -d ' ')
+#echo "DEBUG: gotmd5=$gotmd5"
+#echo "DEBUG: expmd5=$expmd5"
+
 if [ $gotmd5 != $expmd5 ]; then
     echoerror "SNV offsetting to self via alignment does not return original"
 else
