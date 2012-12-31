@@ -298,11 +298,14 @@ def main():
             base_pos = pos_map_aln_to_other[s.pos]
         else:
             base_pos = s.pos
-        if base_pos == -1:
-            # FIXME
-            LOG.fatal("No match for this SNP. This needs to be fixed by the developers")
-            sys.exit(1)
 
+        # special case: if we used different ref seqs for mapping and
+        # this one is aligned with a gap in the other then it's unique
+        if base_pos == -1:
+            LOG.info("%s: unique ( no alignment match in other sample)\n" % (
+                s.identifier()))
+            continue
+        
         LOG.debug("bed entry: %s\t%d (orig %d; %s mapped))\t%d\n" % (
             s.chrom, base_pos, s.pos, 
             "is" if pos_map_aln_to_other else "not",
