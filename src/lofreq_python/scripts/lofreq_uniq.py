@@ -83,7 +83,8 @@ logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
 if USE_SCIPY:
-    LOG.warn("Using scipy functions instead of internal ones. Should only be used for debugging.")
+    LOG.warn("Using scipy functions instead of internal ones."
+             " Should only be used for debugging.")
 
 MYNAME = os.path.basename(sys.argv[0])
 
@@ -302,7 +303,8 @@ def main():
         # special case: if we used different ref seqs for mapping and
         # this one is aligned with a gap in the other then it's unique
         if base_pos == -1:
-            LOG.info("%s: unique ( no alignment match in other sample)\n" % (
+            LOG.info("%s: not necessarily unique"
+                     " (ambigiously aligned to other sample)" % (
                 s.identifier()))
             continue
         
@@ -327,8 +329,7 @@ def main():
             offset_pos = pcol.coord
 
         if offset_pos == -1:
-            # FIXME
-            LOG.fatal("No match for this SNP. This needs to be fixed by the developers")
+            LOG.fatal("INTERNAL ERROR: No alignment match for this SNP")
             sys.exit(1)
 
         snp_candidates = [s for s in snps if
@@ -346,12 +347,14 @@ def main():
                 if base == this_snp.wildtype or base == 'N':
                     continue
                 nonref_counts[base] = sum(pcol.get_counts_for_base(
-                        base, max(opts.ign_bases_below_q, opts.noncons_filter_qual)))
+                        base, 
+                        max(opts.ign_bases_below_q, opts.noncons_filter_qual)))
             cov = sum([ref_count, sum(nonref_counts.values())])
             alt_count = nonref_counts[this_snp.variant]
 
             if cov == 0:
-                LOG.info("%s: not necessarily unique (not rejected)\n" % (this_snp))
+                LOG.info("%s: not necessarily unique"
+                         " (zero coverage in other sample)\n" % (this_snp))
                 continue
 
             if opts.uniform_freq:
@@ -360,14 +363,16 @@ def main():
                 cmp_freq = this_snp.freq
                 if opts.freq_fac:
                     cmp_freq = cmp_freq*opts.freq_fac
-            LOG.info("Testing SNP at pos. %d %s>%s %f. Counts and freq in BAM ref=%d snp=%d snp-freq=%f" % (
+            LOG.info("Testing SNP at pos. %d %s>%s %f."
+                     " Counts and freq in other BAM:"
+                     " ref=%d snp=%d snp-freq=%f" % (
                     pcol.coord+1, this_snp.wildtype, this_snp.variant, cmp_freq,
                     ref_count, alt_count, alt_count/float(cov)))
 
             pvalue = binom_cdf(alt_count+1, cov, cmp_freq)
 
             if pvalue < opts.sig_thresh:
-                LOG.info("%s: unique (number of 'SNP' bases"
+                LOG.info("%s: unique (number of candidate SNP bases"
                          " significantly low)\n" % (
                              this_snp.identifier()))
                 snp.write_record(this_snp, fh_out)
