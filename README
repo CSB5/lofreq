@@ -25,7 +25,7 @@ $ ./configure --prefix $HOME/local/
 $ make
 $ make install
 $ export PYTHONPATH=$PYTHONPATH:$HOME/local/lib/python2.7/site-packages/
-# or 2.6 if you use Pyhton 2.6
+# or 2.6 if you use Python 2.6
 $ export PATH=$PATH:$HOME/local/bin
 
 
