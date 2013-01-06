@@ -14,8 +14,8 @@ BAM_H = bam.h bam_endian.h bgzf.h faidx.h kaln.h khash.h knetfile.h \
 # original LJOBS s/.o/.c and KNETFILE instead of KNETFILE_O
 libbam_la_SOURCES = bgzf.c kstring.c bam_aux.c bam.c bam_import.c \
 	sam.c bam_index.c bam_pileup.c bam_lpileup.c bam_md.c razf.c \
-	faidx.c bedidx.c $(KNETFILE) bam_sort.c sam_header.c \
-	bam_reheader.c kprobaln.c bam_cat.c
+	faidx.c bedidx.c $(KNETFILE) sam_header.c \
+	kprobaln.c
 
 #libbam_la_LIBADD = bcftools/libbcf.la
 #libbam_la_LDFLAGS = -static
