@@ -173,7 +173,8 @@ AC_SUBST([AM_LDFLAGS])
 
 
 AC_CONFIG_FILES(Makefile
-        src/lofreq_samtools/bcftools/Makefile
+        src/libbam/Makefile
+        src/cdflib90/Makefile
         src/lofreq_samtools/Makefile
         src/lofreq_python/setup_conf.py        
         src/lofreq_python/Makefile)

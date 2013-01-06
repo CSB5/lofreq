@@ -33,11 +33,10 @@ EXT_PATH = "lofreq_ext"
 EXT_SOURCES = [os.path.join(EXT_PATH, f)
                for f in ["lofreq_ext.c", 
                          "fet.c",
-                         os.path.join("cdflib90", "dcdflib.c"),
-                         os.path.join("cdflib90", "ipmpar.c"),
                          ]
                ]
-
+CDFLIBDIR = os.path.join('..', 'cdflib90')
+CDFLIB = os.path.join(CDFLIBDIR, "libcdf.a") # FIXME dirty hack
 
 def which(prog):
     """make sure prog can be run
@@ -67,15 +66,18 @@ for prog in []:
                          " which should have been installed earlier.\n#\n" % prog)
         raw_input("Press Enter to continue anyway.")
 
+
 extension = Extension("lofreq_ext",
                       EXT_SOURCES,
-                      include_dirs=[os.path.join(EXT_PATH, 'cdflib90')],
+                      include_dirs=[CDFLIBDIR],
                       define_macros=DEFINE_MACROS,
                       extra_compile_args=EXTRA_COMPILE_ARGS,
-                      depends=[os.path.join(EXT_PATH, "cdflib90", "cdflib.h"), 
-                          os.path.join(EXT_PATH, "fet.h")]
-                      #library_dirs=[],
-                      #libraries=[],
+                      extra_objects=[CDFLIB],
+                      depends=[os.path.join(CDFLIBDIR, "cdflib.h"), 
+                               os.path.join(EXT_PATH, "fet.h")],
+        
+#                      library_dirs=[CDFLIBDIR],
+#libraries=['cdf'],
                       )
 
 # where modules reside:

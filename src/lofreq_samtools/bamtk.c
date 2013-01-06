@@ -8,6 +8,12 @@
 #include "knetfile.h"
 #endif
 
+#ifndef ORIG
+int bam_mpileup(int argc, char *argv[]);
+int bam_index(int argc, char *argv[]);
+int main_samview(int argc, char *argv[]);
+int main_depth(int argc, char *argv[]);
+#else
 int bam_taf2baf(int argc, char *argv[]);
 int bam_mpileup(int argc, char *argv[]);
 int bam_merge(int argc, char *argv[]);
@@ -27,25 +33,26 @@ int main_phase(int argc, char *argv[]);
 int main_cat(int argc, char *argv[]);
 int main_depth(int argc, char *argv[]);
 int main_bam2fq(int argc, char *argv[]);
-
+#endif
 int faidx_main(int argc, char *argv[]);
+
 
 static int usage()
 {
 	fprintf(stderr, "\n");
-/*	fprintf(stderr, "Program: samtools (Tools for alignments in the SAM format)\n"); */
-	fprintf(stderr, "Program: lofreq_samtools (LoFreq adapted version of samtools)\n");
+	fprintf(stderr, "Program: samtools (Tools for alignments in the SAM format)\n");
 	fprintf(stderr, "Version: %s\n\n", BAM_VERSION);
 	fprintf(stderr, "Usage:   samtools <command> [options]\n\n");
 	fprintf(stderr, "Command: view        SAM<->BAM conversion\n");
 	fprintf(stderr, "         sort        sort alignment file\n");
-	fprintf(stderr, "         mpileup     multi-way pileup (LoFreq specific)\n");
+	fprintf(stderr, "         mpileup     multi-way pileup\n");
 	fprintf(stderr, "         depth       compute the depth\n");
 	fprintf(stderr, "         faidx       index/extract FASTA\n");
 #if _CURSES_LIB != 0
 	fprintf(stderr, "         tview       text alignment viewer\n");
 #endif
 	fprintf(stderr, "         index       index alignment\n");
+#ifdef ORIG
 	fprintf(stderr, "         idxstats    BAM index stats (r595 or later)\n");
 	fprintf(stderr, "         fixmate     fix mate information\n");
 	fprintf(stderr, "         flagstat    simple stats\n");
@@ -54,7 +61,6 @@ static int usage()
 	fprintf(stderr, "         rmdup       remove PCR duplicates\n");
 	fprintf(stderr, "         reheader    replace BAM header\n");
 	fprintf(stderr, "         cat         concatenate BAMs\n");
-#if 0
 	fprintf(stderr, "         targetcut   cut fosmid regions (for fosmid pool only)\n");
 	fprintf(stderr, "         phase       phase heterozygotes\n");
 #endif
@@ -79,13 +85,20 @@ int main(int argc, char *argv[])
 #endif
 	if (argc < 2) return usage();
 	if (strcmp(argv[1], "view") == 0) return main_samview(argc-1, argv+1);
+#ifdef ORIG
 	else if (strcmp(argv[1], "import") == 0) return main_import(argc-1, argv+1);
+#endif
 	else if (strcmp(argv[1], "mpileup") == 0) return bam_mpileup(argc-1, argv+1);
+#ifdef ORIG
 	else if (strcmp(argv[1], "merge") == 0) return bam_merge(argc-1, argv+1);
 	else if (strcmp(argv[1], "sort") == 0) return bam_sort(argc-1, argv+1);
+#endif
 	else if (strcmp(argv[1], "index") == 0) return bam_index(argc-1, argv+1);
+#ifdef ORIG
 	else if (strcmp(argv[1], "idxstats") == 0) return bam_idxstats(argc-1, argv+1);
+#endif
 	else if (strcmp(argv[1], "faidx") == 0) return faidx_main(argc-1, argv+1);
+#ifdef ORIG
 	else if (strcmp(argv[1], "fixmate") == 0) return bam_mating(argc-1, argv+1);
 	else if (strcmp(argv[1], "rmdup") == 0) return bam_rmdup(argc-1, argv+1);
 	else if (strcmp(argv[1], "flagstat") == 0) return bam_flagstat(argc-1, argv+1);
@@ -93,11 +106,11 @@ int main(int argc, char *argv[])
 	else if (strcmp(argv[1], "fillmd") == 0) return bam_fillmd(argc-1, argv+1);
 	else if (strcmp(argv[1], "reheader") == 0) return main_reheader(argc-1, argv+1);
 	else if (strcmp(argv[1], "cat") == 0) return main_cat(argc-1, argv+1);
-#if 0
 	else if (strcmp(argv[1], "targetcut") == 0) return main_cut_target(argc-1, argv+1);
 	else if (strcmp(argv[1], "phase") == 0) return main_phase(argc-1, argv+1);
 #endif
 	else if (strcmp(argv[1], "depth") == 0) return main_depth(argc-1, argv+1);
+#ifdef ORIG
 	else if (strcmp(argv[1], "bam2fq") == 0) return main_bam2fq(argc-1, argv+1);
 	else if (strcmp(argv[1], "pileup") == 0) {
 		fprintf(stderr, "[main] The `pileup' command has been removed. Please use `mpileup' instead.\n");
@@ -105,6 +118,7 @@ int main(int argc, char *argv[])
 	}
 #if _CURSES_LIB != 0
 	else if (strcmp(argv[1], "tview") == 0) return bam_tview_main(argc-1, argv+1);
+#endif
 #endif
 	else {
 		fprintf(stderr, "[main] unrecognized command '%s'\n", argv[1]);
