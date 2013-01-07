@@ -39,3 +39,4 @@ install:
 
 clean-local:
 	 -$(PYTHON) setup.py clean
+	 -rm -rf ./build

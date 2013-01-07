@@ -1,0 +1,16 @@
+# backup files
+*~
+*#
+*.dSYM
+
+# objects
+*.o
+*.a
+*.lo
+*.la
+bam2depth
+
+Makefile
+Makefile.log
+.deps
+.libs
