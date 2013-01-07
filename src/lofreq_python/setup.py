@@ -1,11 +1,12 @@
 from distutils.core import setup, Extension
+# see also http://docs.python.org/distutils/setupscript.html
+
 import os
 import sys
-import subprocess
+#import subprocess
 
 import setup_conf
 
-# see also http://docs.python.org/distutils/setupscript.html
 
 DEBUG = False
 #DEBUG = True
@@ -25,30 +26,31 @@ else:
     EXTRA_COMPILE_ARGS.append('-g')
     # NDEBUG seems to be always define through Python's OPT
     EXTRA_COMPILE_ARGS.append('-UNDEBUG') 
-    
+
+
 # C extensions
 #
-#EXT_PATH = os.path.join("src", "ext")
-EXT_PATH = "lofreq_ext"
-EXT_SOURCES = [os.path.join(EXT_PATH, f)
-               for f in ["lofreq_ext.c", 
-                         "fet.c",
-                         ]
-               ]
-CDFLIBDIR = os.path.join('..', 'cdflib90')
-CDFLIB = os.path.join(CDFLIBDIR, "libcdf.a") # FIXME dirty hack
+#PYAPI_PATH = os.path.join("src", "ext")
+PYAPI_PATH = "lofreq_ext"
+PYAPI_SOURCES = [os.path.join(PYAPI_PATH, f)
+               for f in ["lofreq_ext.c"]]
+CDF_LIBDIR = os.path.join('..', 'cdflib90')
+CDF_LIB = os.path.join(CDF_LIBDIR, "libcdf.a")
+LOFREQCORE_LIBDIR = os.path.join('..', 'lofreq_core')
+LOFREQCORE_LIB = os.path.join(LOFREQCORE_LIBDIR, "liblofreq_core.a")
 
-def which(prog):
-    """make sure prog can be run
-    """
-    try:
-        subprocess.call([prog], 
-                        stderr=subprocess.PIPE, 
-                        stdout=subprocess.PIPE,)
-        return True
-    except OSError:
-        return False
 
+#def which(prog):
+#    """make sure prog can be run
+#    """
+#    try:
+#        subprocess.call([prog], 
+#                        stderr=subprocess.PIPE, 
+#                        stdout=subprocess.PIPE,)
+#        return True
+#    except OSError:
+#        return False
+#
     
 # checks
 #
@@ -59,25 +61,22 @@ if sys.version_info >= (2 , 8):
     sys.stderr.write("FATAL: sorry, Python versions above 2.8 are not supported\n")
     sys.exit(1)
 
-#for prog in ['lofreq_samtools']: FIXME only check if cmd is install, not build
-for prog in []:
-    if not which(prog):
-        sys.stderr.write("#\nWARNING: cannot find '%s',"
-                         " which should have been installed earlier.\n#\n" % prog)
-        raw_input("Press Enter to continue anyway.")
-
+#for prog in []:
+#    if not which(prog):
+#        sys.stderr.write("#\nWARNING: cannot find '%s',"
+#                         " which should have been installed earlier.\n#\n" % prog)
+#        raw_input("Press Enter to continue anyway.")
+#
 
 extension = Extension("lofreq_ext",
-                      EXT_SOURCES,
-                      include_dirs=[CDFLIBDIR],
+                      PYAPI_SOURCES,
+                      include_dirs=[CDF_LIBDIR, LOFREQCORE_LIBDIR],
                       define_macros=DEFINE_MACROS,
                       extra_compile_args=EXTRA_COMPILE_ARGS,
-                      extra_objects=[CDFLIB],
-                      depends=[os.path.join(CDFLIBDIR, "cdflib.h"), 
-                               os.path.join(EXT_PATH, "fet.h")],
-        
-#                      library_dirs=[CDFLIBDIR],
-#libraries=['cdf'],
+                      extra_objects=[CDF_LIB, LOFREQCORE_LIB],
+                      depends=[CDF_LIB, LOFREQCORE_LIBDIR],
+                      # libs statically linked using extra_objects instead of:
+                      # libraries=['cdf'], library_dirs=[CDFLIBDIR],
                       )
 
 # where modules reside:
@@ -89,7 +88,7 @@ setup(name = setup_conf.PACKAGE_NAME,
       description="Low frequency variant caller",
       author="Andreas Wilm",
       author_email=setup_conf.PACKAGE_BUGREPORT,
-      #long_description = """FIXME.""" 
+      long_description = """LoFreq is a fast and sensitive variant-caller for inferring single-nucleotide variants (SNVs) from high-throughput sequencing data""",
       url='https://sourceforge.net/p/lofreq/',
       scripts = [
           'scripts/lofreq_alnoffset.py',

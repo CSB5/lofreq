@@ -171,12 +171,13 @@ fi
 AC_SUBST([AM_CFLAGS])
 AC_SUBST([AM_LDFLAGS])
 
+AC_DEFINE([_USE_KNETFILE],[],[KNETFILE for samtools])
 
 AC_CONFIG_FILES(Makefile
         src/libbam/Makefile
         src/cdflib90/Makefile
+        src/lofreq_core/Makefile
         src/lofreq_samtools/Makefile
         src/lofreq_python/setup_conf.py        
         src/lofreq_python/Makefile)
-# FIXME src/lofreq_samtools/Makefile should go here eventually as well
 AC_OUTPUT

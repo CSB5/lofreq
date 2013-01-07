@@ -12,7 +12,6 @@
 int bam_mpileup(int argc, char *argv[]);
 int bam_index(int argc, char *argv[]);
 int main_samview(int argc, char *argv[]);
-int main_depth(int argc, char *argv[]);
 #else
 int bam_taf2baf(int argc, char *argv[]);
 int bam_mpileup(int argc, char *argv[]);
@@ -46,7 +45,9 @@ static int usage()
 	fprintf(stderr, "Command: view        SAM<->BAM conversion\n");
 	fprintf(stderr, "         sort        sort alignment file\n");
 	fprintf(stderr, "         mpileup     multi-way pileup\n");
+#ifdef ORIG
 	fprintf(stderr, "         depth       compute the depth\n");
+#endif
 	fprintf(stderr, "         faidx       index/extract FASTA\n");
 #if _CURSES_LIB != 0
 	fprintf(stderr, "         tview       text alignment viewer\n");
@@ -108,9 +109,7 @@ int main(int argc, char *argv[])
 	else if (strcmp(argv[1], "cat") == 0) return main_cat(argc-1, argv+1);
 	else if (strcmp(argv[1], "targetcut") == 0) return main_cut_target(argc-1, argv+1);
 	else if (strcmp(argv[1], "phase") == 0) return main_phase(argc-1, argv+1);
-#endif
 	else if (strcmp(argv[1], "depth") == 0) return main_depth(argc-1, argv+1);
-#ifdef ORIG
 	else if (strcmp(argv[1], "bam2fq") == 0) return main_bam2fq(argc-1, argv+1);
 	else if (strcmp(argv[1], "pileup") == 0) {
 		fprintf(stderr, "[main] The `pileup' command has been removed. Please use `mpileup' instead.\n");
