@@ -39,7 +39,7 @@ import os
 #
 from lofreq import utils
 from lofreq import conf
-
+from lofreq_ext import depth_stats
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
@@ -735,9 +735,11 @@ def auto_bonf_factor(bam, bed_file=None, excl_file=None, chrom=None):
 
 
 
-def auto_bonf_factor_from_depth(bam, bed_file=None,
+def __auto_bonf_factor_from_depth(bam, bed_file=None,
                                 min_base_q=3, min_map_q=0, samtools=conf.SAMTOOLS):
-    """Uses samtools depth to figure out Bonferroni factor
+    """DEPRECATED. Kept for testing.
+
+    Uses samtools depth to figure out Bonferroni factor
     automatically. Will ignore zero-coverage regions as opposed to
     auto_bonf_factor
     """
@@ -767,3 +769,30 @@ def auto_bonf_factor_from_depth(bam, bed_file=None,
    
     bonf_factor = int(num_cov_cols) * 3
     return bonf_factor
+
+
+def auto_bonf_factor_from_depth(bam, bed_file=None,
+                                min_base_q=3, min_map_q=0):
+    """Determines how many columns have coverage in BAM to figure out
+    Bonferroni factor automatically. Will ignore zero-coverage regions
+    as opposed to auto_bonf_factor
+
+    >>> FIXME doctest against __auto_bonf_factor_from_depth
+    """
+
+    assert os.path.exists(bam)
+    if bed_file:
+        assert os.path.exists(bed_file)
+
+
+    (mean_depth, num_nonzero_cols) = depth_stats(
+        bam, bed=bed_file, min_baseq=min_base_q, min_mapq=min_map_q)
+
+    bonf_factor = int(num_nonzero_cols) * 3
+    return bonf_factor
+
+
+#if __name__ == "__main__":
+#    import doctest
+#    doctest.testmod()
+    
