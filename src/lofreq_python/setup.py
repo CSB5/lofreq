@@ -9,7 +9,20 @@ import setup_conf
 
 DEBUG = False
 #DEBUG = True
-                
+
+
+# checks
+#
+if sys.version_info < (2 , 6):
+    sys.stderr.write("FATAL: sorry, Python versions"
+                     " below 2.6 are not supported\n")
+    sys.exit(1)
+if sys.version_info >= (2 , 8):
+    sys.stderr.write("FATAL: sorry, Python versions"
+                     " above 2.8 are not supported\n")
+    sys.exit(1)
+
+    
 DEFINE_MACROS = []
 EXTRA_COMPILE_ARGS = []
 if not DEBUG:
@@ -26,6 +39,7 @@ else:
     # NDEBUG seems to be always define through Python's OPT
     EXTRA_COMPILE_ARGS.append('-UNDEBUG') 
 
+    
 # C extensions
 #
 #PYAPI_PATH = os.path.join("src", "ext")
@@ -45,27 +59,18 @@ BAM_LIB = os.path.join(BAM_LIBDIR, "libbam.a")
 extraobjects.append(BAM_LIB)
 
    
-# checks
-#
-if sys.version_info < (2 , 6):
-    sys.stderr.write("FATAL: sorry, Python versions below 2.6 are not supported\n")
-    sys.exit(1)
-if sys.version_info >= (2 , 8):
-    sys.stderr.write("FATAL: sorry, Python versions above 2.8 are not supported\n")
-    sys.exit(1)
-
-
-    extension = Extension("lofreq_ext",
-                      PYAPI_SOURCES,
-                      include_dirs=[CDF_LIBDIR, LOFREQCORE_LIBDIR],
-                      define_macros=DEFINE_MACROS,
-                      extra_compile_args=EXTRA_COMPILE_ARGS,
-                      #extra_objects=[CDF_LIB, LOFREQCORE_LIB, BAM_LIB],
-                      extra_objects=[LOFREQCORE_LIB, CDF_LIB, BAM_LIB],
-                      #depends=[LOFREQCORE_LIB],
-                      # libs statically linked using extra_objects instead of:
-                      #libraries=['lofreq_core'], library_dirs=[libdir],
-                      )
+extension = Extension(
+    "lofreq_ext",
+    PYAPI_SOURCES,
+    include_dirs=[CDF_LIBDIR, LOFREQCORE_LIBDIR],
+    define_macros=DEFINE_MACROS,
+    extra_compile_args=EXTRA_COMPILE_ARGS,
+    #extra_objects=[CDF_LIB, LOFREQCORE_LIB, BAM_LIB],
+    extra_objects=[LOFREQCORE_LIB, CDF_LIB, BAM_LIB],
+    #depends=[LOFREQCORE_LIB],
+    # libs statically linked using extra_objects instead of:
+    #libraries=['lofreq_core'], library_dirs=[libdir],
+    )
 
 # where modules reside:
 package_dir = {'': setup_conf.PACKAGE_NAME.lower()}
