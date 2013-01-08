@@ -53,6 +53,7 @@
 #include "fet.h"
 #include "binom.h"
 #include "snpcaller.h"
+#include "bam2depth.h"
 
 #if TIMING
 #include <time.h>
@@ -97,6 +98,44 @@ static PyObject *py_phredqual_to_prob(PyObject *self, PyObject *args);
 static PyObject *py_prob_to_phredqual(PyObject *self, PyObject *args);
 
 
+
+/**
+ * @brief Python wrapper for depth_stats
+ *
+ */
+static PyObject *
+py_depth_stats(PyObject *self, PyObject *args, PyObject *keywds) {
+    double depth_mean;
+    long int depth_num_nonzero_pos;
+    static char *kwlist[] = {
+        "bam", "region", "bed", "min_baseq", "min_mapq", NULL};
+    char *bam = NULL;
+    char *region = NULL;
+    char *bed = NULL;
+    int min_baseq = 0;
+    int min_mapq = 0;
+    
+    if (!PyArg_ParseTupleAndKeywords(
+            args, keywds, "s|zzii", kwlist, 
+            &bam, &region, &bed, &min_baseq, &min_mapq)) {
+        PyErr_SetString(PyExc_TypeError, "Failed to parse arguments.");
+        return NULL; 
+    }
+
+#if 0
+    fprintf(stderr, "DEBUG bam=%s region=%s bed=%s min_baseq=%d min_mapq=%d",
+           bam, region, bed, min_baseq, min_mapq);
+#endif
+
+    if (0 != depth_stats(&depth_mean, &depth_num_nonzero_pos,
+                         bam, region, bed, &min_baseq, &min_mapq)) {
+        PyErr_SetString(PyExc_TypeError, "depth_stats failed");
+        return NULL;
+    }
+
+    return Py_BuildValue("(dl)", depth_mean, depth_num_nonzero_pos);
+}
+/* end of py_depth_stats() */
 
 
 
@@ -400,7 +439,8 @@ LoFreqExtMethods[] = {
      METH_VARARGS, "Cumulative density function."},
     {"kt_fisher_exact", py_kt_fisher_exact,
      METH_VARARGS, "Fisher's Exact Test"},
-
+    {"depth_stats", (PyCFunction)py_depth_stats,
+     METH_VARARGS|METH_KEYWORDS, "BAM depth stats"},
 
     /* only for testing */
     {"_phredqual_to_prob", py_phredqual_to_prob,
