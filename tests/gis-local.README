@@ -1,0 +1,30 @@
+Local notes to test installation on a specific host within GIS, not using
+the shared installation:
+
+Can't use /mnt/software/bin/python as this will change PYTHONPATH and always
+point to the lofreq installation in /mnt/software.
+Either use another python installation or install scripts, set PYTHONPATH
+and use python-real
+
+# install
+host=gemini
+find ~/local/$host/ -name \*lofreq\* | xargs -r echo rm -rf
+cd /home/wilma/snpcaller/lofreq-git
+make clean; ./configure --prefix=/home/wilma/local/${host}/; make -j; make install
+
+# mod env
+export PYTHONPATH=/home/wilma/local/${host}/lib/python2.7/site-packages/
+export PYTHONPATH=$PYTHONPATH:/mnt/software/stow/python_modules/lib/python2.7/site-packages/
+export PATH=/home/wilma/local/${host}/bin:$PATH
+
+# tests
+grep '^#!' ~/local/${host}/bin/lofreq_*py | grep -v '-real$' && echo "WRONG INTERPRETER" 1>&2
+# this is not the stow *installed* lib path. there should be no lofreq file there
+python2.7-real -c 'import lofreq; print lofreq.__file__' && grep -q ${host} || echo "WRONG LOFREQ LIB" 1>&2
+
+cd tests
+bash run_all.sh 
+
+NOTE: doctest.sh will fail because that's explicitely calling python
+
+
