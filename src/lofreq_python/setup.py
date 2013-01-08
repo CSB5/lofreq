@@ -57,7 +57,6 @@ extraobjects.append(LOFREQCORE_LIB)
 BAM_LIBDIR = os.path.join('..', 'libbam')
 BAM_LIB = os.path.join(BAM_LIBDIR, "libbam.a")
 extraobjects.append(BAM_LIB)
-
    
 extension = Extension(
     "lofreq_ext",
@@ -69,7 +68,7 @@ extension = Extension(
     extra_objects=[LOFREQCORE_LIB, CDF_LIB, BAM_LIB],
     #depends=[LOFREQCORE_LIB],
     # libs statically linked using extra_objects instead of:
-    #libraries=['lofreq_core'], library_dirs=[libdir],
+    libraries=['z'],# library_dirs=[libdir],
     )
 
 # where modules reside:
