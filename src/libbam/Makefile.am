@@ -1,5 +1,5 @@
-#SUBDIRS = bcftools
-AM_CFLAGS=-D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -Wall
+AM_CFLAGS = -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -Wall -fPIC
+AM_LDFLAGS = -shared -fPIC
 # -D_USE_KNETFILE defined by toplevel configure to make it active across sub-sources
 KNETFILE = knetfile.c
 noinst_LIBRARIES = libbam.a
@@ -17,17 +17,4 @@ libbam_a_SOURCES = bgzf.c kstring.c bam_aux.c bam.c bam_import.c \
 	sam.c bam_index.c bam_pileup.c bam_lpileup.c bam_md.c razf.c \
 	faidx.c bedidx.c $(KNETFILE) sam_header.c \
 	kprobaln.c
-
-#libbam_la_LIBADD = bcftools/libbcf.la
-#libbam_la_LDFLAGS = -static
-#library_includedir=$(includedir)/clustalo/
-#library_include_HEADERS = clustal-omega-config.h clustal-omega.h
-
-
-#bin_PROGRAMS = lofreq_samtools
-#lofreq_samtools_SOURCES = bam_plcmd.c sam_view.c \
-#	bam_rmdup.c bam_rmdupse.c bam_mate.c bam_stat.c bam_color.c \
-#	bamtk.c kaln.c bam2bcf.c bam2bcf_indel.c errmod.c sample.c \
-#	bam2depth.c
-#lofreq_samtools_LDADD = bcftools/libbcf.la libbam.la
 

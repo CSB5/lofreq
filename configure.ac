@@ -1,6 +1,6 @@
 # configure.ac for LoFreq
 #
-# based on configure.ac for Clustal Omega
+# Based on configure.ac for Clustal Omega
 
 
 AC_PREREQ(2.6) # 2.60 needed for AC_USE_SYSTEM_EXTENSIONS
@@ -59,9 +59,12 @@ AC_PROG_MAKE_SET
 # AC_PROG_RANLIB will allow you to build code in sub-directories into
 # temporary libraries, which make will then link in with the rest of
 # the code.
-# Rendered obsolte by LT_INIT: AC_PROG_RANLIB
-#AC_PROG_LIBTOOL
-LT_INIT
+# AC_PROG_RANLIB rendered obsolte by LT_INIT
+#
+# disable-static: Need to disable static libraries, otherwise we can't
+# link them into the dynamically loaded Python extension
+#
+LT_INIT([disable-static])
 
 # AC_PROG_INSTALL will generate an install target so that users may
 # just type 'make install' to install the software.
