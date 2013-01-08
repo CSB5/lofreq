@@ -7,7 +7,6 @@ import sys
 
 import setup_conf
 
-
 DEBUG = False
 #DEBUG = True
                 
@@ -27,31 +26,25 @@ else:
     # NDEBUG seems to be always define through Python's OPT
     EXTRA_COMPILE_ARGS.append('-UNDEBUG') 
 
-
 # C extensions
 #
 #PYAPI_PATH = os.path.join("src", "ext")
 PYAPI_PATH = "lofreq_ext"
 PYAPI_SOURCES = [os.path.join(PYAPI_PATH, f)
                for f in ["lofreq_ext.c"]]
+# The libraries to link against / to include
+extraobjects = []
 CDF_LIBDIR = os.path.join('..', 'cdflib90')
 CDF_LIB = os.path.join(CDF_LIBDIR, "libcdf.a")
+extraobjects.append(CDF_LIB)
 LOFREQCORE_LIBDIR = os.path.join('..', 'lofreq_core')
 LOFREQCORE_LIB = os.path.join(LOFREQCORE_LIBDIR, "liblofreq_core.a")
+extraobjects.append(LOFREQCORE_LIB)
+BAM_LIBDIR = os.path.join('..', 'libbam')
+BAM_LIB = os.path.join(BAM_LIBDIR, "libbam.a")
+extraobjects.append(BAM_LIB)
 
-
-#def which(prog):
-#    """make sure prog can be run
-#    """
-#    try:
-#        subprocess.call([prog], 
-#                        stderr=subprocess.PIPE, 
-#                        stdout=subprocess.PIPE,)
-#        return True
-#    except OSError:
-#        return False
-#
-    
+   
 # checks
 #
 if sys.version_info < (2 , 6):
@@ -61,22 +54,17 @@ if sys.version_info >= (2 , 8):
     sys.stderr.write("FATAL: sorry, Python versions above 2.8 are not supported\n")
     sys.exit(1)
 
-#for prog in []:
-#    if not which(prog):
-#        sys.stderr.write("#\nWARNING: cannot find '%s',"
-#                         " which should have been installed earlier.\n#\n" % prog)
-#        raw_input("Press Enter to continue anyway.")
-#
 
-extension = Extension("lofreq_ext",
+    extension = Extension("lofreq_ext",
                       PYAPI_SOURCES,
                       include_dirs=[CDF_LIBDIR, LOFREQCORE_LIBDIR],
                       define_macros=DEFINE_MACROS,
                       extra_compile_args=EXTRA_COMPILE_ARGS,
-                      extra_objects=[CDF_LIB, LOFREQCORE_LIB],
-                      depends=[CDF_LIB, LOFREQCORE_LIBDIR],
+                      #extra_objects=[CDF_LIB, LOFREQCORE_LIB, BAM_LIB],
+                      extra_objects=[LOFREQCORE_LIB, CDF_LIB, BAM_LIB],
+                      #depends=[LOFREQCORE_LIB],
                       # libs statically linked using extra_objects instead of:
-                      # libraries=['cdf'], library_dirs=[CDFLIBDIR],
+                      #libraries=['lofreq_core'], library_dirs=[libdir],
                       )
 
 # where modules reside:
@@ -118,4 +106,3 @@ setup(name = setup_conf.PACKAGE_NAME,
                    ],
       keywords='bioinformatics'
       )
-
