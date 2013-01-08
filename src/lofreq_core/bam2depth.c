@@ -34,7 +34,7 @@ static int read_bam(void *data, bam1_t *b) // read level filters better go here 
 
 /* based on main_depth(). differences: only allowing on bam as input.
  * zero arg == unset. output is mean (based on non-zero columns) and
- * number of non-zero columns
+ * number of non-zero columns (ret_mean, ret_num_nonzero_pos)
  */
 int depth_stats(double *ret_mean, long int *ret_num_nonzero_pos,
                 char *bam_file, 
@@ -67,6 +67,21 @@ int depth_stats(double *ret_mean, long int *ret_num_nonzero_pos,
          bed = bed_read(usr_bed_file);
     }
     assert(NULL != bam_file);
+
+    if (! file_exists(bam_file)) {
+         fprintf(stderr, 
+                 "ERROR: BAM file does not exist: '%s'\n", 
+                 bam_file);
+         return -1;
+    }
+    if (NULL != usr_bed_file && ! file_exists(usr_bed_file)) {
+         fprintf(stderr, 
+                 "ERROR: given BED file does not exist: '%s'\n", 
+                 usr_bed_file);
+         return -1;
+    }
+
+
 	// initialize the auxiliary data structures
 	/* n = 1; // the number of BAMs on the command line */
     /* AW: set n to 1 and changed argv[optindx+i] to bam_file to keep
@@ -170,9 +185,9 @@ int main(int argc, char *argv[])
           depth_stats(&mean, &num_nonzero_pos,
                       bam_file, 
                       reg, bed_file, &baseQ, &mapQ);
-          
-          printf("%s mean=%.2f based on %ld pos\n", 
-                 bam_file, mean, num_nonzero_pos);
+#if 0          
+          printf("%s mean=%.2f based on %ld pos\n", bam_file, mean, num_nonzero_pos);
+#endif
      }   
 
      return 0;
