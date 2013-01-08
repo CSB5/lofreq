@@ -339,13 +339,13 @@ def cmdline_parser():
                           " (default: %d)" % conf.DEFAULT_IGN_BASES_BELOW_Q)
     filter_group.add_option("", "--bonf",
                             dest="bonf", 
-                            default='auto',
+                            default='auto-ign-zero-cov',
                             help="Bonferroni correction factor."
-                            " Set to an integer, 'auto' (default) or"
+                            " Set to an integer, 'auto' or"
                             " 'auto-ign-zero-cov'. 'auto' will use a"
                              " stringent and recommmended seqlen*3."
-                            " 'auto-ign-zero-cov' is the same as 'auto'"
-                            " but ignores zero coverage columns")
+                            " 'auto-ign-zero-cov' (default) is the same"
+                            " as 'auto' but ignores zero coverage columns")
     filter_group.add_option("-s", "--sig-level",
                       dest="sig_thresh", type="float",
                       default=conf.DEFAULT_SIG_THRESH,
@@ -639,13 +639,13 @@ def main():
     #
     sig_thresh = opts.sig_thresh
     if opts.bonf == "auto":
-        bonf_factor = sam.auto_bonf_factor_from_depth(
-            opts.bam, opts.region_bed, opts.ign_bases_below_q)
+        bonf_factor = sam.auto_bonf_factor(
+            opts.bam, opts.region_bed)
         LOG.info("Will use an automatically determined (len*3) Bonferroni"
                  " factor of %d." % (bonf_factor))
     elif opts.bonf == 'auto-ign-zero-cov':
-        bonf_factor = sam.auto_bonf_factor(
-            opts.bam, opts.region_bed)
+        bonf_factor = sam.auto_bonf_factor_from_depth(
+            opts.bam, opts.region_bed, opts.ign_bases_below_q)
         LOG.info("Will use an automatically determined"
                  " (non-zero-cov-len*3) Bonferroni"
                  " factor of %d." % (bonf_factor))
