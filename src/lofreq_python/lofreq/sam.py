@@ -205,7 +205,8 @@ class PileupColumn():
 
         # convert quals immediately to phred scale
         quals = [ord(c)-33 for c in line_split[5]]
-
+        assert all([q>=0 and q<100 for q in quals])
+        
         # convert special reference markup to actual reference
         bases = bases.replace(".", self.ref_base.upper())
         bases = bases.replace(",", self.ref_base.lower())
