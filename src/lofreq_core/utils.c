@@ -1,6 +1,8 @@
 /* -*- mode: c; tab-width: 4; c-basic-offset: 4;  indent-tabs-mode: nil -*- */
 
 #include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 /*********************************************************************
  *
@@ -28,4 +30,34 @@ int file_exists(char *fname)
   } else {
       return 0;
   }
+}
+
+/* from http://www.anyexample.com/programming/c/how_to_load_file_into_memory_using_plain_ansi_c_language.xml
+ *
+ * returns file size (number of bytes) on success or negative number
+ * on error
+ */
+int ae_load_file_to_memory(const char *filename, char **result) 
+{ 
+	int size = 0;
+	FILE *f = fopen(filename, "rb");
+	if (f == NULL) 
+	{ 
+		*result = NULL;
+		return -1; // -1 means file opening fail 
+	} 
+	fseek(f, 0, SEEK_END);
+	size = ftell(f);
+	fseek(f, 0, SEEK_SET);
+	*result = (char *)malloc(size+1);
+    if (NULL==result)
+        return -2;
+	if (size != fread(*result, sizeof(char), size, f)) 
+	{ 
+		free(*result);
+		return -3; /* -2 means file reading fail  */
+	} 
+	fclose(f);
+	(*result)[size] = 0;
+	return size;
 }

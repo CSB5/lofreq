@@ -1,3 +1,16 @@
+/* -*- mode: c; tab-width: 4; c-basic-offset: 4;  indent-tabs-mode: nil -*- */
+
+/* samtools' sam_view.c with some modification. for a stand-alone test
+ * binary compile with
+ *
+ * gcc -Wall sam_view.c -o view -I../libbam/ -L../libbam -lbam -lz -DFLAG 
+ *
+ * where FLAG is one of SAM_VIEW_ORIG to get the original 'samtools
+ * view', or SAM_VIEW_MAIN to get a standalone program testing the new
+ * API
+ * 
+ */
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -9,6 +22,10 @@
 #include "kstring.h"
 #include "khash.h"
 KHASH_SET_INIT_STR(rg)
+
+#include <assert.h>
+#include "sam_view.h"
+
 
 // When counting records instead of printing them,
 // data passed to the bam_fetch callback is encapsulated in this struct.
@@ -29,6 +46,34 @@ static void *g_bed;
 void *bed_read(const char *fn);
 void bed_destroy(void *_h);
 int bed_overlap(const void *_h, const char *chr, int beg, int end);
+
+
+int
+new_sam_view_opts(sam_view_opts_t **svo) 
+{
+    (*svo) = calloc(1, sizeof(sam_view_opts_t));
+    if (NULL == (*svo)) return -1;
+
+    (*svo)->g_subsam = -1;
+    (*svo)->is_bamin = 1;
+    (*svo)->compress_level = -1;
+    return 0;
+}
+
+void
+free_sam_view_opts(sam_view_opts_t **svo) 
+{
+  free((*svo)->fn_out);
+  free((*svo)->fn_list);
+  free((*svo)->fn_ref);
+  free((*svo)->fn_rg);
+  free((*svo)->g_library);
+  free((*svo)->g_rg);
+  /*if ((*svo)->g_bed) bed_destroy((*svo)->g_bed);*/ free((*svo)->bed_file);
+  free(*svo);
+}
+
+
 
 static inline int __g_skip_aln(const bam_header_t *h, const bam1_t *b)
 {
@@ -108,16 +153,32 @@ static int count_func(const bam1_t *b, void *data)
 
 static int usage(int is_long_help);
 
+
+
+#ifdef SAM_VIEW_ORIG
 int main_samview(int argc, char *argv[])
+#else
+int main_samview(char *bam_file, sam_view_opts_t *svo)
+#endif
 {
 	int c, is_header = 0, is_header_only = 0, is_bamin = 1, ret = 0, compress_level = -1, is_bamout = 0, is_count = 0;
 	int of_type = BAM_OFDEC, is_long_help = 0;
 	int count = 0;
 	samfile_t *in = 0, *out = 0;
 	char in_mode[5], out_mode[5], *fn_out = 0, *fn_list = 0, *fn_ref = 0, *fn_rg = 0;
+#ifndef SAM_VIEW_ORIG
+    int optind = 1;
+    char *argv[1];
+    int argc = 2;
+    argv[1] = bam_file;
+
+    assert(NULL != bam_file);
+    assert(NULL != svo);
+#endif
 
 	/* parse command-line options */
 	strcpy(in_mode, "r"); strcpy(out_mode, "w");
+#ifdef SAM_VIEW_ORIG
 	while ((c = getopt(argc, argv, "Sbct:h1Ho:q:f:F:ul:r:xX?T:R:L:s:")) >= 0) {
 		switch (c) {
 		case 's': g_subsam = atof(optarg); break;
@@ -144,6 +205,34 @@ int main_samview(int argc, char *argv[])
 		default: return usage(is_long_help);
 		}
 	}
+#else
+    g_subsam = svo->g_subsam;
+    is_count = svo->is_count;
+    is_bamin = svo->is_bamin;
+    is_bamout = svo->is_bamout;
+    fn_list = svo->fn_list;
+    is_header = svo->is_header;
+    is_header_only = svo->is_header_only;
+    fn_out = svo->fn_out;
+    g_flag_on = svo->g_flag_on;
+    g_flag_off = svo->g_flag_off;
+    g_min_mapQ = svo->g_min_mapQ;
+    compress_level = svo->compress_level;
+    g_library = svo->g_library;
+    if (svo->bed_file)
+        g_bed = bed_read(svo->bed_file);
+    g_rg = svo->g_rg;
+    fn_rg = svo->fn_rg;
+    of_type = svo->of_type;
+    is_long_help = svo->is_long_help;
+    fn_ref = svo->fn_ref;
+
+/* special handling of these combinations necessary?
+   case 't': fn_list = strdup(optarg); is_bamin = 0; break;
+   case 'T': fn_ref = strdup(optarg); is_bamin = 0; break;
+*/
+#endif
+
 	if (compress_level >= 0) is_bamout = 1;
 	if (is_header_only) is_header = 1;
 	if (is_bamout) strcat(out_mode, "b");
@@ -158,7 +247,9 @@ int main_samview(int argc, char *argv[])
 		tmp[0] = compress_level + '0'; tmp[1] = '\0';
 		strcat(out_mode, tmp);
 	}
+#if SAM_VIEW_ORIG
 	if (argc == optind) return usage(is_long_help); // potential memory leak...
+#endif
 
 	// read the list of read groups
 	if (fn_rg) {
@@ -250,7 +341,11 @@ view_end:
 		printf("%d\n", count);
 	}
 	// close files, free and return
+#ifdef SAM_VIEW_ORIG
 	free(fn_list); free(fn_ref); free(fn_out); free(g_library); free(g_rg); free(fn_rg);
+#else
+    /* above pointing to svo members which should be freed by called with free_sam_view_opts() */
+#endif
 	if (g_bed) bed_destroy(g_bed);
 	if (g_rghash) {
 		khint_t k;
@@ -323,6 +418,7 @@ static int usage(int is_long_help)
 	return 1;
 }
 
+#ifdef SAM_VIEW_ORIG
 int main_import(int argc, char *argv[])
 {
 	int argc2, ret;
@@ -338,6 +434,7 @@ int main_import(int argc, char *argv[])
 	free(argv2);
 	return ret;
 }
+#endif
 
 int8_t seq_comp_table[16] = { 0, 8, 4, 12, 2, 10, 9, 14, 1, 6, 5, 13, 3, 11, 7, 15 };
 
@@ -404,3 +501,49 @@ int main_bam2fq(int argc, char *argv[])
 	bam_close(fp);
 	return 0;
 }
+
+
+#ifdef SAM_VIEW_ORIG
+int main(int argc, char *argv[]) 
+{
+    return main_samview(argc, argv);
+}
+#elif SAM_VIEW_MAIN
+int main(int argc, char *argv[]) 
+{
+    sam_view_opts_t *svo;
+    char *in = NULL, *out = NULL;
+
+    if (argc>3 || argc<2) {
+        fprintf(stderr, "FATAL: need BAM file and optional output file as arg\n");
+        return EXIT_FAILURE;
+    }
+
+    if (new_sam_view_opts(&svo)) {
+        fprintf(stderr, "FATAL: Couldn't setup new options. Exiting\n");
+        return EXIT_FAILURE;
+    }
+    
+    in = argv[1];
+    if (argc==3) {
+        out = argv[2];
+        svo->fn_out = strdup(out);
+    }
+    fprintf(stdout, "printing from %s to %s:\n", in, out? out : "-");
+    /* see http://stackoverflow.com/questions/955962/how-to-buffer-stdout-in-memory-and-write-it-from-a-dedicated-thread
+       for how to catch */
+
+    fprintf(stdout, "printing headers only\n");
+    svo->is_header_only = 1;
+
+    if (main_samview(argv[1], svo)) {
+        fprintf(stderr, "FATAL: processing of '%s' failed. Exiting\n", in);
+        return EXIT_FAILURE;
+    }
+
+    free_sam_view_opts(&svo);
+
+    return EXIT_SUCCESS;
+}
+
+#endif

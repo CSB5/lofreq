@@ -10,9 +10,9 @@
 
 #ifndef ORIG
 int bam_mpileup(int argc, char *argv[]);
+#else
 int bam_index(int argc, char *argv[]);
 int main_samview(int argc, char *argv[]);
-#else
 int bam_taf2baf(int argc, char *argv[]);
 int bam_mpileup(int argc, char *argv[]);
 int bam_merge(int argc, char *argv[]);
@@ -42,8 +42,10 @@ static int usage()
 	fprintf(stderr, "Program: samtools (Tools for alignments in the SAM format)\n");
 	fprintf(stderr, "Version: %s\n\n", BAM_VERSION);
 	fprintf(stderr, "Usage:   samtools <command> [options]\n\n");
+#ifdef ORIG
 	fprintf(stderr, "Command: view        SAM<->BAM conversion\n");
 	fprintf(stderr, "         sort        sort alignment file\n");
+#endif
 	fprintf(stderr, "         mpileup     multi-way pileup\n");
 #ifdef ORIG
 	fprintf(stderr, "         depth       compute the depth\n");
@@ -85,17 +87,17 @@ int main(int argc, char *argv[])
 #endif
 #endif
 	if (argc < 2) return usage();
-	if (strcmp(argv[1], "view") == 0) return main_samview(argc-1, argv+1);
 #ifdef ORIG
+	if (strcmp(argv[1], "view") == 0) return main_samview(argc-1, argv+1);
 	else if (strcmp(argv[1], "import") == 0) return main_import(argc-1, argv+1);
+
+	else
 #endif
-	else if (strcmp(argv[1], "mpileup") == 0) return bam_mpileup(argc-1, argv+1);
+ if (strcmp(argv[1], "mpileup") == 0) return bam_mpileup(argc-1, argv+1);
 #ifdef ORIG
 	else if (strcmp(argv[1], "merge") == 0) return bam_merge(argc-1, argv+1);
 	else if (strcmp(argv[1], "sort") == 0) return bam_sort(argc-1, argv+1);
-#endif
 	else if (strcmp(argv[1], "index") == 0) return bam_index(argc-1, argv+1);
-#ifdef ORIG
 	else if (strcmp(argv[1], "idxstats") == 0) return bam_idxstats(argc-1, argv+1);
 #endif
 	else if (strcmp(argv[1], "faidx") == 0) return faidx_main(argc-1, argv+1);

@@ -5,7 +5,7 @@ source lib.sh || exit 1
 
 # testing depth functions
 
-bam="../../lofreq-test-data/denv2-multiplex-replicates/ATCACG_1.bam"
+bam="../../lofreq-test-data/denv2-multiplex-replicates/TTAGGC_1.bam"
 reg="consensus:1-100"
 
 # Python API versus samtools and awk
@@ -19,11 +19,20 @@ else
 fi
 
 # auto bonferroni using Python API versus samtools sys call
-autobonfdepth_py=$(python -c 'from lofreq import sam; print sam.auto_bonf_factor_from_depth("../../lofreq-test-data/denv2-multiplex-replicates/ATCACG_1.bam")')
-autobonfdepth_st=$(python -c 'from lofreq import sam; print sam.__auto_bonf_factor_from_depth("../../lofreq-test-data/denv2-multiplex-replicates/ATCACG_1.bam", samtools="samtools")')
+autobonfdepth_py=$(python -c "from lofreq import sam; print sam.auto_bonf_factor_from_depth(\"$bam\")")
+autobonfdepth_st=$(python -c "from lofreq import sam; print sam.__auto_bonf_factor_from_depth(\"$bam\", samtools=\"samtools\")")
 #echo "DEBUG: autobonfdepth_py=$autobonfdepth_py autobonfdepth_st=$autobonfdepth_st" 1>&2
 if [ "$autobonfdepth_py" != "$autobonfdepth_st" ]; then
     echoerror "Samtools and Python auto_bonf_factor_from_depth() implementations differ"
 else
     echook "Samtools and Python auto_bonf_factor_from_depth() give identical result"
+fi
+
+
+header_st=$(python -c "from lofreq import sam; print sam.sam_header(\"$bam\")")
+header_py=$(python -c "from lofreq import sam; print sam.__sam_header(\"$bam\", \"samtools\")")
+if [ "$header_st" != "$header_py" ]; then
+    echoerror "Samtools and Python sam_header implementations differ"
+else
+    echook "Samtools and Python sam_header implementations give identical result"
 fi

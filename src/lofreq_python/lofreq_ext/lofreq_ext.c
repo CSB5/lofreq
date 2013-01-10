@@ -54,6 +54,8 @@
 #include "binom.h"
 #include "snpcaller.h"
 #include "bam2depth.h"
+#include "sam_view.h"
+#include "utils.h"
 
 #if TIMING
 #include <time.h>
@@ -230,6 +232,60 @@ py_binom_cdf(PyObject *self, PyObject *args)
 }
 /* end of py_binom_cdf() */
 
+
+/**
+ * @brief Python wrapper for getting header from a SAM/BAM file
+ *
+ */
+static PyObject *
+py_read_sam_header(PyObject *self, PyObject *args)
+{
+    int is_bam = 1;
+    char *bam_file = NULL;
+    sam_view_opts_t *svo = NULL;
+	char *header_buf = NULL; 
+    int header_size = 0;
+    PyObject *py_header;
+
+    if (!PyArg_ParseTuple(args, "s|i",
+                          & bam_file,
+                          & is_bam)) {
+        PyErr_SetString(PyExc_TypeError, "Failed to parse arguments.");
+        return NULL;
+    }
+
+    if (new_sam_view_opts(&svo)) {
+        PyErr_SetString(PyExc_TypeError, "new_sam_view_opts() failed\n");
+        return NULL;
+    }
+    if (! is_bam) {
+        svo->is_bamin = 0;
+    }
+    svo->fn_out = strdup(tmpnam(NULL));
+    svo->is_header_only = 1;
+    
+    if (main_samview(bam_file, svo)) {
+        PyErr_SetString(PyExc_TypeError, "main_samview() failed\n");
+        free_sam_view_opts(&svo);
+        return NULL;
+    }
+
+    header_size = ae_load_file_to_memory(svo->fn_out, &header_buf);
+    if (header_size < 0) {
+        PyErr_SetString(PyExc_TypeError, "Couldn't read header file\n");
+        free_sam_view_opts(&svo);
+        return NULL;        
+    }
+
+    py_header = Py_BuildValue("s", header_buf);
+
+    unlink(svo->fn_out);
+    free_sam_view_opts(&svo);
+    free(header_buf);
+
+    return py_header;
+}
+/* end of py_read_sam_header() */
 
 
 /**
@@ -439,6 +495,8 @@ LoFreqExtMethods[] = {
      METH_VARARGS, "Cumulative density function."},
     {"kt_fisher_exact", py_kt_fisher_exact,
      METH_VARARGS, "Fisher's Exact Test"},
+    {"read_sam_header", py_read_sam_header,
+     METH_VARARGS, "Get header from SAM/BAM file"},
     {"depth_stats", (PyCFunction)py_depth_stats,
      METH_VARARGS|METH_KEYWORDS, "BAM depth stats"},
 
