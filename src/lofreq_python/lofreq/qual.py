@@ -47,7 +47,20 @@ logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
 
+def median(alist):
+    """Compute median of list
+    Taken from http://stackoverflow.com/questions/7578689/median-code-explanation
+    """
+    
+    srtd = sorted(alist) # returns a sorted copy
+    mid = len(alist)//2 # double slash unconditionally truncates
 
+    if len(alist) % 2 == 0:  # take the avg of middle two
+        return (srtd[mid-1] + srtd[mid]) / 2.0
+    else:
+        return srtd[mid]
+
+    
 class QualBasedSNPCaller(object):
     """
     Quality/probabilty based SNP caller.
@@ -69,9 +82,10 @@ class QualBasedSNPCaller(object):
         below this quality will be completely ignored.
         """
 
-        assert isinstance(noncons_default_qual, int)
-        assert isinstance(noncons_filter_qual, int)
+        # allowed to be 'median' instead of int
+        assert isinstance(noncons_default_qual, int) or noncons_default_qual == 'median'
         assert isinstance(bonf_factor, int)
+        assert isinstance(noncons_filter_qual, int)
 
         self.replace_noncons_quals = True
         self.noncons_default_qual = noncons_default_qual
@@ -79,7 +93,7 @@ class QualBasedSNPCaller(object):
         self.ign_bases_below_q = ign_bases_below_q
         self.bonf_factor = bonf_factor
         self.sig_thresh = sig_thresh
-        LOG.debug("New QualBasedSNPCaller: noncons default qual = %d"
+        LOG.debug("New QualBasedSNPCaller: noncons default qual = %s"
                   ", noncons filter qual = %d"
                   ", ign_bases_below_q = %d"
                   ", bonferroni factor = %d"
@@ -138,7 +152,13 @@ class QualBasedSNPCaller(object):
         # add a default value for each non consensus base
         # (WARNING: reusing cons_quals!)
         base_quals = cons_quals
-        base_quals.extend([self.noncons_default_qual] * sum(noncons_counts_dict.values()))
+        if self.noncons_default_qual == 'median':
+            m = int(median(cons_quals)) # need int, but median might be float
+            base_quals.extend(
+                [m] * sum(noncons_counts_dict.values()))
+        else:
+            base_quals.extend(
+                [self.noncons_default_qual] * sum(noncons_counts_dict.values()))
       
         
         # need noncons counts and bases in order since only counts are
