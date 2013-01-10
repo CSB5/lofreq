@@ -376,10 +376,10 @@ def cmdline_parser():
     
     qual_group = OptionGroup(parser, "Advanced Options for quality-aware stage (LoFreq-Q)", "")
     qual_group.add_option("", "--noncons-default-qual",
-                          dest="noncons_default_qual", type="int",
+                          dest="noncons_default_qual",
                           default=conf.NONCONS_DEFAULT_QUAL,
-                          help="Base call quality used for non-consensus bases"
-                          " (default: %d)" % conf.NONCONS_DEFAULT_QUAL)
+                          help="Base call quality used for non-consensus bases (or 'median' to use median of ref bases)"
+                          " (default: %s)" % conf.NONCONS_DEFAULT_QUAL)
     qual_group.add_option("", "--noncons-filter-qual",
                           dest="noncons_filter_qual", type="int",
                           default=conf.NONCONS_FILTER_QUAL,
@@ -621,7 +621,11 @@ def main():
     # quality filter settings (for quality based method)
     #
     noncons_filter_qual = opts.noncons_filter_qual
-    noncons_default_qual = opts.noncons_default_qual
+    if opts.noncons_default_qual == 'median':
+        noncons_default_qual = opts.noncons_default_qual
+    else:
+        noncons_default_qual = int(opts.noncons_default_qual)
+        
     ign_bases_below_q = opts.ign_bases_below_q
 
     # em setting
