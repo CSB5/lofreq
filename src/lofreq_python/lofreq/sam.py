@@ -39,7 +39,7 @@ import os
 #
 from lofreq import utils
 from lofreq import conf
-from lofreq_ext import depth_stats
+from lofreq_ext import depth_stats, read_sam_header
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
@@ -191,7 +191,7 @@ class PileupColumn():
         assert self.coord == None, (
             "Seems like I already read some values")
 
-        line_split = line.split('\t')
+        line_split = line.rstrip().split('\t')
         assert len(line_split) == 6, (
             "Couldn't parse pileup line: '%s'" % line)
 
@@ -586,7 +586,7 @@ def len_for_sq(header, sq):
         
             
     
-def sam_header(fbam, samtools=conf.SAMTOOLS):
+def __sam_header(fbam, samtools=conf.SAMTOOLS):
     """
     Calls 'samtools -H view', parse output and return
     
@@ -636,6 +636,14 @@ def sam_header(fbam, samtools=conf.SAMTOOLS):
             LOG.warn("Unhandled line on stderr detected: %s" % (line))
 
     return str.splitlines(stdoutdata)
+
+
+
+def sam_header(bam_file, is_bam=True):
+    """Read SAM header"""
+
+    header = read_sam_header(bam_file, is_bam)
+    return str.splitlines(header)
 
 
 def samtools_version(samtools):
