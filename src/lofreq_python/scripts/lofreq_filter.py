@@ -78,7 +78,8 @@ def cmdline_parser():
                       help="enable debugging")
     parser.add_option("-i", "--snp_infile",
                       dest="snp_infile",
-                      help="SNP input file (- for stdin)")
+                      default="-",
+                      help="SNP input file (- for stdin = default)")
     parser.add_option("-o", "--outfile",
                       dest="snp_outfile",
                       default="-",
