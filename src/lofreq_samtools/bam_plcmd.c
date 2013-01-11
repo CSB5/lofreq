@@ -484,6 +484,11 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
                            nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos)];
                            nt = bam1_strand(p->b)? tolower(nt) : toupper(nt);
                            
+                           /* FIXME get rid of unnecessary +- 33
+                            * business here. Use only Phred values
+                            * which are the scores -33.
+                            */
+
                            bq = bam1_qual(p->b)[p->qpos] + 33;
                            if (bq > 126) bq = 126; /* Sanger max */
 
@@ -492,8 +497,17 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
                             * c = plp[i][j].b->core.qual + 33;
                             */
                            mq = p->b->core.qual + 33;
-                           if (mq > 126) mq = 126; /* Sanger max? */
                            
+                           /* samtools check to detect Sanger max
+                            * value: problem is that an MQ Phred of
+                            * 255 means NA according to the samtools
+                            * spec (needed below). This however is not
+                            * detectable if the following original
+                            * samtools line gets executed:
+
+                            if (mq > 126) mq = 126;
+
+                           */
                            putchar(nt);
                            /* "Merge" MQ and BQ if requested and if
                             *  MAQP not 255 (not available):
