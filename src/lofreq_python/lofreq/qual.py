@@ -127,16 +127,19 @@ class QualBasedSNPCaller(object):
         # below noncons_filter_qual or ign_bases_below_q
         #
         noncons_counts_dict = dict()
+        noncons_quals = []# NOTE: temporary only
         noncons_filterq = max(self.noncons_filter_qual, self.ign_bases_below_q)
         for b in base_qual_hist.keys():
             if b == ref_base:
                 continue
-            noncons_counts_dict[b]  = sum(c for (q, c) in base_qual_hist[b].iteritems() 
-                                     if q >= noncons_filterq)
+            noncons_counts_dict[b] = sum(c for (q, c) in base_qual_hist[b].iteritems() 
+                                         if q >= noncons_filterq)
+            noncons_quals.extend([q for (q, c) in base_qual_hist[b].iteritems() 
+                                  if q >= noncons_filterq])
 
         # return if no non-consbases left after filtering
         if sum(noncons_counts_dict.values()) == 0:
-            LOG.debug("Consensus bases only. Early exit...")
+            LOG.debug("Consensus bases only. Early exit at col %d..." % col_coord)
             return []
 
         # get list of consensus qualities but remove if quality is
@@ -153,7 +156,12 @@ class QualBasedSNPCaller(object):
         # (WARNING: reusing cons_quals!)
         base_quals = cons_quals
         if self.noncons_default_qual == 'median':
-            m = int(median(cons_quals)) # need int, but median might be float
+            m = int(median(cons_quals)) # median might be float
+            if False:
+                # shouldn't actually use noncons qual as we would be
+                # building values into the system that we're trying to
+                # test
+                m =  int(median((noncons_quals)))
             base_quals.extend(
                 [m] * sum(noncons_counts_dict.values()))
         else:
