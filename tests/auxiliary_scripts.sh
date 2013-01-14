@@ -1,14 +1,6 @@
 #!/bin/bash
 
-echoerror() {
-    echo "ERROR: $1" 1>&2
-}
-echook() {
-    echo "OK: $1" 1>&2
-}
-echowarn() {
-    echo "WARN: $1" 1>&2
-}
+source lib.sh || exit 1
 
 
 reffa=../../lofreq-test-data/denv2-multiplex-replicates/ref.fa
