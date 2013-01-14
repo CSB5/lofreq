@@ -1,25 +1,14 @@
 #!/bin/bash
 
-echoerror() {
-    echo "ERROR: $1" 1>&2
-}
-echook() {
-    echo "OK: $1" 1>&2
-}
-echowarn() {
-    echo "WARN: $1" 1>&2
-}
-
-# md5sum is md5 on mac
-md5=$(which md5sum 2>/dev/null || which md5)
+source lib.sh || exit 1
 
 bam=../../lofreq-test-data/denv2-simulation/denv2-10haplo.bam
 reffa=../../lofreq-test-data/denv2-simulation/denv2-refseq.fa
+snv_ref=../../lofreq-test-data/denv2-simulation/denv2-10haplo_true-snp.snp
 
 snv_out_raw=../../lofreq-test-data/denv2-simulation/denv2-10haplo_lofreq-raw.snp
 snv_out_joined_raw=../../lofreq-test-data/denv2-simulation/denv2-10haplo_lofreq-joined-raw.snp
 snv_out_sbf=../../lofreq-test-data/denv2-simulation/denv2-10haplo_lofreq-sbf.snp
-snv_ref=../../lofreq-test-data/denv2-simulation/denv2-10haplo_true-snp.snp
 
 # delete output files from previous run
 DEBUG=0
