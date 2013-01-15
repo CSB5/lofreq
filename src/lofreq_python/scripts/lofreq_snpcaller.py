@@ -271,10 +271,10 @@ def cmdline_parser():
                          help="BAQ setting for pileup."
                          " One of: %s (default: %s)"% (
                              ', '.join(choices), conf.DEFAULT_BAQ_SETTING))
-    plp_group.add_option("-j", "--join-mapq-and-baseq",
+    plp_group.add_option("", "--dont-join-mapq-and-baseq",
                          dest = "join_mapq_and_baseq",
-                         action="store_true",
-                         help = "Join mapping and base quality")
+                         action="store_false", default=True,
+                         help = "No joining of mapping and base quality")
     plp_group.add_option("-l", "--regions",
                          dest = "region_bed",
                          help = "Optional: bed file containing regions"
