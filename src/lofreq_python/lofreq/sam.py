@@ -487,11 +487,13 @@ class Pileup(object):
         self.bam = bam
         self.ref_fa = ref_fa
         self.samtools = samtools
-        self.samtools_version = None        
-        self.samtools_version = samtools_version(samtools)
-        if self.samtools_version and self.samtools_version < (0, 1, 13):
-            LOG.warn("Your samtools installation looks too old."
-                     " Will try to continue anyway")
+        if not 'lofreq_samtools' in self.samtools:
+            self.samtools_version = samtools_version(samtools)
+            if self.samtools_version and self.samtools_version < (0, 1, 13):
+                LOG.warn("Your samtools installation looks too old."
+                         " Will try to continue anyway")
+        else:
+            self.samtools_version = 'NA'
 
         
     

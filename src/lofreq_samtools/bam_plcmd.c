@@ -16,11 +16,10 @@
 #include <ctype.h>
 #include <string.h>
 #include <errno.h>
+#include <assert.h>
 #include "sam.h"
 #include "faidx.h"
 #include "kstring.h"
-
-#ifndef ORIG
 
 #define MYNAME "lofreq_mpileup"
 #define PHREDQUAL_TO_PROB(phred) (pow(10.0, -1.0*(phred)/10.0))
@@ -37,7 +36,6 @@ int file_exists(char *fname)
       return 0;
   }
 }
-#endif
 
 static inline int printw(int c, FILE *fp)
 {
@@ -89,15 +87,8 @@ static inline void pileup_seq(const bam_pileup1_t *p, int pos, int ref_len, cons
 	if (p->is_tail) putchar('$');
 }
 
-#include <assert.h>
-#ifdef ORIG
-#include "bam2bcf.h"
-#include "sample.h"
-#endif
 
-#ifdef ORIG
-#define MPLP_GLF   0x10
-#endif
+/*#define MPLP_GLF   0x10*/
 #define MPLP_NO_COMP 0x20
 #define MPLP_NO_ORPHAN 0x40
 #define MPLP_REALN   0x80
@@ -106,22 +97,19 @@ static inline void pileup_seq(const bam_pileup1_t *p, int pos, int ref_len, cons
 #define MPLP_NO_INDEL 0x400
 #define MPLP_EXT_BAQ 0x800
 #define MPLP_ILLUMINA13 0x1000
-#ifdef ORIG
-#define MPLP_IGNORE_RG 0x2000
+/*#define MPLP_IGNORE_RG 0x2000*/
 #define MPLP_PRINT_POS 0x4000
 #define MPLP_PRINT_MAPQ 0x8000
-#else
+
 #define MPLP_JOIN_BQ_AND_MQ 0x10000
-#endif
 
 void *bed_read(const char *fn);
 void bed_destroy(void *_h);
 int bed_overlap(const void *_h, const char *chr, int beg, int end);
 
 typedef struct {
-	int max_mq, min_mq, flag, min_baseQ, capQ_thres, max_depth, max_indel_depth;
-	int openQ, extQ, tandemQ, min_support; // for indels
-	double min_frac; // for indels
+    int max_mq, min_mq, flag, capQ_thres, max_depth;
+    int min_refbaseQ, min_altbaseQ; /* new */
 	char *reg, *pl_list;
 	faidx_t *fai;
 	void *bed, *rghash;
@@ -188,58 +176,19 @@ static int mplp_func(void *data, bam1_t *b)
 	return ret;
 }
 
-#ifdef ORIG
-static void group_smpl(mplp_pileup_t *m, bam_sample_t *sm, kstring_t *buf,
-					   int n, char *const*fn, int *n_plp, const bam_pileup1_t **plp, int ignore_rg)
-{
-	int i, j;
-	memset(m->n_plp, 0, m->n * sizeof(int));
-	for (i = 0; i < n; ++i) {
-		for (j = 0; j < n_plp[i]; ++j) {
-			const bam_pileup1_t *p = plp[i] + j;
-			uint8_t *q;
-			int id = -1;
-			q = ignore_rg? 0 : bam_aux_get(p->b, "RG");
-			if (q) id = bam_smpl_rg2smid(sm, fn[i], (char*)q+1, buf);
-			if (id < 0) id = bam_smpl_rg2smid(sm, fn[i], 0, buf);
-			if (id < 0 || id >= m->n) {
-				assert(q); // otherwise a bug
-				fprintf(stderr, "[%s] Read group %s used in file %s but absent from the header or an alignment missing read group.\n", __func__, (char*)q+1, fn[i]);
-				exit(1);
-			}
-			if (m->n_plp[id] == m->m_plp[id]) {
-				m->m_plp[id] = m->m_plp[id]? m->m_plp[id]<<1 : 8;
-				m->plp[id] = realloc(m->plp[id], sizeof(bam_pileup1_t) * m->m_plp[id]);
-			}
-			m->plp[id][m->n_plp[id]++] = *p;
-		}
-	}
-}
-#endif
 
 static int mpileup(mplp_conf_t *conf, int n, char **fn)
 {
-#ifdef ORIG
-	extern void *bcf_call_add_rg(void *rghash, const char *hdtext, const char *list);
-	extern void bcf_call_del_rghash(void *rghash);
-#endif
 	mplp_aux_t **data;
-	int i, tid, pos, *n_plp, tid0 = -1, beg0 = 0, end0 = 1u<<29, ref_len, ref_tid = -1, max_depth, max_indel_depth;
+	int i, tid, pos, *n_plp, tid0 = -1, beg0 = 0, end0 = 1u<<29, ref_len, ref_tid = -1, max_depth;
 	const bam_pileup1_t **plp;
 	bam_mplp_t iter;
 	bam_header_t *h = 0;
 	char *ref;
 #ifdef ORIG
 	void *rghash = 0;
+#endif
 
-	bcf_callaux_t *bca = 0;
-	bcf_callret1_t *bcr = 0;
-	bcf_call_t bc;
-	bcf_t *bp = 0;
-	bcf_hdr_t *bh = 0;
-
-	bam_sample_t *sm = 0;
-#else
     typedef struct {
          int n;
     } bam_sample_dummy_t;
@@ -247,12 +196,10 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 	sm = calloc(1, sizeof(bam_sample_dummy_t));
     assert(NULL != sm);
 	sm->n = 1; /* that's all we need sm for here */
-#endif
     
 	kstring_t buf;
 	mplp_pileup_t gplp;
 
-#ifndef ORIG
     /* paranoid exit. n only allowed to be one in our case (not much
      * of an *m*pileup, I know...) */
     if (1 != n) {
@@ -262,9 +209,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
               fprintf(stderr, "%s\n", fn[i]);
          }
          exit(1);
-
     }
-#endif
 
 	memset(&gplp, 0, sizeof(mplp_pileup_t));
 	memset(&buf, 0, sizeof(kstring_t));
@@ -274,39 +219,29 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 	data = calloc(n, sizeof(void*));
 	plp = calloc(n, sizeof(void*));
 	n_plp = calloc(n, sizeof(int*));
-#ifdef ORIG
-	sm = bam_smpl_init();
-#endif
 
-#ifndef ORIG
 	fprintf(stderr, "[%s] Note, the output differs from regular pileup (see http://samtools.sourceforge.net/pileup.shtml) in the following ways\n", __func__);
 	fprintf(stderr, "[%s] - bases and qualities are merged into one field\n", __func__);
-    fprintf(stderr, "[%s] - (each base is immediately followed by its quality\n", __func__);
+    fprintf(stderr, "[%s] - each base is immediately followed by its quality\n", __func__);
 	fprintf(stderr, "[%s] - on request mapping and base call quality are merged (P_joined = P_mq * + (1-P_mq) P_bq\n", __func__);
 	fprintf(stderr, "[%s] - indel events are removed from bases and qualities and summarized in an additional field\n", __func__);
 	fprintf(stderr, "[%s] - reference matches are not replaced with , or .\n", __func__);
-#endif
 
 	// read the header and initialize data
 	for (i = 0; i < n; ++i) {
 		bam_header_t *h_tmp;
-#ifndef ORIG
         if (0 != strcmp(fn[i], "-")) {
           if (! file_exists(fn[i])) {
             fprintf(stderr, "File '%s' does not exist. Exiting...\n", fn[i]);
             exit(1);
           }
         }
-#endif
 		data[i] = calloc(1, sizeof(mplp_aux_t));
 		data[i]->fp = strcmp(fn[i], "-") == 0? bam_dopen(fileno(stdin), "r") : bam_open(fn[i], "r");
 		data[i]->conf = conf;
 		h_tmp = bam_header_read(data[i]->fp);
 		data[i]->h = i? h : h_tmp; // for i==0, "h" has not been set yet
-#ifdef ORIG
-		bam_smpl_add(sm, fn[i], (conf->flag&MPLP_IGNORE_RG)? 0 : h_tmp->text);
-		rghash = bcf_call_add_rg(rghash, h_tmp->text, conf->pl_list);
-#endif
+
 		if (conf->reg) {
 			int beg, end;
 			bam_index_t *idx;
@@ -334,41 +269,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 	gplp.m_plp = calloc(sm->n, sizeof(int));
 	gplp.plp = calloc(sm->n, sizeof(void*));
 
-#ifdef ORIG
-	fprintf(stderr, "[%s] %d samples in %d input files\n", __func__, sm->n, n);
-	// write the VCF header
-	if (conf->flag & MPLP_GLF) {
-		kstring_t s;
-		bh = calloc(1, sizeof(bcf_hdr_t));
-		s.l = s.m = 0; s.s = 0;
-		bp = bcf_open("-", (conf->flag&MPLP_NO_COMP)? "wu" : "w");
-		for (i = 0; i < h->n_targets; ++i) {
-			kputs(h->target_name[i], &s);
-			kputc('\0', &s);
-		}
-		bh->l_nm = s.l;
-		bh->name = malloc(s.l);
-		memcpy(bh->name, s.s, s.l);
-		s.l = 0;
-		for (i = 0; i < sm->n; ++i) {
-			kputs(sm->smpl[i], &s); kputc('\0', &s);
-		}
-		bh->l_smpl = s.l;
-		bh->sname = malloc(s.l);
-		memcpy(bh->sname, s.s, s.l);
-		bh->txt = malloc(strlen(BAM_VERSION) + 64);
-		bh->l_txt = 1 + sprintf(bh->txt, "##samtoolsVersion=%s\n", BAM_VERSION);
-		free(s.s);
-		bcf_hdr_sync(bh);
-		bcf_hdr_write(bp, bh);
-		bca = bcf_call_init(-1., conf->min_baseQ);
-		bcr = calloc(sm->n, sizeof(bcf_callret1_t));
-		bca->rghash = rghash;
-		bca->openQ = conf->openQ, bca->extQ = conf->extQ, bca->tandemQ = conf->tandemQ;
-		bca->min_frac = conf->min_frac;
-		bca->min_support = conf->min_support;
-	}
-#endif
+
 	if (tid0 >= 0 && conf->fai) { // region is set
 		ref = faidx_fetch_seq(conf->fai, h->target_name[tid0], 0, 0x7fffffff, &ref_len);
 		ref_tid = tid0;
@@ -382,9 +283,10 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 		max_depth = 8000 / sm->n;
 		fprintf(stderr, "<%s> Set max per-file depth to %d\n", __func__, max_depth);
 	}
-	max_indel_depth = conf->max_indel_depth * sm->n;
+	/* max_indel_depth = conf->max_indel_depth * sm->n; */
 	bam_mplp_set_maxcnt(iter, max_depth);
 	while (bam_mplp_auto(iter, &tid, &pos, n_plp, plp) > 0) {
+        char ref_nuc;
 		if (conf->reg && (pos < beg0 || pos >= end0)) continue; // out of the region requested
 		if (conf->bed && tid >= 0 && !bed_overlap(conf->bed, h->target_name[tid], pos, pos+1)) continue;
 		if (tid != ref_tid) {
@@ -393,36 +295,9 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 			for (i = 0; i < n; ++i) data[i]->ref = ref, data[i]->ref_id = tid;
 			ref_tid = tid;
 		}
-#ifdef ORIG
-		if (conf->flag & MPLP_GLF) {
-			int total_depth, _ref0, ref16;
-			bcf1_t *b = calloc(1, sizeof(bcf1_t));
-			for (i = total_depth = 0; i < n; ++i) total_depth += n_plp[i];
-			group_smpl(&gplp, sm, &buf, n, fn, n_plp, plp, conf->flag & MPLP_IGNORE_RG);
-			_ref0 = (ref && pos < ref_len)? ref[pos] : 'N';
-			ref16 = bam_nt16_table[_ref0];
-			for (i = 0; i < gplp.n; ++i)
-				bcf_call_glfgen(gplp.n_plp[i], gplp.plp[i], ref16, bca, bcr + i);
-			bcf_call_combine(gplp.n, bcr, ref16, &bc);
-			bcf_call2bcf(tid, pos, &bc, b, (conf->flag&(MPLP_FMT_DP|MPLP_FMT_SP))? bcr : 0,
-						 (conf->flag&MPLP_FMT_SP), 0, 0);
-			bcf_write(bp, bh, b);
-			bcf_destroy(b);
-			// call indels
-			if (!(conf->flag&MPLP_NO_INDEL) && total_depth < max_indel_depth && bcf_call_gap_prep(gplp.n, gplp.n_plp, gplp.plp, pos, bca, ref, rghash) >= 0) {
-				for (i = 0; i < gplp.n; ++i)
-					bcf_call_glfgen(gplp.n_plp[i], gplp.plp[i], -1, bca, bcr + i);
-				if (bcf_call_combine(gplp.n, bcr, -1, &bc) >= 0) {
-					b = calloc(1, sizeof(bcf1_t));
-					bcf_call2bcf(tid, pos, &bc, b, (conf->flag&(MPLP_FMT_DP|MPLP_FMT_SP))? bcr : 0,
-								 (conf->flag&MPLP_FMT_SP), bca, ref);
-					bcf_write(bp, bh, b);
-					bcf_destroy(b);
-				}
-			}
-		} else {
-#endif
-			printf("%s\t%d\t%c", h->target_name[tid], pos + 1, (ref && pos < ref_len)? ref[pos] : 'N');
+
+            ref_nuc = (ref && pos < ref_len)? ref[pos] : 'N';
+     		printf("%s\t%d\t%c", h->target_name[tid], pos + 1, ref_nuc);
 			for (i = 0; i < n; ++i) {
 				int j;
 				printf("\t%d\t", n_plp[i]);
@@ -461,6 +336,8 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 			}
 			putchar('\n');
 #else
+                  
+            /* FIXME separate parsing, fitlering and printing */
                     int num_heads = 0;
                     int num_tails = 0;
                     int num_ins = 0;
@@ -475,7 +352,6 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
                       const bam_pileup1_t *p = plp[i] + j;
                       int nt, mq, bq, jq; /* sanger phred scores */
                       double mp, bp, jp; /* corresponding probs */
-
 
                       if (! p->is_del) {
                            if (p->is_head) num_heads += 1;
@@ -521,6 +397,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
                                  */
                                 mp = PHREDQUAL_TO_PROB(mq - 33);
                                 bp = PHREDQUAL_TO_PROB(bq - 33);
+                                /* precision?! */
                                 jp = mp + (1.0 - mp) * bp;
                                 jq = PROB_TO_PHREDQUAL(jp) + 33;
 #if DEBUG
@@ -548,12 +425,56 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
                       if (p->indel != 0) {
                           if (p->indel > 0) {
                              /* originally: + */
+#ifdef INDEL_TEST
+                               {int j;
+                                    uint8_t *s = bam_aux_get(p->b, "BI");
+                                    printf("\n");
+                                    if (s) {
+                                         char *t = (char*)(s+1);
+                                         printf("BI:%s ", t);
+                                         for (j = 0; j < p->indel; ++j) {
+                                              printf("%c", t[p->qpos+j]);
+                                         }
+                                         printf("\n");
+                                    }
+
+                                    putchar('+'); printw(p->indel, stdout);
+                                    putchar(' ');
+                                    for (j = 1; j <= p->indel; ++j) {
+                                         int c = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos + j)];
+                                         putchar(bam1_strand(p->b)? tolower(c) : toupper(c));
+                                    }
+                                    printf("\n");
+                               }
+#endif
                              num_ins += 1;
                              sum_ins += p->indel;
                           } else if (p->indel < 0) {
                              /* originally: - */
                              num_dels += 1;
                              sum_dels -= p->indel;
+#ifdef INDEL_TEST
+                             {int j;
+                                  uint8_t *s = bam_aux_get(p->b, "BD");
+                                  printf("\n");
+                                  if (s) {
+                                       char *t = (char*)(s+1);
+                                       printf("BD:%s ", t);
+                                       for (j = 0; j < -p->indel; ++j) {
+                                            printf("%c", t[p->qpos+j]);
+                                       }
+                                       printf("\n");
+                                  }
+                                  
+                                  printw(p->indel, stdout);
+                                  putchar(' ');
+                                  for (j = 1; j <= -p->indel; ++j) {
+                                       int c = (ref && (int)pos+j < ref_len)? ref[pos+j] : 'N';
+                                       putchar(bam1_strand(p->b)? tolower(c) : toupper(c));
+                                  }
+                                  printf("\n");
+                             }
+#endif
                           }
                           /* as an aside, if we wanted to include the
                              indels, do we need to keep track of heads
@@ -570,20 +491,10 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 			}
 #endif
 		}
-#ifdef ORIG
-    }
-
-	bcf_close(bp);
-	bam_smpl_destroy(sm); free(buf.s);
-#else
     free(sm); free(buf.s);
-#endif
 	for (i = 0; i < gplp.n; ++i) free(gplp.plp[i]);
 	free(gplp.plp); free(gplp.n_plp); free(gplp.m_plp);
-#ifdef ORIG
-	bcf_call_del_rghash(rghash);
-	bcf_hdr_destroy(bh); bcf_call_destroy(bca); free(bc.PL); free(bcr);
-#endif
+
 	bam_mplp_destroy(iter);
 	bam_header_destroy(h);
 	for (i = 0; i < n; ++i) {
@@ -655,140 +566,66 @@ int bam_mpileup(int argc, char *argv[])
 #ifdef ORIG
 	#define MPLP_PRINT_POS 0x4000
 #endif
-	mplp.max_mq = 60;
-#ifdef ORIG
-	mplp.min_baseQ = 13;
-#else
-	mplp.min_baseQ = 3;
-#endif
-	mplp.capQ_thres = 0;
-#if ORIG
-	mplp.max_depth = 250; mplp.max_indel_depth = 250;
-#else
-	mplp.max_depth = 1000000; 
-    mplp.max_indel_depth = 250;
-#endif
-	mplp.openQ = 40; mplp.extQ = 20; mplp.tandemQ = 100;
-	mplp.min_frac = 0.002; mplp.min_support = 1;
+	mplp.max_mq = 255; /* 60 */
+	mplp.min_refbaseQ = 3; /* min_baseQ = 13 */
+	mplp.min_altbaseQ = 20; /* FIXME use */
+    mplp.capQ_thres = 0;
+	mplp.max_depth = 1000000; /* 250 */
 	mplp.flag = MPLP_NO_ORPHAN | MPLP_REALN;
   
-#ifdef ORIG
-	while ((c = getopt(argc, argv, "Agf:r:l:M:q:Q:uaRC:BDSd:L:b:P:o:e:h:Im:F:EG:6Os")) >= 0) {
-#else
-      /* keep in sync with usage below */
-	while ((c = getopt(argc, argv, "Af:r:l:M:q:aC:Bd:E6j")) >= 0) {
-#endif
+	while ((c = getopt(argc, argv, "Af:r:l:m:M:Bd:E6j")) >= 0) {
 		switch (c) {
+		case 'r': mplp.reg = strdup(optarg); break;
+		case 'l': mplp.bed = bed_read(optarg); break;
+
+		case 'd': mplp.max_depth = atoi(optarg); break;
 		case 'f':
 			mplp.fai = fai_load(optarg);
 			if (mplp.fai == 0) return 1;
 			break;
-		case 'd': mplp.max_depth = atoi(optarg); break;
-		case 'r': mplp.reg = strdup(optarg); break;
-		case 'l': mplp.bed = bed_read(optarg); break;
-		case 'P': mplp.pl_list = strdup(optarg); break;
-#ifdef ORIG
-		case 'g': mplp.flag |= MPLP_GLF; break;
-		case 'u': mplp.flag |= MPLP_NO_COMP | MPLP_GLF; break;
-#endif
-		case 'a': mplp.flag |= MPLP_NO_ORPHAN | MPLP_REALN; break;
+
 		case 'B': mplp.flag &= ~MPLP_REALN; break;
-		case 'D': mplp.flag |= MPLP_FMT_DP; break;
-		case 'S': mplp.flag |= MPLP_FMT_SP; break;
-		case 'I': mplp.flag |= MPLP_NO_INDEL; break;
 		case 'E': mplp.flag |= MPLP_EXT_BAQ; break;
-		case '6': mplp.flag |= MPLP_ILLUMINA13; break;
-#ifdef ORIG
-		case 'R': mplp.flag |= MPLP_IGNORE_RG; break;
-		case 's': mplp.flag |= MPLP_PRINT_MAPQ; break;
-		case 'O': mplp.flag |= MPLP_PRINT_POS; break;
-#endif
-		case 'C': mplp.capQ_thres = atoi(optarg); break;
+
+		case 'm': mplp.min_mq = atoi(optarg); break;
 		case 'M': mplp.max_mq = atoi(optarg); break;
-		case 'q': mplp.min_mq = atoi(optarg); break;
-		case 'Q': mplp.min_baseQ = atoi(optarg); break;
-        case 'b': file_list = optarg; break;
-		case 'o': mplp.openQ = atoi(optarg); break;
-		case 'e': mplp.extQ = atoi(optarg); break;
-		case 'h': mplp.tandemQ = atoi(optarg); break;
-		case 'A': use_orphan = 1; break;
-		case 'F': mplp.min_frac = atof(optarg); break;
-		case 'm': mplp.min_support = atoi(optarg); break;
-		case 'L': mplp.max_indel_depth = atoi(optarg); break;
-#ifdef ORIG
-		case 'G': {
-				FILE *fp_rg;
-				char buf[1024];
-				mplp.rghash = bcf_str2id_init();
-				if ((fp_rg = fopen(optarg, "r")) == 0)
-					fprintf(stderr, "(%s) Fail to open file %s. Continue anyway.\n", __func__, optarg);
-				while (!feof(fp_rg) && fscanf(fp_rg, "%s", buf) > 0) // this is not a good style, but forgive me...
-					bcf_str2id_add(mplp.rghash, strdup(buf));
-				fclose(fp_rg);
-			}
-			break;
-		}
-#else
 		case 'j': mplp.flag |= MPLP_JOIN_BQ_AND_MQ; break;
+
+		case '6': mplp.flag |= MPLP_ILLUMINA13; break;
+		case 'A': use_orphan = 1; break;
+
+        /*case 'Q': mplp.min_baseQ = atoi(optarg); break; */
+
         case '?': fprintf(stderr, "ERROR: unrecognized arguments found. Exiting...\n"); exit(1);
-#endif
         }
 	}
 	if (use_orphan) mplp.flag &= ~MPLP_NO_ORPHAN;
 	if (argc == 1) {
 		fprintf(stderr, "\n");
-#ifndef ORIG
-		fprintf(stderr, "Usage: %s mpileup [options] in.bam\n\n", MYNAME);
-		fprintf(stderr, "NOTE: usage and some defaults differ from default samtools mpileup\n\n");
-#else
-		fprintf(stderr, "Usage: samtools mpileup [options] in1.bam [in2.bam [...]]\n\n");
-#endif
-
-		fprintf(stderr, "Input options:\n\n");
+		fprintf(stderr, "Usage: %s [mpileup] [options] in1.bam [in2.bam [...]]\n\n", MYNAME);
+		fprintf(stderr, "Options:\n");
+        /* regions */
+		fprintf(stderr, "       -r STR       region in which pileup is generated [null]\n");
+		fprintf(stderr, "       -l FILE      list of positions (chr pos) or regions (BED) [null]\n");
+        /*  */
+		fprintf(stderr, "       -d INT       max per-BAM depth to avoid excessive memory usage [%d]\n", mplp.max_depth);
+		fprintf(stderr, "       -f FILE      faidx indexed reference sequence file [null]\n");
+        /* baq */
+		fprintf(stderr, "       -B           disable BAQ computation\n");
+		fprintf(stderr, "       -E           extended BAQ for higher sensitivity but lower specificity\n");
+        /* mapping quality */
+		fprintf(stderr, "       -m INT       skip alignments with mapQ smaller than INT [%d]\n", mplp.min_mq);
+		fprintf(stderr, "       -M INT       cap mapping quality at INT [%d]\n", mplp.max_mq);
+		fprintf(stderr, "       -C INT       parameter for adjusting mapQ; 0 to disable [0]\n");
+        /* new options */
+		fprintf(stderr, "       -j           join mapQ and baseQ per base: P_e = P_mq + (1-P_mq) P_bq\n");
+        /* misc */
 		fprintf(stderr, "       -6           assume the quality is in the Illumina-1.3+ encoding\n");
 		fprintf(stderr, "       -A           count anomalous read pairs\n");
-		fprintf(stderr, "       -B           disable BAQ computation\n");
-#ifdef ORIG
-		fprintf(stderr, "       -b FILE      list of input BAM files [null]\n");
-#endif
-		fprintf(stderr, "       -C INT       parameter for adjusting mapQ; 0 to disable [0]\n");
-		fprintf(stderr, "       -d INT       max per-BAM depth to avoid excessive memory usage [%d]\n", mplp.max_depth);
-		fprintf(stderr, "       -E           extended BAQ for higher sensitivity but lower specificity\n");
-		fprintf(stderr, "       -f FILE      faidx indexed reference sequence file [null]\n");
-#ifdef ORIG
-		fprintf(stderr, "       -G FILE      exclude read groups listed in FILE [null]\n");
-#endif
-		fprintf(stderr, "       -l FILE      list of positions (chr pos) or regions (BED) [null]\n");
-		fprintf(stderr, "       -M INT       cap mapping quality at INT [%d]\n", mplp.max_mq);
-		fprintf(stderr, "       -r STR       region in which pileup is generated [null]\n");
 #ifdef ORIG
 		fprintf(stderr, "       -R           ignore RG tags\n");
 #endif
-		fprintf(stderr, "       -q INT       skip alignments with mapQ smaller than INT [%d]\n", mplp.min_mq);
-#ifndef ORIG
-		fprintf(stderr, "       -j           join mapQ and baseQ per base: P_e = P_mq + (1-P_mq) P_bq\n");
-        /* -Q doesn't affect samtools mpileup */
-#else
-		fprintf(stderr, "       -Q INT       skip bases with baseQ/BAQ smaller than INT [%d]\n", mplp.min_baseQ);
-		fprintf(stderr, "\nOutput options:\n\n");
-		fprintf(stderr, "       -D           output per-sample DP in BCF (require -g/-u)\n");
-		fprintf(stderr, "       -g           generate BCF output (genotype likelihoods)\n");
-		fprintf(stderr, "       -O           output base positions on reads (disabled by -g/-u)\n");
-		fprintf(stderr, "       -s           output mapping quality (disabled by -g/-u)\n");
-		fprintf(stderr, "       -S           output per-sample strand bias P-value in BCF (require -g/-u)\n");
-		fprintf(stderr, "       -u           generate uncompress BCF output\n");
-		fprintf(stderr, "\nSNP/INDEL genotype likelihoods options (effective with `-g' or `-u'):\n\n");
-		fprintf(stderr, "       -e INT       Phred-scaled gap extension seq error probability [%d]\n", mplp.extQ);
-		fprintf(stderr, "       -F FLOAT     minimum fraction of gapped reads for candidates [%g]\n", mplp.min_frac);
-		fprintf(stderr, "       -h INT       coefficient for homopolymer errors [%d]\n", mplp.tandemQ);
-		fprintf(stderr, "       -I           do not perform indel calling\n");
-		fprintf(stderr, "       -L INT       max per-sample depth for INDEL calling [%d]\n", mplp.max_indel_depth);
-		fprintf(stderr, "       -m INT       minimum gapped reads for indel candidates [%d]\n", mplp.min_support);
-		fprintf(stderr, "       -o INT       Phred-scaled gap open sequencing error probability [%d]\n", mplp.openQ);
-		fprintf(stderr, "       -P STR       comma separated list of platforms for indels [all]\n");
-		fprintf(stderr, "\n");
-		fprintf(stderr, "Notes: Assuming diploid individuals.\n\n");
-#endif
+        /* orig -Q doesn't affect samtools mpileup */
 		return 1;
 	}
     if (file_list) {
@@ -806,17 +643,17 @@ int bam_mpileup(int argc, char *argv[])
 	return 0;
 }
 
-#ifdef MAIN
+
 int main(int argc, char **argv)
 {
+#if 0
      fprintf(stderr, "FIXME: make -Q work\n");
      fprintf(stderr, "FIXME: make sure -q works\n");
-     fprintf(stderr, "FIXME: doc changes\n");
-     fprintf(stderr, "FIXME: clean up help and flags\n");
+#endif
      if (argc>1 && strcmp(argv[1], "mpileup") == 0) {
           return bam_mpileup(argc-1, argv+1);
      } else {
           return bam_mpileup(argc, argv);
      }
 }
-#endif
+
