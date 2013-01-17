@@ -17,14 +17,180 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
+
 #include "sam.h"
 #include "faidx.h"
 #include "kstring.h"
+
+/* from bedidx.c */
+void *bed_read(const char *fn);
+void bed_destroy(void *_h);
+int bed_overlap(const void *_h, const char *chr, int beg, int end);
+
+
+
+/*#define MPLP_GLF   0x10*/
+#define MPLP_NO_COMP 0x20
+#define MPLP_NO_ORPHAN 0x40
+#define MPLP_REALN   0x80
+#define MPLP_FMT_DP 0x100
+#define MPLP_FMT_SP 0x200
+#define MPLP_NO_INDEL 0x400
+#define MPLP_EXT_BAQ 0x800
+#define MPLP_ILLUMINA13 0x1000
+/*#define MPLP_IGNORE_RG 0x2000
+#define MPLP_PRINT_POS 0x4000*/
+#define MPLP_PRINT_MAPQ 0x8000
+
+#define MPLP_JOIN_BQ_AND_MQ 0x10000
+
+
+typedef struct {
+    int max_mq, min_mq, flag, capQ_thres, max_depth;
+    int min_refbaseQ, min_altbaseQ; /* new */
+	char *reg, *pl_list;
+	faidx_t *fai;
+	void *bed, *rghash;
+} mplp_conf_t;
+
+typedef struct {
+	bamFile fp;
+	bam_iter_t iter;
+	bam_header_t *h;
+	int ref_id;
+	char *ref;
+	const mplp_conf_t *conf;
+} mplp_aux_t;
+
+typedef struct {
+	int n;
+	int *n_plp, *m_plp;
+	bam_pileup1_t **plp;
+} mplp_pileup_t;
+
+
+
+/* ------------------------------ */
+
+
+const char *bam_nt4_rev_table = "ACGTN"; /* as bam_nt16_rev_table */
+#define NUM_NT4 5 /* strlen(bam_nt4_rev_table); */
 
 #define MYNAME "lofreq_mpileup"
 #define PHREDQUAL_TO_PROB(phred) (pow(10.0, -1.0*(phred)/10.0))
 #define PROB_TO_PHREDQUAL(prob) ((int)(-10.0 * log10(prob)))
 
+
+typedef struct {
+     unsigned long int n; /* number of elements stored */
+     int *data; /* actual array of data */
+
+     size_t grow_by_size; /* if needed grow array by this value. will double previous size if 0 */
+     size_t alloced; /* actually allocated size for data */
+} int_varray_t;
+
+
+
+void int_varray_free(int_varray_t *a) 
+{
+    assert(NULL != a);
+    free(a->data); /* save even if a->data==NULL */
+    a->data = NULL;
+    a->n = a->alloced = a->grow_by_size = 0;
+}
+
+void int_varray_init(int_varray_t *a, 
+                     const size_t grow_by_size)
+{
+    assert(NULL != a);
+    assert(0 == a->alloced); /* otherwise use clear() */
+
+    a->n = 0;
+    a->data = NULL;
+
+    a->grow_by_size = grow_by_size;
+    a->alloced = 0;
+}
+
+void int_varray_add_value(int_varray_t *a, int value)
+{
+    assert(NULL != a);
+    if (a->n * sizeof(int) == a->alloced) {
+        size_t size_to_alloc;
+        
+        if (0 == a->grow_by_size) {
+             assert(SIZE_MAX - a->alloced > a->alloced);
+             size_to_alloc = 0==a->n ? sizeof(int) : a->alloced*2;
+        } else {
+             assert(SIZE_MAX - a->alloced > a->grow_by_size);
+             size_to_alloc = a->alloced + a->grow_by_size;
+        }
+#if 0
+        fprintf(stderr, "DEBUG(%s:%s:%d): size=%lu alloced=%zd size_to_alloc=%zd sizeof(data)=%zd\n",
+                __FILE__, __FUNCTION__, __LINE__, 
+                a->n, a->alloced, size_to_alloc, sizeof(a->data));
+#endif
+        a->data = realloc(a->data, size_to_alloc);
+        a->alloced = size_to_alloc;
+    }
+
+    a->data[a->n] = value;
+    a->n++;
+}
+
+
+typedef struct {
+     char *target;
+     int pos;
+     char ref_base;
+     int_varray_t qs_fw[NUM_NT4];
+     int_varray_t qs_rv[NUM_NT4];
+     int heads;
+     int tails;
+} plp_col_t;
+
+
+void plp_col_init(plp_col_t *p) {
+    int i;
+
+    p->target =  NULL;
+    p->pos = -1;
+    p->ref_base = '\0';
+    for (i=0; i<NUM_NT4; i++) {
+         int_varray_init(& p->qs_fw[i], 0);
+         int_varray_init(& p->qs_rv[i], 0);
+    }
+    p->heads = 0;
+    p->tails = 0;
+}
+
+void plp_col_free(plp_col_t *p) {
+    int i;
+
+    free(p->target);
+    for (i=0; i<NUM_NT4; i++) {
+         int_varray_free(& p->qs_fw[i]);
+         int_varray_free(& p->qs_rv[i]);
+    }
+}
+
+void plp_col_print(const plp_col_t *p, FILE *stream) {
+     int i;
+     
+     fprintf(stream, "%s\t%d\t%c base-counts (fw/rv): ", 
+             p->target, p->pos+1, p->ref_base);
+     for (i=0; i<NUM_NT4; i++) {
+          fprintf(stream, " %c:%lu/%lu",
+                  bam_nt4_rev_table[i],
+                  p->qs_fw[i].n,
+                  p->qs_rv[i].n);
+     }
+     fprintf(stream, " heads:%d tails:%d\n", p->heads, p->tails);
+     fprintf(stream, "\n");
+}
+
+
+/* FIXME also in lofreq_core:utils.c */
 int file_exists(char *fname) 
 {
   /* from 
@@ -36,6 +202,10 @@ int file_exists(char *fname)
       return 0;
   }
 }
+
+/* ------------------------------ */
+
+
 
 static inline int printw(int c, FILE *fp)
 {
@@ -88,48 +258,6 @@ static inline void pileup_seq(const bam_pileup1_t *p, int pos, int ref_len, cons
 }
 
 
-/*#define MPLP_GLF   0x10*/
-#define MPLP_NO_COMP 0x20
-#define MPLP_NO_ORPHAN 0x40
-#define MPLP_REALN   0x80
-#define MPLP_FMT_DP 0x100
-#define MPLP_FMT_SP 0x200
-#define MPLP_NO_INDEL 0x400
-#define MPLP_EXT_BAQ 0x800
-#define MPLP_ILLUMINA13 0x1000
-/*#define MPLP_IGNORE_RG 0x2000*/
-#define MPLP_PRINT_POS 0x4000
-#define MPLP_PRINT_MAPQ 0x8000
-
-#define MPLP_JOIN_BQ_AND_MQ 0x10000
-
-void *bed_read(const char *fn);
-void bed_destroy(void *_h);
-int bed_overlap(const void *_h, const char *chr, int beg, int end);
-
-typedef struct {
-    int max_mq, min_mq, flag, capQ_thres, max_depth;
-    int min_refbaseQ, min_altbaseQ; /* new */
-	char *reg, *pl_list;
-	faidx_t *fai;
-	void *bed, *rghash;
-} mplp_conf_t;
-
-typedef struct {
-	bamFile fp;
-	bam_iter_t iter;
-	bam_header_t *h;
-	int ref_id;
-	char *ref;
-	const mplp_conf_t *conf;
-} mplp_aux_t;
-
-typedef struct {
-	int n;
-	int *n_plp, *m_plp;
-	bam_pileup1_t **plp;
-} mplp_pileup_t;
-
 static int mplp_func(void *data, bam1_t *b)
 {
 	extern int bam_realn(bam1_t *b, const char *ref);
@@ -141,16 +269,16 @@ static int mplp_func(void *data, bam1_t *b)
 		int has_ref;
 		ret = ma->iter? bam_iter_read(ma->fp, ma->iter, b) : bam_read1(ma->fp, b);
 		if (ret < 0) break;
-		if (b->core.tid < 0 || (b->core.flag&BAM_FUNMAP)) { // exclude unmapped reads
+		if (b->core.tid < 0 || (b->core.flag&BAM_FUNMAP)) { /* exclude unmapped reads */
 			skip = 1;
 			continue;
 		}
-		if (ma->conf->bed) { // test overlap
+		if (ma->conf->bed) { /* test overlap */
 			skip = !bed_overlap(ma->conf->bed, ma->h->target_name[b->core.tid], b->core.pos, bam_calend(&b->core, bam1_cigar(b)));
 			if (skip) continue;
 		}
 #ifdef ORIG
-		if (ma->conf->rghash) { // exclude read groups
+		if (ma->conf->rghash) { /* exclude read groups */
 			uint8_t *rg = bam_aux_get(b, "RG");
 			skip = (rg && bcf_str2id(ma->conf->rghash, (const char*)(rg+1)) >= 0);
 			if (skip) continue;
@@ -188,17 +316,19 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 #ifdef ORIG
 	void *rghash = 0;
 #endif
+	kstring_t buf;
+	mplp_pileup_t gplp;
 
+    /* create a fake struct, whose only member of interest here is an
+     * int of value 1. originally bam_sample_t *sm. */
     typedef struct {
          int n;
     } bam_sample_dummy_t;
 	bam_sample_dummy_t *sm;
 	sm = calloc(1, sizeof(bam_sample_dummy_t));
     assert(NULL != sm);
-	sm->n = 1; /* that's all we need sm for here */
+	sm->n = 1; /* that's all we need sm for */
     
-	kstring_t buf;
-	mplp_pileup_t gplp;
 
     /* paranoid exit. n only allowed to be one in our case (not much
      * of an *m*pileup, I know...) */
@@ -227,7 +357,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 	fprintf(stderr, "[%s] - indel events are removed from bases and qualities and summarized in an additional field\n", __func__);
 	fprintf(stderr, "[%s] - reference matches are not replaced with , or .\n", __func__);
 
-	// read the header and initialize data
+	/* read the header and initialize data */
 	for (i = 0; i < n; ++i) {
 		bam_header_t *h_tmp;
         if (0 != strcmp(fn[i], "-")) {
@@ -240,7 +370,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 		data[i]->fp = strcmp(fn[i], "-") == 0? bam_dopen(fileno(stdin), "r") : bam_open(fn[i], "r");
 		data[i]->conf = conf;
 		h_tmp = bam_header_read(data[i]->fp);
-		data[i]->h = i? h : h_tmp; // for i==0, "h" has not been set yet
+		data[i]->h = i? h : h_tmp; /* for i==0, "h" has not been set yet */
 
 		if (conf->reg) {
 			int beg, end;
@@ -260,7 +390,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 		}
 		if (i == 0) h = h_tmp;
 		else {
-			// FIXME: to check consistency
+             /* FIXME: to check consistency */
 			bam_header_destroy(h_tmp);
 		}
 	}
@@ -270,7 +400,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 	gplp.plp = calloc(sm->n, sizeof(void*));
 
 
-	if (tid0 >= 0 && conf->fai) { // region is set
+	if (tid0 >= 0 && conf->fai) { /* region is set */
 		ref = faidx_fetch_seq(conf->fai, h->target_name[tid0], 0, 0x7fffffff, &ref_len);
 		ref_tid = tid0;
 		for (i = 0; i < n; ++i) data[i]->ref = ref, data[i]->ref_id = tid0;
@@ -286,8 +416,9 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 	/* max_indel_depth = conf->max_indel_depth * sm->n; */
 	bam_mplp_set_maxcnt(iter, max_depth);
 	while (bam_mplp_auto(iter, &tid, &pos, n_plp, plp) > 0) {
-        char ref_nuc;
-		if (conf->reg && (pos < beg0 || pos >= end0)) continue; // out of the region requested
+        char ref_base;
+
+		if (conf->reg && (pos < beg0 || pos >= end0)) continue; /* out of the region requested */
 		if (conf->bed && tid >= 0 && !bed_overlap(conf->bed, h->target_name[tid], pos, pos+1)) continue;
 		if (tid != ref_tid) {
 			free(ref); ref = 0;
@@ -296,16 +427,21 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 			ref_tid = tid;
 		}
 
-            ref_nuc = (ref && pos < ref_len)? ref[pos] : 'N';
-     		printf("%s\t%d\t%c", h->target_name[tid], pos + 1, ref_nuc);
-			for (i = 0; i < n; ++i) {
+            ref_base = (ref && pos < ref_len)? ref[pos] : 'N';
+     		printf("%s\t%d\t%c", h->target_name[tid], pos + 1, ref_base);
+
+			for (i = 0; i < n; ++i) { /* NOTE n is fixed to 1 */
 				int j;
+                plp_col_t plp_col;
+                plp_col_init(& plp_col);
+
+                plp_col.target = strdup(h->target_name[tid]);
+                plp_col.pos = pos;
+                plp_col.ref_base = ref_base;
+
 				printf("\t%d\t", n_plp[i]);
 				if (n_plp[i] == 0) {
-					printf("*\t*"); // FIXME: printf() is very slow...
-#ifdef ORIG
-                    if (conf->flag & MPLP_PRINT_POS) printf("\t*");
-#endif
+                     printf("*\t*"); /* FIXME: printf() is very slow... */
 				} else {
 #ifdef ORIG
 					for (j = 0; j < n_plp[i]; ++j)
@@ -323,13 +459,6 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 							int c = plp[i][j].b->core.qual + 33;
 							if (c > 126) c = 126;
 							putchar(c);
-						}
-					}
-					if (conf->flag & MPLP_PRINT_POS) {
-						putchar('\t');
-						for (j = 0; j < n_plp[i]; ++j) {
-							if (j > 0) putchar(',');
-							printf("%d", plp[i][j].qpos + 1); // FIXME: printf() is very slow...
 						}
 					}
 				}
@@ -350,21 +479,30 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
                       /* merged modified pileup_seq() in here 
                        */
                       const bam_pileup1_t *p = plp[i] + j;
-                      int nt, mq, bq, jq; /* sanger phred scores */
+                      int nt, nt4;
+                      int mq, bq, jq, final_q; /* sanger phred scores */
                       double mp, bp, jp; /* corresponding probs */
 
                       if (! p->is_del) {
-                           if (p->is_head) num_heads += 1;
-                           if (p->is_tail) num_tails += 1;
+                           if (p->is_head) {
+                                plp_col.heads += 1;
+                                num_heads += 1;
+                           }
+                           if (p->is_tail) {
+                                plp_col.tails += 1;
+                                num_tails += 1;
+                           }
 
                            nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos)];
+                           nt4 = bam_nt16_nt4_table[bam1_seqi(bam1_seq(p->b), p->qpos)];
                            nt = bam1_strand(p->b)? tolower(nt) : toupper(nt);
+                           putchar(nt);
                            
+
                            /* FIXME get rid of unnecessary +- 33
                             * business here. Use only Phred values
                             * which are the scores -33.
                             */
-
                            bq = bam1_qual(p->b)[p->qpos] + 33;
                            if (bq > 126) bq = 126; /* Sanger max */
 
@@ -382,9 +520,8 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
                             * samtools line gets executed:
 
                             if (mq > 126) mq = 126;
-
                            */
-                           putchar(nt);
+
                            /* "Merge" MQ and BQ if requested and if
                             *  MAQP not 255 (not available):
                             * P_jq = P_mq * + (1-P_mq) P_bq.
@@ -405,11 +542,21 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
                                        mp, mp, bp, jp,  mq-33, mq-33, bq-33, jq-33);
 #endif
                                 putchar(jq);
-                                
+                                final_q = jq;
                            } else {
-                                
+                                final_q = bq;
                                 putchar(bq);
                            }
+
+                           if (bam1_strand(p->b)) {
+                                int_varray_add_value(
+                                     & plp_col.qs_rv[nt4], final_q);
+                           } else {
+                                int_varray_add_value(
+                                     & plp_col.qs_fw[nt4], final_q);
+                           }
+
+
                            /*putchar(' ');*/
                       } /* ! p->is_del */
 
@@ -480,13 +627,16 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
                              indels, do we need to keep track of heads
                              and tails as well?! */
                       }
-
-                      
+                     
 					} /* end: for (j = 0; j < n_plp[i]; ++j) { */
                     printf("\t#heads=%d #tails=%d #ins=%d ins_len=%.1f #del=%d del_len=%.1f\n",
                            num_heads, num_tails,
                            num_ins, num_ins ? sum_ins/(float)num_ins : 0,
                            num_dels, num_dels ? sum_dels/(float)num_dels : 0);
+#if PRINT_PLP_COL
+                    plp_col_print(& plp_col, stderr);
+#endif
+                    plp_col_free(& plp_col);
 				}
 			}
 #endif
@@ -506,66 +656,13 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 	return 0;
 }
 
-#define MAX_PATH_LEN 1024
-static int read_file_list(const char *file_list,int *n,char **argv[])
-{
-    char buf[MAX_PATH_LEN];
-    int len, nfiles;
-    char **files;
-
-    FILE *fh = fopen(file_list,"r");
-    if ( !fh )
-    {
-        fprintf(stderr,"%s: %s\n", file_list,strerror(errno));
-        return 1;
-    }
-
-    // Speed is not an issue here, determine the number of files by reading the file twice
-    nfiles = 0;
-    while ( fgets(buf,MAX_PATH_LEN,fh) ) nfiles++;
-
-    if ( fseek(fh, 0L, SEEK_SET) )
-    {
-        fprintf(stderr,"%s: %s\n", file_list,strerror(errno));
-        return 1;
-    }
-
-    files = calloc(nfiles,sizeof(char*));
-    nfiles = 0;
-    while ( fgets(buf,MAX_PATH_LEN,fh) ) 
-    {
-        len = strlen(buf);
-        while ( len>0 && isspace(buf[len-1]) ) len--;
-        if ( !len ) continue;
-
-        files[nfiles] = malloc(sizeof(char)*(len+1)); 
-        strncpy(files[nfiles],buf,len);
-        files[nfiles][len] = 0;
-        nfiles++;
-    }
-    fclose(fh);
-    if ( !nfiles )
-    {
-        fprintf(stderr,"No files read from %s\n", file_list);
-        return 1;
-    }
-    *argv = files;
-    *n    = nfiles;
-    return 0;
-}
-#undef MAX_PATH_LEN
 
 int bam_mpileup(int argc, char *argv[])
 {
 	int c;
-    const char *file_list = NULL;
-    char **fn = NULL;
-    int nfiles = 0, use_orphan = 0;
+    int use_orphan = 0;
 	mplp_conf_t mplp;
 	memset(&mplp, 0, sizeof(mplp_conf_t));
-#ifdef ORIG
-	#define MPLP_PRINT_POS 0x4000
-#endif
 	mplp.max_mq = 255; /* 60 */
 	mplp.min_refbaseQ = 3; /* min_baseQ = 13 */
 	mplp.min_altbaseQ = 20; /* FIXME use */
@@ -602,7 +699,7 @@ int bam_mpileup(int argc, char *argv[])
 	if (use_orphan) mplp.flag &= ~MPLP_NO_ORPHAN;
 	if (argc == 1) {
 		fprintf(stderr, "\n");
-		fprintf(stderr, "Usage: %s [mpileup] [options] in1.bam [in2.bam [...]]\n\n", MYNAME);
+		fprintf(stderr, "Usage: %s [mpileup] [options] in.bam\n\n", MYNAME);
 		fprintf(stderr, "Options:\n");
         /* regions */
 		fprintf(stderr, "       -r STR       region in which pileup is generated [null]\n");
@@ -628,12 +725,12 @@ int bam_mpileup(int argc, char *argv[])
         /* orig -Q doesn't affect samtools mpileup */
 		return 1;
 	}
-    if (file_list) {
-        if ( read_file_list(file_list,&nfiles,&fn) ) return 1;
-        mpileup(&mplp,nfiles,fn);
-        for (c=0; c<nfiles; c++) free(fn[c]);
-        free(fn);
-    } else mpileup(&mplp, argc - optind, argv + optind);
+
+    if (1 != argc - optind) {
+		fprintf(stderr, "Need exactly one BAM file as argument\n");
+        return(EXIT_FAILURE);
+    }
+    mpileup(&mplp, 1, argv + optind);
 #ifdef ORIG
 	if (mplp.rghash) bcf_str2id_thorough_destroy(mplp.rghash);
 #endif
@@ -646,10 +743,22 @@ int bam_mpileup(int argc, char *argv[])
 
 int main(int argc, char **argv)
 {
-#if 0
-     fprintf(stderr, "FIXME: make -Q work\n");
-     fprintf(stderr, "FIXME: make sure -q works\n");
+#ifdef BAM_NT_EXAMPLE
+     {
+          char test_nucs[] = "ACGTNRYacgtnryZ\0";
+          int i;
+          
+          for (i=0; i<strlen(test_nucs); i++) {
+               printf("%d %c - %d - %d\n", i, test_nucs[i],
+                      bam_nt16_table[(int)test_nucs[i]],
+                      bam_nt16_nt4_table[bam_nt16_table[(int)test_nucs[i]]]);
+          }
+     }
+
+     fprintf(stderr, "FIXME: make bq and mq quality filtering work\n");
 #endif
+
+
      if (argc>1 && strcmp(argv[1], "mpileup") == 0) {
           return bam_mpileup(argc-1, argv+1);
      } else {
