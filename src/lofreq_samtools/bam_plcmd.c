@@ -325,137 +325,41 @@ static int mplp_func(void *data, bam1_t *b)
 }
 
 
-static int mpileup(mplp_conf_t *conf, int n, char **fn)
+void process_plp(const bam_pileup1_t *plp, const int n_plp, 
+                 mplp_conf_t *conf, const char *ref, const int pos, 
+                 const int ref_len, const char *target_name)
 {
-    mplp_aux_t **data;
-    int i, tid, pos, *n_plp, tid0 = -1, beg0 = 0, end0 = 1u<<29, ref_len, ref_tid = -1, max_depth;
-    const bam_pileup1_t **plp;
-    bam_mplp_t iter;
-    bam_header_t *h = 0;
-    char *ref;
-    kstring_t buf;
-  
-    /* paranoid exit. n only allowed to be one in our case (not much
-     * of an *m*pileup, I know...) */
-    if (1 != n) {
-         fprintf(stderr, "FATAL(%s:%s): need exactly one BAM files as input (got %d)\n",
-                 __FILE__, __FUNCTION__, n);
-         for (i=0; i<n; i++) {
-              fprintf(stderr, "%s\n", fn[i]);
-         }
-         exit(1);
-    }
+     int j;
+     char ref_base;
+     int num_heads = 0;
+     int num_tails = 0;
+     int num_ins = 0;
+     int sum_ins = 0;
+     int num_dels = 0;
+     int sum_dels = 0;
+     plp_col_t plp_col; /* FIXME in the long-run meant to be the main data-structure */
 
-    memset(&buf, 0, sizeof(kstring_t));
-    data = calloc(n, sizeof(void*));
-    plp = calloc(n, sizeof(void*));
-    n_plp = calloc(n, sizeof(int*));
+     ref_base = (ref && pos < ref_len)? ref[pos] : 'N';
+     printf("%s\t%d\t%c", target_name, pos + 1, ref_base);
+     
+     plp_col_init(& plp_col);
+     plp_col.target = strdup(target_name);
+     plp_col.pos = pos;
+     plp_col.ref_base = ref_base;
+     
+     printf("\t%d\t", n_plp);
 
-    fprintf(stderr, "[%s] Note, the output differs from regular pileup (see http://samtools.sourceforge.net/pileup.shtml) in the following ways\n", __func__);
-    fprintf(stderr, "[%s] - bases and qualities are merged into one field\n", __func__);
-    fprintf(stderr, "[%s] - each base is immediately followed by its quality\n", __func__);
-    fprintf(stderr, "[%s] - on request mapping and base call quality are merged (P_joined = P_mq + (1-P_mq)*P_bq\n", __func__);
-    fprintf(stderr, "[%s] - indel events are removed from bases and qualities and summarized in an additional field\n", __func__);
-    fprintf(stderr, "[%s] - reference matches are not replaced with , or .\n", __func__);
-
-    /* read the header and initialize data */
-    for (i = 0; i < n; ++i) {
-        bam_header_t *h_tmp;
-        if (0 != strcmp(fn[i], "-")) {
-          if (! file_exists(fn[i])) {
-            fprintf(stderr, "File '%s' does not exist. Exiting...\n", fn[i]);
-            exit(1);
-          }
-        }
-        data[i] = calloc(1, sizeof(mplp_aux_t));
-        data[i]->fp = strcmp(fn[i], "-") == 0? bam_dopen(fileno(stdin), "r") : bam_open(fn[i], "r");
-        data[i]->conf = conf;
-        h_tmp = bam_header_read(data[i]->fp);
-        data[i]->h = i? h : h_tmp; /* for i==0, "h" has not been set yet */
-
-        if (conf->reg) {
-            int beg, end;
-            bam_index_t *idx;
-            idx = bam_index_load(fn[i]);
-            if (idx == 0) {
-                fprintf(stderr, "[%s] fail to load index for %d-th input.\n", __func__, i+1);
-                exit(1);
-            }
-            if (bam_parse_region(h_tmp, conf->reg, &tid, &beg, &end) < 0) {
-                fprintf(stderr, "[%s] malformatted region or wrong seqname for %d-th input.\n", __func__, i+1);
-                exit(1);
-            }
-            if (i == 0) tid0 = tid, beg0 = beg, end0 = end;
-            data[i]->iter = bam_iter_query(idx, tid, beg, end);
-            bam_index_destroy(idx);
-        }
-        if (i == 0) h = h_tmp;
-        else {
-             /* FIXME: to check consistency */
-            bam_header_destroy(h_tmp);
-        }
-    }
-
-    if (tid0 >= 0 && conf->fai) { /* region is set */
-        ref = faidx_fetch_seq(conf->fai, h->target_name[tid0], 0, 0x7fffffff, &ref_len);
-        ref_tid = tid0;
-        for (i = 0; i < n; ++i) data[i]->ref = ref, data[i]->ref_id = tid0;
-    } else ref_tid = -1, ref = 0;
-    iter = bam_mplp_init(n, mplp_func, (void**)data);
-    max_depth = conf->max_depth;
-    if (max_depth * 1 > 1<<20)
-        fprintf(stderr, "(%s) Max depth is above 1M. Potential memory hog!\n", __func__);
-    if (max_depth * 1 < 8000) {
-        max_depth = 8000 / 1;
-        fprintf(stderr, "<%s> Set max per-file depth to %d\n", __func__, max_depth);
-    }
-    bam_mplp_set_maxcnt(iter, max_depth);
-
-
-    while (bam_mplp_auto(iter, &tid, &pos, n_plp, plp) > 0) {
-        char ref_base;
-        int j;
-        plp_col_t plp_col;
-        int num_heads = 0;
-        int num_tails = 0;
-        int num_ins = 0;
-        int sum_ins = 0;
-        int num_dels = 0;
-        int sum_dels = 0;
-        int i=0; /* NOTE: mpileup originally iterated over n which is set to 1 here */
-
-
-        if (conf->reg && (pos < beg0 || pos >= end0)) continue; /* out of the region requested */
-        if (conf->bed && tid >= 0 && !bed_overlap(conf->bed, h->target_name[tid], pos, pos+1)) continue;
-        if (tid != ref_tid) {
-            free(ref); ref = 0;
-            if (conf->fai) ref = faidx_fetch_seq(conf->fai, h->target_name[tid], 0, 0x7fffffff, &ref_len);
-            for (i = 0; i < n; ++i) data[i]->ref = ref, data[i]->ref_id = tid;
-            ref_tid = tid;
-        }
-        i=0; /* i is 1 for first pos which is a bug due to the removal
-              * of one of the loops, so reset here */
-        ref_base = (ref && pos < ref_len)? ref[pos] : 'N';
-        printf("%s\t%d\t%c", h->target_name[tid], pos + 1, ref_base);
-
-        plp_col_init(& plp_col);
-        plp_col.target = strdup(h->target_name[tid]);
-        plp_col.pos = pos;
-        plp_col.ref_base = ref_base;
-
-        printf("\t%d\t", n_plp[i]);
-
-        /* never seen this happening. must be filtered somewhere upstream */
-        if (n_plp[i] == 0) {
-             printf("*\t*\n");
-             continue;
-        }
+     /* never seen this happening. must be filtered somewhere upstream */
+     if (n_plp == 0) {
+          printf("*\t*\n");
+          return;
+     }
         
-        for (j = 0; j < n_plp[i]; ++j) {
+     for (j = 0; j < n_plp; ++j) {
 
              /* merged modified pileup_seq() in here 
               */
-             const bam_pileup1_t *p = plp[i] + j;
+             const bam_pileup1_t *p = plp + j;
              int nt, nt4;
              int mq, bq, jq, final_q; /* phred scores */
              double mp, bp, jp; /* corresponding probs */
@@ -480,7 +384,13 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
                   if (bq < conf->min_baseQ) {
                        goto check_indel; /* FIXME: argh! */
                   }
-                  /* FIXME: alt test */
+                  if (ref_base != 'N' && toupper(nt) != toupper(ref_base)) {
+                       if (bq < conf->min_altbaseQ) {
+                            goto check_indel; /* FIXME: argh! */
+                       }
+                  }
+                  /* FIXME test if this work as expected */
+                  /* FIXME should call cons here and test against it? */
 
                   /* the following will correct base-pairs
                    * down if they exceed the valid
@@ -612,7 +522,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
                   }
              } /* if (p->indel != 0) ... */
 
-        }  /* end: for (j = 0; j < n_plp[i]; ++j) { */
+        }  /* end: for (j = 0; j < n_plp; ++j) { */
         
         printf("\t#heads=%d #tails=%d #ins=%d ins_len=%.1f #del=%d del_len=%.1f\n",
                num_heads, num_tails,
@@ -622,6 +532,116 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
         plp_col_print(& plp_col, stderr);
 #endif
         plp_col_free(& plp_col);
+}
+
+
+static int mpileup(mplp_conf_t *conf, int n, char **fn)
+{
+    mplp_aux_t **data;
+    int i, tid, pos, *n_plp, tid0 = -1, beg0 = 0, end0 = 1u<<29, ref_len, ref_tid = -1, max_depth;
+    const bam_pileup1_t **plp;
+    bam_mplp_t iter;
+    bam_header_t *h = 0;
+    char *ref;
+    kstring_t buf;
+  
+    /* paranoid exit. n only allowed to be one in our case (not much
+     * of an *m*pileup, I know...) */
+    if (1 != n) {
+         fprintf(stderr, "FATAL(%s:%s): need exactly one BAM files as input (got %d)\n",
+                 __FILE__, __FUNCTION__, n);
+         for (i=0; i<n; i++) {
+              fprintf(stderr, "%s\n", fn[i]);
+         }
+         exit(1);
+    }
+
+    memset(&buf, 0, sizeof(kstring_t));
+    data = calloc(n, sizeof(void*));
+    plp = calloc(n, sizeof(void*));
+    n_plp = calloc(n, sizeof(int*));
+
+    fprintf(stderr, "[%s] Note, the output differs from regular pileup (see http://samtools.sourceforge.net/pileup.shtml) in the following ways\n", __func__);
+    fprintf(stderr, "[%s] - bases and qualities are merged into one field\n", __func__);
+    fprintf(stderr, "[%s] - each base is immediately followed by its quality\n", __func__);
+    fprintf(stderr, "[%s] - on request mapping and base call quality are merged (P_joined = P_mq + (1-P_mq)*P_bq\n", __func__);
+    fprintf(stderr, "[%s] - indel events are removed from bases and qualities and summarized in an additional field\n", __func__);
+    fprintf(stderr, "[%s] - reference matches are not replaced with , or .\n", __func__);
+
+    /* read the header and initialize data */
+    for (i = 0; i < n; ++i) {
+        bam_header_t *h_tmp;
+        if (0 != strcmp(fn[i], "-")) {
+          if (! file_exists(fn[i])) {
+            fprintf(stderr, "File '%s' does not exist. Exiting...\n", fn[i]);
+            exit(1);
+          }
+        }
+        data[i] = calloc(1, sizeof(mplp_aux_t));
+        data[i]->fp = strcmp(fn[i], "-") == 0? bam_dopen(fileno(stdin), "r") : bam_open(fn[i], "r");
+        data[i]->conf = conf;
+        h_tmp = bam_header_read(data[i]->fp);
+        data[i]->h = i? h : h_tmp; /* for i==0, "h" has not been set yet */
+
+        if (conf->reg) {
+            int beg, end;
+            bam_index_t *idx;
+            idx = bam_index_load(fn[i]);
+            if (idx == 0) {
+                fprintf(stderr, "[%s] fail to load index for %d-th input.\n", __func__, i+1);
+                exit(1);
+            }
+            if (bam_parse_region(h_tmp, conf->reg, &tid, &beg, &end) < 0) {
+                fprintf(stderr, "[%s] malformatted region or wrong seqname for %d-th input.\n", __func__, i+1);
+                exit(1);
+            }
+            if (i == 0) tid0 = tid, beg0 = beg, end0 = end;
+            data[i]->iter = bam_iter_query(idx, tid, beg, end);
+            bam_index_destroy(idx);
+        }
+        if (i == 0) h = h_tmp;
+        else {
+             /* FIXME: to check consistency */
+            bam_header_destroy(h_tmp);
+        }
+    }
+
+    if (tid0 >= 0 && conf->fai) { /* region is set */
+        ref = faidx_fetch_seq(conf->fai, h->target_name[tid0], 0, 0x7fffffff, &ref_len);
+        ref_tid = tid0;
+        for (i = 0; i < n; ++i) data[i]->ref = ref, data[i]->ref_id = tid0;
+    } else ref_tid = -1, ref = 0;
+    iter = bam_mplp_init(n, mplp_func, (void**)data);
+    max_depth = conf->max_depth;
+    if (max_depth * 1 > 1<<20)
+        fprintf(stderr, "(%s) Max depth is above 1M. Potential memory hog!\n", __func__);
+    if (max_depth * 1 < 8000) {
+        max_depth = 8000 / 1;
+        fprintf(stderr, "<%s> Set max per-file depth to %d\n", __func__, max_depth);
+    }
+    bam_mplp_set_maxcnt(iter, max_depth);
+
+
+    while (bam_mplp_auto(iter, &tid, &pos, n_plp, plp) > 0) {
+         int i=0; /* NOTE: mpileup originally iterated over n */
+
+        if (conf->reg && (pos < beg0 || pos >= end0))
+             continue; /* out of the region requested */
+        if (conf->bed && tid >= 0 && !bed_overlap(conf->bed, h->target_name[tid], pos, pos+1)) 
+             continue;
+        if (tid != ref_tid) {
+            free(ref); ref = 0;
+            if (conf->fai) 
+                 ref = faidx_fetch_seq(conf->fai, h->target_name[tid], 0, 0x7fffffff, &ref_len);
+            for (i = 0; i < n; ++i) 
+                 data[i]->ref = ref, data[i]->ref_id = tid;
+            ref_tid = tid;
+        }
+        i=0; /* i is 1 for first pos which is a bug due to the removal
+              * of one of the loops, so reset here */
+
+
+        process_plp(plp[i], n_plp[i], conf, ref, pos, ref_len, h->target_name[tid]);
     } /* while bam_mplp_auto */
 
     free(buf.s);
@@ -636,6 +656,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
     return 0;
 }
 
+
 void usage(const mplp_conf_t *mplp_conf) {
      fprintf(stderr, "Usage: %s [mpileup] [options] in.bam\n\n", MYNAME);
      fprintf(stderr, "Options:\n");
@@ -647,7 +668,7 @@ void usage(const mplp_conf_t *mplp_conf) {
      fprintf(stderr, "       -f FILE      faidx indexed reference sequence file [null]\n");
      /* base call quality and baq */
      fprintf(stderr, "       -q INT       skip any base with baseQ smaller than INT [%d]\n", mplp_conf->min_baseQ);
-     fprintf(stderr, "       -Q INT       skip alt-bases with baseQ smaller than INT [%d]\n", mplp_conf->min_altbaseQ);
+     fprintf(stderr, "       -Q INT       skip nonref-bases with baseQ smaller than INT [%d]. Not active if ref is N\n", mplp_conf->min_altbaseQ);
      fprintf(stderr, "       -B           disable BAQ computation\n");
      fprintf(stderr, "       -E           extended BAQ for higher sensitivity but lower specificity\n");
      /* mapping quality */
