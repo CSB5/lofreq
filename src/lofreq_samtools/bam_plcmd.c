@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <assert.h>
 #include <stdarg.h>
+#include <limits.h>
 
 #include "sam.h"
 #include "faidx.h"
@@ -183,13 +184,19 @@ void int_varray_add_value(int_varray_t *a, const int value)
 
 
 typedef struct {
-     char *target;
-     int pos;
-     char ref_base;
-     int_varray_t qs_fw[NUM_NT4];
-     int_varray_t qs_rv[NUM_NT4];
-     int heads;
-     int tails;
+     char *target; /* chromsome or sequence name */
+     int pos; /* position */
+     char ref_base; /* reference base */
+     int coverage; /* coverage after read-level filtering (same as in samtools mpileup (n_plp)) */
+     int_varray_t qs_fw[NUM_NT4]; /* qualities on fw strand for all bases */
+     int_varray_t qs_rv[NUM_NT4]; /* qualities on rv strand for all bases */
+     int num_heads; /* number of read starts at this pos */
+     int num_tails; /* number of read ends at this pos */
+
+     /* FIXME only temporary before they move into they own structure */
+     int num_ins, sum_ins;
+     int num_dels, sum_dels;
+
 } plp_col_t;
 
 
@@ -197,14 +204,18 @@ void plp_col_init(plp_col_t *p) {
     int i;
 
     p->target =  NULL;
-    p->pos = -1;
+    p->pos = -INT_MAX;
     p->ref_base = '\0';
+    p->coverage = -INT_MAX;
     for (i=0; i<NUM_NT4; i++) {
          int_varray_init(& p->qs_fw[i], 0);
          int_varray_init(& p->qs_rv[i], 0);
     }
-    p->heads = 0;
-    p->tails = 0;
+    p->num_heads = p->num_tails = 0;
+
+    p->num_ins = p->sum_ins = 0;
+    p->num_dels = p->sum_dels = 0;
+
 }
 
 void plp_col_free(plp_col_t *p) {
@@ -217,7 +228,7 @@ void plp_col_free(plp_col_t *p) {
     }
 }
 
-void plp_col_print(const plp_col_t *p, FILE *stream) {
+void plp_col_debug_print(const plp_col_t *p, FILE *stream) {
      int i;
      
      fprintf(stream, "%s\t%d\t%c base-counts (fw/rv): ", 
@@ -228,7 +239,38 @@ void plp_col_print(const plp_col_t *p, FILE *stream) {
                   p->qs_fw[i].n,
                   p->qs_rv[i].n);
      }
-     fprintf(stream, " heads:%d tails:%d\n", p->heads, p->tails);
+     fprintf(stream, " heads:%d tails:%d\n", p->num_heads, p->num_tails);
+     fprintf(stream, "\n");
+
+}
+
+void plp_col_mpileup_print(const plp_col_t *p, FILE *stream) {
+     int i;
+     
+     fprintf(stream, "%s\t%d\t%c\t%d\t",
+             p->target, p->pos+1, p->ref_base, p->coverage);
+
+     for (i=0; i<NUM_NT4; i++) {
+          int j, nt, q;
+
+          nt = toupper(bam_nt4_rev_table[i]);
+          for (j=0; j<p->qs_fw[i].n; j++) {
+               q = p->qs_fw[i].data[j];
+               fprintf(stream, "%c%c", nt, q+33);
+          }
+
+          nt = tolower(bam_nt4_rev_table[i]);
+          for (j=0; j<p->qs_rv[i].n; j++) {
+               q = p->qs_rv[i].data[j];
+               fprintf(stream, "%c%c", nt, q+33);
+          }
+     }             
+
+     fprintf(stream, "\t#heads=%d #tails=%d #ins=%d ins_len=%.1f #del=%d del_len=%.1f",
+            p->num_heads, p->num_tails,
+            p->num_ins, p->num_ins ? p->sum_ins/(float)p->num_ins : 0,
+            p->num_dels, p->num_dels ? p->sum_dels/(float)p->num_dels : 0);
+
      fprintf(stream, "\n");
 }
 
@@ -331,207 +373,201 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
 {
      int j;
      char ref_base;
-     int num_heads = 0;
-     int num_tails = 0;
-     int num_ins = 0;
-     int sum_ins = 0;
-     int num_dels = 0;
-     int sum_dels = 0;
      plp_col_t plp_col; /* FIXME in the long-run meant to be the main data-structure */
 
+     /* computation of depth (after read-level *and* base-level filtering)
+      * samtools-0.1.18/bam2depth.c: 
+      *   if (p->is_del || p->is_refskip) ++m; 
+      *   else if (bam1_qual(p->b)[p->qpos] < baseQ) ++m
+      * n_plp[i] - m
+      */
+     int f_depth = 0;
+     int num_skips = 0;
+
      ref_base = (ref && pos < ref_len)? ref[pos] : 'N';
-     printf("%s\t%d\t%c", target_name, pos + 1, ref_base);
      
      plp_col_init(& plp_col);
      plp_col.target = strdup(target_name);
      plp_col.pos = pos;
      plp_col.ref_base = ref_base;
-     
-     printf("\t%d\t", n_plp);
+     plp_col.coverage = n_plp;  /* this is a in mpileup the coverage, but after read-level filtering. */
 
-     /* never seen this happening. must be filtered somewhere upstream */
-     if (n_plp == 0) {
-          printf("*\t*\n");
-          return;
-     }
-        
      for (j = 0; j < n_plp; ++j) {
-
-             /* merged modified pileup_seq() in here 
-              */
-             const bam_pileup1_t *p = plp + j;
-             int nt, nt4;
-             int mq, bq, jq, final_q; /* phred scores */
-             double mp, bp, jp; /* corresponding probs */
+          /* used parts of pileup_seq() here */
+          const bam_pileup1_t *p = plp + j;
+          int nt, nt4;
+          int mq, bq, jq, final_q; /* phred scores */
+          double mp, bp, jp; /* corresponding probs */
+          int base_skip = 0; /* boolean */
              
-             if (! p->is_del) {
-                  if (p->is_head) {
-                       plp_col.heads += 1;
-                       num_heads += 1;
-                  }
-                  if (p->is_tail) {
-                       plp_col.tails += 1;
-                       num_tails += 1;
-                  }
+          if (! p->is_del) {
+               if (p->is_head) {
+                    plp_col.num_heads += 1;
+               }
+               if (p->is_tail) {
+                    plp_col.num_tails += 1;
+               }
 
-                  /* nt for printing */
-                  nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos)];
-                  nt = bam1_strand(p->b)? tolower(nt) : toupper(nt);
-                  /* nt4 for indexing */
-                  nt4 = bam_nt16_nt4_table[bam1_seqi(bam1_seq(p->b), p->qpos)];                           
-
-                  bq = bam1_qual(p->b)[p->qpos];
-                  if (bq < conf->min_baseQ) {
-                       goto check_indel; /* FIXME: argh! */
-                  }
-                  if (ref_base != 'N' && toupper(nt) != toupper(ref_base)) {
-                       if (bq < conf->min_altbaseQ) {
-                            goto check_indel; /* FIXME: argh! */
-                       }
-                  }
-                  /* FIXME test if this work as expected */
-                  /* FIXME should call cons here and test against it? */
-
-                  /* the following will correct base-pairs
-                   * down if they exceed the valid
-                   * sanger/phred limits. is it wise to do
-                   * this automatically? doesn't this
-                   * indicate a problem with the input ? */
-                  if (bq > 93) 
-                       bq = 93; /* Sanger/Phred max */
-                  
-                  /* mapping quality. originally:
-                   * c = plp[i][j].b->core.qual + 33;
-                   * no need for check if mq is within user defined
-                   * limits. check was done in mplp_func */
-                  mq = p->b->core.qual;
-
-                  /* samtools check to detect Sanger max
-                   * value: problem is that an MQ Phred of
-                   * 255 means NA according to the samtools
-                   * spec (needed below). This however is not
-                   * detectable if the following original
-                   * samtools line gets executed, which is
-                   * why we remove it:
-                   * if (mq > 126) mq = 126;
-                   */
-
-                  /* "Merge" MQ and BQ if requested and if
-                   *  MAQP not 255 (not available):
-                   * P_jq = P_mq * + (1-P_mq) P_bq.
-                   */
-                  if ((conf->flag & MPLP_JOIN_BQ_AND_MQ) && mq != 255) {
-                       /* Careful: q's are all ready to print
-                        * sanger phred-scores. No need to do
-                        * computation in phred-space as numbers
-                        * won't get small enough.
-                        */
-                       mp = PHREDQUAL_TO_PROB(mq);
-                       bp = PHREDQUAL_TO_PROB(bq);
-                       /* precision?! */
-                       jp = mp + (1.0 - mp) * bp;
-                       jq = PROB_TO_PHREDQUAL(jp);
+               /* nt for printing */
+               nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos)];
+               nt = bam1_strand(p->b)? tolower(nt) : toupper(nt);
+               /* nt4 for indexing */
+               nt4 = bam_nt16_nt4_table[bam1_seqi(bam1_seq(p->b), p->qpos)];                           
+               
+               bq = bam1_qual(p->b)[p->qpos];
+               if (bq < conf->min_baseQ) {
+                    base_skip = 1;
+                    goto check_indel; /* FIXME: argh! */
+               }
+               if (toupper(ref_base) != 'N' && toupper(nt) != toupper(ref_base)) {
+                    if (bq < conf->min_altbaseQ) {
+                         base_skip = 1;
+                         goto check_indel; /* FIXME: argh! */
+                    }
+               }
+               /* FIXME test if this work as expected */
+               /* FIXME should call cons here and test against it? */
+               
+               /* the following will correct base-pairs
+                * down if they exceed the valid
+                * sanger/phred limits. is it wise to do
+                * this automatically? doesn't this
+                * indicate a problem with the input ? */
+               if (bq > 93) 
+                    bq = 93; /* Sanger/Phred max */
+               
+               /* mapping quality. originally:
+                * c = plp[i][j].b->core.qual + 33;
+                * no need for check if mq is within user defined
+                * limits. check was done in mplp_func */
+               mq = p->b->core.qual;
+               
+               /* samtools check to detect Sanger max
+                * value: problem is that an MQ Phred of
+                * 255 means NA according to the samtools
+                * spec (needed below). This however is not
+                * detectable if the following original
+                * samtools line gets executed, which is
+                * why we remove it:
+                * if (mq > 126) mq = 126;
+                */
+               
+               /* "Merge" MQ and BQ if requested and if
+                *  MAQP not 255 (not available):
+                * P_jq = P_mq * + (1-P_mq) P_bq.
+                */
+               if ((conf->flag & MPLP_JOIN_BQ_AND_MQ) && mq != 255) {
+                    /* Careful: q's are all ready to print
+                     * sanger phred-scores. No need to do
+                     * computation in phred-space as numbers
+                     * won't get small enough.
+                     */
+                    mp = PHREDQUAL_TO_PROB(mq);
+                    bp = PHREDQUAL_TO_PROB(bq);
+                    /* precision?! */
+                    jp = mp + (1.0 - mp) * bp;
+                    jq = PROB_TO_PHREDQUAL(jp);
 #ifdef DEBUG
-                       LOG_DEBUG("P_M + (1-P_M) P_B:   %g + (1.0 - %g) * %g = %g  ==  Q%d + (1.0 - Q%d) * Q%d  =  Q%d\n",
-                                 mp+33, mp+33, bp+33, jp+33,  mq, mq, bq, jq);
+                    LOG_DEBUG("P_M + (1-P_M) P_B:   %g + (1.0 - %g) * %g = %g  ==  Q%d + (1.0 - Q%d) * Q%d  =  Q%d\n",
+                              mp+33, mp+33, bp+33, jp+33,  mq, mq, bq, jq);
 #endif
-                       final_q = jq;
-                  } else {
-                       final_q = bq;
-                  }
-
-                  putchar(nt);
-                  putchar(final_q+33);
-
-                  if (bam1_strand(p->b)) {
-                        PLP_COL_ADD_BASEQUAL(& plp_col.qs_rv[nt4], final_q);
-                  } else {
-                       PLP_COL_ADD_BASEQUAL(& plp_col.qs_fw[nt4], final_q);
-                  }
-
-             } /* ! p->is_del */
-
-
-        check_indel:
-
-             /* A pattern \+[0-9]+[ACGTNacgtn]+' indicates there is an
-              * insertion between this reference position and the next
-              * reference position. The length of the insertion is
-              * given by the integer in the pattern, followed by the
-              * inserted sequence. Similarly, a pattern
-              * -[0-9]+[ACGTNacgtn]+ represents a deletion from the
-              * reference. The deleted bases will be presented as ‘*’
-              * in the following lines.
-              */
-             if (p->indel != 0) {
-                  if (p->indel > 0) {
-                       /* + */
-                       num_ins += 1;
-                       sum_ins += p->indel;
-
+                    final_q = jq;
+               } else {
+                    final_q = bq;
+               }
+               
+               if (bam1_strand(p->b)) {
+                    PLP_COL_ADD_BASEQUAL(& plp_col.qs_rv[nt4], final_q);
+               } else {
+                    PLP_COL_ADD_BASEQUAL(& plp_col.qs_fw[nt4], final_q);
+               }
+               
+          } /* ! p->is_del */
+          
+          
+     check_indel:
+          
+          /* coverage */
+          if (p->is_del || p->is_refskip || 1 == base_skip) {
+               num_skips += 1;
+          }
+          
+          /* A pattern \+[0-9]+[ACGTNacgtn]+' indicates there is an
+           * insertion between this reference position and the next
+           * reference position. The length of the insertion is
+           * given by the integer in the pattern, followed by the
+           * inserted sequence. Similarly, a pattern
+           * -[0-9]+[ACGTNacgtn]+ represents a deletion from the
+           * reference. The deleted bases will be presented as ‘*’
+           * in the following lines.
+           */
+          if (p->indel != 0) {
+               if (p->indel > 0) {
+                    /* + */
+                    plp_col.num_ins += 1;
+                    plp_col.sum_ins += p->indel;
+                    
 #ifdef INDEL_TEST
-                       {int j;
-                            uint8_t *s = bam_aux_get(p->b, "BI");
-                            printf("\n");
-                            if (s) {
-                                 char *t = (char*)(s+1);
-                                 printf("BI:%s ", t);
-                                 for (j = 0; j < p->indel; ++j) {
-                                      printf("%c", t[p->qpos+j]);
-                                 }
-                                 printf("\n");
-                            }
-                            
-                            putchar('+'); printw(p->indel, stdout);
-                            putchar(' ');
-                            for (j = 1; j <= p->indel; ++j) {
-                                 int c = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos + j)];
-                                 putchar(bam1_strand(p->b)? tolower(c) : toupper(c));
-                            }
-                            printf("\n");
-                       }
+                    {int j;
+                         uint8_t *s = bam_aux_get(p->b, "BI");
+                         printf("\n");
+                         if (s) {
+                              char *t = (char*)(s+1);
+                              printf("BI:%s ", t);
+                              for (j = 0; j < p->indel; ++j) {
+                                   printf("%c", t[p->qpos+j]);
+                              }
+                              printf("\n");
+                         }
+                         
+                         putchar('+'); printw(p->indel, stdout);
+                         putchar(' ');
+                         for (j = 1; j <= p->indel; ++j) {
+                              int c = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos + j)];
+                              putchar(bam1_strand(p->b)? tolower(c) : toupper(c));
+                         }
+                         printf("\n");
+                    }
 #endif
-
-                  } else if (p->indel < 0) {
-                       /* - */
-                       num_dels += 1;
-                       sum_dels -= p->indel;
-
+                    
+               } else if (p->indel < 0) {
+                    /* - */
+                    plp_col.num_dels += 1;
+                    plp_col.sum_dels -= p->indel;
+                    
 #ifdef INDEL_TEST
-                       {int j;
-                            uint8_t *s = bam_aux_get(p->b, "BD");
-                            printf("\n");
-                            if (s) {
-                                 char *t = (char*)(s+1);
-                                 printf("BD:%s ", t);
-                                 for (j = 0; j < -p->indel; ++j) {
-                                      printf("%c", t[p->qpos+j]);
-                                 }
-                                 printf("\n");
-                            }
-                            
-                            printw(p->indel, stdout);
-                            putchar(' ');
-                            for (j = 1; j <= -p->indel; ++j) {
-                                 int c = (ref && (int)pos+j < ref_len)? ref[pos+j] : 'N';
-                                 putchar(bam1_strand(p->b)? tolower(c) : toupper(c));
-                            }
-                            printf("\n");
-                       }
+                    {int j;
+                         uint8_t *s = bam_aux_get(p->b, "BD");
+                         printf("\n");
+                         if (s) {
+                              char *t = (char*)(s+1);
+                              printf("BD:%s ", t);
+                              for (j = 0; j < -p->indel; ++j) {
+                                   printf("%c", t[p->qpos+j]);
+                              }
+                              printf("\n");
+                         }
+                         
+                         printw(p->indel, stdout);
+                         putchar(' ');
+                         for (j = 1; j <= -p->indel; ++j) {
+                              int c = (ref && (int)pos+j < ref_len)? ref[pos+j] : 'N';
+                              putchar(bam1_strand(p->b)? tolower(c) : toupper(c));
+                         }
+                         printf("\n");
+                    }
 #endif
-                  }
-             } /* if (p->indel != 0) ... */
+               }
+          } /* if (p->indel != 0) ... */
+          
+     }  /* end: for (j = 0; j < n_plp; ++j) { */
+     
+     /* FIXME: unused */
+     f_depth = n_plp-num_skips;
 
-        }  /* end: for (j = 0; j < n_plp; ++j) { */
-        
-        printf("\t#heads=%d #tails=%d #ins=%d ins_len=%.1f #del=%d del_len=%.1f\n",
-               num_heads, num_tails,
-               num_ins, num_ins ? sum_ins/(float)num_ins : 0,
-               num_dels, num_dels ? sum_dels/(float)num_dels : 0);
-#if PRINT_PLP_COL
-        plp_col_print(& plp_col, stderr);
-#endif
-        plp_col_free(& plp_col);
+     plp_col_mpileup_print(& plp_col, stdout);
+
+     plp_col_free(& plp_col);
 }
 
 
@@ -691,7 +727,7 @@ int bam_mpileup(int argc, char *argv[])
     /* default pileup options */
     mplp.max_mq = 255; /* 60 */
     mplp.min_baseQ = 3; /* 13 */
-    mplp.min_altbaseQ = 20; /* new */
+    mplp.min_altbaseQ = 3; /* new */
     mplp.capQ_thres = 0;
     mplp.max_depth = 1000000; /* 250 */
     mplp.flag = MPLP_NO_ORPHAN | MPLP_REALN;
