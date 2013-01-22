@@ -125,6 +125,7 @@ int verbose = 1;
 #define LOG_FIXME(fmt, args...)  printk(stderr, 1, "FIXME(%s|%s:%d): " fmt, __FILE__, __FUNCTION__, __LINE__, ## args)
 
 
+
 typedef struct {
      unsigned long int n; /* number of elements stored */
      int *data; /* actual array of data */
@@ -132,8 +133,6 @@ typedef struct {
      size_t grow_by_size; /* if needed grow array by this value. will double previous size if <=1 */
      size_t alloced; /* actually allocated size for data */
 } int_varray_t;
-
-
 
 void int_varray_free(int_varray_t *a) 
 {
@@ -148,11 +147,9 @@ void int_varray_init(int_varray_t *a,
                      const size_t grow_by_size)
 {
     assert(NULL != a);
-    assert(0 == a->alloced); /* otherwise use clear() */
 
     a->n = 0;
     a->data = NULL;
-
     a->grow_by_size = grow_by_size;
     a->alloced = 0;
 }
@@ -160,9 +157,9 @@ void int_varray_init(int_varray_t *a,
 void int_varray_add_value(int_varray_t *a, const int value)
 {
     assert(NULL != a);
+
     if (a->n * sizeof(int) == a->alloced) {
-        size_t size_to_alloc;
-        
+        size_t size_to_alloc;        
         if (1 >=  a->grow_by_size) {
              assert(SIZE_MAX - a->alloced > a->alloced);
              size_to_alloc = 0==a->n ? sizeof(int) : a->alloced*2;
@@ -170,14 +167,9 @@ void int_varray_add_value(int_varray_t *a, const int value)
              assert(SIZE_MAX - a->alloced > a->grow_by_size);
              size_to_alloc = a->alloced + a->grow_by_size;
         }
-#ifdef DEBUG
-        LOG_DEBUG("size=%lu alloced=%zd size_to_alloc=%zd sizeof(data)=%zd\n",
-                a->n, a->alloced, size_to_alloc, sizeof(a->data));
-#endif
         a->data = realloc(a->data, size_to_alloc);
         a->alloced = size_to_alloc;
     }
-
     a->data[a->n] = value;
     a->n++;
 }
@@ -186,17 +178,17 @@ void int_varray_add_value(int_varray_t *a, const int value)
 typedef struct {
      char *target; /* chromsome or sequence name */
      int pos; /* position */
-     char ref_base; /* reference base */
-     int coverage; /* coverage after read-level filtering (same as in samtools mpileup (n_plp)) */
-     int_varray_t qs_fw[NUM_NT4]; /* qualities on fw strand for all bases */
-     int_varray_t qs_rv[NUM_NT4]; /* qualities on rv strand for all bases */
+     char ref_base; /* reference base (given by fasta) */
+     char cons_base; /* consensus base according to base-counts, after read-level filtering */
+     int coverage; /* coverage after read-level filtering i.e. same as in samtools mpileup (n_plp) */
+     int_varray_t qs_fw[NUM_NT4]; /* list of qualities on fw strand for all bases after base-level filtering */
+     int_varray_t qs_rv[NUM_NT4]; /* list of qualities on rv strand for all bases after base-level filtering */
      int num_heads; /* number of read starts at this pos */
      int num_tails; /* number of read ends at this pos */
 
      /* FIXME only temporary before they move into they own structure */
      int num_ins, sum_ins;
      int num_dels, sum_dels;
-
 } plp_col_t;
 
 
@@ -206,6 +198,7 @@ void plp_col_init(plp_col_t *p) {
     p->target =  NULL;
     p->pos = -INT_MAX;
     p->ref_base = '\0';
+    p->cons_base = '\0';
     p->coverage = -INT_MAX;
     for (i=0; i<NUM_NT4; i++) {
          int_varray_init(& p->qs_fw[i], 0);
@@ -231,8 +224,8 @@ void plp_col_free(plp_col_t *p) {
 void plp_col_debug_print(const plp_col_t *p, FILE *stream) {
      int i;
      
-     fprintf(stream, "%s\t%d\t%c base-counts (fw/rv): ", 
-             p->target, p->pos+1, p->ref_base);
+     fprintf(stream, "%s\t%d\t%c\t%c base-counts (fw/rv): ", 
+             p->target, p->pos+1, p->ref_base, p->cons_base);
      for (i=0; i<NUM_NT4; i++) {
           fprintf(stream, " %c:%lu/%lu",
                   bam_nt4_rev_table[i],
@@ -280,6 +273,20 @@ void plp_col_mpileup_print(const plp_col_t *p, FILE *stream) {
 #define PLP_COL_ADD_BASEQUAL(p, q)   int_varray_add_value((p), (q));
 
 
+
+/* will return the lower index on tie */
+int argmax_d(const double *arr, const int n)
+{
+  int i;
+  int maxidx = 0;
+
+  for (i=0; i<n; i++) {
+       if (arr[i] > arr[maxidx]) {
+            maxidx = i;
+       }
+  }
+  return maxidx;
+}
 
 /* FIXME also in lofreq_core:utils.c */
 static inline int file_exists(char *fname) 
@@ -367,14 +374,19 @@ static int mplp_func(void *data, bam1_t *b)
 }
 
 
+
 void process_plp(const bam_pileup1_t *plp, const int n_plp, 
                  mplp_conf_t *conf, const char *ref, const int pos, 
                  const int ref_len, const char *target_name)
 {
-     int j;
+     int i;
      char ref_base;
-     plp_col_t plp_col; /* FIXME in the long-run meant to be the main data-structure */
+     plp_col_t plp_col;
 
+     /* "base counts" minus error-probs before base-level filtering
+      * for each base. temporary data-structure for cheaply of determining
+      * consensus which is save in plp_col */
+     double base_counts[NUM_NT4] = { 0 }; 
      /* computation of depth (after read-level *and* base-level filtering)
       * samtools-0.1.18/bam2depth.c: 
       *   if (p->is_del || p->is_refskip) ++m; 
@@ -390,11 +402,12 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
      plp_col.target = strdup(target_name);
      plp_col.pos = pos;
      plp_col.ref_base = ref_base;
-     plp_col.coverage = n_plp;  /* this is a in mpileup the coverage, but after read-level filtering. */
+     plp_col.coverage = n_plp;  /* this is coverage as in the original mpileup, 
+                                   i.e. after read-level filtering */
 
-     for (j = 0; j < n_plp; ++j) {
+     for (i = 0; i < n_plp; ++i) {
           /* used parts of pileup_seq() here */
-          const bam_pileup1_t *p = plp + j;
+          const bam_pileup1_t *p = plp + i;
           int nt, nt4;
           int mq, bq, jq, final_q; /* phred scores */
           double mp, bp, jp; /* corresponding probs */
@@ -413,8 +426,10 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                nt = bam1_strand(p->b)? tolower(nt) : toupper(nt);
                /* nt4 for indexing */
                nt4 = bam_nt16_nt4_table[bam1_seqi(bam1_seq(p->b), p->qpos)];                           
-               
+
                bq = bam1_qual(p->b)[p->qpos];
+               base_counts[nt4] += (1.0 - PHREDQUAL_TO_PROB(bq));
+
                if (bq < conf->min_baseQ) {
                     base_skip = 1;
                     goto check_indel; /* FIXME: argh! */
@@ -425,14 +440,12 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                          goto check_indel; /* FIXME: argh! */
                     }
                }
-               /* FIXME test if this work as expected */
                /* FIXME should call cons here and test against it? */
                
-               /* the following will correct base-pairs
-                * down if they exceed the valid
-                * sanger/phred limits. is it wise to do
-                * this automatically? doesn't this
-                * indicate a problem with the input ? */
+               /* the following will correct base-pairs down if they
+                * exceed the valid sanger/phred limits. is it wise to
+                * do this automatically? doesn't this indicate a
+                * problem with the input ? */
                if (bq > 93) 
                     bq = 93; /* Sanger/Phred max */
                
@@ -442,25 +455,22 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                 * limits. check was done in mplp_func */
                mq = p->b->core.qual;
                
-               /* samtools check to detect Sanger max
-                * value: problem is that an MQ Phred of
-                * 255 means NA according to the samtools
-                * spec (needed below). This however is not
-                * detectable if the following original
-                * samtools line gets executed, which is
-                * why we remove it:
+               /* samtools check to detect Sanger max value: problem
+                * is that an MQ Phred of 255 means NA according to the
+                * samtools spec (needed below). This however is not
+                * detectable if the following original samtools line
+                * gets executed, which is why we remove it:
                 * if (mq > 126) mq = 126;
                 */
                
-               /* "Merge" MQ and BQ if requested and if
-                *  MAQP not 255 (not available):
+               /* "Merge" MQ and BQ if requested and if MAQP not 255
+                *  (not available):
                 * P_jq = P_mq * + (1-P_mq) P_bq.
                 */
                if ((conf->flag & MPLP_JOIN_BQ_AND_MQ) && mq != 255) {
-                    /* Careful: q's are all ready to print
-                     * sanger phred-scores. No need to do
-                     * computation in phred-space as numbers
-                     * won't get small enough.
+                    /* Careful: q's are all ready to print sanger
+                     * phred-scores. No need to do computation in
+                     * phred-space as numbers won't get small enough.
                      */
                     mp = PHREDQUAL_TO_PROB(mq);
                     bp = PHREDQUAL_TO_PROB(bq);
@@ -487,19 +497,18 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
           
      check_indel:
           
-          /* coverage */
+          /* for post read- and base-level coverage */
           if (p->is_del || p->is_refskip || 1 == base_skip) {
                num_skips += 1;
           }
           
           /* A pattern \+[0-9]+[ACGTNacgtn]+' indicates there is an
            * insertion between this reference position and the next
-           * reference position. The length of the insertion is
-           * given by the integer in the pattern, followed by the
-           * inserted sequence. Similarly, a pattern
-           * -[0-9]+[ACGTNacgtn]+ represents a deletion from the
-           * reference. The deleted bases will be presented as ‘*’
-           * in the following lines.
+           * reference position. The length of the insertion is given
+           * by the integer in the pattern, followed by the inserted
+           * sequence. Similarly, a pattern -[0-9]+[ACGTNacgtn]+
+           * represents a deletion from the reference. The deleted
+           * bases will be presented as ‘*’ in the following lines.
            */
           if (p->indel != 0) {
                if (p->indel > 0) {
@@ -560,15 +569,22 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                }
           } /* if (p->indel != 0) ... */
           
-     }  /* end: for (j = 0; j < n_plp; ++j) { */
-     
-     /* FIXME: unused */
-     f_depth = n_plp-num_skips;
+     }  /* end: for (i = 0; i < n_plp; ++i) { */
 
+    /* FIXME: unused */
+     f_depth = n_plp-num_skips;
+     
+     /* determine consensus from 'counts' */
+     plp_col.cons_base = bam_nt4_rev_table[
+          argmax_d(base_counts, NUM_NT4)];
+#if 0
+     plp_col_debug_print(& plp_col, stdout);
+#endif
      plp_col_mpileup_print(& plp_col, stdout);
 
      plp_col_free(& plp_col);
 }
+
 
 
 static int mpileup(mplp_conf_t *conf, int n, char **fn)
@@ -597,12 +613,14 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
     plp = calloc(n, sizeof(void*));
     n_plp = calloc(n, sizeof(int*));
 
-    fprintf(stderr, "[%s] Note, the output differs from regular pileup (see http://samtools.sourceforge.net/pileup.shtml) in the following ways\n", __func__);
+#if 0
+    fprintf(stderr, "[%s] Note: the format differs from regular pileup (see http://samtools.sourceforge.net/pileup.shtml) in the following ways\n", __func__);
     fprintf(stderr, "[%s] - bases and qualities are merged into one field\n", __func__);
     fprintf(stderr, "[%s] - each base is immediately followed by its quality\n", __func__);
     fprintf(stderr, "[%s] - on request mapping and base call quality are merged (P_joined = P_mq + (1-P_mq)*P_bq\n", __func__);
     fprintf(stderr, "[%s] - indel events are removed from bases and qualities and summarized in an additional field\n", __func__);
     fprintf(stderr, "[%s] - reference matches are not replaced with , or .\n", __func__);
+#endif
 
     /* read the header and initialize data */
     for (i = 0; i < n; ++i) {
@@ -676,8 +694,8 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
         i=0; /* i is 1 for first pos which is a bug due to the removal
               * of one of the loops, so reset here */
 
-
-        process_plp(plp[i], n_plp[i], conf, ref, pos, ref_len, h->target_name[tid]);
+        process_plp(plp[i], n_plp[i], conf, 
+                    ref, pos, ref_len, h->target_name[tid]);
     } /* while bam_mplp_auto */
 
     free(buf.s);
@@ -691,6 +709,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
     free(data); free(plp); free(ref); free(n_plp);
     return 0;
 }
+
 
 
 void usage(const mplp_conf_t *mplp_conf) {
@@ -714,7 +733,16 @@ void usage(const mplp_conf_t *mplp_conf) {
      /* misc */
      fprintf(stderr, "       -6           assume the quality is in the Illumina-1.3+ encoding\n");
      fprintf(stderr, "       -A           count anomalous read pairs\n");
+
+     fprintf(stderr, "\nDefault parameters here differ from original samtools mpileup\n");
+     fprintf(stderr, "Furthermore, the format used here differs from regular pileup (see http://samtools.sourceforge.net/pileup.shtml):\n");
+     fprintf(stderr, " - bases and qualities are merged into one field and each base is immediately followed by its quality\n");
+     fprintf(stderr, " - on request mapping and base call quality are merged (P_joined = P_mq + (1-P_mq)*P_bq\n");
+     fprintf(stderr, " - indel events are removed from bases and qualities and summarized in an additional field\n");
+     fprintf(stderr, " - reference matches are not replaced with , or .\n\n");
+
 }
+
 
 
 int bam_mpileup(int argc, char *argv[])
@@ -786,26 +814,29 @@ int bam_mpileup(int argc, char *argv[])
 }
 
 
+
 int main(int argc, char **argv)
 {
-#ifdef BAM_NT_EXAMPLE
-     {
-          char test_nucs[] = "ACGTNRYacgtnryZ\0";
-          int i;
-          
-          for (i=0; i<strlen(test_nucs); i++) {
-               printf("%d %c - %d - %d\n", i, test_nucs[i],
-                      bam_nt16_table[(int)test_nucs[i]],
-                      bam_nt16_nt4_table[bam_nt16_table[(int)test_nucs[i]]]);
-          }
-     }
-#endif
-
-
      if (argc>1 && strcmp(argv[1], "mpileup") == 0) {
           return bam_mpileup(argc-1, argv+1);
      } else {
           return bam_mpileup(argc, argv);
      }
 }
+
+
+
+#ifdef SANDBOX
+void sandbox()
+{
+     char test_nucs[] = "ACGTNRYacgtnryZ\0";
+     int i;
+     
+     for (i=0; i<strlen(test_nucs); i++) {
+          printf("%d %c - %d - %d\n", i, test_nucs[i],
+                 bam_nt16_table[(int)test_nucs[i]],
+                 bam_nt16_nt4_table[bam_nt16_table[(int)test_nucs[i]]]);
+     }
+}
+#endif
 
