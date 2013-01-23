@@ -7,13 +7,13 @@ reffa=../../lofreq-test-data/denv2-simulation/denv2-refseq.fa
 snv_ref=../../lofreq-test-data/denv2-simulation/denv2-10haplo_true-snp.snp
 
 snv_out_raw=../../lofreq-test-data/denv2-simulation/denv2-10haplo_lofreq-raw.snp
-snv_out_joined_raw=../../lofreq-test-data/denv2-simulation/denv2-10haplo_lofreq-joined-raw.snp
+snv_out_nonjoined_raw=../../lofreq-test-data/denv2-simulation/denv2-10haplo_lofreq-nonjoined-raw.snp
 snv_out_sbf=../../lofreq-test-data/denv2-simulation/denv2-10haplo_lofreq-sbf.snp
 
 # delete output files from previous run
 DEBUG=0
 if [ $DEBUG -ne 1 ]; then
-    rm -f $snv_out_raw $snv_out_joined_raw $snv_out_sbf 2>/dev/null
+    rm -f $snv_out_raw $snv_out_nonjoined_raw $snv_out_sbf 2>/dev/null
 fi
 # index bam if necessary
 test -s ${bam}.bai || samtools index $bam
@@ -25,22 +25,26 @@ if [ $bonfexp -ne $bonf ]; then
     echoerror "Expected bonferroni factor to be $bonfexp, but got $bonf. Can't continue" 1>&2
     exit 1
 fi
-if [ ! -s denv2-10haplo_lofreq-raw.snp ]; then
+if [ ! -s $snv_out_raw ]; then
     lofreq_snpcaller.py --bonf $bonf -f $reffa -b $bam -o $snv_out_raw || exit 1
 else
     echowarn "Reusing snv_out_raw (only useful for debugging)"
 fi
 
-
-lofreq_snpcaller.py -j --bonf $bonf -f $reffa -b $bam -o $snv_out_joined_raw || exit 1
-njoined=$(cat $snv_out_joined_raw | wc -l)
-norig=$(cat $snv_out_raw | wc -l)
-if [ $njoined -gt $norig ]; then
-    echoerror "Was expecting less SNVs when using joined-baseq-mapq"
-elif [ $njoined -eq 0 ]; then
-    echoerror "Got 0 SNVs when using joined-baseq-mapq"
+if [ ! -s $snv_out_nonjoined_raw ]; then
+    lofreq_snpcaller.py --dont-join-mapq-and-baseq --bonf $bonf -f $reffa -b $bam -o $snv_out_nonjoined_raw || exit 1
 else
-    echook "Got Joined-BaseQ-MapQ results look ok"
+    echowarn "Reusing snv_out_nonjoined_raw (only useful for debugging)"
+fi
+
+nnonjoined=$(cat $snv_out_nonjoined_raw | wc -l)
+norig=$(cat $snv_out_raw | wc -l)
+if [ $nnonjoined -lt $norig ]; then
+    echoerror "Was expecting more or equal number of SNVs when using nonjoined-baseq-mapq"
+elif [ $nnonjoined -eq 0 ]; then
+    echoerror "Got 0 SNVs when using nonjoined-baseq-mapq"
+else
+    echook "Got Nonjoined-BaseQ-MapQ results look ok"
 fi
 
 
@@ -53,9 +57,33 @@ else
 fi
 echook "Predictions completed."
 
-# test output
-nmissing=$(lofreq_diff.py -s $snv_ref -t $snv_out_raw -m uniq_to_1 | wc -l)
+# test non-joined output
+nmissing=$(lofreq_diff.py -s $snv_ref -t $snv_out_nonjoined_raw -m uniq_to_1 | wc -l)
 nexp=14
+if [ $nexp -ne $nmissing ]; then
+    echoerror "Number of missing SNVs differs (expected $nexp got $nmissing)"
+else
+    echook "Got expected number of missing SNVs"
+fi
+nextra=$(lofreq_diff.py -s $snv_ref -t $snv_out_nonjoined_raw -m uniq_to_2 | wc -l)
+nexp=0
+if [ $nexp -ne $nextra ]; then
+    echoerror "Number of extra SNVs differs (expected $nexp got $nextra)"
+else
+    echook "Got expected number of extra SNVs"
+fi
+ncommon=$(lofreq_diff.py -s $snv_ref -t $snv_out_nonjoined_raw -m common | wc -l)
+nexp=86
+if [ $nexp -ne $ncommon ]; then
+    echoerror "Number of common SNVs differs (expected $nexp got $ncommon)"
+else
+    echook "Got expected number of common SNVs"
+fi
+
+
+# test normal output
+nmissing=$(lofreq_diff.py -s $snv_ref -t $snv_out_raw -m uniq_to_1 | wc -l)
+nexp=19
 if [ $nexp -ne $nmissing ]; then
     echoerror "Number of missing SNVs differs (expected $nexp got $nmissing)"
 else
@@ -69,7 +97,7 @@ else
     echook "Got expected number of extra SNVs"
 fi
 ncommon=$(lofreq_diff.py -s $snv_ref -t $snv_out_raw -m common | wc -l)
-nexp=86
+nexp=81
 if [ $nexp -ne $ncommon ]; then
     echoerror "Number of common SNVs differs (expected $nexp got $ncommon)"
 else
