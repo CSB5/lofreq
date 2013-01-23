@@ -535,10 +535,14 @@ class Pileup(object):
                 ' '.join(cmd_list)))
             raise
         for line in p.stdout:
-            if self.samtools.endswith("lofreq_samtools"):
-                yield LoFreqPileupColumn(line)
-            else:
-                yield PileupColumn(line)
+            try:
+                if self.samtools.endswith("lofreq_samtools"):
+                    yield LoFreqPileupColumn(line)
+                else:
+                    yield PileupColumn(line)
+            except:
+                LOG.critical("Couldn't parse the following pileup line: %s" % line)
+                raise
 
         
     
