@@ -134,15 +134,15 @@ REQUIRED_INFO_FIELDS = [
     Infofield('AF', 1, 'Float', 
               "allele frequency for ALT allele"), # 1000genomes says number=".". we require exactly one number
     Infofield('DP', 1, 'Integer', 
-              "Raw read depth"), # as in samtools; note that 1000genomes says "read depth" only
+              "Raw read depth"), # as in samtools (even though there it's after read filtering); note that 1000genomes says "read depth" only
     Infofield('DP4', 4, 'Integer', 
               "# high-quality (i.e. after filtering) ref-forward bases, ref-reverse, alt-forward and alt-reverse bases"),
     Infofield('SB', 1, 'Integer',
-              "Phred-scaled strand bias at this position") # instead of samtools SP use predefined SB, but explcitely phred-scaled
+              "Phred-scaled strand bias at this position") # instead of samtools SP use predefined field SB, but explicitely phred-scaled
     ]
-# DEV NOTE: changes have to be synced with create_record
+# NOTE: changes have to be synced with create_record
 
-# DEV NOTE: check output with vcf-validator
+# NOTE: check output with vcf-validator
 
 MISSING_VAL = "."
 
@@ -163,7 +163,8 @@ def new_header(myname="LoFreq"):
     for infofield in REQUIRED_INFO_FIELDS:
         #header.append('##INFO=<ID=DP,Number=1,Type=Integer,Description="Raw read depth">')
         info_line = '##INFO=<ID=%s,Number=%d,Type=%s,Description="%s">' % (
-            infofield.id, infofield.number, infofield.type, infofield.description)
+            infofield.id, infofield.number, 
+            infofield.type, infofield.description)
         header.append(info_line)
         
     header.append("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO")
@@ -173,8 +174,8 @@ def new_header(myname="LoFreq"):
 
            
 def create_record(rec_chrom, rec_pos, rec_id, 
-                      rec_ref, rec_alt, rec_qual,
-                      rec_filter, rec_info):
+                  rec_ref, rec_alt, rec_qual,
+                  rec_filter, rec_info):
     """Creates a new VCF record. rec_info has to be dict() or None.
     Will perform pedantic checks on input
     """
@@ -194,8 +195,9 @@ def create_record(rec_chrom, rec_pos, rec_id,
     # we don't allow multiple bases here for the sake of simplicity
     assert rec_ref in ['A', 'C', 'G', 'T', 'N']
 
-    # 5
-    # we don't allow multiple bases here and only bases for the sake of simplicity
+    # 5 
+    # we don't allow multiple bases here and only bases for the sake
+    # of simplicity
     assert rec_alt in ['A', 'C', 'G', 'T', 'N']
     assert rec_alt != rec_ref
     
@@ -213,7 +215,7 @@ def create_record(rec_chrom, rec_pos, rec_id,
 
     # 8
     if not rec_info:
-        rec_info = "."
+        rec_info = MISSING_VAL
     else:
         assert isinstance(rec_info, dict)
 
@@ -260,7 +262,77 @@ def write(records, fh=sys.stdout):
     for rec in records:
         write_record(rec, fh)
     
+
+def parse_header(fh):
+    """FIXME
+    """
+
+    header_lines = []
+    for line in fh:
+        line = line.rstrip()
+        if line.startswith('#CHROM'):
+            header_lines.append(line)
+            break
+        if not line.startswith('##'):
+            sys.stderr.write("WARNING: expected header line but got: %s\n" % line)
+            break        
+        header_lines.append(line)
+        
+    return header_lines
+
+
+
+def parse_records(fh):
+    """FIXME
+    """
+
+    records = []
     
+    for line in fh:
+        line = line.rstrip()
+        if line.startswith('#'):
+            sys.stderr.write("WARNING: ignoring unexpected line: %s\n" % line)
+            continue
+
+        try:
+            (rec_chrom, rec_pos, rec_id,
+             rec_ref, rec_alt, rec_qual,
+             rec_filter, rec_info) = line.split('\t')
+        except ValueError:
+            sys.stderr.write("WARNING: couldn't split line: %s\n" % line)
+            raise
+            
+        rec_pos = int(rec_pos)-1
+        if rec_qual:
+            rec_qual = int(rec_qual)
+
+        if rec_info != MISSING_VAL:
+            vcf_info_dict = dict()
+            for (k, v) in [x.split('=') for x in rec_info.split(';')]:
+                vcf_info_dict[k] = v
+            for infofield in REQUIRED_INFO_FIELDS:
+                assert infofield.id in vcf_info_dict.keys(), (
+                    "Missing key %s in INFO dict" % (infofield.id))
+            rec_info = vcf_info_dict
+        records.append(Record._make([rec_chrom, rec_pos, rec_id, 
+                                     rec_ref, rec_alt, rec_qual,
+                                     rec_filter, rec_info]))
+    return records
+    
+        
+
+def parse(fh=sys.stdin):
+    """Parse vcf from given file handle
+    """
+
+    header = parse_header(fh)
+    records = parse_records(fh)
+
+    return (header, records)
+
+
+
+
 
 def test():
 
@@ -269,10 +341,7 @@ def test():
     print "# testing write_header()"
     write_header()
 
-
-
     print "# testing create_record()"
-
     records = []
 
     (rec_chrom, rec_pos, rec_id,
@@ -289,17 +358,14 @@ def test():
     records.append(create_record(rec_chrom, rec_pos, rec_id,
                             rec_ref, rec_alt, rec_qual,
                             rec_filter, rec_info))
-
     
     print "# testing write_record()"
-    
     for rec in records:
         write_record(rec)
     # FIXME tests missing
 
 
     print "# testing write()"
-
     write(records)
 
 
