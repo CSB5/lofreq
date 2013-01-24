@@ -1,9 +1,10 @@
 AM_CFLAGS = -Wall -I../cdflib90/ -I../libbam/ -fPIC
 AM_LDFLAGS = -shared -fPIC
 noinst_LIBRARIES = liblofreq_core.a
-liblofreq_core_a_SOURCES = bam2depth.c binom.c fet.c sam_view.c snpcaller.c utils.c 
+liblofreq_core_a_SOURCES = bam2depth.c binom.c fet.c sam_view.c snpcaller.c utils.c \
+	bam2depth.h binom.h fet.h sam_view.h snpcaller.h utils.h
 liblofreq_core_a_LIBADD = ../cdflib90/libcdf.a ../libbam/libbam.a
-
+EXTRA_DIST = fet.c.AUTHORS fet.c.COPYING
 
 #install-exec-hook:
 #	 cd ../lofreq_python && LDFLAGS='-L$(prefix)/lib' $(PYTHON) setup.py install --prefix '$(prefix)'
