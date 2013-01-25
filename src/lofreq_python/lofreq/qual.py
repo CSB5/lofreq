@@ -48,13 +48,12 @@ logging.basicConfig(level=logging.WARN,
 
 
 def median(alist):
-    """Compute median of list
-    Taken from http://stackoverflow.com/questions/7578689/median-code-explanation
+    """Compute median of list. Taken from
+    http://stackoverflow.com/questions/7578689/median-code-explanation
     """
     
     srtd = sorted(alist) # returns a sorted copy
-    mid = len(alist)//2 # double slash unconditionally truncates
-
+    mid = len(alist)//2 # double slash truncates unconditionally
     if len(alist) % 2 == 0:  # take the avg of middle two
         return (srtd[mid-1] + srtd[mid]) / 2.0
     else:
