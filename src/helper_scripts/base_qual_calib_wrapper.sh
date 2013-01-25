@@ -122,8 +122,7 @@ elif [ -s ${vcf}.gz ]; then
 	echo "Will unzip and reusing existing vcf file $vcf" 1>&2
     gunzip ${vcf}.gz
 else
-	samtools mpileup -d 1000000 -B -f $ref_fa $bam_in | \
-	    lofreq_varpos_to_vcf.py -t ${var_thresh} -i - -o $vcf || exit 1;
+	lofreq_varpos_to_vcf.py -t ${var_thresh} -b $bam_in -r $ref_fa -o $vcf || exit 1;
 fi
 
 
