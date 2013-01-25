@@ -7,12 +7,11 @@ INSTALLATION
 
 See INSTALL for generic installation instructions.
 
-You will need Python 2.6 or 2.7 including header files and a C
-compiler to install LoFreq.
+You will need a C compiler, Python 2.7 including header files and zlib
+including header files to install LoFreq.
 
-The following will build the source and install LoFreq:
+The following will build and install LoFreq:
 $ ./configure
-$ make
 $ make install
 
 You will likely need to use sudo for the last step. If you however
@@ -22,10 +21,8 @@ likely have to adjust your PATH and/or PYTHONPATH environment variable
 as well. An example:
 
 $ ./configure --prefix $HOME/local/
-$ make
 $ make install
 $ export PYTHONPATH=$PYTHONPATH:$HOME/local/lib/python2.7/site-packages/
-# or 2.6 if you use Python 2.6
 $ export PATH=$PATH:$HOME/local/bin
 
 
@@ -41,6 +38,20 @@ and also read the publication (www.ncbi.nlm.nih.gov/pubmed/23066108)
 
 VERSION HISTORY
 ---------------
+
+0.5.0 (2013-01-25):
+- Base-call (P_bq) and mapping qualities (P_mq) are now joined by default:
+  P_joined = P_mq + (1-P_mq)*P_bq
+- GNU autotools now used for compilation and installation
+- Included helper scripts to create a stringent, recalibrated mapping
+(bwa_unique.sh and base_qual_calib_wrapper.sh)
+- Incorporated a modified version of samtools mpileup
+- Fixed mixup between --bonf options auto-ign-zero-cov and auto. The
+  former is now default (needs extra parsing of BAM
+- Added script lofreq_alnoffset.py which makes comparison of SNV
+  calls made on different coordinate systems / against different
+  reference sequences easier
+- lofreq_varpos_to_vcf.py now easier to use (takes BAM as input)
 
 0.4.0 (2012-11-08):
 - Fixed overflow for very large Bonferroni factors (relevant for auto
