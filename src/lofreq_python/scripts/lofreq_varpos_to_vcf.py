@@ -1,10 +1,6 @@
 #!/usr/bin/env python
-"""Create a vcf file from variant positions in a pileup. Mainly used
+"""Create a vcf file from variant positions in a BAM files. Mainly used
 as input for GATK quality recalibration.
-
-Make sure to use a reference when creating the pileup. Otherwise all
-reference bases in the pileup will appear to be N, which makes them
-unusable.
 """
 
 # Copyright (C) 2011, 2012 Genome Institute of Singapore
