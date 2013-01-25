@@ -19,7 +19,7 @@ Wrapper for GATK's recalibration functionality. Sites with variability
 above a certain threshold are marked as 'known' SNVs (needed as GATK
 input).
 
-Needs GATK version 2! You will have to set the GATKDIR environment
+Needs GATK version 2! You will have to set the GATK_DIR environment
 variable to point to your GATK installation.
 
   Options:
@@ -97,7 +97,7 @@ fi
 # check for required jar files
 #
 if [ ! -s $gatk_jar ]; then
-    echo "FATAL: couldn't find GATK's $(basename $gatk_jar). Please set GATKDIR to your GATK installation" 1>&2
+    echo "FATAL: couldn't find GATK's $(basename $gatk_jar). Please set the GATK_DIR environemnt variable to your GATK installation" 1>&2
     exit 1
 fi
 
