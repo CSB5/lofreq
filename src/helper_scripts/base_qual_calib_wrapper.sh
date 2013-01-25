@@ -4,6 +4,7 @@
 threads=2
 var_thresh=0.01
 JAVA_EXTRA_ARGS='-Xmx4g'
+vcf=""
 
 GATK_DIR_DEFAULT=/mnt/software/stow/GenomeAnalysisTK-2.0.39/bin/
 test -z "$GATK_DIR" && export GATK_DIR=$GATK_DIR_DEFAULT
@@ -28,6 +29,7 @@ variable to point to your GATK installation.
         -o | --bam_out  : output BAM file
         -t | --threads  : number of threads to use (optional: default = $threads)
         -v | --vartresh : site with a variation greater than this are marked as 'known SNPs' (optional: default = $var_thresh)
+        -s | --vcf      : already existing vcf file, e.g. for dbSNP
         -h | --help )   : display this help
 EOF
 }
@@ -54,6 +56,10 @@ while [ "$1" != "" ]; do
         -r | --ref_fa )
             shift
             ref_fa=$1
+            ;;
+        -s | --vcf )
+            shift
+            vcf=$1
             ;;
         -h | --help ) 
             usage
@@ -115,7 +121,14 @@ done
 test -e ${ref_fa}.fai || \
     samtools faidx $ref_fa || exit 1
 
-vcf=$(dirname $bam_out)/$(basename $bam_in .bam)_t${var_thresh}.vcf
+if [ -z $vcf ]; then
+    vcf=$(dirname $bam_out)/$(basename $bam_in .bam)_t${var_thresh}.vcf
+else
+    if [ ! -s $vcf ]; then
+        echo "FATAL: Non-existing vcf file: $vcf" 1>&2
+        exit 1
+    fi
+fi
 if [ -s $vcf ]; then
 	echo "Reusing existing vcf file $vcf" 1>&2
 elif [ -s ${vcf}.gz ]; then
