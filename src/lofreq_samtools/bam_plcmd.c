@@ -29,7 +29,8 @@ void bed_destroy(void *_h);
 int bed_overlap(const void *_h, const char *chr, int beg, int end);
 
 
-
+/* mpileup configuration flags 
+ */
 /*#define MPLP_GLF   0x10*/
 #define MPLP_NO_COMP 0x20
 #define MPLP_NO_ORPHAN 0x40
@@ -42,10 +43,11 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 /*#define MPLP_IGNORE_RG 0x2000
 #define MPLP_PRINT_POS 0x4000*/
 #define MPLP_PRINT_MAPQ 0x8000
-
 #define MPLP_JOIN_BQ_AND_MQ 0x10000
 
 
+/* mpileup configuration structure 
+ */
 typedef struct {
     int max_mq, min_mq, flag, capQ_thres, max_depth;
     int min_baseQ, min_altbaseQ;
@@ -79,9 +81,20 @@ typedef struct {
 #define PROB_TO_PHREDQUAL(prob) ((int)(-10.0 * log10(prob)))
 
 
-const char *bam_nt4_rev_table = "ACGTN"; /* as bam_nt16_rev_table */
+const char *bam_nt4_rev_table = "ACGTN"; /* similar to bam_nt16_rev_table */
 #define NUM_NT4 5 /* strlen(bam_nt4_rev_table); */
 
+
+
+/* Logging macros
+ *
+ * Taken from squicl-0.2.8
+ * You must use at least one fmt+string and append trailing "\n", e.g.
+ * "%s\n", "string", instead of "string\n"
+ *
+ */
+int debug = 0;
+int verbose = 0;
 /* Taken from the Linux kernel source and slightly modified.
  * bool_flag: print or don't
  */
@@ -103,17 +116,6 @@ printk(FILE *stream, int bool_flag, const char *fmt, ...)
     }
     return printed_len;
 }
-
-
-/* Logging macros
- *
- * Taken from squicl-0.2.8
- * You must use at least one fmt+string and append trailing "\n", e.g.
- * "%s\n", "string", instead of "string\n"
- *
- */
-int debug = 0;
-int verbose = 0;
 /* print only if debug is true*/
 #define LOG_DEBUG(fmt, args...)     printk(stderr, debug, "DEBUG(%s|%s): " fmt, __FILE__, __FUNCTION__, ## args)
 /* print only if verbose is true*/
@@ -127,13 +129,45 @@ int verbose = 0;
 /* always print fixme's */
 #define LOG_FIXME(fmt, args...)  printk(stderr, 1, "FIXME(%s|%s:%d): " fmt, __FILE__, __FUNCTION__, __LINE__, ## args)
 
+
+
 int int_cmp(const void *a, const void *b)
 {
-    const int *ia = (const int *)a;
-    const int *ib = (const int *)b;
-    /* could overflow: return *ia  - *ib; see http://stackoverflow.com/questions/6103636/c-qsort-not-working-correctly*/
-    return ia<ib ? -1 : ia>ib? 1 : 0;
+     int rc;
+     const int ia = *(const int *)a;
+     const int ib = *(const int *)b;
+     /* could overflow: return *ia  - *ib; see http://stackoverflow.com/questions/6103636/c-qsort-not-working-correctly*/
+     return ia<ib ? -1 : ia>ib? 1 : 0;
 }
+
+
+/* will return the lower index on tie */
+int argmax_d(const double *arr, const int n)
+{
+  int i;
+  int maxidx = 0;
+
+  for (i=0; i<n; i++) {
+       if (arr[i] > arr[maxidx]) {
+            maxidx = i;
+       }
+  }
+  return maxidx;
+}
+
+/* FIXME also in lofreq_core:utils.c */
+static inline int file_exists(char *fname) 
+{
+  /* from 
+   * http://stackoverflow.com/questions/230062/whats-the-best-way-to-check-if-a-file-exists-in-c-cross-platform 
+   */
+  if (access(fname, F_OK) != -1) {
+      return 1;
+  } else {
+      return 0;
+  }
+}
+
 
 typedef struct {
      unsigned long int n; /* number of elements stored */
@@ -246,7 +280,7 @@ void plp_col_free(plp_col_t *p) {
 }
 
 void plp_col_debug_print(const plp_col_t *p, FILE *stream) {
-     int i;
+     int i, j;
      
      fprintf(stream, "%s\t%d\t%c\t%c base-counts (fw/rv): ", 
              p->target, p->pos+1, p->ref_base, p->cons_base);
@@ -255,10 +289,21 @@ void plp_col_debug_print(const plp_col_t *p, FILE *stream) {
                   bam_nt4_rev_table[i],
                   p->fw_counts[i],
                   p->rv_counts[i]);
+
      }
+
      fprintf(stream, " heads:%d tails:%d", p->num_heads, p->num_tails);
      fprintf(stream, "\n");
 
+#if 0
+     for (i=0; i<NUM_NT4; i++) {
+          fprintf(stream, "%c BQs (%lu): " , bam_nt4_rev_table[i], p->base_quals[i].n);
+          for (j=0; j<p->base_quals[i].n; j++) {
+               fprintf(stream, " %d", p->base_quals[i].data[j]);
+          }
+          fprintf(stream, "\n");
+     }
+#endif
 }
 
 
@@ -372,8 +417,9 @@ void call_lowfreq_snps(const plp_col_t *p, mplp_conf_t *conf)
           }
      }
 
-
+     
      qsort(quals, quals_len, sizeof(int), int_cmp);
+
      if (snpcaller(pvalues, quals, quals_len, 
                   alt_counts, bonf_factor, sig_level)) {
           fprintf(stderr, "FATAL: snpcaller() failed at %s:%s():%d\n",
@@ -398,32 +444,6 @@ void call_lowfreq_snps(const plp_col_t *p, mplp_conf_t *conf)
 
 
 
-/* will return the lower index on tie */
-int argmax_d(const double *arr, const int n)
-{
-  int i;
-  int maxidx = 0;
-
-  for (i=0; i<n; i++) {
-       if (arr[i] > arr[maxidx]) {
-            maxidx = i;
-       }
-  }
-  return maxidx;
-}
-
-/* FIXME also in lofreq_core:utils.c */
-static inline int file_exists(char *fname) 
-{
-  /* from 
-   * http://stackoverflow.com/questions/230062/whats-the-best-way-to-check-if-a-file-exists-in-c-cross-platform 
-   */
-  if (access(fname, F_OK) != -1) {
-      return 1;
-  } else {
-      return 0;
-  }
-}
 
 /* ------------------------------ */
 
@@ -581,13 +601,11 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                 */
 
 
+               PLP_COL_ADD_QUAL(& plp_col.base_quals[nt4], bq);
+               PLP_COL_ADD_QUAL(& plp_col.map_quals[nt4], mq);
                if (bam1_strand(p->b)) {
-                    PLP_COL_ADD_QUAL(& plp_col.base_quals[nt4], bq);
-                    PLP_COL_ADD_QUAL(& plp_col.map_quals[nt4], bq);
                     plp_col.rv_counts[nt4] += 1;
                } else {
-                    PLP_COL_ADD_QUAL(& plp_col.base_quals[nt4], mq);
-                    PLP_COL_ADD_QUAL(& plp_col.map_quals[nt4], mq);
                     plp_col.fw_counts[nt4] += 1;
                }
                              
