@@ -17,10 +17,12 @@
 #include <assert.h>
 #include <stdarg.h>
 #include <limits.h>
+#include <getopt.h>
 
 #include "sam.h"
 #include "faidx.h"
 #include "kstring.h"
+#include "snpcaller.h">
 /* from bedidx.c */
 void *bed_read(const char *fn);
 void bed_destroy(void *_h);
@@ -46,7 +48,8 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 
 typedef struct {
     int max_mq, min_mq, flag, capQ_thres, max_depth;
-    int min_baseQ, min_altbaseQ; /* new */
+    int min_baseQ, min_altbaseQ;
+    int def_altbaseQ;
     char *reg, *pl_list;
     faidx_t *fai;
     void *bed, *rghash;
@@ -110,7 +113,7 @@ printk(FILE *stream, int bool_flag, const char *fmt, ...)
  *
  */
 int debug = 0;
-int verbose = 1;
+int verbose = 0;
 /* print only if debug is true*/
 #define LOG_DEBUG(fmt, args...)     printk(stderr, debug, "DEBUG(%s|%s): " fmt, __FILE__, __FUNCTION__, ## args)
 /* print only if verbose is true*/
@@ -124,7 +127,13 @@ int verbose = 1;
 /* always print fixme's */
 #define LOG_FIXME(fmt, args...)  printk(stderr, 1, "FIXME(%s|%s:%d): " fmt, __FILE__, __FUNCTION__, __LINE__, ## args)
 
-
+int int_cmp(const void *a, const void *b)
+{
+    const int *ia = (const int *)a;
+    const int *ib = (const int *)b;
+    /* could overflow: return *ia  - *ib; see http://stackoverflow.com/questions/6103636/c-qsort-not-working-correctly*/
+    return ia<ib ? -1 : ia>ib? 1 : 0;
+}
 
 typedef struct {
      unsigned long int n; /* number of elements stored */
@@ -178,11 +187,21 @@ void int_varray_add_value(int_varray_t *a, const int value)
 typedef struct {
      char *target; /* chromsome or sequence name */
      int pos; /* position */
-     char ref_base; /* reference base (given by fasta) */
-     char cons_base; /* consensus base according to base-counts, after read-level filtering */
+     char ref_base; /* uppercase reference base (given by fasta) */
+     char cons_base; /* uppercase consensus base according to base-counts, after read-level filtering. */
      int coverage; /* coverage after read-level filtering i.e. same as in samtools mpileup (n_plp) */
-     int_varray_t qs_fw[NUM_NT4]; /* list of qualities on fw strand for all bases after base-level filtering */
-     int_varray_t qs_rv[NUM_NT4]; /* list of qualities on rv strand for all bases after base-level filtering */
+
+     /* list of qualities: keeping them all here in one place so that
+      * filtering can become separate step. alternative is to filter
+      * during pileup. the latter doesn't work if you want to filter
+      * based on a consensus which you don't know in advance */
+     int_varray_t base_quals[NUM_NT4]; 
+     int_varray_t map_quals[NUM_NT4]; 
+     int_varray_t source_quals[NUM_NT4]; 
+     long int fw_counts[NUM_NT4]; 
+     long int rv_counts[NUM_NT4]; 
+     /* fw_counts[b] + rv_counts[b] = x_quals.n = coverage */
+
      int num_heads; /* number of read starts at this pos */
      int num_tails; /* number of read ends at this pos */
 
@@ -198,12 +217,16 @@ void plp_col_init(plp_col_t *p) {
     p->target =  NULL;
     p->pos = -INT_MAX;
     p->ref_base = '\0';
-    p->cons_base = '\0';
+    p->cons_base = 'N';
     p->coverage = -INT_MAX;
     for (i=0; i<NUM_NT4; i++) {
-         int_varray_init(& p->qs_fw[i], 0);
-         int_varray_init(& p->qs_rv[i], 0);
+         int_varray_init(& p->base_quals[i], 0);
+         int_varray_init(& p->map_quals[i], 0);
+         int_varray_init(& p->source_quals[i], 0);
+         p->fw_counts[i] = 0;
+         p->rv_counts[i] = 0;
     }
+
     p->num_heads = p->num_tails = 0;
 
     p->num_ins = p->sum_ins = 0;
@@ -216,8 +239,9 @@ void plp_col_free(plp_col_t *p) {
 
     free(p->target);
     for (i=0; i<NUM_NT4; i++) {
-         int_varray_free(& p->qs_fw[i]);
-         int_varray_free(& p->qs_rv[i]);
+         int_varray_free(& p->base_quals[i]);
+         int_varray_free(& p->map_quals[i]);
+         int_varray_free(& p->source_quals[i]);
     }
 }
 
@@ -229,48 +253,148 @@ void plp_col_debug_print(const plp_col_t *p, FILE *stream) {
      for (i=0; i<NUM_NT4; i++) {
           fprintf(stream, " %c:%lu/%lu",
                   bam_nt4_rev_table[i],
-                  p->qs_fw[i].n,
-                  p->qs_rv[i].n);
+                  p->fw_counts[i],
+                  p->rv_counts[i]);
      }
-     fprintf(stream, " heads:%d tails:%d\n", p->num_heads, p->num_tails);
+     fprintf(stream, " heads:%d tails:%d", p->num_heads, p->num_tails);
      fprintf(stream, "\n");
 
 }
 
-void plp_col_mpileup_print(const plp_col_t *p, FILE *stream) {
-     int i;
-     
-     fprintf(stream, "%s\t%d\t%c\t%d\t",
-             p->target, p->pos+1, p->ref_base, p->coverage);
 
+#define PLP_COL_ADD_QUAL(p, q)   int_varray_add_value((p), (q));
+
+
+/* low-freq vars always called against cons_base, which might be
+ * different from ref_base. if cons_base != ref_base then it's a
+ * cons-var.
+ * 
+ * Assuming conf->min_baseQ and read-level filtering was already done
+ * upstream. altbase mangling happens here however.
+ * 
+ */
+void call_lowfreq_snps(const plp_col_t *p, mplp_conf_t *conf)
+{
+     int *quals;
+     int quals_len;
+     int i, j;
+
+     unsigned long int bonf_factor = 1;
+     double sig_level = 0.05;
+
+     /* 4 bases ignoring N, -1 reference/consensus base makes 3 */
+     double pvalues[3]; /* pvalues reported back from snpcaller */
+     int alt_counts[3]; /* counts for alt bases handed down to snpcaller */
+     int alt_bases[3];/* actual alt bases */
+     int alt_idx;
+
+     if (p->coverage == 0 || p->cons_base == 'N') {          
+          return;
+     }
+
+     /* check for consensus snps */
+     if (p->ref_base != 'N' && p->ref_base != p->cons_base) {
+          LOG_FIXME("cons var snp: %s %d %c>%c\n", p->target, p->pos+1, p->ref_base, p->cons_base);
+     }
+
+     if (NULL == (quals = malloc(p->coverage * sizeof(int)))) {
+          /* coverage = base-count after read level filtering */
+          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
+                  __FILE__, __FUNCTION__, __LINE__);
+          return;
+     }
+
+    
+     quals_len = 0;
+     alt_idx = -1;
      for (i=0; i<NUM_NT4; i++) {
-          int j, nt, q;
-
-          nt = toupper(bam_nt4_rev_table[i]);
-          for (j=0; j<p->qs_fw[i].n; j++) {
-               q = p->qs_fw[i].data[j];
-               fprintf(stream, "%c%c", nt, q+33);
+          int is_alt_base;
+          int nt = bam_nt4_rev_table[i];
+          if (nt == 'N') {
+               continue;
           }
 
-          nt = tolower(bam_nt4_rev_table[i]);
-          for (j=0; j<p->qs_rv[i].n; j++) {
-               q = p->qs_rv[i].data[j];
-               fprintf(stream, "%c%c", nt, q+33);
+          if (nt != p->cons_base) {
+               is_alt_base = 1;
+
+               alt_idx += 1;
+               alt_bases[alt_idx] = nt;
+               alt_counts[alt_idx] = 0;
+          } else {
+               is_alt_base = 0;
           }
-     }             
 
-     fprintf(stream, "\t#heads=%d #tails=%d #ins=%d ins_len=%.1f #del=%d del_len=%.1f",
-            p->num_heads, p->num_tails,
-            p->num_ins, p->num_ins ? p->sum_ins/(float)p->num_ins : 0,
-            p->num_dels, p->num_dels ? p->sum_dels/(float)p->num_dels : 0);
 
-     fprintf(stream, "\n");
+          for (j=0; j<p->base_quals[i].n; j++) {
+               int bq, mq, sq, jq, final_q;
+               double mp, bp, jp; /* corresponding probs */
+
+               assert(p->fw_counts[i] + p->rv_counts[i] == p->base_quals[i].n);
+               assert(p->base_quals[i].n == p->map_quals[i].n);
+               /* FIXME assert(plp_col.map_quals[i].n == plp_col.source_quals[i].n); */
+            
+               bq = p->base_quals[i].data[j];
+               mq = p->map_quals[i].data[j];
+               /* FIXME sq = p->source_quals[i].data[j]; */
+               
+               if (is_alt_base) {
+                    if (bq < conf->min_altbaseQ) {
+                         continue; /* WARNING base counts now invalid. We used them for freq reporting anyway, otherwise heterozygous calls look odd */
+                    }
+                    bq = conf->def_altbaseQ;
+                    alt_counts[alt_idx] += 1;
+               }
+
+               /* "Merge" MQ and BQ if requested and if MAQP not 255
+                *  (not available):
+                * P_jq = P_mq * + (1-P_mq) P_bq.
+                */
+               if ((conf->flag & MPLP_JOIN_BQ_AND_MQ) && mq != 255) {
+                    /* No need to do computation in phred-space as
+                     * numbers won't get small enough.
+                     */
+                    mp = PHREDQUAL_TO_PROB(mq);
+                    bp = PHREDQUAL_TO_PROB(bq);
+
+                    jp = mp + (1.0 - mp) * bp;
+                    jq = PROB_TO_PHREDQUAL(jp);
+#ifdef DEBUG
+                    LOG_DEBUG("P_M + (1-P_M) P_B:   %g + (1.0 - %g) * %g = %g  ==  Q%d + (1.0 - Q%d) * Q%d  =  Q%d\n",
+                              mp+33, mp+33, bp+33, jp+33,  mq, mq, bq, jq);
+#endif
+                    final_q = jq;
+
+               } else {
+                    final_q = bq;
+               }
+
+               quals[quals_len++] = final_q;
+          }
+     }
+
+
+     qsort(quals, quals_len, sizeof(int), int_cmp);
+     if (snpcaller(pvalues, quals, quals_len, 
+                  alt_counts, bonf_factor, sig_level)) {
+          fprintf(stderr, "FATAL: snpcaller() failed at %s:%s():%d\n",
+                  __FILE__, __FUNCTION__, __LINE__);
+          return;
+     }
+
+
+     for (i=0; i<3; i++) {
+          int alt_base = alt_bases[i];
+          int alt_count = alt_counts[i];
+          double pvalue = pvalues[i];
+          if (pvalue * (double)bonf_factor < sig_level) {
+               LOG_FIXME("low freq snp: %s %d %c>%c pv:%f;%d/%d\n",
+                         p->target, p->pos+1, p->cons_base, alt_base, pvalue, alt_count, quals_len);
+          }
+     }
+     free(quals);
 }
 
-/* p should be a pointer to the quals of a nuc of a certrain strand, e.g.
- * & plp_col.qs_rv[nt4]. q is the quality.
-*/
-#define PLP_COL_ADD_BASEQUAL(p, q)   int_varray_add_value((p), (q));
+
 
 
 
@@ -384,8 +508,8 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
      plp_col_t plp_col;
 
      /* "base counts" minus error-probs before base-level filtering
-      * for each base. temporary data-structure for cheaply of determining
-      * consensus which is save in plp_col */
+      * for each base. temporary data-structure for cheaply determining
+      * consensus which is saved in plp_col */
      double base_counts[NUM_NT4] = { 0 }; 
      /* computation of depth (after read-level *and* base-level filtering)
       * samtools-0.1.18/bam2depth.c: 
@@ -401,7 +525,7 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
      plp_col_init(& plp_col);
      plp_col.target = strdup(target_name);
      plp_col.pos = pos;
-     plp_col.ref_base = ref_base;
+     plp_col.ref_base = toupper(ref_base);
      plp_col.coverage = n_plp;  /* this is coverage as in the original mpileup, 
                                    i.e. after read-level filtering */
 
@@ -409,8 +533,7 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
           /* used parts of pileup_seq() here */
           const bam_pileup1_t *p = plp + i;
           int nt, nt4;
-          int mq, bq, jq, final_q; /* phred scores */
-          double mp, bp, jp; /* corresponding probs */
+          int mq, bq; /* phred scores */
           int base_skip = 0; /* boolean */
              
           if (! p->is_del) {
@@ -424,37 +547,31 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                /* nt for printing */
                nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos)];
                nt = bam1_strand(p->b)? tolower(nt) : toupper(nt);
+
                /* nt4 for indexing */
                nt4 = bam_nt16_nt4_table[bam1_seqi(bam1_seq(p->b), p->qpos)];                           
 
                bq = bam1_qual(p->b)[p->qpos];
-               base_counts[nt4] += (1.0 - PHREDQUAL_TO_PROB(bq));
 
+               /* minimal base-call quality filtering
+                */
                if (bq < conf->min_baseQ) {
                     base_skip = 1;
                     goto check_indel; /* FIXME: argh! */
                }
-               if (toupper(ref_base) != 'N' && toupper(nt) != toupper(ref_base)) {
-                    if (bq < conf->min_altbaseQ) {
-                         base_skip = 1;
-                         goto check_indel; /* FIXME: argh! */
-                    }
-               }
-               /* FIXME should call cons here and test against it? */
-               
+
                /* the following will correct base-pairs down if they
                 * exceed the valid sanger/phred limits. is it wise to
                 * do this automatically? doesn't this indicate a
                 * problem with the input ? */
                if (bq > 93) 
                     bq = 93; /* Sanger/Phred max */
-               
-               /* mapping quality. originally:
-                * c = plp[i][j].b->core.qual + 33;
-                * no need for check if mq is within user defined
+
+               base_counts[nt4] += (1.0 - PHREDQUAL_TO_PROB(bq));
+
+               /* no need for check if mq is within user defined
                 * limits. check was done in mplp_func */
                mq = p->b->core.qual;
-               
                /* samtools check to detect Sanger max value: problem
                 * is that an MQ Phred of 255 means NA according to the
                 * samtools spec (needed below). This however is not
@@ -462,35 +579,18 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                 * gets executed, which is why we remove it:
                 * if (mq > 126) mq = 126;
                 */
-               
-               /* "Merge" MQ and BQ if requested and if MAQP not 255
-                *  (not available):
-                * P_jq = P_mq * + (1-P_mq) P_bq.
-                */
-               if ((conf->flag & MPLP_JOIN_BQ_AND_MQ) && mq != 255) {
-                    /* Careful: q's are all ready to print sanger
-                     * phred-scores. No need to do computation in
-                     * phred-space as numbers won't get small enough.
-                     */
-                    mp = PHREDQUAL_TO_PROB(mq);
-                    bp = PHREDQUAL_TO_PROB(bq);
-                    /* precision?! */
-                    jp = mp + (1.0 - mp) * bp;
-                    jq = PROB_TO_PHREDQUAL(jp);
-#ifdef DEBUG
-                    LOG_DEBUG("P_M + (1-P_M) P_B:   %g + (1.0 - %g) * %g = %g  ==  Q%d + (1.0 - Q%d) * Q%d  =  Q%d\n",
-                              mp+33, mp+33, bp+33, jp+33,  mq, mq, bq, jq);
-#endif
-                    final_q = jq;
-               } else {
-                    final_q = bq;
-               }
-               
+
+
                if (bam1_strand(p->b)) {
-                    PLP_COL_ADD_BASEQUAL(& plp_col.qs_rv[nt4], final_q);
+                    PLP_COL_ADD_QUAL(& plp_col.base_quals[nt4], bq);
+                    PLP_COL_ADD_QUAL(& plp_col.map_quals[nt4], bq);
+                    plp_col.rv_counts[nt4] += 1;
                } else {
-                    PLP_COL_ADD_BASEQUAL(& plp_col.qs_fw[nt4], final_q);
+                    PLP_COL_ADD_QUAL(& plp_col.base_quals[nt4], mq);
+                    PLP_COL_ADD_QUAL(& plp_col.map_quals[nt4], mq);
+                    plp_col.fw_counts[nt4] += 1;
                }
+                             
                
           } /* ! p->is_del */
           
@@ -577,10 +677,19 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
      /* determine consensus from 'counts' */
      plp_col.cons_base = bam_nt4_rev_table[
           argmax_d(base_counts, NUM_NT4)];
-#if 0
+#if 1
      plp_col_debug_print(& plp_col, stdout);
+#else
+     plp_col_mpileup_print(& plp_col, conf, stdout);
 #endif
-     plp_col_mpileup_print(& plp_col, stdout);
+
+     for (i = 0; i < NUM_NT4; ++i) {
+          assert(plp_col.fw_counts[i] + plp_col.rv_counts[i] == plp_col.base_quals[i].n);
+          assert(plp_col.base_quals[i].n == plp_col.map_quals[i].n);
+          /* FIXME assert(plp_col.map_quals[i].n == plp_col.source_quals[i].n); */
+     }
+
+     call_lowfreq_snps(& plp_col, conf);
 
      plp_col_free(& plp_col);
 }
@@ -724,14 +833,15 @@ void usage(const mplp_conf_t *mplp_conf) {
      /* base call quality and baq */
      fprintf(stderr, "       -q INT       skip any base with baseQ smaller than INT [%d]\n", mplp_conf->min_baseQ);
      fprintf(stderr, "       -Q INT       skip nonref-bases with baseQ smaller than INT [%d]. Not active if ref is N\n", mplp_conf->min_altbaseQ);
+     fprintf(stderr, "       FIXME        nonref base qualities will be replace with this value [%d]\n", mplp_conf->def_altbaseQ);
      fprintf(stderr, "       -B           disable BAQ computation\n");
-     fprintf(stderr, "       -E           extended BAQ for higher sensitivity but lower specificity\n");
+     /* fprintf(stderr, "       -E           extended BAQ for higher sensitivity but lower specificity\n"); */
      /* mapping quality */
      fprintf(stderr, "       -m INT       skip alignments with mapQ smaller than INT [%d]\n", mplp_conf->min_mq);
      fprintf(stderr, "       -M INT       cap mapping quality at INT [%d]\n", mplp_conf->max_mq);
      fprintf(stderr, "       -j           join mapQ and baseQ per base: P_e = P_mq + (1-P_mq) P_bq\n");
      /* misc */
-     fprintf(stderr, "       -6           assume the quality is in the Illumina-1.3+ encoding\n");
+     fprintf(stderr, "       -6           assume the quality is in the Illumina-1.3-1.7/ASCII+64 encoding\n");
      fprintf(stderr, "       -A           count anomalous read pairs\n");
 
      fprintf(stderr, "\nDefault parameters here differ from original samtools mpileup\n");
@@ -755,41 +865,86 @@ int bam_mpileup(int argc, char *argv[])
     /* default pileup options */
     mplp.max_mq = 255; /* 60 */
     mplp.min_baseQ = 3; /* 13 */
-    mplp.min_altbaseQ = 3; /* new */
+    mplp.min_altbaseQ = 20; /* new */
+    mplp.def_altbaseQ = mplp.min_altbaseQ;
     mplp.capQ_thres = 0;
     mplp.max_depth = 1000000; /* 250 */
-    mplp.flag = MPLP_NO_ORPHAN | MPLP_REALN;
+    /* mplp.flag = MPLP_NO_ORPHAN | MPLP_REALN; */
+    mplp.flag = MPLP_NO_ORPHAN | MPLP_EXT_BAQ;
   
-    while ((c = getopt(argc, argv, "r:l:d:f:Q:q:BEm:M:j6A:h")) >= 0) {
-        switch (c) {
-        case 'r': mplp.reg = strdup(optarg); break;
-        case 'l': mplp.bed = bed_read(optarg); break;
+    while (1) {
+         static struct option long_opts[] = {
+              /* These options set a flag. */
+              {"verbose", no_argument, &verbose, 1},
+              {"debug", no_argument, &debug, 1},
 
-        case 'd': mplp.max_depth = atoi(optarg); break;
-        case 'f':
-            mplp.fai = fai_load(optarg);
-            if (mplp.fai == 0) 
-                 return 1;
-            break;
+              {"region", optional_argument, NULL, 'r'},
+              {"bed", optional_argument, NULL, 'l'},
+              
+              {"max_depth", optional_argument, NULL, 'd'},
+              {"ref_fa", optional_argument, NULL, 'f'},
+               
+              {"min_baseQ", optional_argument, NULL, 'q'},
+              {"min_altbaseQ", optional_argument, NULL, 'Q'},
+              {"no-baq", optional_argument, NULL, 'B'},
+              /*{"ext-baq", optional_argument, NULL, 'E'},*/
+                   
+              {"min_mq", optional_argument, NULL, 'm'},
+              {"max_mq", optional_argument, NULL, 'M'},
+              {"join_quals", optional_argument, NULL, 'j'},
+                   
+              {"illumina-1.3", optional_argument, NULL, '6'},
+              {"use-orphan", optional_argument, NULL, 'A'},
 
-        case 'q': mplp.min_baseQ = atoi(optarg); break;
-        case 'Q': mplp.min_altbaseQ = atoi(optarg); break;
-        case 'B': mplp.flag &= ~MPLP_REALN; break;
-        case 'E': mplp.flag |= MPLP_EXT_BAQ; break;
+              {0, 0, 0, 0} /* sentinel */
+         };
+         static const char *long_opts_str = "vr:l:d:f:Q:q:BEm:M:j6A:h"; /* WARN keep in sync with above */
 
-        case 'm': mplp.min_mq = atoi(optarg); break;
-        case 'M': mplp.max_mq = atoi(optarg); break;
-        case 'j': mplp.flag |= MPLP_JOIN_BQ_AND_MQ; break;
-
-        case '6': mplp.flag |= MPLP_ILLUMINA13; break;
-        case 'A': use_orphan = 1; break;
-
-        case 'h': usage(& mplp); exit(0);
-        case '?': fprintf(stderr, "ERROR: unrecognized arguments found. Exiting...\n"); exit(1);
-        }
+         /* getopt_long stores the option index here. */
+         int long_opts_index = 0;
+         c = getopt_long(argc, argv, long_opts_str, long_opts, & long_opts_index);
+         /* Detect the end of the options. */
+         if (c == -1) {
+              break;
+         }
+         switch (c) {
+         case 'r': mplp.reg = strdup(optarg); break;
+         case 'l': mplp.bed = bed_read(optarg); break;
+              
+         case 'd': mplp.max_depth = atoi(optarg); break;
+         case 'f':
+              mplp.fai = fai_load(optarg);
+              if (mplp.fai == 0) 
+                   return 1;
+              break;
+              
+         case 'q': mplp.min_baseQ = atoi(optarg); break;
+         case 'Q': mplp.min_altbaseQ = atoi(optarg); break;
+         case 'B': mplp.flag &= ~MPLP_REALN; break;
+         /* case 'E': mplp.flag |= MPLP_EXT_BAQ; break; */
+              
+         case 'm': mplp.min_mq = atoi(optarg); break;
+         case 'M': mplp.max_mq = atoi(optarg); break;
+         case 'j': mplp.flag |= MPLP_JOIN_BQ_AND_MQ; break;
+              
+         case '6': mplp.flag |= MPLP_ILLUMINA13; break;
+         case 'A': use_orphan = 1; break;
+              
+         case 'h': usage(& mplp); exit(0);
+         case '?': fprintf(stderr, "ERROR: unrecognized arguments found. Exiting...\n"); exit(1);
+#if 0
+         case 0:  fprintf(stderr, "ERROR: long opt (%s) not mapping to short option. Exiting...\n", long_opts[long_opts_index].name); exit(1);
+#endif
+         default:
+              break;
+         }
     }
+
     if (use_orphan) mplp.flag &= ~MPLP_NO_ORPHAN;
     
+    LOG_FIXME("%s\n", "implement dump_opts()");
+
+    LOG_FIXME("%s\n", "implement logic_check_opts()");
     assert(mplp.min_mq <= mplp.max_mq);
     assert(mplp.min_baseQ <= mplp.min_altbaseQ);
     
@@ -817,6 +972,11 @@ int bam_mpileup(int argc, char *argv[])
 
 int main(int argc, char **argv)
 {
+     LOG_FIXME("%s\n", "- Missing sig and bonf value options");
+     LOG_FIXME("%s\n", "- Source qual missing");
+     LOG_FIXME("%s\n", "- Usage not listing long options");
+     LOG_FIXME("%s\n", "- Missing test against old SNV caller");
+
      if (argc>1 && strcmp(argv[1], "mpileup") == 0) {
           return bam_mpileup(argc-1, argv+1);
      } else {
