@@ -1,0 +1,15 @@
+# backup files
+*~
+*#
+
+# objects
+*.o
+*.a
+*.lo
+*.la
+lofreq_snpcaller
+
+Makefile
+Makefile.log
+.deps
+.libs
