@@ -3,7 +3,7 @@
  * http://www.emacswiki.org/emacs/LocalVariables
  * http://en.wikipedia.org/wiki/Indent_style 
  *
- * This is based on samtools bam_plcmd.c
+ * This file is largely based on samtools' bam_plcmd.c
  *
  */
 #include <math.h>
@@ -46,7 +46,7 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #define MPLP_JOIN_BQ_AND_MQ 0x10000
 
 
-#define MYNAME "lofreq_mpileup"
+#define MYNAME "lofreq_snpcaller"
 #define PHREDQUAL_TO_PROB(phred) (pow(10.0, -1.0*(phred)/10.0))
 #define PROB_TO_PHREDQUAL(prob) ((int)(-10.0 * log10(prob)))
 
@@ -827,7 +827,7 @@ void dump_mplp_conf(const mplp_conf_t *c, FILE *stream) {
 
 
 void usage(const mplp_conf_t *mplp_conf) {
-     fprintf(stderr, "Usage: %s [mpileup] [options] in.bam\n\n", MYNAME);
+     fprintf(stderr, "Usage: %s [options] in.bam\n\n", MYNAME);
      fprintf(stderr, "Options:\n");
      /* generic */
      fprintf(stderr, "          --verbose           be verbose\n");
@@ -856,13 +856,6 @@ void usage(const mplp_conf_t *mplp_conf) {
      /* misc */
      fprintf(stderr, "       -6|--illumina-1.3      assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
      fprintf(stderr, "       -A|--use-orphan        count anomalous read pairs\n");
-
-     fprintf(stderr, "\nDefault parameters here differ from original samtools mpileup\n");
-     fprintf(stderr, "Furthermore, the format used here differs from regular pileup (see http://samtools.sourceforge.net/pileup.shtml):\n");
-     fprintf(stderr, " - bases and qualities are merged into one field and each base is immediately followed by its quality\n");
-     fprintf(stderr, " - on request mapping and base call quality are merged (P_joined = P_mq + (1-P_mq)*P_bq\n");
-     fprintf(stderr, " - indel events are removed from bases and qualities and summarized in an additional field\n");
-     fprintf(stderr, " - reference matches are not replaced with , or .\n\n");
 }
 
 
@@ -1050,11 +1043,7 @@ int main(int argc, char **argv)
      LOG_FIXME("%s\n", "- Missing test against old SNV caller");
      LOG_FIXME("%s\n", "- Set defaults once things are working");
 
-     if (argc>1 && strcmp(argv[1], "mpileup") == 0) {
-          return bam_mpileup(argc-1, argv+1);
-     } else {
-          return bam_mpileup(argc, argv);
-     }
+     return bam_mpileup(argc, argv);
 }
 
 
