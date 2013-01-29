@@ -44,9 +44,9 @@ int depth_stats(double *ret_mean, long int *ret_num_nonzero_pos,
 	int i, tid, beg, end, pos, *n_plp, baseQ = 0, mapQ = 0;
     const int n = 1;
 	const bam_pileup1_t **plp;
-	char *reg = 0; // specified region
-	void *bed = 0; // BED data structure
-	bam_header_t *h = 0; // BAM header of the 1st input
+	char *reg = 0; /* specified region */
+	void *bed = 0; /* BED data structure */
+	bam_header_t *h = 0; /* BAM header of the 1st input */
 	aux_t **data;
 	bam_mplp_t mplp;
 
@@ -63,12 +63,9 @@ int depth_stats(double *ret_mean, long int *ret_num_nonzero_pos,
     if (NULL != usr_reg) {
          reg = strdup(usr_reg);
     }
-    if (NULL != usr_bed_file) {
-         bed = bed_read(usr_bed_file);
-    }
     assert(NULL != bam_file);
 
-    if (! file_exists(bam_file)) {
+    if (0 != strcmp(bam_file, "-") && ! file_exists(bam_file)) {
          fprintf(stderr, 
                  "ERROR: BAM file does not exist: '%s'\n", 
                  bam_file);
@@ -80,7 +77,9 @@ int depth_stats(double *ret_mean, long int *ret_num_nonzero_pos,
                  usr_bed_file);
          return -1;
     }
-
+    if (NULL != usr_bed_file) {
+         bed = bed_read(usr_bed_file);
+    }
 
 	// initialize the auxiliary data structures
 	/* n = 1; // the number of BAMs on the command line */
@@ -111,8 +110,8 @@ int depth_stats(double *ret_mean, long int *ret_num_nonzero_pos,
 	n_plp = calloc(n, sizeof(int)); // n_plp[i] is the number of covering reads from the i-th BAM
 	plp = calloc(n, sizeof(void*)); // plp[i] points to the array of covering reads (internal in mplp)
 	while (bam_mplp_auto(mplp, &tid, &pos, n_plp, plp) > 0) { // come to the next covered position
-		if (pos < beg || pos >= end) continue; // out of range; skip
-		if (bed && bed_overlap(bed, h->target_name[tid], pos, pos + 1) == 0) continue; // not in BED; skip
+        if (pos < beg || pos >= end) continue; /* out of range; skip */
+		if (bed && bed_overlap(bed, h->target_name[tid], pos, pos + 1) == 0) continue; /* not in BED; skip */
 		/*fputs(h->target_name[tid], stdout); printf("\t%d", pos+1); // a customized printf() would be faster*/
 		for (i = 0; i < n; ++i) { // base level filters have to go here
 			int j, m = 0;
@@ -175,13 +174,15 @@ int main(int argc, char *argv[])
      n = argc - optind; // the number of BAMs on the command line
      for (i = 0; i < n; ++i) {
           bam_file = argv[optind+i];
-          if (! file_exists(bam_file)) {
-               fprintf(stderr, 
-                       "WARNING: skipping non-existant file '%s'\n", 
-                       bam_file);
-               continue;
+          if (0 != strcmp(bamfile, "-")) {
+               if (! file_exists(bam_file)) {
+                    fprintf(stderr, 
+                            "WARNING: skipping non-existant file '%s'\n", 
+                            bam_file);
+                    continue;
+               }
           }
-
+          
           depth_stats(&mean, &num_nonzero_pos,
                       bam_file, 
                       reg, bed_file, &baseQ, &mapQ);
