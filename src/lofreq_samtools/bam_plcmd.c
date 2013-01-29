@@ -3,9 +3,11 @@
  * http://www.emacswiki.org/emacs/LocalVariables
  * http://en.wikipedia.org/wiki/Indent_style 
  *
- * This is based on samtools bam_plcmd.c
+ * This is a modified version of samtools mpileup, based on
+ * bam_plcmd.c.
  *
  */
+
 #include <math.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -15,22 +17,17 @@
 #include <assert.h>
 #include <stdarg.h>
 #include <limits.h>
-#include <getopt.h>
 
 #include "sam.h"
 #include "faidx.h"
 #include "kstring.h"
-#include "snpcaller.h"
-#include "bam2depth.h"
-#include "utils.h">
 /* from bedidx.c */
 void *bed_read(const char *fn);
 void bed_destroy(void *_h);
 int bed_overlap(const void *_h, const char *chr, int beg, int end);
 
 
-/* mpileup configuration flags 
- */
+
 /*#define MPLP_GLF   0x10*/
 #define MPLP_NO_COMP 0x20
 #define MPLP_NO_ORPHAN 0x40
@@ -43,42 +40,25 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 /*#define MPLP_IGNORE_RG 0x2000
 #define MPLP_PRINT_POS 0x4000*/
 #define MPLP_PRINT_MAPQ 0x8000
+
 #define MPLP_JOIN_BQ_AND_MQ 0x10000
 
 
-#define MYNAME "lofreq_mpileup"
-#define PHREDQUAL_TO_PROB(phred) (pow(10.0, -1.0*(phred)/10.0))
-#define PROB_TO_PHREDQUAL(prob) ((int)(-10.0 * log10(prob)))
-
-
-const char *bam_nt4_rev_table = "ACGTN"; /* similar to bam_nt16_rev_table */
-#define NUM_NT4 5 /* strlen(bam_nt4_rev_table); */
-
-
-
-/* mpileup configuration structure 
- */
 typedef struct {
-     int max_mq, min_mq;
-     int flag;
-     int capQ_thres;
-     int max_depth;
-     int min_baseQ, min_altbaseQ;
-     int def_altbaseQ;
-     unsigned long int bonf;
-     double sig;
-     char *reg;
-     faidx_t *fai;
-     void *bed;
+    int max_mq, min_mq, flag, capQ_thres, max_depth;
+    int min_baseQ, min_altbaseQ; /* new */
+    char *reg, *pl_list;
+    faidx_t *fai;
+    void *bed, *rghash;
 } mplp_conf_t;
 
 typedef struct {
-     bamFile fp;
-     bam_iter_t iter;
-     bam_header_t *h;
-     int ref_id;
-     char *ref;
-     const mplp_conf_t *conf;
+    bamFile fp;
+    bam_iter_t iter;
+    bam_header_t *h;
+    int ref_id;
+    char *ref;
+    const mplp_conf_t *conf;
 } mplp_aux_t;
 
 typedef struct {
@@ -89,15 +69,16 @@ typedef struct {
 
 
 
-/* Logging macros
- *
- * Taken from squicl-0.2.8
- * You must use at least one fmt+string and append trailing "\n", e.g.
- * "%s\n", "string", instead of "string\n"
- *
- */
-int debug = 0;
-int verbose = 0;
+/* ------------------------------ */
+
+#define MYNAME "lofreq_mpileup"
+#define PHREDQUAL_TO_PROB(phred) (pow(10.0, -1.0*(phred)/10.0))
+#define PROB_TO_PHREDQUAL(prob) ((int)(-10.0 * log10(prob)))
+
+
+const char *bam_nt4_rev_table = "ACGTN"; /* as bam_nt16_rev_table */
+#define NUM_NT4 5 /* strlen(bam_nt4_rev_table); */
+
 /* Taken from the Linux kernel source and slightly modified.
  * bool_flag: print or don't
  */
@@ -119,39 +100,89 @@ printk(FILE *stream, int bool_flag, const char *fmt, ...)
     }
     return printed_len;
 }
+
+
+/* Logging macros
+ *
+ * Taken from squicl-0.2.8
+ * You must use at least one fmt+string and append trailing "\n", e.g.
+ * "%s\n", "string", instead of "string\n"
+ *
+ */
+int debug = 0;
+int verbose = 1;
 /* print only if debug is true*/
 #define LOG_DEBUG(fmt, args...)     printk(stderr, debug, "DEBUG(%s|%s): " fmt, __FILE__, __FUNCTION__, ## args)
 /* print only if verbose is true*/
-#define LOG_VERBOSE(fmt, args...)   printk(stderr, verbose || debug, fmt, ## args)
+#define LOG_VERBOSE(fmt, args...)   printk(stderr, verbose, fmt, ## args)
 /* always warn to stderr */
 #define LOG_WARN(fmt, args...)      printk(stderr, 1, "WARNING(%s|%s): " fmt, __FILE__, __FUNCTION__, ## args)
 /* always print errors to stderr*/
 #define LOG_ERROR(fmt, args...)     printk(stderr, 1, "ERROR(%s|%s): " fmt, __FILE__, __FUNCTION__, ## args)
 /* always print critical errors to stderr*/
-#define LOG_CRITICAL(fmt, args...)  printk(stderr, 1, "CRITICAL(%s|%s): " fmt, __FILE__, __FUNCTION__, ## args)
-#define LOG_FATAL(fmt, args...)     printk(stderr, 1, "FATAL(%s|%s): " fmt, __FILE__, __FUNCTION__, ## args)
+#define LOG_CRITICAL(fmt, args...)     printk(stderr, 1, "CRITICAL(%s|%s): " fmt, __FILE__, __FUNCTION__, ## args)
 /* always print fixme's */
 #define LOG_FIXME(fmt, args...)  printk(stderr, 1, "FIXME(%s|%s:%d): " fmt, __FILE__, __FUNCTION__, __LINE__, ## args)
+
+
+
+typedef struct {
+     unsigned long int n; /* number of elements stored */
+     int *data; /* actual array of data */
+
+     size_t grow_by_size; /* if needed grow array by this value. will double previous size if <=1 */
+     size_t alloced; /* actually allocated size for data */
+} int_varray_t;
+
+void int_varray_free(int_varray_t *a) 
+{
+    assert(NULL != a);
+
+    free(a->data); /* save even if a->data==NULL */
+    a->data = NULL;
+    a->n = a->alloced = a->grow_by_size = 0;
+}
+
+void int_varray_init(int_varray_t *a, 
+                     const size_t grow_by_size)
+{
+    assert(NULL != a);
+
+    a->n = 0;
+    a->data = NULL;
+    a->grow_by_size = grow_by_size;
+    a->alloced = 0;
+}
+
+void int_varray_add_value(int_varray_t *a, const int value)
+{
+    assert(NULL != a);
+
+    if (a->n * sizeof(int) == a->alloced) {
+        size_t size_to_alloc;        
+        if (1 >=  a->grow_by_size) {
+             assert(SIZE_MAX - a->alloced > a->alloced);
+             size_to_alloc = 0==a->n ? sizeof(int) : a->alloced*2;
+        } else {
+             assert(SIZE_MAX - a->alloced > a->grow_by_size);
+             size_to_alloc = a->alloced + a->grow_by_size;
+        }
+        a->data = realloc(a->data, size_to_alloc);
+        a->alloced = size_to_alloc;
+    }
+    a->data[a->n] = value;
+    a->n++;
+}
 
 
 typedef struct {
      char *target; /* chromsome or sequence name */
      int pos; /* position */
-     char ref_base; /* uppercase reference base (given by fasta) */
-     char cons_base; /* uppercase consensus base according to base-counts, after read-level filtering. */
-     int coverage; /* coverage after read-level filtering i.e. same as in samtools mpileup (n_plp) but without indels! */
-
-     /* list of qualities: keeping them all here in one place so that
-      * filtering can become separate step. alternative is to filter
-      * during pileup. the latter doesn't work if you want to filter
-      * based on a consensus which you don't know in advance */
-     int_varray_t base_quals[NUM_NT4]; 
-     int_varray_t map_quals[NUM_NT4]; 
-     int_varray_t source_quals[NUM_NT4]; 
-     long int fw_counts[NUM_NT4]; 
-     long int rv_counts[NUM_NT4]; 
-     /* fw_counts[b] + rv_counts[b] = x_quals.n = coverage */
-
+     char ref_base; /* reference base (given by fasta) */
+     char cons_base; /* consensus base according to base-counts, after read-level filtering */
+     int coverage; /* coverage after read-level filtering i.e. same as in samtools mpileup (n_plp) */
+     int_varray_t qs_fw[NUM_NT4]; /* list of qualities on fw strand for all bases after base-level filtering */
+     int_varray_t qs_rv[NUM_NT4]; /* list of qualities on rv strand for all bases after base-level filtering */
      int num_heads; /* number of read starts at this pos */
      int num_tails; /* number of read ends at this pos */
 
@@ -161,25 +192,18 @@ typedef struct {
 } plp_col_t;
 
 
-#define PLP_COL_ADD_QUAL(p, q)   int_varray_add_value((p), (q));
-
-
 void plp_col_init(plp_col_t *p) {
     int i;
 
     p->target =  NULL;
     p->pos = -INT_MAX;
     p->ref_base = '\0';
-    p->cons_base = 'N';
+    p->cons_base = '\0';
     p->coverage = -INT_MAX;
     for (i=0; i<NUM_NT4; i++) {
-         int_varray_init(& p->base_quals[i], 0);
-         int_varray_init(& p->map_quals[i], 0);
-         int_varray_init(& p->source_quals[i], 0);
-         p->fw_counts[i] = 0;
-         p->rv_counts[i] = 0;
+         int_varray_init(& p->qs_fw[i], 0);
+         int_varray_init(& p->qs_rv[i], 0);
     }
-
     p->num_heads = p->num_tails = 0;
 
     p->num_ins = p->sum_ins = 0;
@@ -192,229 +216,92 @@ void plp_col_free(plp_col_t *p) {
 
     free(p->target);
     for (i=0; i<NUM_NT4; i++) {
-         int_varray_free(& p->base_quals[i]);
-         int_varray_free(& p->map_quals[i]);
-         int_varray_free(& p->source_quals[i]);
+         int_varray_free(& p->qs_fw[i]);
+         int_varray_free(& p->qs_rv[i]);
     }
 }
 
-void plp_col_debug_print(const plp_col_t *p, FILE *stream)
-{
+void plp_col_debug_print(const plp_col_t *p, FILE *stream) {
      int i;
      
-     fprintf(stream, "%s\t%d\t%c\t%c\tcounts:rv/fw",
+     fprintf(stream, "%s\t%d\t%c\t%c base-counts (fw/rv): ", 
              p->target, p->pos+1, p->ref_base, p->cons_base);
      for (i=0; i<NUM_NT4; i++) {
           fprintf(stream, " %c:%lu/%lu",
                   bam_nt4_rev_table[i],
-                  p->fw_counts[i],
-                  p->rv_counts[i]);
+                  p->qs_fw[i].n,
+                  p->qs_rv[i].n);
      }
-
-     fprintf(stream, " heads:%d tails:%d", p->num_heads, p->num_tails);
-     fprintf(stream, " ins=%d del=%d", p->num_ins, p->num_dels);
+     fprintf(stream, " heads:%d tails:%d\n", p->num_heads, p->num_tails);
      fprintf(stream, "\n");
 
-#if 0
-     for (i=0; i<NUM_NT4; i++) {
-          int j;
-          fprintf(stream, "%c BQs (%lu): " , bam_nt4_rev_table[i], p->base_quals[i].n);
-          for (j=0; j<p->base_quals[i].n; j++) {
-               fprintf(stream, " %d", p->base_quals[i].data[j]);
-          }
-          fprintf(stream, "\n");
-     }
-#endif
 }
 
-/* attempt to keep a function in here that produces output similar to
- * the last pre-c version which can be easily parsed from Python. Note
- * however, that defaults have changed and that filtering was done differently before.
- */
-void plp_col_mpileup_print(const plp_col_t *p, mplp_conf_t *conf, FILE *stream)
-{
-     int i, j;
+void plp_col_mpileup_print(const plp_col_t *p, FILE *stream) {
+     int i;
      
-     fprintf(stream, "%s\t%d\t%c\t%d\t", 
-             p->target, p->pos+1, p->ref_base,p->coverage);
+     fprintf(stream, "%s\t%d\t%c\t%d\t",
+             p->target, p->pos+1, p->ref_base, p->coverage);
+
      for (i=0; i<NUM_NT4; i++) {
-          for (j=0; j<p->base_quals[i].n; j++) {
-               fprintf(stream, "%c%c",
-                       bam_nt4_rev_table[i],  p->base_quals[i].data[j]+33);
+          int j, nt, q;
+
+          nt = toupper(bam_nt4_rev_table[i]);
+          for (j=0; j<p->qs_fw[i].n; j++) {
+               q = p->qs_fw[i].data[j];
+               fprintf(stream, "%c%c", nt, q+33);
           }
-     }
-           
-     fprintf(stream, "\t#heads=%d #tails=%d #ins=%d ins_len=%.1f #del=%d del_len=%.1f\n",
-          p->num_heads, p->num_tails,
-          p->num_ins, p->num_ins ? p->sum_ins/(float)p->num_ins : 0,
-          p->num_dels, p->num_dels ? p->sum_dels/(float)p->num_dels : 0);
+
+          nt = tolower(bam_nt4_rev_table[i]);
+          for (j=0; j<p->qs_rv[i].n; j++) {
+               q = p->qs_rv[i].data[j];
+               fprintf(stream, "%c%c", nt, q+33);
+          }
+     }             
+
+     fprintf(stream, "\t#heads=%d #tails=%d #ins=%d ins_len=%.1f #del=%d del_len=%.1f",
+            p->num_heads, p->num_tails,
+            p->num_ins, p->num_ins ? p->sum_ins/(float)p->num_ins : 0,
+            p->num_dels, p->num_dels ? p->sum_dels/(float)p->num_dels : 0);
+
+     fprintf(stream, "\n");
 }
 
+/* p should be a pointer to the quals of a nuc of a certrain strand, e.g.
+ * & plp_col.qs_rv[nt4]. q is the quality.
+*/
+#define PLP_COL_ADD_BASEQUAL(p, q)   int_varray_add_value((p), (q));
 
-/* "Merge" MQ and BQ if requested and if MAQP not 255 (not available):
- *  P_jq = P_mq * + (1-P_mq) P_bq.
- */
-int merge_baseq_and_mapq(int bq, int mq)
+
+
+/* will return the lower index on tie */
+int argmax_d(const double *arr, const int n)
 {
-     double mp, bp, jp; /* corresponding probs */
-     int jq;
+  int i;
+  int maxidx = 0;
 
-     if (mq == 255) {
-          return bq;
-     }
-      
-     /* No need to do computation in phred-space as
-      * numbers won't get small enough.
-      */
-     mp = PHREDQUAL_TO_PROB(mq);
-     bp = PHREDQUAL_TO_PROB(bq);
-
-     jp = mp + (1.0 - mp) * bp;
-     jq = PROB_TO_PHREDQUAL(jp);
-#ifdef DEBUG
-     LOG_DEBUG("P_M + (1-P_M) P_B:   %g + (1.0 - %g) * %g = %g  ==  Q%d + (1.0 - Q%d) * Q%d  =  Q%d\n",
-               mp, mp, bp, jp, mq+33, mq+33, bq+33, jq+33);
-#endif
-     return jq;
+  for (i=0; i<n; i++) {
+       if (arr[i] > arr[maxidx]) {
+            maxidx = i;
+       }
+  }
+  return maxidx;
 }
 
-
-/* low-freq vars always called against cons_base, which might be
- * different from ref_base. if cons_base != ref_base then it's a
- * cons-var.
- * 
- * Assuming conf->min_baseQ and read-level filtering was already done
- * upstream. altbase mangling happens here however.
- * 
- */
-void call_lowfreq_snps(const plp_col_t *p, mplp_conf_t *conf)
+/* FIXME also in lofreq_core:utils.c */
+static inline int file_exists(char *fname) 
 {
-     int *quals; /* qualities passed down to snpcaller */
-     int quals_len; /* #elements in quals */
-     int i, j;
-
-     /* 4 bases ignoring N, -1 reference/consensus base makes 3 */
-     double pvalues[3]; /* pvalues reported back from snpcaller */
-     int alt_counts[3]; /* counts for alt bases handed down to snpcaller */
-     int alt_raw_counts[3];
-     int alt_bases[3];/* actual alt bases */
-     int alt_idx;
-     int got_alt_bases = 0;
-
-     /* don't call if no coverage or if we don't know what to call
-      * against */
-     if (p->coverage == 0 || p->cons_base == 'N') {          
-          return;
-     }
-
-     /* check for consensus snps, i.e. those where the consensus
-      * determined here is different from the reference coming from a
-      * fasta file */
-     if (p->ref_base != 'N' && p->ref_base != p->cons_base) {
-          LOG_FIXME("cons var snp: %s %d %c>%c\n", p->target, p->pos+1, p->ref_base, p->cons_base);
-     }
-
-     if (NULL == (quals = malloc(p->coverage * sizeof(int)))) {
-          /* coverage = base-count after read level filtering */
-          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
-                  __FILE__, __FUNCTION__, __LINE__);
-          free(quals);
-          return;
-     }
-    
-     quals_len = 0;
-     alt_idx = -1;
-     for (i=0; i<NUM_NT4; i++) {
-          int is_alt_base;
-          int nt = bam_nt4_rev_table[i];
-          if (nt == 'N') {
-               continue;
-          }
-
-          is_alt_base = 0;
-          if (nt != p->cons_base) {
-               is_alt_base = 1;
-
-               alt_idx += 1;
-               alt_bases[alt_idx] = nt;
-               alt_counts[alt_idx] = 0;
-               alt_raw_counts[alt_idx] = 0;
-          }
-
-          for (j=0; j<p->base_quals[i].n; j++) {
-               int bq, mq, sq, final_q;
-
-               assert(p->fw_counts[i] + p->rv_counts[i] == p->base_quals[i].n);
-               assert(p->base_quals[i].n == p->map_quals[i].n);
-               /* FIXME assert(plp_col.map_quals[i].n == plp_col.source_quals[i].n); */
-            
-               bq = p->base_quals[i].data[j];
-               mq = p->map_quals[i].data[j];
-               /* FIXME sq = p->source_quals[i].data[j]; */
-               
-               if (is_alt_base) {
-                    alt_raw_counts[alt_idx] += 1;
-                    if (bq < conf->min_altbaseQ) {
-                         continue; /* WARNING base counts now invalid. We used them for freq reporting anyway, otherwise heterozygous calls look odd */
-                    }
-                    bq = conf->def_altbaseQ;
-                    alt_counts[alt_idx] += 1;
-               }
-
-               if ((conf->flag & MPLP_JOIN_BQ_AND_MQ)) {
-                    final_q = merge_baseq_and_mapq(bq, mq);
-
-               } else {
-                    final_q = bq;
-               }
-
-               quals[quals_len++] = final_q;
-          }
-     }
-
-     for (i=0; i<3; i++) {
-          if (alt_counts[i]) {
-               got_alt_bases = 1;
-               break;
-          }
-     }
-     if (! got_alt_bases) {
-          LOG_DEBUG("%s %d: only cons bases left after filtering.\n", p->target, p->pos+1);
-          free(quals);
-          return;
-     }
-
-     /* sorting in theory should be numerically more stable and also
-      * make snpcallerfaster */
-     qsort(quals, quals_len, sizeof(int), int_cmp);
-
-     LOG_DEBUG("%s %d: passing down %d quals with noncons_counts (%d, %d, %d) to snpcaller()\n",
-               p->target, p->pos+1, quals_len, alt_counts[0], alt_counts[1], alt_counts[2]);
-
-     if (snpcaller(pvalues, quals, quals_len, 
-                  alt_counts, conf->bonf, conf->sig)) {
-          fprintf(stderr, "FATAL: snpcaller() failed at %s:%s():%d\n",
-                  __FILE__, __FUNCTION__, __LINE__);
-          free(quals);
-          return;
-     }
-
-
-     for (i=0; i<3; i++) {
-          int alt_base = alt_bases[i];
-          int alt_count = alt_counts[i];
-          int alt_raw_count = alt_raw_counts[i];
-          double pvalue = pvalues[i];
-          if (pvalue * (double)conf->bonf < conf->sig) {
-               LOG_FIXME("low freq snp: %s %d %c>%c pv:%f;raw:%d/%d;filt:%d/%d\n",
-                         p->target, p->pos+1, p->cons_base, alt_base,
-                         pvalue, 
-                         alt_raw_count, p->coverage,
-                         alt_count, quals_len);
-          }
-     }
-     free(quals);
+  /* from 
+   * http://stackoverflow.com/questions/230062/whats-the-best-way-to-check-if-a-file-exists-in-c-cross-platform 
+   */
+  if (access(fname, F_OK) != -1) {
+      return 1;
+  } else {
+      return 0;
+  }
 }
+
+/* ------------------------------ */
 
 
 
@@ -497,16 +384,16 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
      plp_col_t plp_col;
 
      /* "base counts" minus error-probs before base-level filtering
-      * for each base. temporary data-structure for cheaply determining
-      * consensus which is saved in plp_col */
+      * for each base. temporary data-structure for cheaply of determining
+      * consensus which is save in plp_col */
      double base_counts[NUM_NT4] = { 0 }; 
-
      /* computation of depth (after read-level *and* base-level filtering)
       * samtools-0.1.18/bam2depth.c: 
       *   if (p->is_del || p->is_refskip) ++m; 
       *   else if (bam1_qual(p->b)[p->qpos] < baseQ) ++m
       * n_plp[i] - m
       */
+     int f_depth = 0;
      int num_skips = 0;
 
      ref_base = (ref && pos < ref_len)? ref[pos] : 'N';
@@ -514,7 +401,7 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
      plp_col_init(& plp_col);
      plp_col.target = strdup(target_name);
      plp_col.pos = pos;
-     plp_col.ref_base = toupper(ref_base);
+     plp_col.ref_base = ref_base;
      plp_col.coverage = n_plp;  /* this is coverage as in the original mpileup, 
                                    i.e. after read-level filtering */
 
@@ -522,7 +409,8 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
           /* used parts of pileup_seq() here */
           const bam_pileup1_t *p = plp + i;
           int nt, nt4;
-          int mq, bq; /* phred scores */
+          int mq, bq, jq, final_q; /* phred scores */
+          double mp, bp, jp; /* corresponding probs */
           int base_skip = 0; /* boolean */
              
           if (! p->is_del) {
@@ -536,31 +424,37 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                /* nt for printing */
                nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos)];
                nt = bam1_strand(p->b)? tolower(nt) : toupper(nt);
-
                /* nt4 for indexing */
                nt4 = bam_nt16_nt4_table[bam1_seqi(bam1_seq(p->b), p->qpos)];                           
 
                bq = bam1_qual(p->b)[p->qpos];
+               base_counts[nt4] += (1.0 - PHREDQUAL_TO_PROB(bq));
 
-               /* minimal base-call quality filtering
-                */
                if (bq < conf->min_baseQ) {
                     base_skip = 1;
                     goto check_indel; /* FIXME: argh! */
                }
-
+               if (toupper(ref_base) != 'N' && toupper(nt) != toupper(ref_base)) {
+                    if (bq < conf->min_altbaseQ) {
+                         base_skip = 1;
+                         goto check_indel; /* FIXME: argh! */
+                    }
+               }
+               /* FIXME should call cons here and test against it? */
+               
                /* the following will correct base-pairs down if they
                 * exceed the valid sanger/phred limits. is it wise to
                 * do this automatically? doesn't this indicate a
                 * problem with the input ? */
                if (bq > 93) 
                     bq = 93; /* Sanger/Phred max */
-
-               base_counts[nt4] += (1.0 - PHREDQUAL_TO_PROB(bq));
-
-               /* no need for check if mq is within user defined
+               
+               /* mapping quality. originally:
+                * c = plp[i][j].b->core.qual + 33;
+                * no need for check if mq is within user defined
                 * limits. check was done in mplp_func */
                mq = p->b->core.qual;
+               
                /* samtools check to detect Sanger max value: problem
                 * is that an MQ Phred of 255 means NA according to the
                 * samtools spec (needed below). This however is not
@@ -568,16 +462,36 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                 * gets executed, which is why we remove it:
                 * if (mq > 126) mq = 126;
                 */
-
-
-               PLP_COL_ADD_QUAL(& plp_col.base_quals[nt4], bq);
-               PLP_COL_ADD_QUAL(& plp_col.map_quals[nt4], mq);
-               if (bam1_strand(p->b)) {
-                    plp_col.rv_counts[nt4] += 1;
+               
+               /* "Merge" MQ and BQ if requested and if MAQP not 255
+                *  (not available):
+                * P_jq = P_mq * + (1-P_mq) P_bq.
+                */
+               if ((conf->flag & MPLP_JOIN_BQ_AND_MQ) && mq != 255) {
+                    /* Careful: q's are all ready to print sanger
+                     * phred-scores. No need to do computation in
+                     * phred-space as numbers won't get small enough.
+                     */
+                    mp = PHREDQUAL_TO_PROB(mq);
+                    bp = PHREDQUAL_TO_PROB(bq);
+                    /* precision?! */
+                    jp = mp + (1.0 - mp) * bp;
+                    jq = PROB_TO_PHREDQUAL(jp);
+#ifdef DEBUG
+                    LOG_DEBUG("P_M + (1-P_M) P_B:   %g + (1.0 - %g) * %g = %g  ==  Q%d + (1.0 - Q%d) * Q%d  =  Q%d\n",
+                              mp+33, mp+33, bp+33, jp+33,  mq, mq, bq, jq);
+#endif
+                    final_q = jq;
                } else {
-                    plp_col.fw_counts[nt4] += 1;
+                    final_q = bq;
                }
-                                            
+               
+               if (bam1_strand(p->b)) {
+                    PLP_COL_ADD_BASEQUAL(& plp_col.qs_rv[nt4], final_q);
+               } else {
+                    PLP_COL_ADD_BASEQUAL(& plp_col.qs_fw[nt4], final_q);
+               }
+               
           } /* ! p->is_del */
           
           
@@ -657,26 +571,16 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
           
      }  /* end: for (i = 0; i < n_plp; ++i) { */
 
-     plp_col.coverage -= num_skips;
+    /* FIXME: unused */
+     f_depth = n_plp-num_skips;
      
      /* determine consensus from 'counts' */
      plp_col.cons_base = bam_nt4_rev_table[
           argmax_d(base_counts, NUM_NT4)];
-
-     if (debug) {
-          plp_col_debug_print(& plp_col, stdout);
-     }
 #if 0
-     plp_col_mpileup_print(& plp_col, conf, stdout);
+     plp_col_debug_print(& plp_col, stdout);
 #endif
-
-     for (i = 0; i < NUM_NT4; ++i) {
-          assert(plp_col.fw_counts[i] + plp_col.rv_counts[i] == plp_col.base_quals[i].n);
-          assert(plp_col.base_quals[i].n == plp_col.map_quals[i].n);
-          /* FIXME assert(plp_col.map_quals[i].n == plp_col.source_quals[i].n); */
-     }
-
-     call_lowfreq_snps(& plp_col, conf);
+     plp_col_mpileup_print(& plp_col, stdout);
 
      plp_col_free(& plp_col);
 }
@@ -808,54 +712,27 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 
 
 
-void dump_mplp_conf(const mplp_conf_t *c, FILE *stream) {
-     fprintf(stream, "mplp options\n");
-     fprintf(stream, " max_mq       = %d\n", c->max_mq);
-     fprintf(stream, " min_mq       = %d\n", c->min_mq);
-     fprintf(stream, " flag         = %d\n", c->flag);
-     fprintf(stream, " capQ_thres   = %d\n", c->capQ_thres);
-     fprintf(stream, " max_depth    = %d\n", c->max_depth);
-     fprintf(stream, " min_baseQ    = %d\n", c->min_baseQ);
-     fprintf(stream, " min_altbaseQ = %d\n", c->min_altbaseQ);
-     fprintf(stream, " def_altbaseQ = %d\n", c->def_altbaseQ);
-     fprintf(stream, " bonf         = %lu\n", c->bonf);
-     fprintf(stream, " sig          = %f\n", c->sig);
-     fprintf(stream, " reg          = %s\n", c->reg);
-     fprintf(stream, " fai          = %p\n", c->fai);
-     fprintf(stream, " bed          = %p\n", c->bed);
-}
-
-
 void usage(const mplp_conf_t *mplp_conf) {
      fprintf(stderr, "Usage: %s [mpileup] [options] in.bam\n\n", MYNAME);
      fprintf(stderr, "Options:\n");
-     /* generic */
-     fprintf(stderr, "          --verbose           be verbose\n");
-     fprintf(stderr, "          --debug             enable debugging\n");
      /* regions */
-     fprintf(stderr, "       -r|--region STR        region in which pileup is generated [null]\n");
-     fprintf(stderr, "       -l|--bed FILE          list of positions (chr pos) or regions (BED) [null]\n");
+     fprintf(stderr, "       -r STR       region in which pileup is generated [null]\n");
+     fprintf(stderr, "       -l FILE      list of positions (chr pos) or regions (BED) [null]\n");
      /*  */
-     fprintf(stderr, "       -d|--maxdepth INT      max per-BAM depth to avoid excessive memory usage [%d]\n", mplp_conf->max_depth);
-     fprintf(stderr, "       -f|--reffa FILE        faidx indexed reference sequence file [null]\n");
+     fprintf(stderr, "       -d INT       max per-BAM depth to avoid excessive memory usage [%d]\n", mplp_conf->max_depth);
+     fprintf(stderr, "       -f FILE      faidx indexed reference sequence file [null]\n");
      /* base call quality and baq */
-     fprintf(stderr, "       -q|--min_baseq INT     skip any base with baseQ smaller than INT [%d]\n", mplp_conf->min_baseQ);
-     fprintf(stderr, "       -Q|--min_altbaseq INT  skip nonref-bases with baseQ smaller than INT [%d]. Not active if ref is N\n", mplp_conf->min_altbaseQ);
-     fprintf(stderr, "       -a|--def_altbaseq INT  nonref base qualities will be replace with this value [%d]\n", mplp_conf->def_altbaseQ);
-     fprintf(stderr, "       -B|--no-baq            disable BAQ computation\n");
-     /* fprintf(stderr, "       -E           extended BAQ for higher sensitivity but lower specificity\n"); */
+     fprintf(stderr, "       -q INT       skip any base with baseQ smaller than INT [%d]\n", mplp_conf->min_baseQ);
+     fprintf(stderr, "       -Q INT       skip nonref-bases with baseQ smaller than INT [%d]. Not active if ref is N\n", mplp_conf->min_altbaseQ);
+     fprintf(stderr, "       -B           disable BAQ computation\n");
+     fprintf(stderr, "       -E           extended BAQ for higher sensitivity but lower specificity\n");
      /* mapping quality */
-     fprintf(stderr, "       -m|--min_mq INT        skip alignments with mapQ smaller than INT [%d]\n", mplp_conf->min_mq);
-     fprintf(stderr, "       -M|--max_mq INT        cap mapping quality at INT [%d]\n", mplp_conf->max_mq);
-     fprintf(stderr, "       -j|--join-quals        join mapQ and baseQ per base: P_e = P_mq + (1-P_mq) P_bq\n");
-     /* stats */
-     fprintf(stderr, "       -s|--sig               P-value cutoff / significance level [%f]\n", mplp_conf->sig);
-     fprintf(stderr, "       -b|--bonf              Bonferroni factor [%lu]. INT or 'auto' (non-zero-cov-pos * 3\n", mplp_conf->bonf);
-     fprintf(stderr, "                              'auto' needs to pre-parse BAM, i.e. won't work with input from stdin.\n");
-     fprintf(stderr, "                              Higher numbers speed up computation on high-coverage data considerably.\n");
+     fprintf(stderr, "       -m INT       skip alignments with mapQ smaller than INT [%d]\n", mplp_conf->min_mq);
+     fprintf(stderr, "       -M INT       cap mapping quality at INT [%d]\n", mplp_conf->max_mq);
+     fprintf(stderr, "       -j           join mapQ and baseQ per base: P_e = P_mq + (1-P_mq) P_bq\n");
      /* misc */
-     fprintf(stderr, "       -6|--illumina-1.3      assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
-     fprintf(stderr, "       -A|--use-orphan        count anomalous read pairs\n");
+     fprintf(stderr, "       -6           assume the quality is in the Illumina-1.3+ encoding\n");
+     fprintf(stderr, "       -A           count anomalous read pairs\n");
 
      fprintf(stderr, "\nDefault parameters here differ from original samtools mpileup\n");
      fprintf(stderr, "Furthermore, the format used here differs from regular pileup (see http://samtools.sourceforge.net/pileup.shtml):\n");
@@ -863,6 +740,7 @@ void usage(const mplp_conf_t *mplp_conf) {
      fprintf(stderr, " - on request mapping and base call quality are merged (P_joined = P_mq + (1-P_mq)*P_bq\n");
      fprintf(stderr, " - indel events are removed from bases and qualities and summarized in an additional field\n");
      fprintf(stderr, " - reference matches are not replaced with , or .\n\n");
+
 }
 
 
@@ -870,175 +748,68 @@ void usage(const mplp_conf_t *mplp_conf) {
 int bam_mpileup(int argc, char *argv[])
 {
     int c;
-    static int use_orphan = 0;
-    int bonf_auto = 0;
-    char *bam_file;
-    char *bed_file = NULL;
+    int use_orphan = 0;
     mplp_conf_t mplp;
 
     memset(&mplp, 0, sizeof(mplp_conf_t));
     /* default pileup options */
     mplp.max_mq = 255; /* 60 */
     mplp.min_baseQ = 3; /* 13 */
-    mplp.min_altbaseQ = 20; /* new */
-    mplp.def_altbaseQ = mplp.min_altbaseQ;
+    mplp.min_altbaseQ = 3; /* new */
     mplp.capQ_thres = 0;
     mplp.max_depth = 1000000; /* 250 */
-    /* mplp.flag = MPLP_NO_ORPHAN | MPLP_REALN; */
-    mplp.flag = MPLP_NO_ORPHAN | MPLP_REALN | MPLP_EXT_BAQ;
-    mplp.bonf = 1;
-    mplp.sig = 0.05;
-    /* should differentiate between pileup and snp calling options */
+    mplp.flag = MPLP_NO_ORPHAN | MPLP_REALN;
+  
+    while ((c = getopt(argc, argv, "r:l:d:f:Q:q:BEm:M:j6A:h")) >= 0) {
+        switch (c) {
+        case 'r': mplp.reg = strdup(optarg); break;
+        case 'l': mplp.bed = bed_read(optarg); break;
 
-    while (1) {
-         static struct option long_opts[] = {
-              /* These options set a flag. */
-              {"verbose", no_argument, &verbose, 1},
-              {"debug", no_argument, &debug, 1},
+        case 'd': mplp.max_depth = atoi(optarg); break;
+        case 'f':
+            mplp.fai = fai_load(optarg);
+            if (mplp.fai == 0) 
+                 return 1;
+            break;
 
-              {"region", required_argument, NULL, 'r'},
-              {"bed", required_argument, NULL, 'l'},
-              
-              {"maxdepth", required_argument, NULL, 'd'},
-              {"reffa", required_argument, NULL, 'f'},
-               
-              {"min_baseq", required_argument, NULL, 'q'},
-              {"min_altbaseq", required_argument, NULL, 'Q'},
-              {"def_altbaseq", required_argument, NULL, 0},
-              {"no-baq", no_argument, NULL, 'B'},
-              /*{"ext-baq", required_argument, NULL, 'E'},*/
-                   
-              {"min_mq", required_argument, NULL, 'm'},
-              {"max_mq", required_argument, NULL, 'M'},
-              {"join_quals", no_argument, NULL, 'j'},
+        case 'q': mplp.min_baseQ = atoi(optarg); break;
+        case 'Q': mplp.min_altbaseQ = atoi(optarg); break;
+        case 'B': mplp.flag &= ~MPLP_REALN; break;
+        case 'E': mplp.flag |= MPLP_EXT_BAQ; break;
 
-              {"bonf", required_argument, NULL, 'b'},
-              {"sig", required_argument, NULL, 's'},
-                   
-              {"illumina-1.3", no_argument, NULL, '6'},
-              {"use-orphan", no_argument, &use_orphan, 1},
+        case 'm': mplp.min_mq = atoi(optarg); break;
+        case 'M': mplp.max_mq = atoi(optarg); break;
+        case 'j': mplp.flag |= MPLP_JOIN_BQ_AND_MQ; break;
 
-              {0, 0, 0, 0} /* sentinel */
-         };
-         /* WARN keep in sync with above */
-         static const char *long_opts_str = "r:l:d:f:Q:q:Bm:M:jb:s:6A:h"; 
+        case '6': mplp.flag |= MPLP_ILLUMINA13; break;
+        case 'A': use_orphan = 1; break;
 
-         /* getopt_long stores the option index here. */
-         int long_opts_index = 0;
-         c = getopt_long(argc, argv, long_opts_str, long_opts, & long_opts_index);
-         if (c == -1) {
-              break;
-         }
-
-         switch (c) {
-         case 'r': mplp.reg = strdup(optarg); break;
-         case 'l': 
-              mplp.bed = bed_read(optarg); 
-              bed_file = strdup(optarg);
-              break;
-              
-         case 'd': mplp.max_depth = atoi(optarg); break;
-         case 'f':
-              mplp.fai = fai_load(optarg);
-              if (mplp.fai == 0) 
-                   return 1;
-              break;
-              
-         case 'q': mplp.min_baseQ = atoi(optarg); break;
-         case 'Q': mplp.min_altbaseQ = atoi(optarg); break;
-         case 'a': mplp.def_altbaseQ = atoi(optarg); break;
-         case 'B': mplp.flag &= ~MPLP_REALN; break;
-         /* case 'E': mplp.flag |= MPLP_EXT_BAQ; break; */
-              
-         case 'm': mplp.min_mq = atoi(optarg); break;
-         case 'M': mplp.max_mq = atoi(optarg); break;
-         case 'j': mplp.flag |= MPLP_JOIN_BQ_AND_MQ; break;
-              
-         case '6': mplp.flag |= MPLP_ILLUMINA13; break;
-
-         case 'b': 
-              if (0 == strncmp(optarg, "auto", 4)) {
-                   bonf_auto = 1;
-
-              } else {
-                   mplp.bonf = strtol(optarg, (char **)NULL, 10); /* atol */ 
-                   if (0==mplp.bonf) {
-                        LOG_FATAL("%s\n", "Couldn't parse Bonferroni factor\n"); 
-                        exit(1);
-                   }
-              }
-              break;
-         case 's': 
-              mplp.sig = strtof(optarg, (char **)NULL); /* atof */
-              if (0==mplp.sig) {
-                   LOG_FATAL("%s\n", "Couldn't parse sign-threshold\n"); 
-                   exit(1);
-              }
-              break;
-              
-         case 'h': usage(& mplp); exit(0); /* WARN: not printing defaults if some args where parsed */
-         case '?': LOG_FATAL("%s\n", "unrecognized arguments found. Exiting...\n"); exit(1);
-#if 0
-         case 0:  fprintf(stderr, "ERROR: long opt (%s) not mapping to short option. Exiting...\n", long_opts[long_opts_index].name); exit(1);
-#endif
-         default:
-              break;
-         }
+        case 'h': usage(& mplp); exit(0);
+        case '?': fprintf(stderr, "ERROR: unrecognized arguments found. Exiting...\n"); exit(1);
+        }
     }
-    if (use_orphan) {
-         mplp.flag &= ~MPLP_NO_ORPHAN;
-    }
+    if (use_orphan) mplp.flag &= ~MPLP_NO_ORPHAN;
+    
+    assert(mplp.min_mq <= mplp.max_mq);
+    assert(mplp.min_baseQ <= mplp.min_altbaseQ);
+    
 
     if (argc == 1) {
         fprintf(stderr, "\n");
         usage(& mplp);
         return 1;
     }
+
     if (1 != argc - optind) {
         fprintf(stderr, "Need exactly one BAM file as last argument\n");
         return(EXIT_FAILURE);
     }
-    bam_file = (argv + optind)[0];
-    LOG_FIXME("bam_file = %s\n", bam_file);
-
-
-    if (bonf_auto) {
-         double cov_mean;
-         long int num_non0cov_pos;
-         LOG_DEBUG("Automatically determining Bonferroni factor for bam=%s reg=%s bed=%s\n",
-                   bam_file, mplp.reg, bed_file); 
-         if (depth_stats(&cov_mean, &num_non0cov_pos, bam_file, mplp.reg, bed_file,
-                         &mplp.min_baseQ, &mplp.min_mq)) {
-              LOG_FATAL("%s\n", "Couldn't determine Bonferroni factor automatically\n"); 
-              exit(1);
-         }
-         mplp.bonf = num_non0cov_pos*3;
-         LOG_VERBOSE("Automatically determined Bonferroni factor = %lu\n", mplp.bonf);
-    }
-
-
-    if (debug) {
-         dump_mplp_conf(& mplp, stderr);
-    }
-
-    /* FIXME: implement logic_check_opts() */
-    assert(mplp.min_mq <= mplp.max_mq);
-    assert(mplp.min_baseQ <= mplp.min_altbaseQ);
-    assert(! (mplp.bed && mplp.reg));
-   
-
 
     mpileup(&mplp, 1, argv + optind);
 
-    free(mplp.reg); 
-    if (mplp.fai) {
-         fai_destroy(mplp.fai);
-    }
-    free(bed_file);
-    if (mplp.bed) {
-         bed_destroy(mplp.bed);
-    }
-
+    free(mplp.reg); free(mplp.pl_list);
+    if (mplp.fai) fai_destroy(mplp.fai);
+    if (mplp.bed) bed_destroy(mplp.bed);
     return 0;
 }
 
@@ -1046,10 +817,6 @@ int bam_mpileup(int argc, char *argv[])
 
 int main(int argc, char **argv)
 {
-     LOG_FIXME("%s\n", "- Source qual missing");
-     LOG_FIXME("%s\n", "- Missing test against old SNV caller");
-     LOG_FIXME("%s\n", "- Set defaults once things are working");
-
      if (argc>1 && strcmp(argv[1], "mpileup") == 0) {
           return bam_mpileup(argc-1, argv+1);
      } else {
