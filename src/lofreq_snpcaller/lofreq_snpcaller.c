@@ -434,6 +434,18 @@ static inline int printw(int c, FILE *fp)
 }
 
 
+char *cigar_from_bam(const bam1_t *b) {
+     /* from char *bam_format1_core(const bam_header_t *header, const bam1_t *b, int of) */
+     const bam1_core_t *c = &b->core;
+     kstring_t str;
+     int i;
+     str.l = str.m = 0; str.s = 0;
+     for (i = 0; i < c->n_cigar; ++i) {
+          kputw(bam1_cigar(b)[i]>>BAM_CIGAR_SHIFT, &str);
+          kputc("MIDNSHP=X"[bam1_cigar(b)[i]&BAM_CIGAR_MASK], &str);
+     }
+     return str.s;
+}
 
 static int mplp_func(void *data, bam1_t *b)
 {
@@ -483,6 +495,94 @@ static int mplp_func(void *data, bam1_t *b)
              skip = 1;
         }
     } while (skip);
+
+#if 0
+    {
+         /* modelled after bam.c:bam_calend(), bam_format1_core() and
+          * pysam's aligned_pairs */
+         uint32_t *cigar = bam1_cigar(b);
+         const bam1_core_t *c = &b->core;
+         uint32_t pos = c->pos; /* pos on genome */
+         uint32_t qpos = 0; /* pos on read */
+         int has_ref = (ma->ref && ma->ref_id == b->core.tid)? 1 : 0;
+         uint32_t k, i;
+         int n_mismatches = 0;
+         int n_matches = 0;
+
+         if (has_ref) {
+              fprintf(stderr, "SOURCEQUAL: core.pos %d - calend %d - cigar %s", 
+                      b->core.pos, bam_calend(&b->core, bam1_cigar(b)), cigar_from_bam(b));
+              /* read <=> bam_format1_core(NULL, b, BAM_OFDEC); */
+              for (k=0; k < c->n_cigar; ++k) {/* n_cigar: number of cigar operations */
+                   int op = cigar[k] & BAM_CIGAR_MASK; /* the cigar operation */
+                   uint32_t l = cigar[k] >> BAM_CIGAR_SHIFT;
+      
+                   /* tests could be collapsed but keeping them as they
+                    * were in pysam's aligned_pairs to make later
+                    * handling of indels easier */
+                   if (op == BAM_CMATCH) {
+                        for (i=pos; i<pos+l; i++) {                             
+#if 0
+                             printf("qpos,i = %d,%d\n", qpos, i);
+#endif
+                             char ref_nt = ma->ref[i];
+                             char read_nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(b), qpos)];
+                             int bq = bam1_qual(b)[qpos];
+
+                             if (ref_nt == read_nt) {
+                                  n_matches += 1;
+                             } else {
+                                  n_mismatches += 1;
+                             }
+                             qpos += 1;
+                        }
+                        pos += l;
+
+                   } else if (op == BAM_CINS) {
+                        for (i=pos; i<pos+l; i++) {
+#if 0
+                             printf("qpos,i = %d,None\n", qpos);
+#endif
+                             qpos += 1;
+                        }
+                        qpos += l;
+
+                   } else if (op == BAM_CDEL || op == BAM_CREF_SKIP) {
+                        for (i=pos; i<pos+l; i++) {
+#if 0
+                             printf("qpos,i = None,%d\n", i);
+#endif
+                        }
+                        pos += l;
+                   }
+              }
+              assert(pos ==  bam_calend(&b->core, bam1_cigar(b))); /* FIXME correct assert? what if clipped */
+              fprintf(stderr, " - matches %d - mismatches %d\n", n_matches, n_mismatches);                                       
+
+#if 0
+"
+PJ = joined Q
+PM = map Q
+PG = genome Q
+PS = source Q
+
+
+PJ = PM  +  (1-PM) * PG  +  (1-PM) * (1-PG) * PB
+# note: niranjan used PS and meant PB I think
+# mapping error
+# OR
+# no mapping error AND genome error
+# OR
+# no mapping error AND no genome error AND base-error
+
+
+PJ = PM + (1-PM) * PB
+# mapping error OR no mapping error AND base-error
+"
+#endif
+         } /* has_ref */
+    } /* dummy for locals */
+#endif
     return ret;
 }
 
@@ -810,19 +910,19 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
 
 void dump_mplp_conf(const mplp_conf_t *c, FILE *stream) {
      fprintf(stream, "mplp options\n");
-     fprintf(stream, " max_mq       = %d\n", c->max_mq);
-     fprintf(stream, " min_mq       = %d\n", c->min_mq);
-     fprintf(stream, " flag         = %d\n", c->flag);
-     fprintf(stream, " capQ_thres   = %d\n", c->capQ_thres);
-     fprintf(stream, " max_depth    = %d\n", c->max_depth);
-     fprintf(stream, " min_baseQ    = %d\n", c->min_baseQ);
-     fprintf(stream, " min_altbaseQ = %d\n", c->min_altbaseQ);
-     fprintf(stream, " def_altbaseQ = %d\n", c->def_altbaseQ);
-     fprintf(stream, " bonf         = %lu\n", c->bonf);
-     fprintf(stream, " sig          = %f\n", c->sig);
-     fprintf(stream, " reg          = %s\n", c->reg);
-     fprintf(stream, " fai          = %p\n", c->fai);
-     fprintf(stream, " bed          = %p\n", c->bed);
+     fprintf(stream, "  max_mq       = %d\n", c->max_mq);
+     fprintf(stream, "  min_mq       = %d\n", c->min_mq);
+     fprintf(stream, "  flag         = %d\n", c->flag);
+     fprintf(stream, "  capQ_thres   = %d\n", c->capQ_thres);
+     fprintf(stream, "  max_depth    = %d\n", c->max_depth);
+     fprintf(stream, "  min_baseQ    = %d\n", c->min_baseQ);
+     fprintf(stream, "  min_altbaseQ = %d\n", c->min_altbaseQ);
+     fprintf(stream, "  def_altbaseQ = %d\n", c->def_altbaseQ);
+     fprintf(stream, "  bonf         = %lu\n", c->bonf);
+     fprintf(stream, "  sig          = %f\n", c->sig);
+     fprintf(stream, "  reg          = %s\n", c->reg);
+     fprintf(stream, "  fai          = %p\n", c->fai);
+     fprintf(stream, "  bed          = %p\n", c->bed);
 }
 
 
