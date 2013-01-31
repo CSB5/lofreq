@@ -15,6 +15,7 @@
 #include <assert.h>
 #include <stdarg.h>
 #include <limits.h>
+#include <float.h>
 #include <getopt.h>
 
 #include "sam.h"
@@ -22,7 +23,8 @@
 #include "kstring.h"
 #include "snpcaller.h"
 #include "bam2depth.h"
-#include "utils.h">
+#include "fet.h"
+#include "utils.h"
 /* from bedidx.c */
 void *bed_read(const char *fn);
 void bed_destroy(void *_h);
@@ -31,27 +33,40 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 
 /* mpileup configuration flags 
  */
-/*#define MPLP_GLF   0x10*/
-#define MPLP_NO_COMP 0x20
-#define MPLP_NO_ORPHAN 0x40
-#define MPLP_REALN   0x80
-#define MPLP_FMT_DP 0x100
-#define MPLP_FMT_SP 0x200
-#define MPLP_NO_INDEL 0x400
-#define MPLP_EXT_BAQ 0x800
-#define MPLP_ILLUMINA13 0x1000
-/*#define MPLP_IGNORE_RG 0x2000
-#define MPLP_PRINT_POS 0x4000*/
-#define MPLP_PRINT_MAPQ 0x8000
-#define MPLP_JOIN_BQ_AND_MQ 0x10000
+#define MPLP_NO_ORPHAN 0x10
+#define MPLP_REALN   0x20
+#define MPLP_EXT_BAQ 0x40
+#define MPLP_ILLUMINA13 0x80
+#define MPLP_IGNORE_RG 0x100
+#define MPLP_USE_MQ 0x200
+#define MPLP_USE_SQ 0x400
 
 
 #define MYNAME "lofreq_snpcaller"
 #define PHREDQUAL_TO_PROB(phred) (pow(10.0, -1.0*(phred)/10.0))
-#define PROB_TO_PHREDQUAL(prob) ((int)(-10.0 * log10(prob)))
+#define PROB_TO_PHREDQUAL(prob) (prob<0.0+DBL_EPSILON?INT_MAX:(int)(-10.0 * log10(prob)))
 
 
 const char *bam_nt4_rev_table = "ACGTN"; /* similar to bam_nt16_rev_table */
+
+unsigned char bam_nt4_table[256] = {
+     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+     4,0,4,1,4,4,4,2,4,4,4,4,4,4,4,4,
+     4,4,4,4,3,4,4,4,4,4,4,4,4,4,4,4,
+     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+};
 #define NUM_NT4 5 /* strlen(bam_nt4_rev_table); */
 
 
@@ -175,7 +190,7 @@ void plp_col_init(plp_col_t *p) {
     for (i=0; i<NUM_NT4; i++) {
          int_varray_init(& p->base_quals[i], 0);
          int_varray_init(& p->map_quals[i], 0);
-         int_varray_init(& p->source_quals[i], 0);
+         int_varray_init(& p->source_quals[i], 0); /* FIXME unused */
          p->fw_counts[i] = 0;
          p->rv_counts[i] = 0;
     }
@@ -296,7 +311,7 @@ void call_lowfreq_snps(const plp_col_t *p, mplp_conf_t *conf)
      /* 4 bases ignoring N, -1 reference/consensus base makes 3 */
      double pvalues[3]; /* pvalues reported back from snpcaller */
      int alt_counts[3]; /* counts for alt bases handed down to snpcaller */
-     int alt_raw_counts[3];
+     int alt_raw_counts[3]; /* raw, unfiltered alt-counts */
      int alt_bases[3];/* actual alt bases */
      int alt_idx;
      int got_alt_bases = 0;
@@ -355,13 +370,16 @@ void call_lowfreq_snps(const plp_col_t *p, mplp_conf_t *conf)
                if (is_alt_base) {
                     alt_raw_counts[alt_idx] += 1;
                     if (bq < conf->min_altbaseQ) {
-                         continue; /* WARNING base counts now invalid. We used them for freq reporting anyway, otherwise heterozygous calls look odd */
+                         continue; 
+                         /* WARNING base counts now invalid. We use
+                          * them for freq reporting anyway, otherwise
+                          * heterozygous calls are odd */
                     }
                     bq = conf->def_altbaseQ;
                     alt_counts[alt_idx] += 1;
                }
 
-               if ((conf->flag & MPLP_JOIN_BQ_AND_MQ)) {
+               if ((conf->flag & MPLP_USE_MQ)) {
                     final_q = merge_baseq_and_mapq(bq, mq);
 
                } else {
@@ -406,11 +424,21 @@ void call_lowfreq_snps(const plp_col_t *p, mplp_conf_t *conf)
           int alt_raw_count = alt_raw_counts[i];
           double pvalue = pvalues[i];
           if (pvalue * (double)conf->bonf < conf->sig) {
-               LOG_FIXME("low freq snp: %s %d %c>%c pv:%f;raw:%d/%d;filt:%d/%d\n",
+               double sb_prob, sb_left_pv, sb_right_pv, sb_two_pv;
+               int n11, n12, n21, n22;
+               n11 = p->fw_counts[bam_nt4_table[(int)p->cons_base]];
+               n12 = p->rv_counts[bam_nt4_table[(int)p->cons_base]];
+               n21 = p->fw_counts[bam_nt4_table[(int)alt_base]];
+               n22 = p->rv_counts[bam_nt4_table[(int)alt_base]];
+               /*LOG_DEBUG("kt_fisher_exact(n11=%d, n12=%d, n21=%d, n22=%d\n", n11, n12, n21, n22);*/
+               sb_prob = kt_fisher_exact(n11, n12, n21, n22, &sb_left_pv, &sb_right_pv, &sb_two_pv);
+
+               LOG_FIXME("low freq snp: %s %d %c>%c pv-prob:%g;pv-qual:%d counts-raw:%d/%d=%.6f counts-filt:%d/%d=%.6f sb-prob=%g;sb-qual=%d\n",
                          p->target, p->pos+1, p->cons_base, alt_base,
-                         pvalue, 
-                         alt_raw_count, p->coverage,
-                         alt_count, quals_len);
+                         pvalue, PROB_TO_PHREDQUAL(pvalue),
+                         alt_raw_count, p->coverage, alt_raw_count/(float)p->coverage,
+                         alt_count, quals_len, alt_count/(float)quals_len,
+                         sb_two_pv, PROB_TO_PHREDQUAL(sb_two_pv));
           }
      }
      free(quals);
@@ -446,6 +474,167 @@ char *cigar_from_bam(const bam1_t *b) {
      }
      return str.s;
 }
+
+/* Estimate as to how likely it is that this read, given the mapping,
+ * comes from this reference genome. P(r not from g|mapping) = 1 - P(r
+ * from g). Use qualities of all bases for and poisson-binomial dist
+ * (as for core SNV calling). Assumed independence of errors okay: if
+ * they are not independent, then the assumption is conservative. Keep
+ * all qualities as they are, i.e. don’t replace mismatches with lower
+ * values. Rationale: higher SNV quals, means higher chance SNVs are
+ * real, therefore higher prob. read does not come from genome. 
+ *
+ * FIXME: should always ignore het or know SNV pos!
+ *
+ * Returns -1 on error. otherwise
+ * phred score of source error prob.
+ */
+int source_qual(bam1_t *b, char *ref)
+{
+     /* modelled after bam.c:bam_calend(), bam_format1_core() and
+      * pysam's aligned_pairs 
+      */
+     uint32_t *cigar = bam1_cigar(b);
+     const bam1_core_t *c = &b->core;
+     uint32_t pos = c->pos; /* pos on genome */
+     uint32_t qpos = 0; /* pos on read/query */
+     uint32_t k, i;
+     int n_mismatches = 0;
+     int n_matches = 0;
+     int *quals = NULL;
+     int n_quals = 0;
+     int32_t qlen = (int32_t) bam_cigar2qlen(c, bam1_cigar(b)); /* read length */
+     double *probvec;
+     int src_qual = 255;
+     double src_pvalue;
+
+     if (NULL==ref) {
+          return -1;
+     }
+
+     if (NULL == (quals = malloc(qlen * sizeof(int)))) {
+          LOG_FATAL("couldn't allocate memory\n");
+          return -1;
+     }
+
+     if (0) {
+          fprintf(stderr, "SOURCEQUAL: core.pos %d - calend %d - cigar %s", 
+                  b->core.pos, bam_calend(&b->core, bam1_cigar(b)), cigar_from_bam(b));
+     }
+     
+     /* loop over cigar to get aligned bases and matches/mismatches and their quals.
+      *
+      * read: bam_format1_core(NULL, b, BAM_OFDEC);
+      */
+     for (k=0; k < c->n_cigar; ++k) {/* n_cigar: number of cigar operations */
+          int op = cigar[k] & BAM_CIGAR_MASK; /* the cigar operation */
+          uint32_t l = cigar[k] >> BAM_CIGAR_SHIFT;
+          
+          /* following conditionals could be collapsed to much shorter
+           * code, but we keep them as they were in pysam's
+           * aligned_pairs to make later handling of indels easier 
+           */
+          if (op == BAM_CMATCH) {
+               for (i=pos; i<pos+l; i++) {                             
+#if 0
+                    printf("qpos,i = %d,%d\n", qpos, i);
+#endif
+                    char ref_nt = ref[i];
+                    char read_nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(b), qpos)];
+                    int bq = bam1_qual(b)[qpos];
+                    
+                    if (ref_nt == read_nt) {
+                         n_matches += 1;
+                    } else {
+                         n_mismatches += 1;
+                    }
+                    quals[n_quals++] = bq;
+
+                    qpos += 1;
+               }
+               pos += l;
+               
+          } else if (op == BAM_CINS) {
+               for (i=pos; i<pos+l; i++) {
+#if 0
+                    printf("qpos,i = %d,None\n", qpos);
+#endif
+                    qpos += 1;
+               }
+               qpos += l;
+               
+          } else if (op == BAM_CDEL || op == BAM_CREF_SKIP) {
+               for (i=pos; i<pos+l; i++) {
+#if 0
+                    printf("qpos,i = None,%d\n", i);
+#endif
+               }
+               pos += l;
+          }
+     } /* for k */
+     assert(pos ==  bam_calend(&b->core, bam1_cigar(b))); /* FIXME correct assert? what if clipped? */
+
+     if (0) {
+          fprintf(stderr, " - matches %d - mismatches %d\n", n_matches, n_mismatches);                                       
+     }
+     assert(n_matches+n_mismatches == n_quals);
+
+     /* sorting in theory should be numerically more stable and also
+      * make snpcallerfaster */
+     qsort(quals, n_quals, sizeof(int), int_cmp);
+     probvec = poissbin(&src_pvalue, quals,
+                        n_quals, n_mismatches, 1.0, 0.05);
+
+     if (src_pvalue>1.0) {/* DBL_MAX is default return value */
+          src_pvalue = 1.0;/*-DBL_EPSILON;*/
+     }
+     /* src_pvalue: what's the prob of seeing n_mismatches or more by
+      * chance, given quals? or: how likely is this read from the
+      * genome. 1-src_value = prob read is not from genome
+      */
+     if (0) {
+          LOG_FIXME("Orig src_pv = %f", src_pvalue);
+     }
+     src_pvalue = 1.0-src_pvalue;
+     free(probvec);
+
+     src_qual =  PROB_TO_PHREDQUAL(src_pvalue);
+
+     if (0) {
+          fprintf(stderr, "| src_pv = %f = Q%d for %d/%d mismatches. All quals: ", 
+                  src_pvalue, src_qual, n_mismatches, n_quals);
+          for (i=0; i<n_quals; i++) {
+               fprintf(stderr, " %d", quals[i]);
+          }
+          fprintf(stderr, "\n");
+     }
+
+#if 0
+"
+PJ = joined Q
+PM = map Q
+PG = genome Q
+PS = source Q
+
+
+PJ = PM  +  (1-PM) * PG  +  (1-PM) * (1-PG) * PB
+# note: niranjan used PS and meant PB I think
+# mapping error
+# OR
+# no mapping error AND genome error
+# OR
+# no mapping error AND no genome error AND base-error
+
+
+PJ = PM + (1-PM) * PB
+# mapping error OR no mapping error AND base-error
+"
+#endif
+     free(quals);
+
+     return src_qual;
+}
+
 
 static int mplp_func(void *data, bam1_t *b)
 {
@@ -496,93 +685,12 @@ static int mplp_func(void *data, bam1_t *b)
         }
     } while (skip);
 
-#if 0
-    {
-         /* modelled after bam.c:bam_calend(), bam_format1_core() and
-          * pysam's aligned_pairs */
-         uint32_t *cigar = bam1_cigar(b);
-         const bam1_core_t *c = &b->core;
-         uint32_t pos = c->pos; /* pos on genome */
-         uint32_t qpos = 0; /* pos on read */
-         int has_ref = (ma->ref && ma->ref_id == b->core.tid)? 1 : 0;
-         uint32_t k, i;
-         int n_mismatches = 0;
-         int n_matches = 0;
+    /* compute source qual if requested and have ref */
+    if (ma->ref && ma->ref_id == b->core.tid && ma->conf->flag & MPLP_USE_SQ) {
+         int sq = source_qual(b, ma->ref);
+         LOG_FIXME("Got sq %d. What now?\n");
+    }
 
-         if (has_ref) {
-              fprintf(stderr, "SOURCEQUAL: core.pos %d - calend %d - cigar %s", 
-                      b->core.pos, bam_calend(&b->core, bam1_cigar(b)), cigar_from_bam(b));
-              /* read <=> bam_format1_core(NULL, b, BAM_OFDEC); */
-              for (k=0; k < c->n_cigar; ++k) {/* n_cigar: number of cigar operations */
-                   int op = cigar[k] & BAM_CIGAR_MASK; /* the cigar operation */
-                   uint32_t l = cigar[k] >> BAM_CIGAR_SHIFT;
-      
-                   /* tests could be collapsed but keeping them as they
-                    * were in pysam's aligned_pairs to make later
-                    * handling of indels easier */
-                   if (op == BAM_CMATCH) {
-                        for (i=pos; i<pos+l; i++) {                             
-#if 0
-                             printf("qpos,i = %d,%d\n", qpos, i);
-#endif
-                             char ref_nt = ma->ref[i];
-                             char read_nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(b), qpos)];
-                             int bq = bam1_qual(b)[qpos];
-
-                             if (ref_nt == read_nt) {
-                                  n_matches += 1;
-                             } else {
-                                  n_mismatches += 1;
-                             }
-                             qpos += 1;
-                        }
-                        pos += l;
-
-                   } else if (op == BAM_CINS) {
-                        for (i=pos; i<pos+l; i++) {
-#if 0
-                             printf("qpos,i = %d,None\n", qpos);
-#endif
-                             qpos += 1;
-                        }
-                        qpos += l;
-
-                   } else if (op == BAM_CDEL || op == BAM_CREF_SKIP) {
-                        for (i=pos; i<pos+l; i++) {
-#if 0
-                             printf("qpos,i = None,%d\n", i);
-#endif
-                        }
-                        pos += l;
-                   }
-              }
-              assert(pos ==  bam_calend(&b->core, bam1_cigar(b))); /* FIXME correct assert? what if clipped */
-              fprintf(stderr, " - matches %d - mismatches %d\n", n_matches, n_mismatches);                                       
-
-#if 0
-"
-PJ = joined Q
-PM = map Q
-PG = genome Q
-PS = source Q
-
-
-PJ = PM  +  (1-PM) * PG  +  (1-PM) * (1-PG) * PB
-# note: niranjan used PS and meant PB I think
-# mapping error
-# OR
-# no mapping error AND genome error
-# OR
-# no mapping error AND no genome error AND base-error
-
-
-PJ = PM + (1-PM) * PB
-# mapping error OR no mapping error AND base-error
-"
-#endif
-         } /* has_ref */
-    } /* dummy for locals */
-#endif
     return ret;
 }
 
@@ -913,12 +1021,20 @@ void dump_mplp_conf(const mplp_conf_t *c, FILE *stream) {
      fprintf(stream, "  max_mq       = %d\n", c->max_mq);
      fprintf(stream, "  min_mq       = %d\n", c->min_mq);
      fprintf(stream, "  flag         = %d\n", c->flag);
+
+     fprintf(stream, "  flag & MPLP_NO_ORPHAN  = %d\n", c->flag&MPLP_NO_ORPHAN?1:0);
+     fprintf(stream, "  flag & MPLP_REALN      = %d\n", c->flag&MPLP_REALN?1:0);
+     fprintf(stream, "  flag & MPLP_EXT_BAQ    = %d\n", c->flag&MPLP_EXT_BAQ?1:0);
+     fprintf(stream, "  flag & MPLP_ILLUMINA13 = %d\n", c->flag&MPLP_ILLUMINA13?1:0);
+     fprintf(stream, "  flag & MPLP_USE_MQ     = %d\n", c->flag&MPLP_USE_MQ?1:0);
+     fprintf(stream, "  flag & MPLP_USE_SQ     = %d\n", c->flag&MPLP_USE_SQ?1:0);
+     
      fprintf(stream, "  capQ_thres   = %d\n", c->capQ_thres);
      fprintf(stream, "  max_depth    = %d\n", c->max_depth);
      fprintf(stream, "  min_baseQ    = %d\n", c->min_baseQ);
      fprintf(stream, "  min_altbaseQ = %d\n", c->min_altbaseQ);
      fprintf(stream, "  def_altbaseQ = %d\n", c->def_altbaseQ);
-     fprintf(stream, "  bonf         = %lu\n", c->bonf);
+     fprintf(stream, "  bonf         = %lu  (might get recalculated later)\n", c->bonf);
      fprintf(stream, "  sig          = %f\n", c->sig);
      fprintf(stream, "  reg          = %s\n", c->reg);
      fprintf(stream, "  fai          = %p\n", c->fai);
@@ -947,7 +1063,8 @@ void usage(const mplp_conf_t *mplp_conf) {
      /* mapping quality */
      fprintf(stderr, "       -m|--min_mq INT        skip alignments with mapQ smaller than INT [%d]\n", mplp_conf->min_mq);
      fprintf(stderr, "       -M|--max_mq INT        cap mapping quality at INT [%d]\n", mplp_conf->max_mq);
-     fprintf(stderr, "       -j|--join-quals        join mapQ and baseQ per base: P_e = P_mq + (1-P_mq) P_bq\n");
+     fprintf(stderr, "       -J|--no-mq             don't merge mapQ into baseQ: P_e = P_mq + (1-P_mq) P_bq\n");
+     fprintf(stderr, "       -S|--no-sq             don't merge sourceQ into baseQ\n");
      /* stats */
      fprintf(stderr, "       -s|--sig               P-value cutoff / significance level [%f]\n", mplp_conf->sig);
      fprintf(stderr, "       -b|--bonf              Bonferroni factor [%lu]. INT or 'auto' (non-zero-cov-pos * 3\n", mplp_conf->bonf);
@@ -977,8 +1094,7 @@ int bam_mpileup(int argc, char *argv[])
     mplp.def_altbaseQ = mplp.min_altbaseQ;
     mplp.capQ_thres = 0;
     mplp.max_depth = 1000000; /* 250 */
-    /* mplp.flag = MPLP_NO_ORPHAN | MPLP_REALN; */
-    mplp.flag = MPLP_NO_ORPHAN | MPLP_REALN | MPLP_EXT_BAQ;
+    mplp.flag = MPLP_NO_ORPHAN | MPLP_REALN | MPLP_EXT_BAQ | MPLP_USE_MQ; /* | MPLP_USE_SQ; */
     mplp.bonf = 1;
     mplp.sig = 0.05;
     /* should differentiate between pileup and snp calling options */
@@ -1003,7 +1119,8 @@ int bam_mpileup(int argc, char *argv[])
                    
               {"min_mq", required_argument, NULL, 'm'},
               {"max_mq", required_argument, NULL, 'M'},
-              {"join_quals", no_argument, NULL, 'j'},
+              {"no-mq", no_argument, NULL, 'J'},
+              {"no-sq", no_argument, NULL, 'S'},
 
               {"bonf", required_argument, NULL, 'b'},
               {"sig", required_argument, NULL, 's'},
@@ -1011,10 +1128,12 @@ int bam_mpileup(int argc, char *argv[])
               {"illumina-1.3", no_argument, NULL, '6'},
               {"use-orphan", no_argument, &use_orphan, 1},
 
+              {"help", no_argument, NULL, 'h'},
+
               {0, 0, 0, 0} /* sentinel */
          };
          /* WARN keep in sync with above */
-         static const char *long_opts_str = "r:l:d:f:Q:q:Bm:M:jb:s:6A:h"; 
+         static const char *long_opts_str = "r:l:d:f:Q:q:Bm:M:JSb:s:6A:h"; 
 
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
@@ -1045,7 +1164,8 @@ int bam_mpileup(int argc, char *argv[])
               
          case 'm': mplp.min_mq = atoi(optarg); break;
          case 'M': mplp.max_mq = atoi(optarg); break;
-         case 'j': mplp.flag |= MPLP_JOIN_BQ_AND_MQ; break;
+         case 'J': mplp.flag &= ~MPLP_USE_MQ; break;
+         case 'S': mplp.flag &= ~MPLP_USE_SQ; break;
               
          case '6': mplp.flag |= MPLP_ILLUMINA13; break;
 
@@ -1092,7 +1212,6 @@ int bam_mpileup(int argc, char *argv[])
         return(EXIT_FAILURE);
     }
     bam_file = (argv + optind)[0];
-    LOG_FIXME("bam_file = %s\n", bam_file);
 
 
     if (bonf_auto) {
@@ -1119,8 +1238,6 @@ int bam_mpileup(int argc, char *argv[])
     assert(mplp.min_baseQ <= mplp.min_altbaseQ);
     assert(! (mplp.bed && mplp.reg));
    
-
-
     mpileup(&mplp, 1, argv + optind);
 
     free(mplp.reg); 
@@ -1137,28 +1254,73 @@ int bam_mpileup(int argc, char *argv[])
 
 
 
+#ifndef SANDBOX
+
 int main(int argc, char **argv)
 {
-     LOG_FIXME("%s\n", "- Source qual missing");
-     LOG_FIXME("%s\n", "- Missing test against old SNV caller");
-     LOG_FIXME("%s\n", "- Set defaults once things are working");
+     LOG_FIXME("%s\n", "- Proper source qual use missing");
+     LOG_FIXME("%s\n", "- Indel handling missing");
+     LOG_FIXME("%s\n", "- Implement routine test against old SNV caller");
 
      return bam_mpileup(argc, argv);
 }
 
+#else
 
-
-#ifdef SANDBOX
-void sandbox()
+int main()
 {
-     char test_nucs[] = "ACGTNRYacgtnryZ\0";
-     int i;
-     
-     for (i=0; i<strlen(test_nucs); i++) {
-          printf("%d %c - %d - %d\n", i, test_nucs[i],
-                 bam_nt16_table[(int)test_nucs[i]],
-                 bam_nt16_nt4_table[bam_nt16_table[(int)test_nucs[i]]]);
+     if (1) {
+          char test_nucs[] = "ACGTNRYacgtnryZ\0";
+          int i;
+          
+          for (i=0; i<strlen(test_nucs); i++) {
+               printf("%d %c - %d - %d - %d\n", i, test_nucs[i],
+                      bam_nt16_table[(int)test_nucs[i]],
+                      bam_nt16_nt4_table[bam_nt16_table[(int)test_nucs[i]]],
+                      bam_nt4_table[(int)test_nucs[i]]);
+          }
      }
+
+     if (1) {
+          int quals[] = {30, 30, 30, 30, 30, 30, 30, 30, 30, 30,
+                         30, 30, 30, 30, 30, 30, 30, 30, 30, 30,
+                         30, 30, 30, 30, 30, 30, 30, 30, 30, 30,
+                         30, 30, 30, 30, 30, 30, 30, 30, 30, 30,
+                         30, 30, 30, 30, 30, 30, 30, 30, 30, 30};
+          int n_quals = 50;
+          int n_mismatches = 1;
+          double *probvec;
+          double src_pvalue;
+          int src_qual; 
+          int i;
+
+          qsort(quals, n_quals, sizeof(int), int_cmp);
+
+          for (n_mismatches=0; n_mismatches<n_quals/2; n_mismatches++) {
+               probvec = poissbin(&src_pvalue, quals,
+                                  n_quals, n_mismatches, 1.0, 0.05);
+               
+               if (src_pvalue>1.0) {/* DBL_MAX is default return value */
+                    src_pvalue = 1.0;/*-DBL_EPSILON;*/
+               }
+               /* src_pvalue: what's the chance of seeing n_mismatches or more
+                * given quals? or: how likely is this read from the genome.
+                * 1-src_value = prob read is not from genome
+                */
+               LOG_FIXME("Orig src_pv = %f", src_pvalue);
+               src_pvalue = 1.0-src_pvalue;
+               free(probvec);
+               
+               src_qual =  PROB_TO_PHREDQUAL(src_pvalue);
+               fprintf(stderr, "| src_pv = %f = Q%d for %d/%d mismatches. All quals: ", 
+                       src_pvalue, src_qual, n_mismatches, n_quals);
+               for (i=0; i<n_quals; i++) {
+                    fprintf(stderr, " %d", quals[i]);
+               }
+               fprintf(stderr, "\n");
+          }
+     }
+     return 0;
 }
 #endif
 
