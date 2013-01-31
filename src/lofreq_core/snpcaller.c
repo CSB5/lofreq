@@ -307,6 +307,45 @@ pruned_calc_prob_dist(const int *quals, int N, int K,
 
 
 
+/* main logic. return of probvec (needs to be freed by caller allows
+   to check pvalues for other numbers < (original num_failures), like
+   so: exp(probvec_tailsum(probvec, smaller_numl, orig_num+1)) but
+   only if first pvalue was below limits implied by bonf and sig.
+   default pvalue is DBL_MAX (1 might still be significant).
+ */       
+double *
+poissbin(double *pvalue, const int *phred_quals,
+         const int num_phred_quals, const int num_failures, 
+         const unsigned long int bonf, const double sig) 
+{
+    double *probvec = NULL;
+#if TIMING
+    clock_t start = clock();
+    int msec;
+#endif
+    *pvalue = DBL_MAX;
+
+#if TIMING
+    start = clock();
+#endif
+#ifdef NAIVE
+    probvec = pruned_calc_prob_dist(phred_quals, num_phred_quals,
+                                    num_failures);
+#else
+    probvec = pruned_calc_prob_dist(phred_quals, num_phred_quals,
+                                    num_failures, bonf, sig);    
+#endif
+#if TIMING
+    msec = (clock() - start) * 1000 / CLOCKS_PER_SEC;
+    fprintf(stderr, "calc_prob_dist() took %d s %d ms\n", msec/1000, msec%1000);
+#endif
+
+    *pvalue = exp(probvec[num_failures]);
+    return probvec;
+}
+
+
+
 /**
  * @brief
  * 
@@ -325,10 +364,6 @@ snpcaller(double *snp_pvalues,
 {
     double *probvec = NULL;
     int i;
-#if TIMING
-    clock_t start = clock();
-    int msec;
-#endif
     int max_noncons_count = 0;
     double pvalue;
 
@@ -356,25 +391,9 @@ snpcaller(double *snp_pvalues,
         goto free_and_exit;
     }
 
-#if TIMING
-    start = clock();
-#endif
-
-#ifdef NAIVE
-    probvec = naive_calc_prob_dist(phred_quals, num_phred_quals,
-                                    max_noncons_count);
-#else
-    probvec = pruned_calc_prob_dist(phred_quals, num_phred_quals,
-                                    max_noncons_count,
-                                    bonf_factor, sig_level);
-#endif
-
-#if TIMING
-    msec = (clock() - start) * 1000 / CLOCKS_PER_SEC;
-    fprintf(stderr, "calc_prob_dist() took %d s %d ms\n", msec/1000, msec%1000);
-#endif
-
-    pvalue = exp(probvec[max_noncons_count]);
+    probvec = poissbin(&pvalue, phred_quals, num_phred_quals,
+                       max_noncons_count, bonf_factor, sig_level);
+    
     if (pvalue * (double)bonf_factor >= sig_level) {
 #ifdef DEBUG
         fprintf(stderr, "DEBUG(%s:%s():%d): Most frequent SNV candidate already gets not signifcant pvalue of %g * %ul >= %g\n", 
