@@ -1,9 +1,8 @@
 /* -*- c-file-style: "k&r" -*-
- * http://emacswiki.org/emacs/IndentingC
- * http://www.emacswiki.org/emacs/LocalVariables
- * http://en.wikipedia.org/wiki/Indent_style 
  *
- * This file is largely based on samtools' bam_plcmd.c
+ * This file based on samtools' bam_plcmd.c
+ *
+ * FIXME missing license
  *
  */
 #include <math.h>
@@ -16,34 +15,32 @@
 #include <stdarg.h>
 #include <limits.h>
 #include <float.h>
-/* FIXME getopt should be replaced with something sensible like argtable2
- * that introduces one depdency but we can provide binaries and don't run the risk of
- * having inconsistent short/long-opts and usage
- */
 #include <getopt.h>
 
 #include "sam.h"
 #include "faidx.h"
 #include "kstring.h"
-#include "snpcaller.h"
-#include "bam2depth.h"
-#include "fet.h"
-#include "utils.h"
 /* from bedidx.c */
 void *bed_read(const char *fn);
 void bed_destroy(void *_h);
 int bed_overlap(const void *_h, const char *chr, int beg, int end);
 
+#include "snpcaller.h"
+#include "vcf.h"
+#include "bam2depth.h"
+#include "fet.h"
+#include "utils.h"
+
 
 /* mpileup configuration flags 
  */
-#define MPLP_NO_ORPHAN 0x10
-#define MPLP_REALN   0x20
-#define MPLP_EXT_BAQ 0x40
-#define MPLP_ILLUMINA13 0x80
-#define MPLP_IGNORE_RG 0x100
-#define MPLP_USE_MQ 0x200
-#define MPLP_USE_SQ 0x400
+#define MPLP_NO_ORPHAN   0x10
+#define MPLP_REALN       0x20
+#define MPLP_EXT_BAQ     0x40
+#define MPLP_ILLUMINA13  0x80
+#define MPLP_IGNORE_RG   0x100
+#define MPLP_USE_MQ      0x200
+#define MPLP_USE_SQ      0x400
 
 
 #define MYNAME "lofreq_snpcaller"
@@ -87,6 +84,7 @@ typedef struct {
      unsigned long int bonf;
      double sig;
      char *reg;
+     char *fa;
      faidx_t *fai;
      void *bed;
 } mplp_conf_t;
@@ -180,7 +178,7 @@ typedef struct {
 } plp_col_t;
 
 
-#define PLP_COL_ADD_QUAL(p, q)   int_varray_add_value((p), (q));
+#define PLP_COL_ADD_QUAL(p, q)   int_varray_add_value((p), (q))
 
 
 void plp_col_init(plp_col_t *p) {
@@ -270,6 +268,44 @@ void plp_col_mpileup_print(const plp_col_t *p, mplp_conf_t *conf, FILE *stream)
 }
 
 
+
+void report_var(FILE *stream, const plp_col_t *p, const char ref, const char alt, 
+                const float af, const int qual,
+                const int is_indel, const int is_consvar)
+{
+     var_t *var;
+     dp4_counts_t dp4;
+     double sb_prob, sb_left_pv, sb_right_pv, sb_two_pv;
+     int sb_qual;
+     
+     vcf_new_var(&var);
+     var->chrom = strdup(p->target);
+     var->pos = p->pos;
+     /* var->id = NA */
+     var->ref = ref;
+     var->alt = alt;
+     if (qual>-1) {
+          var->qual = qual;
+     }
+     /* var->filter = NA */ 
+   
+     dp4.ref_fw = p->fw_counts[bam_nt4_table[(int)ref]];
+     dp4.ref_rv = p->rv_counts[bam_nt4_table[(int)ref]];
+     dp4.alt_fw = p->fw_counts[bam_nt4_table[(int)alt]];
+     dp4.alt_rv = p->rv_counts[bam_nt4_table[(int)alt]];
+
+     sb_prob = kt_fisher_exact(dp4.ref_fw, dp4.ref_rv, 
+                               dp4.alt_fw, dp4.alt_rv,
+                               &sb_left_pv, &sb_right_pv, &sb_two_pv);
+     sb_qual = PROB_TO_PHREDQUAL(sb_two_pv);
+
+     vcf_var_sprintf_info(var, &p->coverage, &af, &sb_qual,
+                          &dp4, is_indel, is_consvar);
+     LOG_FIXME("%s\n", "Check correctness of values for both var types");
+     vcf_write_var(stream, var);
+     vcf_free_var(&var);
+}
+
 /* "Merge" MQ and BQ if requested and if MAQP not 255 (not available):
  *  P_jq = P_mq * + (1-P_mq) P_bq.
  */
@@ -330,7 +366,17 @@ void call_lowfreq_snps(const plp_col_t *p, mplp_conf_t *conf)
       * determined here is different from the reference coming from a
       * fasta file */
      if (p->ref_base != 'N' && p->ref_base != p->cons_base) {
-          LOG_FIXME("cons var snp: %s %d %c>%c\n", p->target, p->pos+1, p->ref_base, p->cons_base);
+          const int is_indel = 0;
+          const int is_consvar = 1;
+          const int qual = -1;
+          float af = (p->fw_counts[bam_nt4_table[(int) p->cons_base]] 
+                      + 
+                      p->rv_counts[bam_nt4_table[(int) p->cons_base]]) 
+               / (float)p->coverage;
+
+          report_var(stdout, p, p->ref_base, p->cons_base, af, qual, is_indel, is_consvar);
+          LOG_DEBUG("cons var snp: %s %d %c>%c\n",
+                    p->target, p->pos+1, p->ref_base, p->cons_base);          
      }
 
      if (NULL == (quals = malloc(p->coverage * sizeof(int)))) {
@@ -428,28 +474,24 @@ void call_lowfreq_snps(const plp_col_t *p, mplp_conf_t *conf)
           int alt_raw_count = alt_raw_counts[i];
           double pvalue = pvalues[i];
           if (pvalue * (double)conf->bonf < conf->sig) {
-               double sb_prob, sb_left_pv, sb_right_pv, sb_two_pv;
-               int n11, n12, n21, n22;
-               n11 = p->fw_counts[bam_nt4_table[(int)p->cons_base]];
-               n12 = p->rv_counts[bam_nt4_table[(int)p->cons_base]];
-               n21 = p->fw_counts[bam_nt4_table[(int)alt_base]];
-               n22 = p->rv_counts[bam_nt4_table[(int)alt_base]];
-               /*LOG_DEBUG("kt_fisher_exact(n11=%d, n12=%d, n21=%d, n22=%d\n", n11, n12, n21, n22);*/
-               sb_prob = kt_fisher_exact(n11, n12, n21, n22, &sb_left_pv, &sb_right_pv, &sb_two_pv);
-
-               LOG_FIXME("low freq snp: %s %d %c>%c pv-prob:%g;pv-qual:%d counts-raw:%d/%d=%.6f counts-filt:%d/%d=%.6f sb-prob=%g;sb-qual=%d\n",
+               const int is_indel = 0;
+               const int is_consvar = 0;
+               float af = alt_raw_count/(float)p->coverage;
+               report_var(stdout, p, p->cons_base, alt_base, 
+                          af, PROB_TO_PHREDQUAL(pvalue), 
+                          is_indel, is_consvar);
+               LOG_DEBUG("low freq snp: %s %d %c>%c pv-prob:%g;pv-qual:%d counts-raw:%d/%d=%.6f counts-filt:%d/%d=%.6f\n",
                          p->target, p->pos+1, p->cons_base, alt_base,
                          pvalue, PROB_TO_PHREDQUAL(pvalue),
-                         alt_raw_count, p->coverage, alt_raw_count/(float)p->coverage,
-                         alt_count, quals_len, alt_count/(float)quals_len,
-                         sb_two_pv, PROB_TO_PHREDQUAL(sb_two_pv));
+                         /* counts-raw */ alt_raw_count, p->coverage, alt_raw_count/(float)p->coverage,
+                         /* counts-filt */ alt_count, quals_len, alt_count/(float)quals_len);
           }
      }
      free(quals);
 }
 
 
-
+/* FIXME get rid in the future */
 static inline int printw(int c, FILE *fp)
 {
     char buf[16];
@@ -478,6 +520,7 @@ char *cigar_from_bam(const bam1_t *b) {
      }
      return str.s;
 }
+
 
 /* Estimate as to how likely it is that this read, given the mapping,
  * comes from this reference genome. P(r not from g|mapping) = 1 - P(r
@@ -517,7 +560,7 @@ int source_qual(bam1_t *b, char *ref)
      }
 
      if (NULL == (quals = malloc(qlen * sizeof(int)))) {
-          LOG_FATAL("couldn't allocate memory\n");
+          LOG_FATAL("%s\n", "couldn't allocate memory");
           return -1;
      }
 
@@ -692,7 +735,7 @@ static int mplp_func(void *data, bam1_t *b)
     /* compute source qual if requested and have ref */
     if (ma->ref && ma->ref_id == b->core.tid && ma->conf->flag & MPLP_USE_SQ) {
          int sq = source_qual(b, ma->ref);
-         LOG_FIXME("Got sq %d. What now?\n");
+         LOG_FIXME("%s\n", "Got sq %d. What now?");
     }
 
     return ret;
@@ -986,6 +1029,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
     }
     bam_mplp_set_maxcnt(iter, max_depth);
 
+    vcf_write_header(stderr, PACKAGE_STRING, conf->fa);
 
     while (bam_mplp_auto(iter, &tid, &pos, n_plp, plp) > 0) {
          int i=0; /* NOTE: mpileup originally iterated over n */
@@ -1044,7 +1088,8 @@ void dump_mplp_conf(const mplp_conf_t *c, FILE *stream) {
      fprintf(stream, "  bonf         = %lu  (might get recalculated later)\n", c->bonf);
      fprintf(stream, "  sig          = %f\n", c->sig);
      fprintf(stream, "  reg          = %s\n", c->reg);
-     fprintf(stream, "  fai          = %p\n", c->fai);
+     fprintf(stream, "  fa           = %p\n", c->fa);
+     /*fprintf(stream, "  fai          = %p\n", c->fai);*/
      fprintf(stream, "  bed          = %p\n", c->bed);
 }
 
@@ -1056,15 +1101,15 @@ void usage(const mplp_conf_t *mplp_conf) {
      fprintf(stderr, "          --verbose           be verbose\n");
      fprintf(stderr, "          --debug             enable debugging\n");
      /* regions */
-     fprintf(stderr, "       -r|--region STR        region in which pileup is generated [null]\n");
+     fprintf(stderr, "       -r|--region STR        region in which pileup should be generated [null]\n");
      fprintf(stderr, "       -l|--bed FILE          list of positions (chr pos) or regions (BED) [null]\n");
      /*  */
      fprintf(stderr, "       -d|--maxdepth INT      max per-BAM depth to avoid excessive memory usage [%d]\n", mplp_conf->max_depth);
      fprintf(stderr, "       -f|--reffa FILE        faidx indexed reference sequence file [null]\n");
      /* base call quality and baq */
-     fprintf(stderr, "       -q|--min-bq INT     skip any base with bas-qual smaller than INT [%d]\n", mplp_conf->min_bq);
-     fprintf(stderr, "       -Q|--min-altbq INT  skip nonref-bases with base-qual smaller than INT [%d]. Not active if ref is N\n", mplp_conf->min_altbq);
-     fprintf(stderr, "       -a|--def-altbq INT  nonref base qualities will be replace with this value [%d]\n", mplp_conf->def_altbq);
+     fprintf(stderr, "       -q|--min-bq INT        skip any base with bas-qual smaller than INT [%d]\n", mplp_conf->min_bq);
+     fprintf(stderr, "       -Q|--min-altbq INT     skip nonref-bases with base-qual smaller than INT [%d]. Not active if ref is N\n", mplp_conf->min_altbq);
+     fprintf(stderr, "       -a|--def-altbq INT     nonref base qualities will be replace with this value [%d]\n", mplp_conf->def_altbq);
      fprintf(stderr, "       -B|--no-baq            disable BAQ computation\n");
      /* fprintf(stderr, "       -E           extended BAQ for higher sensitivity but lower specificity\n"); */
      /* mapping quality */
@@ -1074,8 +1119,8 @@ void usage(const mplp_conf_t *mplp_conf) {
      fprintf(stderr, "       -S|--no-sq             don't merge sourceQ into base-qual\n");
      /* stats */
      fprintf(stderr, "       -s|--sig               P-value cutoff / significance level [%f]\n", mplp_conf->sig);
-     fprintf(stderr, "       -b|--bonf              Bonferroni factor [%lu]. INT or 'auto' (non-zero-cov-pos * 3\n", mplp_conf->bonf);
-     fprintf(stderr, "                              'auto' needs to pre-parse BAM, i.e. won't work with input from stdin.\n");
+     fprintf(stderr, "       -b|--bonf              Bonferroni factor. INT or 'auto' (default; non-zero-cov-pos * 3)\n");
+     fprintf(stderr, "                              'auto' needs to pre-parse BAM once, i.e. this won't work with input from stdin.\n");
      fprintf(stderr, "                              Higher numbers speed up computation on high-coverage data considerably.\n");
      /* misc */
      fprintf(stderr, "       -6|--illumina-1.3      assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
@@ -1088,7 +1133,7 @@ int bam_mpileup(int argc, char *argv[])
 {
     int c;
     static int use_orphan = 0;
-    int bonf_auto = 0;
+    int bonf_auto = 1;
     char *bam_file;
     char *bed_file = NULL;
     mplp_conf_t mplp;
@@ -1106,6 +1151,9 @@ int bam_mpileup(int argc, char *argv[])
     mplp.sig = 0.05;
     /* should differentiate between pileup and snp calling options */
 
+    /* FIXME getopt should be replaced with something more sensible like
+     * argtable2 ot Gopt. Otherwise there's always the risk between
+     * incosistent long opt, short opt and usage */
     while (1) {
          static struct option long_opts[] = {
               /* see usage sync */
@@ -1160,6 +1208,7 @@ int bam_mpileup(int argc, char *argv[])
               
          case 'd': mplp.max_depth = atoi(optarg); break;
          case 'f':
+              mplp.fa = strdup(optarg);
               mplp.fai = fai_load(optarg);
               if (mplp.fai == 0) 
                    return 1;
@@ -1183,6 +1232,7 @@ int bam_mpileup(int argc, char *argv[])
                    bonf_auto = 1;
 
               } else {
+                   bonf_auto = 0;
                    mplp.bonf = strtol(optarg, (char **)NULL, 10); /* atol */ 
                    if (0==mplp.bonf) {
                         LOG_FATAL("%s\n", "Couldn't parse Bonferroni factor\n"); 
@@ -1250,6 +1300,7 @@ int bam_mpileup(int argc, char *argv[])
     mpileup(&mplp, 1, argv + optind);
 
     free(mplp.reg); 
+    free(mplp.fa);
     if (mplp.fai) {
          fai_destroy(mplp.fai);
     }
