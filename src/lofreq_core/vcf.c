@@ -60,7 +60,8 @@ void vcf_write_var(FILE *stream, const var_t *var)
              var->info ? var->info : MISSING_VAL_STR);    
 }
 
-/* caller has to free infobuf */
+
+/* var->info allocated here. caller has to free */
 void vcf_var_sprintf_info(var_t *var,
                          const int *dp, const float *af, const int *sb,
                          const dp4_counts_t *dp4,
@@ -74,9 +75,7 @@ void vcf_var_sprintf_info(var_t *var,
           sprintf(buf, "%s;INDEL", buf);
      }
      if (consvar) {
-          sprintf(buf, "%s;CONS", buf);
-     } else {
-          sprintf(buf, "%s;LOWFREQ", buf);
+          sprintf(buf, "%s;CONSVAR", buf);
      }
      
      var->info = strdup(buf);
@@ -105,8 +104,7 @@ void vcf_write_header(FILE *stream, const char *srcprog, const char *reffa)
      fprintf(stream, "##INFO=<ID=DP4,Number=4,Type=Integer,Description=\"Counts for ref-forward bases, ref-reverse, alt-forward and alt-reverse bases\">\n");
 
      fprintf(stream, "##INFO=<ID=INDEL,Number=0,Type=Flag,Description=\"Indicates that the variant is an INDEL.\">\n");
-     fprintf(stream, "##INFO=<ID=CONS,Number=0,Type=Flag,Description=\"Indicates that the variant is a consensus variant.\">\n");
-     fprintf(stream, "##INFO=<ID=LOWFREQ,Number=0,Type=Flag,Description=\"Indicates that the variant is a low freq variant.\">\n");
+     fprintf(stream, "##INFO=<ID=CONSVAR,Number=0,Type=Flag,Description=\"Indicates that the variant is a consensus variant (as opposed to a low frequency variant).\">\n");
 
      fprintf(stream, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n");
 }
