@@ -1,6 +1,5 @@
-/* -*- mode: c; tab-width: 4; c-basic-offset: 4;  indent-tabs-mode: nil -*- */
-
-/*********************************************************************
+/* -*- c-file-style: "k&r" -*-
+ *
  *
  * Copyright (C) 2011, 2012 Genome Institute of Singapore
  *
@@ -27,7 +26,6 @@
 #include <ctype.h>
 #include <float.h>
 
-#include "cdflib.h"
 #include "fet.h"
 
 #if TIMING
@@ -42,7 +40,6 @@
 #define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
 
 #define LOGZERO -1e100 
-#define FLOAT_DELTA 1e-32
 
 /* Four nucleotides, with one consensus, makes three
    non-consensus bases */
@@ -86,7 +83,7 @@ log_sum(double log_a, double log_b)
         return log_b + log1p(exp(log_a-log_b));
     }
 }
-/* end of log_sum() */
+/* log_sum() */
 
 
 /**
@@ -105,7 +102,7 @@ log_diff(double log_a, double log_b)
         return log_b + log1p(- exp(log_a-log_b));
     }
 }
-/* end of log_diff() */
+/* log_diff() */
 
 
 
@@ -127,7 +124,7 @@ probvec_tailsum(double *probvec, int tail_startindex, int probvec_len)
 
     return tailsum;
 }
-/* end of probvec_tailsum() */
+/* probvec_tailsum() */
 
 
 /**
@@ -190,7 +187,7 @@ naive_calc_prob_dist(const int *quals, int N, int K)
     free(probvec_prev);    
     return probvec;
 }
-/* end of naive_prob_dist */
+/* naive_prob_dist */
 
 
 
@@ -302,7 +299,7 @@ pruned_calc_prob_dist(const int *quals, int N, int K,
     free(probvec_prev);    
     return probvec;
 }
-/* end of pruned_calc_prob_dist */
+/* pruned_calc_prob_dist */
 
 
 
@@ -432,5 +429,5 @@ snpcaller(double *snp_pvalues,
 
     return 0;
 }
-/* end of snpcaller() */
+/* snpcaller() */
 
