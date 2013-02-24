@@ -8,6 +8,7 @@
 *.lo
 *.la
 lofreq_snpcaller
+lofreq
 
 Makefile
 Makefile.log

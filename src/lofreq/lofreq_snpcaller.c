@@ -1,6 +1,6 @@
 /* -*- c-file-style: "k&r" -*-
  *
- * This file based on samtools' bam_plcmd.c
+ * This file is partially based on samtools' bam_plcmd.c
  *
  * FIXME missing license
  *
@@ -30,6 +30,7 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #include "bam2depth.h"
 #include "fet.h"
 #include "utils.h"
+#include "log.h"
 
 
 /* mpileup configuration flags 
@@ -44,8 +45,6 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 
 
 #define MYNAME "lofreq_snpcaller"
-#define PHREDQUAL_TO_PROB(phred) (pow(10.0, -1.0*(phred)/10.0))
-#define PROB_TO_PHREDQUAL(prob) (prob<0.0+DBL_EPSILON?INT_MAX:(int)(-10.0 * log10(prob)))
 
 
 const char *bam_nt4_rev_table = "ACGTN"; /* similar to bam_nt16_rev_table */
@@ -104,51 +103,6 @@ typedef struct {
     bam_pileup1_t **plp;
 } mplp_pileup_t;
 
-
-
-/* Logging macros
- *
- * Taken from squicl-0.2.8
- * You must use at least one fmt+string and append trailing "\n", e.g.
- * "%s\n", "string", instead of "string\n"
- *
- */
-int debug = 0;
-int verbose = 0;
-/* Taken from the Linux kernel source and slightly modified.
- * bool_flag: print or don't
- */
-int
-printk(FILE *stream, int bool_flag, const char *fmt, ...)
-{                
-    va_list args;
-    static char printk_buf[8192];
-    int printed_len=0;
- 
-    if (bool_flag) {
-        /* Emit the output into the temporary buffer */
-        va_start(args, fmt);
-        printed_len = vsnprintf(printk_buf, sizeof(printk_buf), fmt, args);
-        va_end(args);
-
-        fprintf(stream, "%s", printk_buf);
-        fflush(stream);        
-    }
-    return printed_len;
-}
-/* print only if debug is true*/
-#define LOG_DEBUG(fmt, args...)     printk(stderr, debug, "DEBUG(%s|%s): " fmt, __FILE__, __FUNCTION__, ## args)
-/* print only if verbose is true*/
-#define LOG_VERBOSE(fmt, args...)   printk(stderr, verbose || debug, fmt, ## args)
-/* always warn to stderr */
-#define LOG_WARN(fmt, args...)      printk(stderr, 1, "WARNING(%s|%s): " fmt, __FILE__, __FUNCTION__, ## args)
-/* always print errors to stderr*/
-#define LOG_ERROR(fmt, args...)     printk(stderr, 1, "ERROR(%s|%s): " fmt, __FILE__, __FUNCTION__, ## args)
-/* always print critical errors to stderr*/
-#define LOG_CRITICAL(fmt, args...)  printk(stderr, 1, "CRITICAL(%s|%s): " fmt, __FILE__, __FUNCTION__, ## args)
-#define LOG_FATAL(fmt, args...)     printk(stderr, 1, "FATAL(%s|%s): " fmt, __FILE__, __FUNCTION__, ## args)
-/* always print fixme's */
-#define LOG_FIXME(fmt, args...)  printk(stderr, 1, "FIXME(%s|%s:%d): " fmt, __FILE__, __FUNCTION__, __LINE__, ## args)
 
 
 typedef struct {
@@ -305,6 +259,7 @@ void report_var(FILE *stream, const plp_col_t *p, const char ref, const char alt
      vcf_write_var(stream, var);
      vcf_free_var(&var);
 }
+
 
 /* "Merge" MQ and BQ if requested and if MAQP not 255 (not available):
  *  P_jq = P_mq * + (1-P_mq) P_bq.
@@ -522,21 +477,13 @@ char *cigar_from_bam(const bam1_t *b) {
 }
 
 
-/* Estimate as to how likely it is that this read, given the mapping,
- * comes from this reference genome. P(r not from g|mapping) = 1 - P(r
- * from g). Use qualities of all bases for and poisson-binomial dist
- * (as for core SNV calling). Assumed independence of errors okay: if
- * they are not independent, then the assumption is conservative. Keep
- * all qualities as they are, i.e. don’t replace mismatches with lower
- * values. Rationale: higher SNV quals, means higher chance SNVs are
- * real, therefore higher prob. read does not come from genome. 
- *
- * FIXME: should always ignore heterozygous or known SNV pos!
- *
- * Returns -1 on error. otherwise
- * phred score of source error prob.
+/* Count matches and mismatches for an aligned read and also return
+ * the corresponding qualities. returns NULL on error or pointer to
+ * qual array for n_match and n_mismatch (sum is size). allocated
+ * here. user must free
  */
-int source_qual(bam1_t *b, char *ref)
+int *count_matches(int *n_matches, int *n_mismatches,
+                  const bam1_t *b, const char *ref)
 {
      /* modelled after bam.c:bam_calend(), bam_format1_core() and
       * pysam's aligned_pairs 
@@ -546,22 +493,21 @@ int source_qual(bam1_t *b, char *ref)
      uint32_t pos = c->pos; /* pos on genome */
      uint32_t qpos = 0; /* pos on read/query */
      uint32_t k, i;
-     int n_mismatches = 0;
-     int n_matches = 0;
      int *quals = NULL;
      int n_quals = 0;
-     int32_t qlen = (int32_t) bam_cigar2qlen(c, bam1_cigar(b)); /* read length */
-     double *probvec;
-     int src_qual = 255;
-     double src_pvalue;
+     /* read length */
+     int32_t qlen = (int32_t) bam_cigar2qlen(c, bam1_cigar(b));
+
+     *n_matches = 0;
+     *n_mismatches = 0;
 
      if (NULL==ref) {
-          return -1;
+          return NULL;
      }
 
      if (NULL == (quals = malloc(qlen * sizeof(int)))) {
           LOG_FATAL("%s\n", "couldn't allocate memory");
-          return -1;
+          return NULL;
      }
 
      if (0) {
@@ -569,17 +515,18 @@ int source_qual(bam1_t *b, char *ref)
                   b->core.pos, bam_calend(&b->core, bam1_cigar(b)), cigar_from_bam(b));
      }
      
-     /* loop over cigar to get aligned bases and matches/mismatches and their quals.
+     /* loop over cigar to get aligned bases and matches/mismatches
+      * and their quals.
       *
       * read: bam_format1_core(NULL, b, BAM_OFDEC);
       */
-     for (k=0; k < c->n_cigar; ++k) {/* n_cigar: number of cigar operations */
+     for (k=0; k < c->n_cigar; ++k) { /* n_cigar: number of cigar operations */
           int op = cigar[k] & BAM_CIGAR_MASK; /* the cigar operation */
           uint32_t l = cigar[k] >> BAM_CIGAR_SHIFT;
           
           /* following conditionals could be collapsed to much shorter
            * code, but we keep them as they were in pysam's
-           * aligned_pairs to make later handling of indels easier 
+           * aligned_pairs to make later handling of indels easier
            */
           if (op == BAM_CMATCH) {
                for (i=pos; i<pos+l; i++) {                             
@@ -591,9 +538,9 @@ int source_qual(bam1_t *b, char *ref)
                     int bq = bam1_qual(b)[qpos];
                     
                     if (ref_nt == read_nt) {
-                         n_matches += 1;
+                         *n_matches += 1;
                     } else {
-                         n_mismatches += 1;
+                         *n_mismatches += 1;
                     }
                     quals[n_quals++] = bq;
 
@@ -622,9 +569,45 @@ int source_qual(bam1_t *b, char *ref)
      assert(pos == bam_calend(&b->core, bam1_cigar(b))); /* FIXME correct assert? what if clipped? */
 
      if (0) {
-          fprintf(stderr, " - matches %d - mismatches %d\n", n_matches, n_mismatches);                                       
+          fprintf(stderr, " - matches %d - mismatches %d\n", *n_matches, *n_mismatches);                                       
      }
-     assert(n_matches+n_mismatches == n_quals);
+     assert(*n_matches + *n_mismatches == n_quals);
+
+     return quals;
+}
+
+
+/* Estimate as to how likely it is that this read, given the mapping,
+ * comes from this reference genome. P(r not from g|mapping) = 1 - P(r
+ * from g). Use qualities of all bases for and poisson-binomial dist
+ * (as for core SNV calling). Assumed independence of errors okay: if
+ * they are not independent, then the assumption is conservative. Keep
+ * all qualities as they are, i.e. don’t replace mismatches with lower
+ * values. Rationale: higher SNV quals, means higher chance SNVs are
+ * real, therefore higher prob. read does not come from genome. 
+ *
+ * FIXME: should always ignore heterozygous or known SNV pos!
+ *
+ * Returns -1 on error. otherwise phred score of source error prob.
+ *
+ * FIXME: old definition above and below in source
+ *
+ */
+int source_qual(bam1_t *b, char *ref)
+{
+     double *probvec;
+     int src_qual = 255;
+     double src_pvalue;
+     int *quals;
+     int n_matches = 0;
+     int n_mismatches = 0;
+     int n_quals = 0;
+
+     quals = count_matches(&n_matches, &n_mismatches, b, ref);
+     if (NULL == quals) {
+          return -1;
+     }
+     n_quals = n_matches + n_mismatches;
 
      /* sorting in theory should be numerically more stable and also
       * make snpcallerfaster */
@@ -632,9 +615,13 @@ int source_qual(bam1_t *b, char *ref)
      probvec = poissbin(&src_pvalue, quals,
                         n_quals, n_mismatches, 1.0, 0.05);
 
+
      if (src_pvalue>1.0) {/* DBL_MAX is default return value */
           src_pvalue = 1.0;/*-DBL_EPSILON;*/
      }
+
+     LOG_FIXME("src_pvalue = %g. Actual prob = %g\n", src_pvalue, exp(probvec[n_mismatches]));
+
      /* src_pvalue: what's the prob of seeing n_mismatches or more by
       * chance, given quals? or: how likely is this read from the
       * genome. 1-src_value = prob read is not from genome
@@ -648,6 +635,7 @@ int source_qual(bam1_t *b, char *ref)
      src_qual =  PROB_TO_PHREDQUAL(src_pvalue);
 
      if (0) {
+          int i;
           fprintf(stderr, "| src_pv = %f = Q%d for %d/%d mismatches. All quals: ", 
                   src_pvalue, src_qual, n_mismatches, n_quals);
           for (i=0; i<n_quals; i++) {
@@ -735,7 +723,7 @@ static int mplp_func(void *data, bam1_t *b)
     /* compute source qual if requested and have ref */
     if (ma->ref && ma->ref_id == b->core.tid && ma->conf->flag & MPLP_USE_SQ) {
          int sq = source_qual(b, ma->ref);
-         LOG_FIXME("%s\n", "Got sq %d. What now?");
+         LOG_FIXME("%s\n", "Got sq %d. What now?", sq);
     }
 
     return ret;
@@ -823,7 +811,6 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                 * gets executed, which is why we remove it:
                 * if (mq > 126) mq = 126;
                 */
-
 
                PLP_COL_ADD_QUAL(& plp_col.base_quals[nt4], bq);
                PLP_COL_ADD_QUAL(& plp_col.map_quals[nt4], mq);
@@ -1029,7 +1016,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
     }
     bam_mplp_set_maxcnt(iter, max_depth);
 
-    vcf_write_header(stderr, PACKAGE_STRING, conf->fa);
+    vcf_write_header(stdout, PACKAGE_STRING, conf->fa);
 
     while (bam_mplp_auto(iter, &tid, &pos, n_plp, plp) > 0) {
          int i=0; /* NOTE: mpileup originally iterated over n */
@@ -1094,7 +1081,8 @@ void dump_mplp_conf(const mplp_conf_t *c, FILE *stream) {
 }
 
 
-void usage(const mplp_conf_t *mplp_conf) {
+static void usage(const mplp_conf_t *mplp_conf)
+{
      fprintf(stderr, "Usage: %s [options] in.bam\n\n", MYNAME);
      fprintf(stderr, "Options:\n");
      /* generic */
@@ -1120,7 +1108,7 @@ void usage(const mplp_conf_t *mplp_conf) {
      /* stats */
      fprintf(stderr, "       -s|--sig               P-value cutoff / significance level [%f]\n", mplp_conf->sig);
      fprintf(stderr, "       -b|--bonf              Bonferroni factor. INT or 'auto' (default; non-zero-cov-pos * 3)\n");
-     fprintf(stderr, "                              'auto' needs to pre-parse BAM once, i.e. this won't work with input from stdin.\n");
+     fprintf(stderr, "                              'auto' needs to pre-parse the BAM file once, i.e. this won't work with input from stdin (or named pipes).\n");
      fprintf(stderr, "                              Higher numbers speed up computation on high-coverage data considerably.\n");
      /* misc */
      fprintf(stderr, "       -6|--illumina-1.3      assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
@@ -1129,14 +1117,19 @@ void usage(const mplp_conf_t *mplp_conf) {
 
 
 
-int bam_mpileup(int argc, char *argv[])
+int main_call(int argc, char *argv[])
 {
-    int c;
-    static int use_orphan = 0;
-    int bonf_auto = 1;
-    char *bam_file;
-    char *bed_file = NULL;
-    mplp_conf_t mplp;
+     /* based on bam_mpileup() */
+     int c;
+     static int use_orphan = 0;
+     int bonf_auto = 1;
+     char *bam_file;
+     char *bed_file = NULL;
+     mplp_conf_t mplp;
+     
+     LOG_FIXME("%s\n", "- Proper source qual use missing");
+     LOG_FIXME("%s\n", "- Indel handling missing");
+     LOG_FIXME("%s\n", "- Implement routine test against old SNV caller");
 
     memset(&mplp, 0, sizeof(mplp_conf_t));
     /* default pileup options */
@@ -1146,7 +1139,7 @@ int bam_mpileup(int argc, char *argv[])
     mplp.def_altbq = mplp.min_altbq;
     mplp.capQ_thres = 0;
     mplp.max_depth = 1000000; /* 250 */
-    mplp.flag = MPLP_NO_ORPHAN | MPLP_REALN | MPLP_EXT_BAQ | MPLP_USE_MQ; /* | MPLP_USE_SQ; */
+    mplp.flag = MPLP_NO_ORPHAN | MPLP_REALN | MPLP_EXT_BAQ | MPLP_USE_MQ;/* | MPLP_USE_SQ; FIXME */
     mplp.bonf = 1;
     mplp.sig = 0.05;
     /* should differentiate between pileup and snp calling options */
@@ -1314,18 +1307,7 @@ int bam_mpileup(int argc, char *argv[])
 
 
 
-#ifndef SANDBOX
-
-int main(int argc, char **argv)
-{
-     LOG_FIXME("%s\n", "- Proper source qual use missing");
-     LOG_FIXME("%s\n", "- Indel handling missing");
-     LOG_FIXME("%s\n", "- Implement routine test against old SNV caller");
-
-     return bam_mpileup(argc, argv);
-}
-
-#else
+#ifdef MAIN_TEST
 
 int main()
 {
