@@ -30,11 +30,10 @@ from optparse import OptionParser, SUPPRESS_HELP
 #
 #/
 
-
 #--- project specific imports
 #
-from lofreq import snp
-from lofreq import multiple_testing
+from lofreq2 import vcf
+from lofreq2 import multiple_testing
 
 # invocation of ipython on exceptions
 #import sys, pdb
@@ -56,8 +55,6 @@ LOG = logging.getLogger("")
 logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
-
-
     
 
 def cmdline_parser():
@@ -76,14 +73,16 @@ def cmdline_parser():
     parser.add_option("", "--debug",
                       action="store_true", dest="debug",
                       help="enable debugging")
-    parser.add_option("-i", "--snp_infile",
-                      dest="snp_infile",
-                      default="-",
-                      help="SNP input file (- for stdin = default)")
+    DEFAULT = "-"
+    parser.add_option("-i", "--vcf_in",
+                      dest="vcf_in",
+                      default=DEFAULT,
+                      help="Input vcf file (- for stdin). Default = %s)" % DEFAULT)
+    DEFAULT = "-"
     parser.add_option("-o", "--outfile",
-                      dest="snp_outfile",
-                      default="-",
-                      help="SNP output file (- for stdout = default)")
+                      dest="vcf_out",
+                      default=DEFAULT,
+                      help="Output vcf file (- for stdout). Default = %s)" % DEFAULT)
 
     parser.add_option("", "--strandbias-bonf",
                       dest="strandbias_bonf", 
@@ -152,7 +151,7 @@ def main():
     if opts.debug:
         LOG.setLevel(logging.DEBUG)
 
-    for (in_file, descr) in [(opts.snp_infile, "SNP file")]:
+    for (in_file, descr) in [(opts.vcf_in, "VCF input file")]:
         if not in_file:
             parser.error("%s input file argument missing." % descr)
             sys.exit(1)
@@ -161,7 +160,7 @@ def main():
                 "file '%s' does not exist.\n" % in_file)
             sys.exit(1)
             
-    for (out_file, descr) in [(opts.snp_outfile, "SNP output file")]:
+    for (out_file, descr) in [(opts.vcf_out, "VCF output file")]:
         if not out_file:
             parser.error("%s output file argument missing." % descr)
             sys.exit(1)
@@ -170,9 +169,12 @@ def main():
                 "Cowardly refusing to overwrite existing output file '%s'.\n" % out_file)
             sys.exit(1)
 
-
-    snps = snp.parse_snp_file(opts.snp_infile)
-    LOG.info("Parsed %d SNPs from %s" % (len(snps), opts.snp_infile))
+    if opts.vcf_in == '-':
+        vcf_reader = vcf.VCFReader(sys.stdin)
+    else:
+        vcf_reader = vcf.VCFReader(open(opts.vcfin,'r'))
+    snvs = [r for r in vcf_reader]
+    LOG.info("Parsed %d SNVs from %s" % (len(snvs), opts.vcf_in))
 
     
     # list of tuples: first element is a lambda test with a snp as
@@ -184,54 +186,56 @@ def main():
     if opts.strandbias_bonf:
         assert opts.max_strandbias_phred == None and opts.strandbias_holmbonf == None, (
             "Can't filter strand bias twice")
-        pvals = [float(s.info['strandbias-pvalue-uncorr']) for s in snps]
+        pvals = [s.INFO['SB'] for s in snvs]
         corr_pvals = multiple_testing.Bonferroni(pvals).corrected_pvals
-        for (cp, s) in zip(corr_pvals, snps):
-            s.info['strandbias-pvalue-corr'] = str(cp)
+        LOG.error("FIXME add SBC value and INFO column")
+        #for (cp, s) in zip(corr_pvals, snps):
+        #    s.info['strandbias-pvalue-corr'] = str(cp)
         tests.append((
-            lambda s: float(s.info['strandbias-pvalue-corr']) > 0.05,
+            lambda s: s.INFO['SBC'] > 0.05,
             "Bonferroni corrected strandbias phred-value"
             ))
         
     if opts.strandbias_holmbonf:
         assert opts.max_strandbias_phred == None and opts.strandbias_bonf == None, (
             "Can't filter strand bias twice")
-        pvals = [float(s.info['strandbias-pvalue-uncorr']) for s in snps]
+        pvals = [s.INFO['SB'] for s in snvs]
         corr_pvals = multiple_testing.HolmBonferroni(pvals).corrected_pvals
-        for (cp, s) in zip(corr_pvals, snps):
-            s.info['strandbias-pvalue-corr'] = str(cp)
+        LOG.error("FIXME add SBC value and INFO column")
+        #for (cp, s) in zip(corr_pvals, snvs):
+        #    s.info['strandbias-pvalue-corr'] = str(cp)
         tests.append((
-            lambda s: float(s.info['strandbias-pvalue-corr']) > 0.05,
+            lambda s: s.INFO['SBC'] > 0.05,
             "Holm-Bonferroni corrected strandbias phred-value"
             ))                
         
     if opts.max_strandbias_phred != None:
         tests.append((
-            lambda s: float(s.info['strandbias-pvalue-uncorr-phred']) <= opts.max_strandbias_phred,
+            lambda s: float(s.INFO['SB']) <= opts.max_strandbias_phred,
             "maximum strandbias phred-value"
             ))
         
     if opts.min_freq != None:  
         tests.append((
-            lambda s: s.freq >= opts.min_freq,
+            lambda s: s.INFO['AF'] >= opts.min_freq,
             "minimum frequency"
             ))
 
     if opts.max_cov != None:  
         tests.append((
-            lambda s: int(s.info['coverage']) <= opts.max_cov,
+            lambda s: s.INFO['DP'] <= opts.max_cov,
             "maximum coverage"
             ))
 
     if opts.min_cov != None:  
         tests.append((
-            lambda s: int(s.info['coverage']) >= opts.min_cov,
+            lambda s: s.INFO['DP'] >= opts.min_cov,
             "minimum coverage"
             ))
 
     if opts.min_snp_phred != None:  
         tests.append((
-            lambda s: s.info['pvalue-phred'] == 'NA' or int(s.info['pvalue-phred']) >= opts.min_snp_phred,
+            lambda s: s.QUAL == '.' or s.QUAL >= opts.min_snp_phred,
             "minimum SNP phred"
             ))
 
@@ -242,23 +246,24 @@ def main():
     # LOG.info("Will perform the following tests: \n%s" % (
     # '\n'.join(["- %s" % t[1] for t in tests])))
     for (test_lambda, test_descr) in tests:
-        snps = [s for s in snps if test_lambda(s)]
-        LOG.info("%d SNPs left after applying %s filter" % (
-            len(snps), test_descr))
-
+        snvs = [s for s in snvs if test_lambda(s)]
+        LOG.info("%d SNVs left after applying %s filter" % (
+            len(snvs), test_descr))
 
     if opts.window_size != None:  
         raise NotImplementedError # FIXME
-
-
         
-    LOG.info("%d SNPs survived all filters. Writing to %s" % (
-        len(snps), opts.snp_outfile))
-    if opts.snp_outfile == '-':
+    LOG.info("%d SNVS survived all filters. Writing to %s" % (
+        len(snvs), opts.vcf_out))
+    if opts.vcf_out == '-':
         fh_out = sys.stdout
     else:
-        fh_out = open(opts.snp_outfile, 'w')
-    snp.write_snp_file(fh_out, snps)
+        fh_out = open(opts.vcf_out, 'w')
+
+    vcf_writer = vcf.VCFWriter(sys.stdout)
+    vcf_writer.meta_from_reader(vcf_reader)
+    LOG.error("Add corrected values as info fields and also filters")
+    vcf_writer.write(snvs)
     if fh_out != sys.stdout:
         fh_out.close()
 
