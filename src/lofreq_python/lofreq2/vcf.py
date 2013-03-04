@@ -469,9 +469,6 @@ class VCFWriter(object):
             self.write_rec(v)     
 
             
-    writerow = write_rec# as csvwriter
-
-    
     def write_metainfo(self):
         """FIXME
         """
@@ -581,100 +578,8 @@ class VCFWriter(object):
         self.handle.write(rec_str + "\n")
     
     
-    
-    #            
-    #The chrom line
-    #-------------------------
-    #vcf._Record._fields[:8]
-    #Out[83]: ('CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO')
-    #+ samples
-    #In [85]: '#' + '\t'.join(vcf._Record._fields[:8])
-    #Out[85]: '#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO'
-    #
-    #
-    #
-    #lofreq_example.vcf
-    #-----------------------------------
-    #
-    #vcf_reader = vcf.VCFReader(open('lofreq_example.vcf', 'rb'))
-    #records = [r for r in vcf_reader]# FIXME or iter
-    #
-    #vcf_reader.metadata
-    #Out[53]: {'fileDate': '20130302',
-    # 'fileformat': 'VCFv4.1',
-    # 'reference': '/Users/wilma/scratch/ref.fa',
-    # 'source': '"LoFreq 0.5.0"'}
-    #
-    #
-    #vcf_reader.infos
-    #Out[54]: 
-    #{'AF': Info(id='AF', num=1, type='Float', desc='Allele Frequency'),
-    # 'CONSVAR': Info(id='CONSVAR', num=0, type='Flag', desc='Indicates that the variant is a consensus variant (as opposed to a low frequency variant).'),
-    # 'DP': Info(id='DP', num=1, type='Integer', desc='Raw Depth'),
-    # 'DP4': Info(id='DP4', num=4, type='Integer', desc='Counts for ref-forward bases, ref-reverse, alt-forward and alt-reverse bases'),
-    # 'INDEL': Info(id='INDEL', num=0, type='Flag', desc='Indicates that the variant is an INDEL.'),
-    # 'SB': Info(id='SB', num=1, type='Integer', desc='Phred-scaled strand bias at this position')}
-    #
-    #vcf_reader.filters
-    #Out[56]: {}
-    #
-    #In [57]: vcf_reader.formats
-    #Out[57]: {}
-    #
-    #In [58]: vcf_reader.samples
-    #Out[58]: []
-    #
-    #FIXME: assert: LoFreq doesn't output samples
-    #
-    #Record(CHROM='consensus', POS=51, ID='.', REF='C', ALT=['G'], QUAL='.', FILTER='.', INFO={'SB': 0, 'DP4': [0, 0, 37, 80], 'CONSVAR': True, 'DP': 117, 'AF': 1.0}, FORMAT=None, samples=None)
-    #
-    #records[0]._replace(FILTER='schmock')
-    #Out[65]: Record(CHROM='consensus', POS=51, ID='.', REF='C', ALT=['G'], QUAL='.', FILTER='schmock', INFO={'SB': 0, 'DP4': [0, 0, 37, 80], 'CONSVAR': True, 'DP': 117, 'AF': 1.0}, FORMAT=None, samples=None)
-    #
-    #
-    #1000genomes_example_4.0.vcf
-    #-----------------------------------
-    #
-    #vcf_reader = vcf.VCFReader(open('1000genomes_example_4.0.vcf', 'rb'))
-    #
-    #In [67]: records = [r for r in vcf_reader]
-    #
-    #In [69]: vcf_reader.metadata
-    #Out[69]: 
-    #{'fileDate': '20090805',
-    # 'fileformat': 'VCFv4.0',
-    # 'phasing': 'partial',
-    # 'reference': '1000GenomesPilot-NCBI36',
-    # 'source': 'myImputationProgramV3.1'}
-    #
-    #In [70]: vcf_reader.infos
-    #Out[70]: 
-    #{'AA': Info(id='AA', num=1, type='String', desc='Ancestral Allele'),
-    # 'AF': Info(id='AF', num='.', type='Float', desc='Allele Frequency'),
-    # 'DB': Info(id='DB', num=0, type='Flag', desc='dbSNP membership, build 129'),
-    # 'DP': Info(id='DP', num=1, type='Integer', desc='Total Depth'),
-    # 'H2': Info(id='H2', num=0, type='Flag', desc='HapMap2 membership'),
-    # 'NS': Info(id='NS', num=1, type='Integer', desc='Number of Samples With Data')}
-    #
-    #In [71]: vcf_reader.filters
-    #Out[71]: 
-    #{'q10': Filter(id='q10', desc='Quality below 10'),
-    # 's50': Filter(id='s50', desc='Less than 50% of samples have data')}
-    #
-    #In [72]: vcf_reader.formats
-    #Out[72]: 
-    #{'DP': Format(id='DP', num=1, type='Integer', desc='Read Depth'),
-    # 'GQ': Format(id='GQ', num=1, type='Integer', desc='Genotype Quality'),
-    # 'GT': Format(id='GT', num=1, type='String', desc='Genotype'),
-    # 'HQ': Format(id='HQ', num=2, type='Integer', desc='Haplotype Quality')}
-    #
-    ## those come after the 8th field "FORMAT" in chrom...
-    #In [73]: vcf_reader.samples
-    #Out[73]: ['NA00001', 'NA00002', 'NA00003']
-    #
-    #
-    
-# ----------------------------------------------------------------------
+    writerow = write_rec# as csvwriter
+
     
 def main():
     '''Parse the example VCF file from the specification and print every
