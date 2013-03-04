@@ -99,7 +99,7 @@ void int_varray_add_value(int_varray_t *a, const int value)
 
 
 
-int file_exists(char *fname) 
+int file_exists(const char *fname) 
 {
   /* from 
    * http://stackoverflow.com/questions/230062/whats-the-best-way-to-check-if-a-file-exists-in-c-cross-platform 
