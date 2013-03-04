@@ -7,7 +7,7 @@ AC_PREREQ(2.6) # 2.60 needed for AC_USE_SYSTEM_EXTENSIONS
 # consider 2.64 which allows to define a URL as well
 
 # NOTE set version here and replace in setup.py
-AC_INIT([LoFreq], [0.5.0], [wilma@gis.a-star.edu.sg])
+AC_INIT([LoFreq2], [2.0.0a], [wilma@gis.a-star.edu.sg])
 
 # The AC_INIT macro can take any source file as an argument. It just
 # checks that the file is there, which should, in turn, mean that the
