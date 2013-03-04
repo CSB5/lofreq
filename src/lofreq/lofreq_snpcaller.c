@@ -44,7 +44,7 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #define MPLP_USE_SQ      0x400
 
 
-#define MYNAME "lofreq_snpcaller"
+#define MYNAME "lofreq call"
 
 
 const char *bam_nt4_rev_table = "ACGTN"; /* similar to bam_nt16_rev_table */
@@ -81,7 +81,7 @@ typedef struct {
      int min_bq, min_altbq;
      int def_altbq;
      unsigned long int bonf;
-     double sig;
+     float sig;
      char *reg;
      char *fa;
      faidx_t *fai;
@@ -126,9 +126,13 @@ typedef struct {
      int num_heads; /* number of read starts at this pos */
      int num_tails; /* number of read ends at this pos */
 
-     /* FIXME only temporary before they move into they own structure */
      int num_ins, sum_ins;
+     int_varray_t ins_quals; 
+
      int num_dels, sum_dels;
+     int_varray_t del_quals; 
+
+     /* changes here should be reflected in plp_col_init, plp_col_free etc. */
 } plp_col_t;
 
 
@@ -154,8 +158,9 @@ void plp_col_init(plp_col_t *p) {
     p->num_heads = p->num_tails = 0;
 
     p->num_ins = p->sum_ins = 0;
+    int_varray_init(& p->ins_quals, 0);
     p->num_dels = p->sum_dels = 0;
-
+    int_varray_init(& p->del_quals, 0);
 }
 
 void plp_col_free(plp_col_t *p) {
@@ -167,6 +172,8 @@ void plp_col_free(plp_col_t *p) {
          int_varray_free(& p->map_quals[i]);
          int_varray_free(& p->source_quals[i]);
     }
+    int_varray_init(& p->ins_quals, 0);
+    int_varray_init(& p->del_quals, 0);
 }
 
 void plp_col_debug_print(const plp_col_t *p, FILE *stream)
@@ -202,7 +209,7 @@ void plp_col_debug_print(const plp_col_t *p, FILE *stream)
  * the last pre-c version which can be easily parsed from Python. Note
  * however, that defaults have changed and that filtering was done differently before.
  */
-void plp_col_mpileup_print(const plp_col_t *p, mplp_conf_t *conf, FILE *stream)
+void plp_col_mpileup_print(const plp_col_t *p, const mplp_conf_t *conf, FILE *stream)
 {
      int i, j;
      
@@ -223,7 +230,8 @@ void plp_col_mpileup_print(const plp_col_t *p, mplp_conf_t *conf, FILE *stream)
 
 
 
-void report_var(FILE *stream, const plp_col_t *p, const char ref, const char alt, 
+void report_var(FILE *stream, const plp_col_t *p, 
+                const char ref, const char alt, 
                 const float af, const int qual,
                 const int is_indel, const int is_consvar)
 {
@@ -264,7 +272,7 @@ void report_var(FILE *stream, const plp_col_t *p, const char ref, const char alt
 /* "Merge" MQ and BQ if requested and if MAQP not 255 (not available):
  *  P_jq = P_mq * + (1-P_mq) P_bq.
  */
-int merge_baseq_and_mapq(int bq, int mq)
+int merge_baseq_and_mapq(const int bq, const int mq)
 {
      double mp, bp, jp; /* corresponding probs */
      int jq;
@@ -297,7 +305,7 @@ int merge_baseq_and_mapq(int bq, int mq)
  * upstream. altbase mangling happens here however.
  * 
  */
-void call_lowfreq_snps(const plp_col_t *p, mplp_conf_t *conf)
+void call_lowfreq_snps(const plp_col_t *p, const mplp_conf_t *conf)
 {
      int *quals; /* qualities passed down to snpcaller */
      int quals_len; /* #elements in quals */
@@ -315,6 +323,16 @@ void call_lowfreq_snps(const plp_col_t *p, mplp_conf_t *conf)
       * against */
      if (p->coverage == 0 || p->cons_base == 'N') {          
           return;
+     }
+     if (p->num_dels || p->num_ins) {
+          LOG_FIXME("%s:%d (p->num_dels=%d p->del_quals=%d p->num_ins=%d p->ins_quals.n=%d\n", 
+                    p->target, p->pos+1, p->num_dels, p->del_quals.n, p->num_ins, p->ins_quals.n);
+          if (p->num_dels && p->del_quals.n) {
+               LOG_FIXME("Call deletions at %s:%d\n", p->target, p->pos+1);
+          }
+          if (p->num_ins && p->ins_quals.n) {
+               LOG_FIXME("Call insertions at %s:%d\n", p->target, p->pos+1);
+          }
      }
 
      /* check for consensus snps, i.e. those where the consensus
@@ -483,7 +501,7 @@ char *cigar_from_bam(const bam1_t *b) {
  * here. user must free
  */
 int *count_matches(int *n_matches, int *n_mismatches,
-                  const bam1_t *b, const char *ref)
+                   const bam1_t *b, const char *ref)
 {
      /* modelled after bam.c:bam_calend(), bam_format1_core() and
       * pysam's aligned_pairs 
@@ -593,7 +611,7 @@ int *count_matches(int *n_matches, int *n_mismatches,
  * FIXME: old definition above and below in source
  *
  */
-int source_qual(bam1_t *b, char *ref)
+int source_qual(const bam1_t *b, const char *ref)
 {
      double *probvec;
      int src_qual = 255;
@@ -732,7 +750,7 @@ static int mplp_func(void *data, bam1_t *b)
 
 
 void process_plp(const bam_pileup1_t *plp, const int n_plp, 
-                 mplp_conf_t *conf, const char *ref, const int pos, 
+                 const mplp_conf_t *conf, const char *ref, const int pos, 
                  const int ref_len, const char *target_name)
 {
      int i;
@@ -762,12 +780,31 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                                    i.e. after read-level filtering */
 
      for (i = 0; i < n_plp; ++i) {
-          /* used parts of pileup_seq() here */
+          /* Used parts of pileup_seq() here */
           const bam_pileup1_t *p = plp + i;
           int nt, nt4;
           int mq, bq; /* phred scores */
           int base_skip = 0; /* boolean */
-             
+
+          /* GATKs BI & BD: "are per-base quantities which estimate
+           * the probability that the next base in the read was
+           * mis-incorporated or mis-deleted (due to slippage, for
+           * example)". See
+           * http://www.broadinstitute.org/gatk/guide/article?id=44
+           * and
+           * http://gatkforums.broadinstitute.org/discussion/1619/baserecalibratorprintreads-bd-and-bi-flags
+           */
+          uint8_t *bi = bam_aux_get(p->b, "BI"); /* GATK indels */
+          uint8_t *bd = bam_aux_get(p->b, "BD"); /* GATK deletions */
+
+#if 0
+          LOG_FIXME("At %s:%d %c: p->is_del=%d p->is_refskip=%d p->indel=%d p->is_head=%d p->is_tail=%d\n", 
+                    plp_col.target, 
+                    plp_col.pos+1,
+                    bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos)],
+                    p->is_del, p->is_refskip, p->indel, p->is_head, p->is_tail);
+#endif
+
           if (! p->is_del) {
                if (p->is_head) {
                     plp_col.num_heads += 1;
@@ -796,8 +833,9 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                 * exceed the valid sanger/phred limits. is it wise to
                 * do this automatically? doesn't this indicate a
                 * problem with the input ? */
-               if (bq > 93) 
+               if (bq > 93) {
                     bq = 93; /* Sanger/Phred max */
+               }
 
                base_counts[nt4] += (1.0 - PHREDQUAL_TO_PROB(bq));
 
@@ -819,9 +857,49 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                } else {
                     plp_col.fw_counts[nt4] += 1;
                }
-                                            
+                
+               if (bi) {
+                    int j;
+                    char *t = (char*)(bi+1); /* 1 is type */
+#if 0
+                    printf("At %d qpos %d: BI=%s", plp_col.pos+1, p->qpos+1, t);
+                    for (j = 0; j < p->indel; ++j) {
+                         printf(" %c:%d-%d-%d", t[p->qpos+j], t[p->qpos+j-1]-33, t[p->qpos+j]-33, t[p->qpos+j+1]-33);
+                    }
+                    printf("\n");
+#endif
+                    /* only adding 1 value representing whole insert */
+                    PLP_COL_ADD_QUAL(& plp_col.ins_quals, t[p->qpos]);
+               }
+
+               if (bd) {
+                    int j;
+                    char *t = (char*)(bd+1);  /* 1 is type */
+#if 0
+                    printf("At %d qpos %d: BD=%sx", plp_col.pos+1, p->qpos+1, t);
+                    for (j = 0; j < p->indel; ++j) {
+                         printf(" %c:%d-%d-%d", t[p->qpos+j], t[p->qpos+j-1]-33, t[p->qpos+j]-33, t[p->qpos+j+1]-33);
+                    }
+                    printf("\n");
+#endif
+                    PLP_COL_ADD_QUAL(& plp_col.del_quals, t[p->qpos]);
+                    /* only adding 1 value representing whole insert */
+               }
+                            
           } /* ! p->is_del */
-          
+#if 0
+          /* FIXME so what happens if is_del?
+           * Observation: if indel<0 == del then they are followed by
+           * is_del's. shouldn't that rather happen for ins? 
+           */
+          if (p->is_del || p->indel) {
+               fflush(stdout); fflush(stderr);
+               LOG_FIXME("At %s:%d p->is_del=%d p->is_refskip=%d p->indel=%d\n", 
+                         plp_col.target, plp_col.pos+1, p->is_del, p->is_refskip, p->indel);
+               fflush(stdout); fflush(stderr);
+
+          }
+#endif     
           
      check_indel:
           
@@ -838,61 +916,36 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
            * represents a deletion from the reference. The deleted
            * bases will be presented as ‘*’ in the following lines.
            */
-          if (p->indel != 0) {
+
+          if (p->indel != 0) { /* seems to rule out is_del */
+               int j;
+               /* insertion (+)
+                */
                if (p->indel > 0) {
-                    /* + */
                     plp_col.num_ins += 1;
                     plp_col.sum_ins += p->indel;
-                    
-#ifdef INDEL_TEST
-                    {int j;
-                         uint8_t *s = bam_aux_get(p->b, "BI");
-                         printf("\n");
-                         if (s) {
-                              char *t = (char*)(s+1);
-                              printf("BI:%s ", t);
-                              for (j = 0; j < p->indel; ++j) {
-                                   printf("%c", t[p->qpos+j]);
-                              }
-                              printf("\n");
-                         }
-                         
-                         putchar('+'); printw(p->indel, stdout);
-                         putchar(' ');
-                         for (j = 1; j <= p->indel; ++j) {
-                              int c = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos + j)];
-                              putchar(bam1_strand(p->b)? tolower(c) : toupper(c));
-                         }
-                         printf("\n");
+#ifdef PRINT_INDEL
+                    putchar('+'); printw(p->indel, stdout);
+                    putchar(' ');
+                    for (j = 1; j <= p->indel; ++j) {
+                         int c = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos + j)];
+                         putchar(bam1_strand(p->b)? tolower(c) : toupper(c));
                     }
-#endif
-                    
+                    printf("\n");
+#endif 
+               /* deletion (-)
+                */
                } else if (p->indel < 0) {
-                    /* - */
                     plp_col.num_dels += 1;
                     plp_col.sum_dels -= p->indel;
-                    
-#ifdef INDEL_TEST
-                    {int j;
-                         uint8_t *s = bam_aux_get(p->b, "BD");
-                         printf("\n");
-                         if (s) {
-                              char *t = (char*)(s+1);
-                              printf("BD:%s ", t);
-                              for (j = 0; j < -p->indel; ++j) {
-                                   printf("%c", t[p->qpos+j]);
-                              }
-                              printf("\n");
-                         }
-                         
-                         printw(p->indel, stdout);
-                         putchar(' ');
-                         for (j = 1; j <= -p->indel; ++j) {
-                              int c = (ref && (int)pos+j < ref_len)? ref[pos+j] : 'N';
-                              putchar(bam1_strand(p->b)? tolower(c) : toupper(c));
-                         }
-                         printf("\n");
+#ifdef PRINT_INDEL                   
+                    printw(p->indel, stdout);
+                    putchar(' ');
+                    for (j = 1; j <= -p->indel; ++j) {
+                         int c = (ref && (int)pos+j < ref_len)? ref[pos+j] : 'N';
+                         putchar(bam1_strand(p->b)? tolower(c) : toupper(c));
                     }
+                    printf("\n");
 #endif
                }
           } /* if (p->indel != 0) ... */
@@ -922,10 +975,11 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
 
      plp_col_free(& plp_col);
 }
+/* process_plp */
 
 
 
-static int mpileup(mplp_conf_t *conf, int n, char **fn)
+static int mpileup(const mplp_conf_t *conf, const int n, const char **fn)
 {
     mplp_aux_t **data;
     int i, tid, pos, *n_plp, tid0 = -1, beg0 = 0, end0 = 1u<<29, ref_len, ref_tid = -1, max_depth;
@@ -1051,7 +1105,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn)
     free(data); free(plp); free(ref); free(n_plp);
     return 0;
 }
-
+/* mpileup */
 
 
 void dump_mplp_conf(const mplp_conf_t *c, FILE *stream) {
@@ -1142,7 +1196,7 @@ int main_call(int argc, char *argv[])
     mplp.flag = MPLP_NO_ORPHAN | MPLP_REALN | MPLP_EXT_BAQ | MPLP_USE_MQ;/* | MPLP_USE_SQ; FIXME */
     mplp.bonf = 1;
     mplp.sig = 0.05;
-    /* should differentiate between pileup and snp calling options */
+    /* FIXME should differentiate between pileup and snp calling options */
 
     /* FIXME getopt should be replaced with something more sensible like
      * argtable2 ot Gopt. Otherwise there's always the risk between
@@ -1290,7 +1344,7 @@ int main_call(int argc, char *argv[])
     assert(mplp.min_bq <= mplp.min_altbq);
     assert(! (mplp.bed && mplp.reg));
    
-    mpileup(&mplp, 1, argv + optind);
+    mpileup(&mplp, 1, (const char **) argv + optind);
 
     free(mplp.reg); 
     free(mplp.fa);
@@ -1304,7 +1358,7 @@ int main_call(int argc, char *argv[])
 
     return 0;
 }
-
+/* main_call */
 
 
 #ifdef MAIN_TEST
