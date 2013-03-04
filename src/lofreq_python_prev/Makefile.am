@@ -10,11 +10,31 @@
 # echo $source | sed -e 's, , \\\n,g' | sed -e 's,^,\t,';
 #
 EXTRA_DIST = setup.py \
-	lofreq2/__init__.py \
-	lofreq2/multiple_testing.py \
-	lofreq2/vcf.py \
-	scripts/lofreq2_filter.py \
-	setup_conf.py
+	lofreq/__init__.py \
+	lofreq/conf.py \
+	lofreq/em.py \
+	lofreq/multiple_testing.py \
+	lofreq/posmap.py \
+	lofreq/qual.py \
+	lofreq/sam.py \
+	lofreq/simple_vcf.py \
+	lofreq/snp.py \
+	lofreq/utils.py \
+	lofreq_ext/lofreq_ext.c \
+	scripts/lofreq_alnoffset.py \
+	scripts/lofreq_bonf.py \
+	scripts/lofreq_diff.py \
+	scripts/lofreq_filter.py \
+	scripts/lofreq_pileup_summary.py \
+	scripts/lofreq_regionbed.py \
+	scripts/lofreq_snpcaller.py \
+	scripts/lofreq_uniq.py \
+	scripts/lofreq_uniq_pipeline.py \
+	scripts/lofreq_varpos_to_vcf.py \
+	scripts/lofreq_version.py \
+	setup_conf.py \
+	./utils/lofreq_ign_pos.py \
+	./utils/lofreq_others.py
 
 all:
 	$(PYTHON) setup.py build
