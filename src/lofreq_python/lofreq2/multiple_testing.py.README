@@ -1,0 +1,10 @@
+Original source: multiple_testing.py from goatools (see below).
+
+goatools: Tools for Gene Ontology.
+Source https://github.com/tanghaibao/goatools
+Original Authors:
+- Haibao Tang (tanghaibao),
+- Brent Pedersen (brentp),
+- Aurelien Naldi (aurelien-naldi)
+Email: tanghaibao@gmail.com
+License: BSD
