@@ -91,7 +91,7 @@ For example::
 '''
 import collections
 import re
-
+import sys
 
 # Metadata parsers/constants
 RESERVED_INFO = {
@@ -294,7 +294,7 @@ class VCFReader(object):
             line = self.reader.next()
 
         fields = line.split()
-        self._samples = fields[9:]
+        self._samples = fields[8:]
 
     def _none_map(self, func, iterable, bad='.'):
         '''``map``, but make bad values None.'''
@@ -394,7 +394,11 @@ class VCFReader(object):
 
         ref = row[3]
         alt = self._mapper(str, row[4].split(','))
-        qual = float(row[5]) if '.' in row[5] else int(row[5])
+        #qual = float(row[5]) if '.' in row[5] else int(row[5])
+        if row[5] != '.':
+            qual = float(row[5]) if '.' in row[5] else int(row[5])
+        else:
+            qual = None if self.aggro else row[5]
         filt = row[6].split(';') if ';' in row[6] else row[6]
         if filt == 'PASS' and self.aggro:
             filt = None
@@ -413,6 +417,265 @@ class VCFReader(object):
         return record
 
 
+
+    
+
+class VCFWriter(object):
+    """Hack to complement VCFReader. 
+
+    Partially LoFreq specific!
+
+    Reader is modelled after csvreader. Writer would therefore best be
+    modelled after csvwriter.
+    """
+
+
+    def __init__(self, handle, 
+                 metadata=None, infos=None, filters=None, formats=None, samples=None):
+
+        self.handle = handle
+        
+        self.metadata = metadata if metadata else dict()
+        self.infos = infos if infos else dict()
+        self.filters = filters if filters else dict()
+        
+        if formats or samples:
+            sys.stderr.write("WARN: Will ignore samples and format field in vcf. Module can't handle them\n")
+        self.formats = dict()
+        self.samples = []
+        
+
+        
+    def meta_from_reader(self, vcfreader):
+        """Copy metainformation like metadata info and filter from vcfreader template instance
+        """
+
+        assert isinstance(vcfreader, VCFReader)
+        self.metadata = vcfreader.metadata
+        self.infos = vcfreader.infos
+        self.filters = vcfreader.filters
+        # sanity check
+        if len(vcfreader.formats) or len(vcfreader.samples):
+            sys.stderr.write("WARN: Will ignore samples and format field in vcf. Module can't handle them\n")
+
+        
+    def write(self, vars):
+        """FIXME
+        """
+
+        self.write_metainfo()
+        self.write_header()
+        for v in vars:
+            self.write_rec(v)     
+
+            
+    writerow = write_rec# as csvwriter
+
+    
+    def write_metainfo(self):
+        """FIXME
+        """
+    
+        # metadata
+        #
+        # order doesn't matter in theory, but fileformat usually comes first.
+        # define a number of keys to use first. 
+        # FIXME: does fileDate have to be changed?
+        # FIXME: does filtering prog have to be added to source
+        #
+        PRIO_KEYS = ['fileformat', 'fileDate', 'source']
+        for prio_key in PRIO_KEYS:
+            if self.metadata.has_key(prio_key):
+                self.handle.write("#%s=%s\n" % (prio_key, self.metadata[prio_key]))
+        for (k, v) in sorted(self.metadata.items()):
+            if k not in PRIO_KEYS:
+                self.handle.write("#%s=%s\n" % (k, v))
+    
+        # info
+        # dict with undefined order, therefore sorted here and in write_record as well
+        for (k, v) in sorted(self.infos.items()):
+            self.handle.write("##INFO=<ID=%s,Number=%s,Type=%s,Description=\"%s\">\n" % (
+                v.id, v.num, v.type, v.desc))
+        # note: v.id == k
+    
+        # filters
+        # dict with undefined order, therefore sorted here and in write_record as well
+        for (k, v) in sorted(self.filters.items()):
+            self.handle.write("##FILTER=<ID=%s,Description=\"%s\">\n" % (
+                v.id, v.desc))
+    
+        # formats
+        # list, therefore ordered and no need to sort
+        for (k, v) in self.formats.items():
+            self.handle.write("##FORMAT=<ID=%s,Number=%s,Type=%s,Description=\"%s\">\n" % (
+                v.id, v.num, v.type, v.desc))
+    
+    
+    def write_header(self):
+        """Write the CHROM... header line
+        """
+    
+        #self.handle.write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO'
+        self.handle.write('#' + '\t'.join(_Record._fields[:8]) + "\n")
+    
+    
+    def write_rec(self, rec):
+        """FIXME
+        """
+    
+        rec_str = ""
+
+        # limited to 8 standard fields ignoring 'FORMAT' and extra 'samples'
+        for (field_no, field_id) in enumerate(_Record._fields[:8]):
+            if field_no:
+                rec_str += "\t"
+            
+            field_val = getattr(rec, field_id)
+    
+            #print field, getattr(rec, field)
+            #CHROM 20
+            #POS 14370
+            #ID rs6054257
+            #REF G
+            #ALT ['A']
+            #QUAL 29
+            #FILTER PASS
+            #INFO {'H2': True, 'NS': 3, 'DB': True, 'DP': 14, 'AF': [0.5]}
+            #
+            # or if you include all fields
+            # FORMAT GT:GQ:DP:HQ
+            # samples [{'GT': '0|0', 'HQ': [51, 51], 'DP': [1], 'GQ': [48], 'name': 'NA00001'}, {'GT': '1|0', 'HQ': [51, 51], 'DP': [8], 'GQ': [48], 'name': 'NA00002'}, {'GT': '1/1', 'HQ': ['.', '.'], 'DP': [5], 'GQ': [43], 'name': 'NA00003'}]
+            #
+            # If list join with ,
+            # if dict join with =, and join values with ,
+    
+            # could use some recursive printing function here
+            # to avoid all the unnecssary nssting and asserts
+            
+            if isinstance(field_val, list):
+                for v in field_val:
+                    assert not isinstance(v, dict) and not isinstance(v, list)
+                # e.g. multiple alleles (but also 'samples' in non-lofreq vcf's)
+                rec_str += ','.join(["%s" % v for v in field_val])
+                
+            elif isinstance(field_val, dict):
+                # e.g. info field
+                for (d_no, (d_key, d_val)) in enumerate(sorted(field_val.items())):
+                    assert not isinstance(d_val, dict), (
+                        "Arghh...don't know how to hand field value %s" % d_key)
+                    if d_no:
+                        rec_str += ";"
+                    rec_str += "%s" % d_key
+                        
+                    if isinstance(d_val, bool):
+                        continue
+                    elif isinstance(d_val, list):
+                        rec_str += "="
+                        rec_str += ','.join(["%s" % v for v in d_val])
+                    else:
+                        assert not isinstance(d_val, dict)
+                        rec_str += "="
+                        rec_str += "%s" % (d_val)
+            else:
+                rec_str += "%s" % (field_val)
+        self.handle.write(rec_str + "\n")
+    
+    
+    
+    #            
+    #The chrom line
+    #-------------------------
+    #vcf._Record._fields[:8]
+    #Out[83]: ('CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO')
+    #+ samples
+    #In [85]: '#' + '\t'.join(vcf._Record._fields[:8])
+    #Out[85]: '#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO'
+    #
+    #
+    #
+    #lofreq_example.vcf
+    #-----------------------------------
+    #
+    #vcf_reader = vcf.VCFReader(open('lofreq_example.vcf', 'rb'))
+    #records = [r for r in vcf_reader]# FIXME or iter
+    #
+    #vcf_reader.metadata
+    #Out[53]: {'fileDate': '20130302',
+    # 'fileformat': 'VCFv4.1',
+    # 'reference': '/Users/wilma/scratch/ref.fa',
+    # 'source': '"LoFreq 0.5.0"'}
+    #
+    #
+    #vcf_reader.infos
+    #Out[54]: 
+    #{'AF': Info(id='AF', num=1, type='Float', desc='Allele Frequency'),
+    # 'CONSVAR': Info(id='CONSVAR', num=0, type='Flag', desc='Indicates that the variant is a consensus variant (as opposed to a low frequency variant).'),
+    # 'DP': Info(id='DP', num=1, type='Integer', desc='Raw Depth'),
+    # 'DP4': Info(id='DP4', num=4, type='Integer', desc='Counts for ref-forward bases, ref-reverse, alt-forward and alt-reverse bases'),
+    # 'INDEL': Info(id='INDEL', num=0, type='Flag', desc='Indicates that the variant is an INDEL.'),
+    # 'SB': Info(id='SB', num=1, type='Integer', desc='Phred-scaled strand bias at this position')}
+    #
+    #vcf_reader.filters
+    #Out[56]: {}
+    #
+    #In [57]: vcf_reader.formats
+    #Out[57]: {}
+    #
+    #In [58]: vcf_reader.samples
+    #Out[58]: []
+    #
+    #FIXME: assert: LoFreq doesn't output samples
+    #
+    #Record(CHROM='consensus', POS=51, ID='.', REF='C', ALT=['G'], QUAL='.', FILTER='.', INFO={'SB': 0, 'DP4': [0, 0, 37, 80], 'CONSVAR': True, 'DP': 117, 'AF': 1.0}, FORMAT=None, samples=None)
+    #
+    #records[0]._replace(FILTER='schmock')
+    #Out[65]: Record(CHROM='consensus', POS=51, ID='.', REF='C', ALT=['G'], QUAL='.', FILTER='schmock', INFO={'SB': 0, 'DP4': [0, 0, 37, 80], 'CONSVAR': True, 'DP': 117, 'AF': 1.0}, FORMAT=None, samples=None)
+    #
+    #
+    #1000genomes_example_4.0.vcf
+    #-----------------------------------
+    #
+    #vcf_reader = vcf.VCFReader(open('1000genomes_example_4.0.vcf', 'rb'))
+    #
+    #In [67]: records = [r for r in vcf_reader]
+    #
+    #In [69]: vcf_reader.metadata
+    #Out[69]: 
+    #{'fileDate': '20090805',
+    # 'fileformat': 'VCFv4.0',
+    # 'phasing': 'partial',
+    # 'reference': '1000GenomesPilot-NCBI36',
+    # 'source': 'myImputationProgramV3.1'}
+    #
+    #In [70]: vcf_reader.infos
+    #Out[70]: 
+    #{'AA': Info(id='AA', num=1, type='String', desc='Ancestral Allele'),
+    # 'AF': Info(id='AF', num='.', type='Float', desc='Allele Frequency'),
+    # 'DB': Info(id='DB', num=0, type='Flag', desc='dbSNP membership, build 129'),
+    # 'DP': Info(id='DP', num=1, type='Integer', desc='Total Depth'),
+    # 'H2': Info(id='H2', num=0, type='Flag', desc='HapMap2 membership'),
+    # 'NS': Info(id='NS', num=1, type='Integer', desc='Number of Samples With Data')}
+    #
+    #In [71]: vcf_reader.filters
+    #Out[71]: 
+    #{'q10': Filter(id='q10', desc='Quality below 10'),
+    # 's50': Filter(id='s50', desc='Less than 50% of samples have data')}
+    #
+    #In [72]: vcf_reader.formats
+    #Out[72]: 
+    #{'DP': Format(id='DP', num=1, type='Integer', desc='Read Depth'),
+    # 'GQ': Format(id='GQ', num=1, type='Integer', desc='Genotype Quality'),
+    # 'GT': Format(id='GT', num=1, type='String', desc='Genotype'),
+    # 'HQ': Format(id='HQ', num=2, type='Integer', desc='Haplotype Quality')}
+    #
+    ## those come after the 8th field "FORMAT" in chrom...
+    #In [73]: vcf_reader.samples
+    #Out[73]: ['NA00001', 'NA00002', 'NA00003']
+    #
+    #
+    
+# ----------------------------------------------------------------------
+    
 def main():
     '''Parse the example VCF file from the specification and print every
     record.'''
@@ -445,11 +708,16 @@ def main():
         20\t1230237\t.\tT\t.\t47\tPASS\tNS=3;DP=13;AA=T\tGT:GQ:DP:HQ\t0|0:54:7:56,60\t0|0:48:4:51,51\t0/0:61:2
         20\t1234567\tmicrosat1\tGTCT\tG,GTACT\t50\tPASS\tNS=3;DP=9;AA=G\tGT:GQ:DP\t./.:35:4\t0/2:17:2\t1/1:40:3
         '''
+    records = []
     with contextlib.closing(StringIO.StringIO(textwrap.dedent(buff))) as sock:
         vcf_file = VCFReader(sock, aggressive=True)
         for record in vcf_file:
             print record
+            records.append(record)
 
+    vcf_writer = VCFWriter(sys.stdout)
+    vcf_writer.meta_from_reader(vcf_file)
+    vcf_writer.write(records)
 
 if __name__ == '__main__':
     main()
