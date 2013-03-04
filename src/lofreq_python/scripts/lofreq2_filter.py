@@ -25,6 +25,9 @@ import logging
 import os
 # optparse deprecated from Python 2.7 on
 from optparse import OptionParser, SUPPRESS_HELP
+from collections import namedtuple
+
+
 
 #--- third-party imports
 #
@@ -34,6 +37,7 @@ from optparse import OptionParser, SUPPRESS_HELP
 #
 from lofreq2 import vcf
 from lofreq2 import multiple_testing
+from lofreq2.utils import prob_to_phredqual, phredqual_to_prob
 
 # invocation of ipython on exceptions
 #import sys, pdb
@@ -64,7 +68,7 @@ def cmdline_parser():
 
     # http://docs.python.org/library/optparse.html
     usage = "%prog [Options]\n" \
-            + "\n" + __doc__
+      + "\n" + __doc__ + "NOTE: filters are applied in there order of appearance here\n" # FIXME
     parser = OptionParser(usage=usage)
 
     parser.add_option("-v", "--verbose",
@@ -97,12 +101,12 @@ def cmdline_parser():
     parser.add_option("", "--strandbias-phred",
                       dest="max_strandbias_phred", 
                       type='int',
-                      help="Optional: Ignore SNPs with strandbias"
+                      help="Optional: Ignore SNVs with strandbias"
                       " phred-score above this value")
     parser.add_option("", "--min-freq",
                       dest="min_freq", 
                       type="float",
-                      help="Optional: Ignore SNPs below this freq treshold")
+                      help="Optional: Ignore SNVs below this freq treshold")
     parser.add_option("", "--max-cov",
                       dest="max_cov", 
                       type='int',
@@ -134,9 +138,6 @@ def cmdline_parser():
 
 
 def main():
-    """
-    The main function
-    """
 
     parser = cmdline_parser()
     (opts, args) = parser.parse_args()
@@ -172,7 +173,7 @@ def main():
     if opts.vcf_in == '-':
         vcf_reader = vcf.VCFReader(sys.stdin)
     else:
-        vcf_reader = vcf.VCFReader(open(opts.vcfin,'r'))
+        vcf_reader = vcf.VCFReader(open(opts.vcf_in,'r'))
     snvs = [r for r in vcf_reader]
     LOG.info("Parsed %d SNVs from %s" % (len(snvs), opts.vcf_in))
 
@@ -186,75 +187,138 @@ def main():
     if opts.strandbias_bonf:
         assert opts.max_strandbias_phred == None and opts.strandbias_holmbonf == None, (
             "Can't filter strand bias twice")
-        pvals = [s.INFO['SB'] for s in snvs]
-        corr_pvals = multiple_testing.Bonferroni(pvals).corrected_pvals
-        LOG.error("FIXME add SBC value and INFO column")
-        #for (cp, s) in zip(corr_pvals, snps):
-        #    s.info['strandbias-pvalue-corr'] = str(cp)
-        tests.append((
-            lambda s: s.INFO['SBC'] > 0.05,
-            "Bonferroni corrected strandbias phred-value"
-            ))
+
+        vcf_filter = vcf._Filter(
+            id="sbb", 
+            desc="Strand-bias filter on Bonferroni corrected p-values")
+        vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
+        vcf_info = vcf._Info(
+            id="SBBC", num=1, type='Integer',
+            desc="Strand-bias Bonferroni corrected")        
+        vcf_reader.infos[vcf_info.id] = vcf_info
         
+        pvals = [phredqual_to_prob(s.INFO['SB']) for s in snvs]
+        corr_pvals = multiple_testing.Bonferroni(pvals).corrected_pvals
+        for (cp, s) in zip(corr_pvals, snvs):
+            s.INFO[vcf_info.id] = prob_to_phredqual(cp)
+            # FIXME PHREDQUAL_TO_PROB in snspcaller.c has no limit
+            if s.INFO[vcf_info.id] > sys.maxint:
+                s.INFO[vcf_info.id] = sys.maxint
+                
+        tests.append((
+            lambda s, f: f.id if s.INFO["SBBC"] > 13 else None,
+            vcf_filter
+            ))
+    
     if opts.strandbias_holmbonf:
         assert opts.max_strandbias_phred == None and opts.strandbias_bonf == None, (
             "Can't filter strand bias twice")
-        pvals = [s.INFO['SB'] for s in snvs]
+
+        vcf_filter = vcf._Filter(
+            id="sbh", 
+            desc="Strand-bias filter on Holm-Bonferroni corrected p-values")
+        vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
+        vcf_info = vcf._Info(
+            id="SBHC", num=1, type='Integer',
+            desc="Strand-bias Holm-Bonferroni corrected")        
+        vcf_reader.infos[vcf_info.id] = vcf_info
+        
+        pvals = [phredqual_to_prob(s.INFO['SB']) for s in snvs]
         corr_pvals = multiple_testing.HolmBonferroni(pvals).corrected_pvals
-        LOG.error("FIXME add SBC value and INFO column")
-        #for (cp, s) in zip(corr_pvals, snvs):
-        #    s.info['strandbias-pvalue-corr'] = str(cp)
+        for (cp, s) in zip(corr_pvals, snvs):
+            s.INFO[vcf_info.id] = prob_to_phredqual(cp)
+            # FIXME PHREDQUAL_TO_PROB in snspcaller.c has no limit
+            if s.INFO[vcf_info.id] > sys.maxint:
+                s.INFO[vcf_info.id] = sys.maxint
+            
         tests.append((
-            lambda s: s.INFO['SBC'] > 0.05,
-            "Holm-Bonferroni corrected strandbias phred-value"
+            lambda s, f: f.id if s.INFO["SBHC"] > 13 else None,
+            vcf_filter
             ))                
         
     if opts.max_strandbias_phred != None:
+        vcf_filter = vcf._Filter(
+            id="sbp", 
+            desc="Phred-based strand-bias filter (max)")
+        vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
+
         tests.append((
-            lambda s: float(s.INFO['SB']) <= opts.max_strandbias_phred,
-            "maximum strandbias phred-value"
+            lambda s, f: f.id if float(s.INFO['SB']) > opts.max_strandbias_phred else None,
+            vcf_filter
             ))
         
     if opts.min_freq != None:  
+        vcf_filter = vcf._Filter(
+            id="minaf", 
+            desc="Minimum allele frequency")
+        vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
+
         tests.append((
-            lambda s: s.INFO['AF'] >= opts.min_freq,
-            "minimum frequency"
+            lambda s, f: f.id if s.INFO['AF'] < opts.min_freq else None,
+            vcf_filter
             ))
 
     if opts.max_cov != None:  
+        vcf_filter = vcf._Filter(
+            id="maxcov", 
+            desc="Maximum coverage")
+        vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
+
         tests.append((
-            lambda s: s.INFO['DP'] <= opts.max_cov,
-            "maximum coverage"
+            lambda s, f: f.id if s.INFO['DP'] > opts.max_cov else None,
+            vcf_filter
             ))
 
     if opts.min_cov != None:  
+        vcf_filter = vcf._Filter(
+            id="mincov", 
+            desc="Minimum coverage")
+        vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
+
         tests.append((
-            lambda s: s.INFO['DP'] >= opts.min_cov,
-            "minimum coverage"
+            lambda s, f: f.id if s.INFO['DP'] < opts.min_cov else None,
+            vcf_filter
             ))
 
     if opts.min_snp_phred != None:  
+        vcf_filter = vcf._Filter(
+            id="minqual", 
+            desc="Minimum SNV quality")
+        vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
+
         tests.append((
-            lambda s: s.QUAL == '.' or s.QUAL >= opts.min_snp_phred,
-            "minimum SNP phred"
+            lambda s, f: f.id if s.QUAL != '.' and s.QUAL < opts.min_snp_phred else None,
+            vcf_filter
             ))
 
-                
-
+    LOG.error("TEST TEST TEST")
+         
     # The actual filtering:
     #
     # LOG.info("Will perform the following tests: \n%s" % (
     # '\n'.join(["- %s" % t[1] for t in tests])))
-    for (test_lambda, test_descr) in tests:
-        snvs = [s for s in snvs if test_lambda(s)]
-        LOG.info("%d SNVs left after applying %s filter" % (
-            len(snvs), test_descr))
+    # can't this be done with map()?
+    for (test_func, test_filt) in tests:
+        for (i, s) in enumerate(snvs):
+            f = test_func(s, test_filt)
+            if f:
+                # just s = s.__replace() can't work
+                if s.FILTER == '.' or s.FILTER == 'PASS':
+                    snvs[i] = s._replace(FILTER=f)
+                else:
+                    snvs[i] = s._replace(FILTER="%s,%s" % (s.FILTER, f))
 
     if opts.window_size != None:  
         raise NotImplementedError # FIXME
-        
-    LOG.info("%d SNVS survived all filters. Writing to %s" % (
-        len(snvs), opts.vcf_out))
+
+    LOG.error("FIXME test each filter")
+
+    for (i, s) in enumerate(snvs):
+        if s.FILTER == '.':
+            snvs[i] = s._replace(FILTER="PASS")
+
+    # FIXME LOG.info("%d SNVS survived all filters. Writing to %s" % (
+    #    len(snvs), opts.vcf_out))
     if opts.vcf_out == '-':
         fh_out = sys.stdout
     else:
