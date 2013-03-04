@@ -4,10 +4,11 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "lofreq_snpcaller.h"
 #include "log.h"
+#include "utils.h"
 
-#define BASENAME(x) strrchr((x), '/') ? strrchr((x), '/')+1 : (x)
+#include "lofreq_snpcaller.h"
+
 static void usage(const char *myname)
 {
      fprintf(stderr, "%s: Fast and sensitive inference of single-nucleotide variants\n", PACKAGE_NAME);
@@ -15,7 +16,9 @@ static void usage(const char *myname)
      fprintf(stderr, "\n");
      fprintf(stderr, "Usage: %s <command> [options], where command is one of:\n", myname);
      fprintf(stderr, "  call   : call variants\n");
+#ifdef FILTER
      fprintf(stderr, "  filter : filter variants\n");
+#endif
      fprintf(stderr, "\n");
 }
 
@@ -27,11 +30,11 @@ int main(int argc, char *argv[])
      }
      if (strcmp(argv[1], "call") == 0)  {
           return main_call(argc-1, argv+1);
-
+#ifdef FILTER
      } else if (strcmp(argv[1], "filter") == 0) {
           LOG_FIXME("%s\n", "not implemented yet");
           return -1;
-
+#endif
      } else {
           LOG_FATAL("Unrecognized command '%s'\n", argv[1]);
           return 1;
