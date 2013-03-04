@@ -4,6 +4,12 @@
  * FIXME missing license
  *
  */
+
+/* NOTE: this is by no means a generic vcf parser, since many
+ * functions depends on the properties/format of your variants. Here,
+ * we only use whatever is needed inside LoFreq
+ */
+
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -92,7 +98,7 @@ void vcf_write_header(FILE *stream, const char *srcprog, const char *reffa)
      localtime_r(&t, &tm);
      strftime(tbuf, 9, "%Y%m%d", &tm);
      
-     fprintf(stream, "##fileformat=VCFv4.1\n");
+     fprintf(stream, "##fileformat=VCFv4.0\n");
      fprintf(stream, "##fileDate=%s\n", tbuf);
      fprintf(stream, "##source=\"%s\"\n", srcprog);
      fprintf(stream, "##reference=%s\n", reffa);
@@ -108,3 +114,31 @@ void vcf_write_header(FILE *stream, const char *srcprog, const char *reffa)
 
      fprintf(stream, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n");
 }
+
+#ifdef REINVENT_THE_VCF_WHEEL
+
+/* will allocate memory for header. caller has to free */
+void vcf_parse_header(char *header, FILE *stream)
+{
+     char linebuf[1024];
+
+     FIXME;
+
+     /* make sure strlen below will work on header */
+     header = malloc(sizeof(char)); 
+     header[0] = '\0';
+
+     while (NULL != fgets(linebuf, sizeof(linebuf), stream)) {
+          header = realloc(header, strlen(header) + strlen(linebuf) + 1 /* '\0' */);
+          (void) strcat(header, linebuf);
+          if (0 == strncmp(linebuf, "#CHROM", strlen("#CHROM"))) {
+               break;
+          }
+     }
+}
+
+void vcf_parse_var(FILE *stream, const var_t *var)
+{
+     FIXME;
+}
+#endif
