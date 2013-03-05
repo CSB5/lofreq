@@ -25,7 +25,7 @@ import logging
 import os
 # optparse deprecated from Python 2.7 on
 from optparse import OptionParser, SUPPRESS_HELP
-from collections import namedtuple
+
 
 
 
@@ -68,7 +68,7 @@ def cmdline_parser():
 
     # http://docs.python.org/library/optparse.html
     usage = "%prog [Options]\n" \
-      + "\n" + __doc__ + "NOTE: filters are applied in there order of appearance here\n" # FIXME
+      + "\n" + __doc__ 
     parser = OptionParser(usage=usage)
 
     parser.add_option("-v", "--verbose",
@@ -91,44 +91,45 @@ def cmdline_parser():
     parser.add_option("", "--strandbias-bonf",
                       dest="strandbias_bonf", 
                       action="store_true",
-                      help="Optional: Bonferroni corrected strand bias"
-                      " value has to be 0.05 (applied first!)")
+                      help="Optional: Filter variant if Bonferroni"
+                      " corrected strand-bias pvalue is <0.05"
+                      " (i.e. > phred qual 13)")
     parser.add_option("", "--strandbias-holmbonf",
                       dest="strandbias_holmbonf", 
                       action="store_true",
-                      help="Optional: Holm-Bonferroni corrected strand"
-                      " bias value has to be 0.05 (applied first!)")
+                      help="Optional: Filter variant if Holm-Bonferroni"
+                      " corrected strand-bias pvalue is <0.05"
+                      " (i.e. > phred qual 13)")
     parser.add_option("", "--strandbias-phred",
                       dest="max_strandbias_phred", 
                       type='int',
-                      help="Optional: Ignore SNVs with strandbias"
-                      " phred-score above this value")
-    parser.add_option("", "--min-freq",
-                      dest="min_freq", 
+                      help="Optional: Filter variant if its strand-bias"
+                      " phred-score is above this value (int)")
+    parser.add_option("", "--min-af",
+                      dest="min_af", 
                       type="float",
-                      help="Optional: Ignore SNVs below this freq treshold")
+                      help="Optional: Filter if (allele) freq is"
+                      " below this threshold (float)")
     parser.add_option("", "--max-cov",
                       dest="max_cov", 
                       type='int',
-                      #default=sys.maxint, type=int,
-                      help="Optional: Ignore variant sites if coverage above this cap")
+                      help="Optional: Filter variant if coverage is"
+                      " above this cap (int)")
     parser.add_option("", "--min-cov",
                       dest="min_cov", 
                       type='int',
-                      #default=1, type=int,
-                      help="Optional: Ignore variants sites if coverage"
-                      " is below this value")    
+                      help="Optional: Filter variant if coverage is"
+                      " below this value (int)")    
     parser.add_option("", "--snp-phred", 
                       dest="min_snp_phred",
                       type='int',
-                      #default=1, type=int,
-                      help="Optional: Ignore variants sites if SNP"
-                      " phred score is below this (float) value")
-    parser.add_option("", "--window-size",
-                      dest="window_size",
-                      type='int',
-                      help="Optional: Ignore any variants if at least"
-                      " one more was called within this window size")
+                      help="Optional: Filter variant if its phred-score"
+                      " is below this value (int)")
+    #parser.add_option("", "--window-size",
+    #                  dest="window_size",
+    #                  type='int',
+    #                  help="Optional: Filter variants if at least"
+    #                  " one or more were called within this window size")
 
     parser.add_option("--force", help=SUPPRESS_HELP,
                       dest="force_overwrite", action="store_true") 
@@ -182,8 +183,6 @@ def main():
     # input (keep if lambda returns 1), second one is description
     tests = []
 
-    # strand-bias [holm]/bonf have to be first filters
-    
     if opts.strandbias_bonf:
         assert opts.max_strandbias_phred == None and opts.strandbias_holmbonf == None, (
             "Can't filter strand bias twice")
@@ -201,7 +200,6 @@ def main():
         corr_pvals = multiple_testing.Bonferroni(pvals).corrected_pvals
         for (cp, s) in zip(corr_pvals, snvs):
             s.INFO[vcf_info.id] = prob_to_phredqual(cp)
-            # FIXME PHREDQUAL_TO_PROB in snspcaller.c has no limit
             if s.INFO[vcf_info.id] > sys.maxint:
                 s.INFO[vcf_info.id] = sys.maxint
                 
@@ -227,7 +225,6 @@ def main():
         corr_pvals = multiple_testing.HolmBonferroni(pvals).corrected_pvals
         for (cp, s) in zip(corr_pvals, snvs):
             s.INFO[vcf_info.id] = prob_to_phredqual(cp)
-            # FIXME PHREDQUAL_TO_PROB in snspcaller.c has no limit
             if s.INFO[vcf_info.id] > sys.maxint:
                 s.INFO[vcf_info.id] = sys.maxint
             
@@ -238,7 +235,7 @@ def main():
         
     if opts.max_strandbias_phred != None:
         vcf_filter = vcf._Filter(
-            id="sbp", 
+            id="sbp%d" % opts.max_strandbias_phred, 
             desc="Phred-based strand-bias filter (max)")
         vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
 
@@ -247,20 +244,20 @@ def main():
             vcf_filter
             ))
         
-    if opts.min_freq != None:  
+    if opts.min_af != None:  
         vcf_filter = vcf._Filter(
-            id="minaf", 
+            id="minaf%dp" % int(opts.min_af*100), 
             desc="Minimum allele frequency")
         vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
 
         tests.append((
-            lambda s, f: f.id if s.INFO['AF'] < opts.min_freq else None,
+            lambda s, f: f.id if s.INFO['AF'] < opts.min_af else None,
             vcf_filter
             ))
 
     if opts.max_cov != None:  
         vcf_filter = vcf._Filter(
-            id="maxcov", 
+            id="maxcov%d" % opts.max_cov, 
             desc="Maximum coverage")
         vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
 
@@ -271,7 +268,7 @@ def main():
 
     if opts.min_cov != None:  
         vcf_filter = vcf._Filter(
-            id="mincov", 
+            id="mincov%d" % opts.min_cov, 
             desc="Minimum coverage")
         vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
 
@@ -282,7 +279,7 @@ def main():
 
     if opts.min_snp_phred != None:  
         vcf_filter = vcf._Filter(
-            id="minqual", 
+            id="minqual%d" % opts.min_snp_phred, 
             desc="Minimum SNV quality")
         vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
 
@@ -291,8 +288,6 @@ def main():
             vcf_filter
             ))
 
-    LOG.error("TEST TEST TEST")
-         
     # The actual filtering:
     #
     # LOG.info("Will perform the following tests: \n%s" % (
@@ -308,30 +303,34 @@ def main():
                 else:
                     snvs[i] = s._replace(FILTER="%s,%s" % (s.FILTER, f))
 
-    if opts.window_size != None:  
-        raise NotImplementedError # FIXME
+    #if opts.window_size != None:  
+    #    raise NotImplementedError # FIXME
 
-    LOG.error("FIXME test each filter")
+    if len(tests) == 0:
+        LOG.error("No filters used. Will exit now.")
+        sys.exit(1)
 
+    n_passed = 0
     for (i, s) in enumerate(snvs):
         if s.FILTER == '.':
             snvs[i] = s._replace(FILTER="PASS")
-
-    # FIXME LOG.info("%d SNVS survived all filters. Writing to %s" % (
-    #    len(snvs), opts.vcf_out))
+            n_passed += 1
+    LOG.info("%d SNVs passed all filters.")
+    
     if opts.vcf_out == '-':
         fh_out = sys.stdout
     else:
         fh_out = open(opts.vcf_out, 'w')
-
+        
     vcf_writer = vcf.VCFWriter(sys.stdout)
     vcf_writer.meta_from_reader(vcf_reader)
-    LOG.error("Add corrected values as info fields and also filters")
     vcf_writer.write(snvs)
+    
     if fh_out != sys.stdout:
         fh_out.close()
 
     
 if __name__ == "__main__":
     main()
+    LOG.critical("Need test case")
     LOG.info("Successful program exit")
