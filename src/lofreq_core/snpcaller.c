@@ -27,17 +27,26 @@
 #include <float.h>
 
 #include "fet.h"
+#include "utils.h"
 
 #if TIMING
 #include <time.h>
 #endif
 
+#if 0
+/* defined in utils.h, including a check if prob~0.0*/
 #define PHREDQUAL_TO_PROB(phred) (pow(10.0, -1.0*(phred)/10.0))
-#define PHREDQUAL_VALID_RANGE(phred) ((phred)>1 && (phred)<100)
 #define PROB_TO_PHREDQUAL(prob) ((int)(-10.0 * log10(prob)))
+#endif
 
+#define BASECALLQUAL_VALID_RANGE(phred) ((phred)>1 && (phred)<100)
+
+#ifndef MIN
 #define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
+#endif
+#ifndef MAX
 #define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
+#endif
 
 #define LOGZERO -1e100 
 
@@ -164,7 +173,7 @@ naive_calc_prob_dist(const int *quals, int N, int K)
         double log_pn = log(pn);
         double log_1_pn = log1p(-pn);
 
-        assert(PHREDQUAL_VALID_RANGE(quals[n-1]));
+        assert(BASECALLQUAL_VALID_RANGE(quals[n-1]));
 
         k = 0;
         probvec[k] = probvec_prev[k] + log_1_pn;
@@ -235,7 +244,7 @@ pruned_calc_prob_dist(const int *quals, int N, int K,
         double log_1_pn = log1p(-pn); /* 0.0 = log(1.0) */
         
         /* test for valid phred quality boundaries */
-        assert(PHREDQUAL_VALID_RANGE(quals[n-1]));
+        assert(BASECALLQUAL_VALID_RANGE(quals[n-1]));
 
         if(n < K) {
 #ifdef TRACE
