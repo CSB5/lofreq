@@ -1,8 +1,13 @@
+#ifndef UTILS_H
+#define UTILS_H
+
 #include <limits.h>
+#include <float.h>
+#include <math.h>
 
 
 #define PHREDQUAL_TO_PROB(phred) (pow(10.0, -1.0*(phred)/10.0))
-#define PROB_TO_PHREDQUAL(prob) (prob<0.0+DBL_EPSILON?INT_MAX:(int)(-10.0 * log10(prob)))
+#define PROB_TO_PHREDQUAL(prob) (prob<0.0+DBL_EPSILON ? INT_MAX : (int)(-10.0 * log10(prob)))
 
 #define BASENAME(x) strrchr((x), '/') ? strrchr((x), '/')+1 : (x)
 
@@ -23,3 +28,5 @@ void int_varray_add_value(int_varray_t *a, const int value);
 void int_varray_free(int_varray_t *a);
 void int_varray_init(int_varray_t *a, 
                      const size_t grow_by_size);
+
+#endif
