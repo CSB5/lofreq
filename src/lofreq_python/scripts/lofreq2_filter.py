@@ -26,9 +26,6 @@ import os
 # optparse deprecated from Python 2.7 on
 from optparse import OptionParser, SUPPRESS_HELP
 
-
-
-
 #--- third-party imports
 #
 #/
@@ -179,9 +176,10 @@ def main():
     LOG.info("Parsed %d SNVs from %s" % (len(snvs), opts.vcf_in))
 
     
-    # list of tuples: first element is a lambda test with a snp as
-    # input (keep if lambda returns 1), second one is description
-    tests = []
+    # list of tuples: first element is a filter func, which takes a
+    # snp and a filter-id as input. second is the filter id. variant
+    # will be marked as filtered if func returns True
+    filters = []
 
     if opts.strandbias_bonf:
         assert opts.max_strandbias_phred == None and opts.strandbias_holmbonf == None, (
@@ -191,6 +189,7 @@ def main():
             id="sbb", 
             desc="Strand-bias filter on Bonferroni corrected p-values")
         vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
+        
         vcf_info = vcf._Info(
             id="SBBC", num=1, type='Integer',
             desc="Strand-bias Bonferroni corrected")        
@@ -203,11 +202,12 @@ def main():
             if s.INFO[vcf_info.id] > sys.maxint:
                 s.INFO[vcf_info.id] = sys.maxint
                 
-        tests.append((
-            lambda s, f: f.id if s.INFO["SBBC"] > 13 else None,
-            vcf_filter
+        filters.append((
+            lambda s, f_id: f_id if s.INFO["SBBC"] > 13 else None,
+            vcf_filter.id
             ))
-    
+
+        
     if opts.strandbias_holmbonf:
         assert opts.max_strandbias_phred == None and opts.strandbias_bonf == None, (
             "Can't filter strand bias twice")
@@ -216,6 +216,7 @@ def main():
             id="sbh", 
             desc="Strand-bias filter on Holm-Bonferroni corrected p-values")
         vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
+        
         vcf_info = vcf._Info(
             id="SBHC", num=1, type='Integer',
             desc="Strand-bias Holm-Bonferroni corrected")        
@@ -228,10 +229,11 @@ def main():
             if s.INFO[vcf_info.id] > sys.maxint:
                 s.INFO[vcf_info.id] = sys.maxint
             
-        tests.append((
-            lambda s, f: f.id if s.INFO["SBHC"] > 13 else None,
-            vcf_filter
+        filters.append((
+            lambda s, f_id: f_id if s.INFO["SBHC"] > 13 else None,
+            vcf_filter.id
             ))                
+
         
     if opts.max_strandbias_phred != None:
         vcf_filter = vcf._Filter(
@@ -239,10 +241,11 @@ def main():
             desc="Phred-based strand-bias filter (max)")
         vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
 
-        tests.append((
-            lambda s, f: f.id if float(s.INFO['SB']) > opts.max_strandbias_phred else None,
-            vcf_filter
+        filters.append((
+            lambda s, f_id: f_id if float(s.INFO['SB']) > opts.max_strandbias_phred else None,
+            vcf_filter.id
             ))
+
         
     if opts.min_af != None:  
         vcf_filter = vcf._Filter(
@@ -250,52 +253,59 @@ def main():
             desc="Minimum allele frequency")
         vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
 
-        tests.append((
-            lambda s, f: f.id if s.INFO['AF'] < opts.min_af else None,
-            vcf_filter
+        filters.append((
+            lambda s, f_id: f_id if s.INFO['AF'] < opts.min_af else None,
+            vcf_filter.id
             ))
 
+        
     if opts.max_cov != None:  
         vcf_filter = vcf._Filter(
             id="maxcov%d" % opts.max_cov, 
             desc="Maximum coverage")
         vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
 
-        tests.append((
-            lambda s, f: f.id if s.INFO['DP'] > opts.max_cov else None,
-            vcf_filter
+        filters.append((
+            lambda s, f_id: f_id if s.INFO['DP'] > opts.max_cov else None,
+            vcf_filter.id
             ))
 
+        
     if opts.min_cov != None:  
         vcf_filter = vcf._Filter(
             id="mincov%d" % opts.min_cov, 
             desc="Minimum coverage")
         vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
 
-        tests.append((
-            lambda s, f: f.id if s.INFO['DP'] < opts.min_cov else None,
-            vcf_filter
+        filters.append((
+            lambda s, f_id: f_id if s.INFO['DP'] < opts.min_cov else None,
+            vcf_filter.id
             ))
 
+        
     if opts.min_snp_phred != None:  
         vcf_filter = vcf._Filter(
             id="minqual%d" % opts.min_snp_phred, 
             desc="Minimum SNV quality")
         vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
 
-        tests.append((
-            lambda s, f: f.id if s.QUAL != '.' and s.QUAL < opts.min_snp_phred else None,
-            vcf_filter
+        filters.append((
+            lambda s, f_id: f_id if s.QUAL != '.' and s.QUAL < opts.min_snp_phred else None,
+            vcf_filter.id
             ))
+
+        
+    if len(filters) == 0:
+        LOG.error("No filters used. Will exit now.")
+        sys.exit(1)
 
     # The actual filtering:
     #
-    # LOG.info("Will perform the following tests: \n%s" % (
-    # '\n'.join(["- %s" % t[1] for t in tests])))
-    # can't this be done with map()?
-    for (test_func, test_filt) in tests:
+    # FIXME can't this be done easier with map()?
+    #
+    for (filter_func, filter_id) in filters:
         for (i, s) in enumerate(snvs):
-            f = test_func(s, test_filt)
+            f = filter_func(s, filter_id)
             if f:
                 # just s = s.__replace() can't work
                 if s.FILTER == '.' or s.FILTER == 'PASS':
@@ -306,10 +316,9 @@ def main():
     #if opts.window_size != None:  
     #    raise NotImplementedError # FIXME
 
-    if len(tests) == 0:
-        LOG.error("No filters used. Will exit now.")
-        sys.exit(1)
 
+    # should all also work if we get already PASSed input  
+    
     n_passed = 0
     for (i, s) in enumerate(snvs):
         if s.FILTER == '.':
@@ -332,5 +341,5 @@ def main():
     
 if __name__ == "__main__":
     main()
-    LOG.critical("Need test case")
+    LOG.critical("Test cases missing")
     LOG.info("Successful program exit")
