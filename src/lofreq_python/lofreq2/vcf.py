@@ -483,10 +483,10 @@ class VCFWriter(object):
         PRIO_KEYS = ['fileformat', 'fileDate', 'source']
         for prio_key in PRIO_KEYS:
             if self.metadata.has_key(prio_key):
-                self.handle.write("#%s=%s\n" % (prio_key, self.metadata[prio_key]))
+                self.handle.write("##%s=%s\n" % (prio_key, self.metadata[prio_key]))
         for (k, v) in sorted(self.metadata.items()):
             if k not in PRIO_KEYS:
-                self.handle.write("#%s=%s\n" % (k, v))
+                self.handle.write("##%s=%s\n" % (k, v))
     
         # info
         # dict with undefined order, therefore sorted here and in write_record as well
