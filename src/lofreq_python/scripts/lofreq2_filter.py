@@ -74,11 +74,9 @@ def cmdline_parser():
     parser.add_option("", "--debug",
                       action="store_true", dest="debug",
                       help="enable debugging")
-    DEFAULT = "-"
     parser.add_option("-i", "--vcf_in",
                       dest="vcf_in",
-                      default=DEFAULT,
-                      help="Input vcf file (- for stdin). Default = %s)" % DEFAULT)
+                      help="Input vcf file (- for stdin).")
     DEFAULT = "-"
     parser.add_option("-o", "--outfile",
                       dest="vcf_out",
@@ -296,7 +294,7 @@ def main():
 
         
     if len(filters) == 0:
-        LOG.error("No filters used. Will exit now.")
+        LOG.error("No filters activated. Will exit now.")
         sys.exit(1)
 
     # The actual filtering:
@@ -331,7 +329,7 @@ def main():
     else:
         fh_out = open(opts.vcf_out, 'w')
         
-    vcf_writer = vcf.VCFWriter(sys.stdout)
+    vcf_writer = vcf.VCFWriter(fh_out)
     vcf_writer.meta_from_reader(vcf_reader)
     vcf_writer.write(snvs)
     
