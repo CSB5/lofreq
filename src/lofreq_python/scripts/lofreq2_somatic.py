@@ -108,15 +108,24 @@ def cmdline_parser():
     opt_group.add_option("", "--min-snp-phred",
                       dest="min_snp_phred",
                       default=DEFAULT,
-                      help="SNV Phred cutoff for filtering (default=%s)" % DEFAULT)
+                      help="SNV Phred cutoff for filtering"
+                      " (default=%s)" % DEFAULT)
     DEFAULT=10
     opt_group.add_option("", "--min-cov",
                       dest="mincov",
                       default=DEFAULT,
-                      help="SNV Phred cutoff for filtering (default=%s)" % DEFAULT)
+                      help="SNV Phred cutoff for filtering"
+                      " (default=%s)" % DEFAULT)
+    
     opt_group.add_option("", "--sbfilter",
                       dest="sbhbfilter",
                       help="Holm-Bonferroni strandbias filtering")
+    opt_group.add_option("", "--snp-bonf",
+                      dest="snp_bonf",
+                      help="SNV Bonferroni correction factor"
+                      " (any option understood by lofreq2 call,"
+                      " e.g. INT, auto or auto-ign-zero-cov;"
+                      " uses lofreq2 default if not set)")
 
     parser.add_option_group(opt_group)
     
@@ -127,16 +136,15 @@ def cmdline_parser():
 def snv_call_wrapper(bam, ref_fa, bed, snv_raw, bonf='auto-ign-zero-cov'):
     """Wrapper for lofreq_snpvaller.py
 
-    sUse stdout if snv_raw is None
+    Use stdout if snv_raw is None
     """
-
     
     if snv_raw and os.path.exists(snv_raw):
         LOG.warn("Reusing %s." % snv_raw)
         return snv_raw
 
     if snv_raw:
-        LOG.fatal("lofreq2 call does not suuport output arguments at the moment")
+        LOG.fatal("lofreq2 call does not support output arguments at the moment")
         return None
     cmd_list = ['lofreq2', 'call',
                 '--bonf', "%s" % bonf,
@@ -220,11 +228,10 @@ def main():
                   " Don't use upstream filtering on this."
                   " Bonf correction must come downstream!")
 
-    
-    snv_call_cmd = snv_call_wrapper(opts.tumor_bam, opts.ref_fa, opts.bed, None)
+    snv_call_cmd = snv_call_wrapper(opts.tumor_bam, opts.ref_fa, opts.bed, None, opts.snp_bonf)
     LOG.debug("snv_call_cmd = %s" % snv_call_cmd)
     basename = os.path.splitext(os.path.basename(opts.tumor_bam))[0] 
-    basename =  os.path.join(opts.outdir, basename)
+    basename = os.path.join(opts.outdir, basename)
     snv_filt_out = basename + ".snp"
     snv_filt_cmd = snv_filter_wrapper(None, snv_filt_out,
                                       opts.min_snp_phred, opts.mincov, opts.sbhbfilter)
@@ -234,9 +241,11 @@ def main():
     p2 = subprocess.Popen(snv_filt_cmd, stdin=p1.stdout)
     p1.stdout.close()  # Allow p1 to receive a SIGPIPE if p2 exits.
 
-    (stdoutdata, stderrdata) =  p2.communicate()
-    import pdb; pdb.set_trace()
-
+    (stdoutdata, stderrdata) = p2.communicate()
+    #import pdb; pdb.set_trace()
+    
+    LOG.critical("stdoutdata: %s" % stdoutdata)
+    LOG.critical("stderrdata: %s" % stderrdata)
     LOG.critical("Now run: bgzip $vcf and tabix ${vcf}.gz")
     LOG.critical("Now run: vcf-isec -c tumour.vcf.gz normal.vcf.gz and save to diff.vcf")
 
