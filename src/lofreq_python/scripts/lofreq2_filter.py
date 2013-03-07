@@ -172,7 +172,6 @@ def main():
         vcf_reader = vcf.VCFReader(open(opts.vcf_in,'r'))
     snvs = [r for r in vcf_reader]
     LOG.info("Parsed %d SNVs from %s" % (len(snvs), opts.vcf_in))
-
     
     # list of tuples: first element is a filter func, which takes a
     # snp and a filter-id as input. second is the filter id. variant
@@ -322,7 +321,7 @@ def main():
         if s.FILTER == '.':
             snvs[i] = s._replace(FILTER="PASS")
             n_passed += 1
-    LOG.info("%d SNVs passed all filters.")
+    LOG.info("%d SNVs passed all filters." % n_passed)
     
     if opts.vcf_out == '-':
         fh_out = sys.stdout
