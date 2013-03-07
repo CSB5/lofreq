@@ -1,3 +1,6 @@
+#ifndef LOG_H
+#define LOG_H
+
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -20,3 +23,4 @@ vout(FILE *stream, const char *fmt, ...);
 /* always print fixme's */
 #define LOG_FIXME(fmt, args...)     (void)vout(stderr, "FIXME(%s|%s:%d): " fmt, __FILE__, __FUNCTION__, __LINE__, ## args)
 
+#endif
