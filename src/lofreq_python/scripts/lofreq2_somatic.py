@@ -142,6 +142,10 @@ def cmdline_parser():
                       action="store_true", dest="debug",
                       help="enable debugging")
 
+    opt_group.add_option("", "--combine-pvalues",
+                      action="store_true",
+                      dest="combine_pvalues",
+                      help="Combine p-values")
     opt_group.add_option("-q", "--ignore-bases-below-q",
                       dest="ign_bases_below_q", type="int",
                       default=conf.DEFAULT_IGN_BASES_BELOW_Q,
@@ -238,6 +242,11 @@ def main():
         LOG.fatal("Can't use both, uniform frequency and frequency factor")
         sys.exit(1)                    
 
+    if opts.combine_pvalues:
+        # should go to cmdline option
+        LOG.error("FIXME Experimental code. Don't use filtering on this. Bonf correction must come downstream!")
+        from scipy.stats import chi2
+        from math import log
         
     pos_map_other_to_aln = None
     pos_map_aln_to_other = None
@@ -372,6 +381,42 @@ def main():
 
             pvalue = binom_cdf(alt_count, cov, cmp_freq)
 
+            if opts.combine_pvalues and s.info['type'] == 'low-freq-var':
+                # fisher's method
+                """
+                p://en.wikipedia.org/wiki/Fisher's_method
+                --- 
+                
+                breseq-0.18b/src/c/breseq/polymorphism_statistics.r:
+                
+                combined_log = - 2* ( log(ks_test_p_value) + log(fisher_test_p_value) )
+                Y$bias_p_value[i] = pchisq(combined_log, 2*2, lower.tail=F)
+                Y$bias_e_value[i] = Y$bias_p_value[i] * total_length
+                
+                ---
+                
+                R:
+                
+                > ks_test_p_value = 0.05
+                > fisher_test_p_value = 0.05
+                > combined_log = - 2* ( log(ks_test_p_value) + log(fisher_test_p_value) )
+                > combined_log
+                [1] 11.98293
+                > pchisq(combined_log, 2*2, lower.tail=F)
+                [1] 0.01747866
+                
+                ---
+                
+                from scipy.stats import chi2
+                chi2.sf(11.98293, 4
+                0.017478654584055061
+                
+                # 1 - chi2.cdf(11.98293, 1)
+                # Out[25]: 0.00053690098750680537
+                                """
+                comb_log = - 2* (log(pvalue) + log(float(this_snp.info['pvalue'])))
+                pvalue = chi2.sf(comb_log, 2*2)
+                
             if pvalue < opts.sig_thresh:
                 LOG.info("%s: unique (number of candidate SNP bases"
                          " significantly low)\n" % (
