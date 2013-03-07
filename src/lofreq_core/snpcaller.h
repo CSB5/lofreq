@@ -1,3 +1,6 @@
+#ifndef SNPCALLER_H
+#define SNPCALLER_H
+
 /*********************************************************************
  *
  * Copyright (C) 2011, 2012 Genome Institute of Singapore
@@ -23,3 +26,5 @@ extern int
            const int num_phred_quals, const int *noncons_counts,
            const unsigned long int bonf_factor,
            const double sig_level);
+
+#endif
