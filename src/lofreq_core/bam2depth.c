@@ -82,8 +82,8 @@ int depth_stats(double *ret_mean, long int *ret_num_nonzero_pos,
      }
 
      /* initialize the auxiliary data structures
-        /* n = 1; // the number of BAMs on the command line */
-     /* AW: set n to 1 and changed argv[optindx+i] to bam_file to keep
+      * n = 1; // the number of BAMs on the command line 
+      * AW: set n to 1 and changed argv[optindx+i] to bam_file to keep
       * rest of code unchanged and c
       */
 
