@@ -104,12 +104,16 @@ def cmdline_parser():
                       action="store_true",
                       dest="combine_pvalues",
                       help="Combine SNV call and binomial test p-values for final calls")
+    DEFAULT=20
     opt_group.add_option("", "--min-snp-phred",
                       dest="min_snp_phred",
-                      help="SNV Phred cutoff for filtering")
+                      default=DEFAULT,
+                      help="SNV Phred cutoff for filtering (default=%s)" % DEFAULT)
+    DEFAULT=10
     opt_group.add_option("", "--min-cov",
                       dest="mincov",
-                      help="SNV Phred cutoff for filtering")
+                      default=DEFAULT,
+                      help="SNV Phred cutoff for filtering (default=%s)" % DEFAULT)
     opt_group.add_option("", "--sbfilter",
                       dest="sbhbfilter",
                       help="Holm-Bonferroni strandbias filtering")
@@ -131,11 +135,14 @@ def snv_call_wrapper(bam, ref_fa, bed, snv_raw, bonf='auto-ign-zero-cov'):
         LOG.warn("Reusing %s." % snv_raw)
         return snv_raw
 
-    cmd_list = ['lofreq2 call',
+    if snv_raw:
+        LOG.fatal("lofreq2 call does not suuport output arguments at the moment")
+        return None
+    cmd_list = ['lofreq2', 'call',
                 '--bonf', "%s" % bonf,
                 '-f', ref_fa,
                 '-l', bed,
-                '-o', snv_raw if snv_raw else "-",
+                #'-o', snv_raw if snv_raw else "-",
                 '--verbose', 
                 bam]
     return cmd_list
@@ -148,18 +155,17 @@ def snv_filter_wrapper(snv_raw, snv_filt,
 
     Use stdin if snv_raw is None.
     Use stdout if snv_filt is None.
-     
     """
 
-    if snv_filt and os.path.exists(snv_filt):
-        LOG.warn("Reusing %s" % snv_filt)
-        return snv_filt
+    #if snv_filt and os.path.exists(snv_filt):
+    #    LOG.warn("Reusing %s" % snv_filt)
+    #    return snv_filt
 
     if not any([minphred, mincov, sbfilter]):
         LOG.fatal("No filtering requested. Will just copy files")
         return None
 
-    cmd_list = ['lofreq2 filter']
+    cmd_list = ['lofreq2', 'filter']
     if sbfilter:
         cmd_list.append('--strandbias-holmbonf')
         
@@ -216,16 +222,18 @@ def main():
 
     
     snv_call_cmd = snv_call_wrapper(opts.tumor_bam, opts.ref_fa, opts.bed, None)
-    
+    LOG.debug("snv_call_cmd = %s" % snv_call_cmd)
     basename = os.path.splitext(os.path.basename(opts.tumor_bam))[0] 
     basename =  os.path.join(opts.outdir, basename)
     snv_filt_out = basename + ".snp"
-    
     snv_filt_cmd = snv_filter_wrapper(None, snv_filt_out,
                                       opts.min_snp_phred, opts.mincov, opts.sbhbfilter)
+    LOG.debug("snv_filt_cmd = %s" % snv_filt_cmd)
+    
     p1 = subprocess.Popen(snv_call_cmd, stdout=subprocess.PIPE)
     p2 = subprocess.Popen(snv_filt_cmd, stdin=p1.stdout)
     p1.stdout.close()  # Allow p1 to receive a SIGPIPE if p2 exits.
+
     (stdoutdata, stderrdata) =  p2.communicate()
     import pdb; pdb.set_trace()
 
