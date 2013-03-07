@@ -1,21 +1,5 @@
 #!/usr/bin/env python
-"""Test wether a SNV call only made in one sample (e.g. tumour
-tissue), but not in another (e.g. normal/blood tissue) is 'unique' or
-significant'. Done by performing a binomial test on the prospective
-snp-base counts in the normal sample given the SNV-call frequency.
-
-The script is assuming that the initial SNV calls were made with
-default pileup parameters.
-
-NOTE: the two files should be on the same coordinate system. If you
-used different reference sequences then you should use the following
-recipe:
-- Align the two reference sequences
-- Run lofreq_alnoffset on the SNP to (leave -m empty) to give
-  "aligned" SNV positions
-- Run lofreq_diff between the two aligned SNV files
-- Now run lofreq_uniq with alignment options (-a -m)
-Note that reported uniq positions are still aligned
+"""FIXME
 """
 
 # Copyright (C) 2011, 2012 Genome Institute of Singapore
@@ -41,33 +25,30 @@ import os
 import tempfile
 # optparse deprecated from Python 2.7 on
 from optparse import OptionParser, OptionGroup
-
+from math import log
+import subprocess
+ 
 #--- third-party imports
 #
 # default is to use our own binomial extension instead of introducing
 # a scipy dependency. but it's great for testing/validation
 #
-USE_SCIPY = False
-if USE_SCIPY:
-    from scipy.stats import binom
-    binom_cdf = binom.cdf
+# FIXME remove dependency
+from scipy import stats
 
 #--- project specific imports
 #
-from lofreq import sam
-#from lofreq.utils import count_bases
-from lofreq import snp
-if not USE_SCIPY:
-    from lofreq_ext import binom_cdf
-from lofreq import conf
-from lofreq import posmap
-from lofreq import fasta_parser
+##from lofreq import sam
+##from lofreq.utils import count_bases
+##from lofreq import snp
+##from lofreq import conf
 
 # invocation of ipython on exceptions
-#import sys, pdb
-#from IPython.core import ultratb
-#sys.excepthook = ultratb.FormattedTB(mode='Verbose',
-#                                     color_scheme='Linux', call_pdb=1)
+if False:
+    import sys, pdb
+    from IPython.core import ultratb
+    sys.excepthook = ultratb.FormattedTB(mode='Verbose',
+                                         color_scheme='Linux', call_pdb=1)
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
@@ -82,12 +63,6 @@ LOG = logging.getLogger("")
 logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
-if USE_SCIPY:
-    LOG.warn("Using scipy functions instead of internal ones."
-             " Should only be used for debugging.")
-
-MYNAME = os.path.basename(sys.argv[0])
-
     
 
 def cmdline_parser():
@@ -100,39 +75,23 @@ def cmdline_parser():
             + "\n" + __doc__
     parser = OptionParser(usage=usage)
 
-    parser.add_option("-d", "--snpdiff",
-                      dest="snpdiff_file", # type="string|int|float"
-                      help="List of SNPs, predicted from other sample"
-                      " and not predicted for this mapping/BAM-file"
-                      " (e.g. somatic calls)."
-                      " Can be produced with lofreq_diff.py")
-    parser.add_option("-b", "--bam",
-                      dest="bam_file", # type="string|int|float"
-                      help="BAM file to check (i.e. given SNVs where"
-                      " unique to another sample")
-    parser.add_option("-r", "--reffa",
-                      dest="ref_fasta_file", # type="string|int|float"
+    parser.add_option("-n", "--normal",
+                      dest="normal_bam",
+                      help="BAM file for normal samples")
+    parser.add_option("-t", "--tumor",
+                      dest="tumor_bam",
+                      help="BAM file for tumor samples")
+    parser.add_option("-r", "--ref-fa",
+                      dest="ref_fa",
                       help="Reference fasta file")
-    parser.add_option("-o", "--out",
-                      dest="out", # type="string|int|float"
-                      default="-",
-                      help="Output file ('-' for stdout,"
-                      " which is default)")
+    parser.add_option("-l", "--bed",
+                      dest="bed",
+                      help="Bed file listing regions to run on")
+    # FIXME add script to derive automatically from WGS
+    parser.add_option("-o", "--outdir",
+                      dest="outdir",
+                      help="Output directory (must exist)")
 
-    aln_group = OptionGroup(parser, "Alignment arguments"
-                            " (mandatory if SNP pos are aligned!)", "")
-    aln_group.add_option("-a", "--msa",
-                         dest="msa_file",
-                         help="Multiple sequence alignment")
-    #aln_group.add_option("-s", "--seqid",
-    #                     dest="seq_id",
-    #                     help="Sequence name in msa matching sequence for which this SNP"
-    #                     " file was produced). If empty aligned positions are assumed!")
-    aln_group.add_option("-m", "--map-to-id",
-                         dest="map_to_id",
-                         help="Sequence name in MSA for which matches"
-                         " BAM file (other sample's seq name)")
-    parser.add_option_group(aln_group)
 
     opt_group = OptionGroup(parser, "Optional arguments", "")
     opt_group.add_option("-v", "--verbose",
@@ -141,41 +100,19 @@ def cmdline_parser():
     opt_group.add_option("", "--debug",
                       action="store_true", dest="debug",
                       help="enable debugging")
-
     opt_group.add_option("", "--combine-pvalues",
                       action="store_true",
                       dest="combine_pvalues",
-                      help="Combine p-values")
-    opt_group.add_option("-q", "--ignore-bases-below-q",
-                      dest="ign_bases_below_q", type="int",
-                      default=conf.DEFAULT_IGN_BASES_BELOW_Q,
-                      help="Remove any base below this base call"
-                      " quality threshold from pileup (default: %d)."
-                      " Should be the same as used for the original"
-                      " SNP calling" % conf.DEFAULT_IGN_BASES_BELOW_Q)
-    opt_group.add_option("", "--noncons-filter-qual",
-                      dest="noncons_filter_qual", type="int",
-                      default=0, #conf.NONCONS_FILTER_QUAL,
-                      help="Non-consensus bases below this threshold"
-                       " will be filtered (default: %d). Should be the"
-                       " same as used for the original SNP calling" % 0)#conf.NONCONS_FILTER_QUAL)
-    opt_group.add_option("", "--uniform-freq",
-                      dest="uniform_freq", type="int",
-                      help="Assume this uniform frequency [%] instead"
-                      " of original SNP frequency")
-    opt_group.add_option("", "--freq-factor",
-                      dest="freq_fac", type="float",
-                      help="Apply this factor (0.0<x<=1.0) to original"
-                      " SNP frequency")
-    opt_group.add_option("-s", "--sig-level",
-                      dest="sig_thresh", type="float",
-                      default=conf.DEFAULT_SIG_THRESH,
-                      help="p-value significance value"
-                      " (default: %g)" % conf.DEFAULT_SIG_THRESH)
-    opt_group.add_option("-c", "--chrom",
-                      dest="chrom", # type="string|int|float"
-                      help="Override snp chrom/seq-name for pileup of"
-                      " BAM (most likely needed if diff refs where used)")
+                      help="Combine SNV call and binomial test p-values for final calls")
+    opt_group.add_option("", "--min-snp-phred",
+                      dest="min_snp_phred",
+                      help="SNV Phred cutoff for filtering")
+    opt_group.add_option("", "--min-cov",
+                      dest="mincov",
+                      help="SNV Phred cutoff for filtering")
+    opt_group.add_option("", "--sbfilter",
+                      dest="sbhbfilter",
+                      help="Holm-Bonferroni strandbias filtering")
 
     parser.add_option_group(opt_group)
     
@@ -183,18 +120,64 @@ def cmdline_parser():
 
 
 
-def main():
-    """
-    The main function
+def snv_call_wrapper(bam, ref_fa, bed, snv_raw, bonf='auto-ign-zero-cov'):
+    """Wrapper for lofreq_snpvaller.py
 
-    doctest for our own cdf function
-    >>> from scipy.stats import binom
-    >>> x = binom.cdf(10, 1000, 0.01)
-    >>> from lofreq_ext import binom_cdf
-    >>> y = binom_cdf(10, 1000, 0.01)
-    >>> print '%.6f' % x == '%.6f' % y
-    True
+    sUse stdout if snv_raw is None
+    """
+
     
+    if snv_raw and os.path.exists(snv_raw):
+        LOG.warn("Reusing %s." % snv_raw)
+        return snv_raw
+
+    cmd_list = ['lofreq2 call',
+                '--bonf', "%s" % bonf,
+                '-f', ref_fa,
+                '-l', bed,
+                '-o', snv_raw if snv_raw else "-",
+                '--verbose', 
+                bam]
+    return cmd_list
+
+
+
+def snv_filter_wrapper(snv_raw, snv_filt, 
+                       minphred=None, mincov=None, sbfilter=None):
+    """Wrapper for lofreq2 filter
+
+    Use stdin if snv_raw is None.
+    Use stdout if snv_filt is None.
+     
+    """
+
+    if snv_filt and os.path.exists(snv_filt):
+        LOG.warn("Reusing %s" % snv_filt)
+        return snv_filt
+
+    if not any([minphred, mincov, sbfilter]):
+        LOG.fatal("No filtering requested. Will just copy files")
+        return None
+
+    cmd_list = ['lofreq2 filter']
+    if sbfilter:
+        cmd_list.append('--strandbias-holmbonf')
+        
+    if mincov:
+        cmd_list.extend(['--min-cov', "%d" % mincov])
+        
+    if minphred:
+        cmd_list.extend(['--snp-phred', "%d" % minphred])
+        
+    cmd_list.extend(['-i', snv_raw if snv_raw else "-", 
+                     '-o', snv_filt if snv_filt else "-", 
+                     '-v'])
+    return cmd_list
+
+
+
+def main():
+    """The main function
     """
 
     parser = cmdline_parser()
@@ -210,120 +193,46 @@ def main():
     if opts.debug:
         LOG.setLevel(logging.DEBUG)
 
-    for (in_file, descr) in [(opts.snpdiff_file, "SNP diff"), 
-                             (opts.bam_file, "BAM"),
-                             (opts.ref_fasta_file, "Reference fasta")]:
+    for (in_file, descr) in [(opts.normal_bam, "Normal BAM"), 
+                             (opts.tumor_bam, "Tumor BAM"),
+                             (opts.ref_fa, "Reference fasta"),
+                             (opts.bed, "Bed (regions)")]:
         if not in_file:
             parser.error("%s input file argument missing." % descr)
             sys.exit(1)
         if not os.path.exists(in_file):
-            sys.stderr.write(
-                "file '%s' does not exist.\n" % in_file)
+            LOG.fatal("file '%s' does not exist.\n" % in_file)
             sys.exit(1)
             
-    if opts.out == '-':
-        fh_out = sys.stdout
-    else:
-        if os.path.exists(opts.out):
-            sys.stderr.write(
-                "Refusing to overwrite existing file '%s'.\n" % opts.out)
-            sys.exit(1)
-        fh_out = open(opts.out, 'w')
-            
-    if opts.uniform_freq or opts.uniform_freq == 0:
-        if opts.uniform_freq < 1 or opts.uniform_freq > 100:
-            LOG.fatal("Frequency out of valid range (1-100%)\n")
-            sys.exit(1)
-    if opts.freq_fac or opts.freq_fac == 0:
-        if opts.freq_fac < 0.0 or opts.freq_fac > 1.0:
-            LOG.fatal("Frequency factor out of valid range (0.0<x<=1.0)")
-            sys.exit(1)
-    if opts.freq_fac and opts.uniform_freq:
-        LOG.fatal("Can't use both, uniform frequency and frequency factor")
-        sys.exit(1)                    
+    if not opts.outdir or not os.path.isdir(opts.outdir):
+        LOG.fatal("output directory does not exist or argument missing")
+        sys.exit(1)
 
     if opts.combine_pvalues:
         # should go to cmdline option
-        LOG.error("FIXME Experimental code. Don't use filtering on this. Bonf correction must come downstream!")
-        from scipy.stats import chi2
-        from math import log
-        
-    pos_map_other_to_aln = None
-    pos_map_aln_to_other = None
-    if opts.msa_file or opts.map_to_id:
-        if not all([opts.msa_file, opts.map_to_id]):
-            LOG.fatal("When given an alignment I need a seq name to"
-                      " map to and vice versa")
-            sys.exit(1)
-            
-        msa_seqs = fasta_parser.to_dict(fasta_parser.fasta_iter(opts.msa_file))
-        if len(msa_seqs)<2:
-            LOG.fatal("%s contains only one sequence\n" % (opts.msa_file))
-            sys.exit(1)
-        if not opts.map_to_id in msa_seqs.keys():
-            LOG.fatal("Couldn't find seq '%s' in MSA file %s" % (
-                opts.map_to_id, opts.msa_file))
+        LOG.error("FIXME Experimental code pvalue merging code."
+                  " Don't use upstream filtering on this."
+                  " Bonf correction must come downstream!")
 
-        pos_map = posmap.PosMap(msa_seqs.values())
-        if opts.debug:
-            pos_map.output()
-        # aligned to map_to_id
-        pos_map_aln_to_other = pos_map.convert(None, opts.map_to_id)
-        # and reverse
-        pos_map_other_to_aln = pos_map.convert(opts.map_to_id, None)
-        #if opts.debug:
-        #    for (k, v) in conv_pos_map.iteritems():
-        #        print k, v
-            
-    snps = snp.parse_snp_file(opts.snpdiff_file)
-    LOG.info("Parsed %d SNPs from %s" % (len(snps), opts.snpdiff_file))
+    
+    snv_call_cmd = snv_call_wrapper(opts.tumor_bam, opts.ref_fa, opts.bed, None)
+    
+    basename = os.path.splitext(os.path.basename(opts.tumor_bam))[0] 
+    basename =  os.path.join(opts.outdir, basename)
+    snv_filt_out = basename + ".snp"
+    
+    snv_filt_cmd = snv_filter_wrapper(None, snv_filt_out,
+                                      opts.min_snp_phred, opts.mincov, opts.sbhbfilter)
+    p1 = subprocess.Popen(snv_call_cmd, stdout=subprocess.PIPE)
+    p2 = subprocess.Popen(snv_filt_cmd, stdin=p1.stdout)
+    p1.stdout.close()  # Allow p1 to receive a SIGPIPE if p2 exits.
+    (stdoutdata, stderrdata) =  p2.communicate()
+    import pdb; pdb.set_trace()
 
-    # fix chromosome info if necessary
-    if set([s.chrom for s in snps if s.chrom]) == 0:
-        if opts.chrom:
-            for s in snps:
-                s.chrom = opts.chrom
-        else:
-            LOG.fatal("SNV file did not contain chromosome"
-                      " info and none given on command line")
-            sys.exit(1)
-    elif opts.chrom:
-        LOG.info("Overriding SNV chromsomes with %s" % opts.chrom)
-        for s in snps:
-            s.chrom = opts.chrom
-        
-    LOG.info("Removing any base with quality below %d and non-cons"
-             " bases with quality below %d" % (
-                 opts.ign_bases_below_q, opts.noncons_filter_qual))
+    LOG.critical("Now run: bgzip $vcf and tabix ${vcf}.gz")
+    LOG.critical("Now run: vcf-isec -c tumour.vcf.gz normal.vcf.gz and save to diff.vcf")
 
-    # drop a bed-file only containing regions of interest
-    #
-    fh_bed_region = tempfile.NamedTemporaryFile(delete=False)
-    bed_region_file = fh_bed_region.name
-    LOG.info("Creating region file samtools: %s" % bed_region_file)
-    for s in snps:
-        if pos_map_aln_to_other:
-            base_pos = pos_map_aln_to_other[s.pos]
-        else:
-            base_pos = s.pos
-
-        # special case: if we used different ref seqs for mapping and
-        # this one is aligned with a gap in the other then it's unique
-        if base_pos == -1:
-            LOG.info("%s: not necessarily unique"
-                     " (ambigiously aligned to other sample)" % (
-                s.identifier()))
-            continue
-        
-        LOG.debug("bed entry: %s\t%d (orig %d; %s mapped))\t%d\n" % (
-            s.chrom, base_pos, s.pos, 
-            "is" if pos_map_aln_to_other else "not",
-            base_pos+1))
-        fh_bed_region.write("%s\t%d\t%d\n" % (
-            s.chrom, base_pos, base_pos+1))                
-    fh_bed_region.close()
-
-
+    """
     pileup_obj = sam.Pileup(opts.bam_file, opts.ref_fasta_file)
     pileup_gen = pileup_obj.generate_pileup(
         conf.DEFAULT_BAQ_SETTING, conf.DEFAULT_MAX_PLP_DEPTH, bed_region_file)
@@ -383,7 +292,7 @@ def main():
 
             if opts.combine_pvalues and s.info['type'] == 'low-freq-var':
                 # fisher's method
-                """
+                \"""
                 p://en.wikipedia.org/wiki/Fisher's_method
                 --- 
                 
@@ -413,7 +322,7 @@ def main():
                 
                 # 1 - chi2.cdf(11.98293, 1)
                 # Out[25]: 0.00053690098750680537
-                                """
+                \"""
                 comb_log = - 2* (log(pvalue) + log(float(this_snp.info['pvalue'])))
                 pvalue = chi2.sf(comb_log, 2*2)
                 
@@ -441,6 +350,7 @@ def main():
         
     if fh_out != sys.stdout:
         fh_out.close()
+        """
         
 if __name__ == "__main__":
     main()
