@@ -72,6 +72,7 @@ unsigned char bam_nt4_table[256] = {
 
 
 /* mpileup configuration structure 
+ * FIXME should be logically split into pileup, snvcall and others
  */
 typedef struct {
      int max_mq, min_mq;
@@ -86,6 +87,9 @@ typedef struct {
      char *fa;
      faidx_t *fai;
      void *bed;
+
+     char cmdline[1024];
+     FILE *out;
 } mplp_conf_t;
 
 typedef struct {
@@ -263,7 +267,6 @@ void report_var(FILE *stream, const plp_col_t *p,
 
      vcf_var_sprintf_info(var, &p->coverage, &af, &sb_qual,
                           &dp4, is_indel, is_consvar);
-     LOG_FIXME("%s\n", "Check correctness of values for both var types");
      vcf_write_var(stream, var);
      vcf_free_var(&var);
 }
@@ -347,7 +350,7 @@ void call_lowfreq_snps(const plp_col_t *p, const mplp_conf_t *conf)
                       p->rv_counts[bam_nt4_table[(int) p->cons_base]]) 
                / (float)p->coverage;
 
-          report_var(stdout, p, p->ref_base, p->cons_base, af, qual, is_indel, is_consvar);
+          report_var(conf->out, p, p->ref_base, p->cons_base, af, qual, is_indel, is_consvar);
           LOG_DEBUG("cons var snp: %s %d %c>%c\n",
                     p->target, p->pos+1, p->ref_base, p->cons_base);          
      }
@@ -450,7 +453,7 @@ void call_lowfreq_snps(const plp_col_t *p, const mplp_conf_t *conf)
                const int is_indel = 0;
                const int is_consvar = 0;
                float af = alt_raw_count/(float)p->coverage;
-               report_var(stdout, p, p->cons_base, alt_base, 
+               report_var(conf->out, p, p->cons_base, alt_base, 
                           af, PROB_TO_PHREDQUAL(pvalue), 
                           is_indel, is_consvar);
                LOG_DEBUG("low freq snp: %s %d %c>%c pv-prob:%g;pv-qual:%d counts-raw:%d/%d=%.6f counts-filt:%d/%d=%.6f\n",
@@ -778,7 +781,8 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
      plp_col.ref_base = toupper(ref_base);
      plp_col.coverage = n_plp;  /* this is coverage as in the original mpileup, 
                                    i.e. after read-level filtering */
-
+     LOG_DEBUG("Processing %s:%d\n", plp_col.target, plp_col.pos+1);
+     
      for (i = 0; i < n_plp; ++i) {
           /* Used parts of pileup_seq() here */
           const bam_pileup1_t *p = plp + i;
@@ -1051,6 +1055,7 @@ static int mpileup(const mplp_conf_t *conf, const int n, const char **fn)
             bam_header_destroy(h_tmp);
         }
     }
+    /*LOG_DEBUG("%s\n", "BAM header initialized");*/
 
     if (tid0 >= 0 && conf->fai) { /* region is set */
         ref = faidx_fetch_seq(conf->fai, h->target_name[tid0], 0, 0x7fffffff, &ref_len);
@@ -1070,8 +1075,9 @@ static int mpileup(const mplp_conf_t *conf, const int n, const char **fn)
     }
     bam_mplp_set_maxcnt(iter, max_depth);
 
-    vcf_write_header(stdout, PACKAGE_STRING, conf->fa);
+    vcf_write_header(conf->out, PACKAGE_STRING, conf->fa);
 
+    LOG_DEBUG("%s\n", "Starting pileup loop");
     while (bam_mplp_auto(iter, &tid, &pos, n_plp, plp) > 0) {
          int i=0; /* NOTE: mpileup originally iterated over n */
 
@@ -1132,6 +1138,8 @@ void dump_mplp_conf(const mplp_conf_t *c, FILE *stream) {
      fprintf(stream, "  fa           = %p\n", c->fa);
      /*fprintf(stream, "  fai          = %p\n", c->fai);*/
      fprintf(stream, "  bed          = %p\n", c->bed);
+     fprintf(stream, "  cmdline      = %s\n", c->cmdline);
+     fprintf(stream, "  out          = %p\n", c->out);
 }
 
 
@@ -1148,17 +1156,19 @@ static void usage(const mplp_conf_t *mplp_conf)
      /*  */
      fprintf(stderr, "       -d|--maxdepth INT      max per-BAM depth to avoid excessive memory usage [%d]\n", mplp_conf->max_depth);
      fprintf(stderr, "       -f|--reffa FILE        faidx indexed reference sequence file [null]\n");
+     /* */
+     fprintf(stderr, "       -o|--out FILE          vcf output file [- = stdout]\n");
      /* base call quality and baq */
-     fprintf(stderr, "       -q|--min-bq INT        skip any base with bas-qual smaller than INT [%d]\n", mplp_conf->min_bq);
-     fprintf(stderr, "       -Q|--min-altbq INT     skip nonref-bases with base-qual smaller than INT [%d]. Not active if ref is N\n", mplp_conf->min_altbq);
+     fprintf(stderr, "       -q|--min-bq INT        skip any base with baseQ smaller than INT [%d]\n", mplp_conf->min_bq);
+     fprintf(stderr, "       -Q|--min-altbq INT     skip nonref-bases with baseQ smaller than INT [%d]. Not active if ref is N\n", mplp_conf->min_altbq);
      fprintf(stderr, "       -a|--def-altbq INT     nonref base qualities will be replace with this value [%d]\n", mplp_conf->def_altbq);
      fprintf(stderr, "       -B|--no-baq            disable BAQ computation\n");
      /* fprintf(stderr, "       -E           extended BAQ for higher sensitivity but lower specificity\n"); */
      /* mapping quality */
      fprintf(stderr, "       -m|--min_mq INT        skip alignments with mapQ smaller than INT [%d]\n", mplp_conf->min_mq);
      fprintf(stderr, "       -M|--max_mq INT        cap mapping quality at INT [%d]\n", mplp_conf->max_mq);
-     fprintf(stderr, "       -J|--no-mq             don't merge mapQ into base-qual: P_e = P_mq + (1-P_mq) P_bq\n");
-     fprintf(stderr, "       -S|--no-sq             don't merge sourceQ into base-qual\n");
+     fprintf(stderr, "       -J|--no-mq             don't merge mapQ into baseQ: P_e = P_mq + (1-P_mq) P_bq\n");
+     fprintf(stderr, "       -S|--no-sq             don't merge sourceQ into baseQ\n");
      /* stats */
      fprintf(stderr, "       -s|--sig               P-value cutoff / significance level [%f]\n", mplp_conf->sig);
      fprintf(stderr, "       -b|--bonf              Bonferroni factor. INT or 'auto' (default; non-zero-cov-pos * 3)\n");
@@ -1174,7 +1184,7 @@ static void usage(const mplp_conf_t *mplp_conf)
 int main_call(int argc, char *argv[])
 {
      /* based on bam_mpileup() */
-     int c;
+     int c, i;
      static int use_orphan = 0;
      int bonf_auto = 1;
      char *bam_file;
@@ -1196,7 +1206,7 @@ int main_call(int argc, char *argv[])
     mplp.flag = MPLP_NO_ORPHAN | MPLP_REALN | MPLP_EXT_BAQ | MPLP_USE_MQ;/* | MPLP_USE_SQ; FIXME */
     mplp.bonf = 1;
     mplp.sig = 0.05;
-    /* FIXME should differentiate between pileup and snp calling options */
+    mplp.out = stdout;
 
     /* FIXME getopt should be replaced with something more sensible like
      * argtable2 ot Gopt. Otherwise there's always the risk between
@@ -1213,6 +1223,8 @@ int main_call(int argc, char *argv[])
               {"maxdepth", required_argument, NULL, 'd'},
               {"reffa", required_argument, NULL, 'f'},
                
+              {"out", required_argument, NULL, 'o'},
+
               {"min-bq", required_argument, NULL, 'q'},
               {"min-altbq", required_argument, NULL, 'Q'},
               {"def-altbq", required_argument, NULL, 'a'},
@@ -1236,7 +1248,7 @@ int main_call(int argc, char *argv[])
          };
 
          /* see usage sync */
-         static const char *long_opts_str = "r:l:d:f:q:Q:a:Bm:M:JSb:s:IA:h";
+         static const char *long_opts_str = "r:l:d:f:o:q:Q:a:Bm:M:JSb:s:IA:h";
 
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
@@ -1260,7 +1272,17 @@ int main_call(int argc, char *argv[])
               if (mplp.fai == 0) 
                    return 1;
               break;
-              
+         case 'o':
+              if (0 != strcmp(optarg, "-")) {
+                   if (file_exists(optarg)) {
+                        LOG_FATAL("Cowardly refusing to overwrite file '%s'. Exiting...\n", optarg);
+                        return 1;
+                   }
+                   if (NULL == (mplp.out = fopen(optarg, "w"))) {
+                        LOG_FATAL("Couldn't open file '%s'. Exiting...\n", optarg);
+                        return 1;
+                   }
+              } /* else: already set to stdout */
          case 'q': mplp.min_bq = atoi(optarg); break;
          case 'Q': mplp.min_altbq = atoi(optarg); break;
          case 'a': mplp.def_altbq = atoi(optarg); break;
@@ -1307,6 +1329,11 @@ int main_call(int argc, char *argv[])
     if (use_orphan) {
          mplp.flag &= ~MPLP_NO_ORPHAN;
     }
+    mplp.cmdline[0] = '\0';
+    for (i=0; i<argc; i++) {
+         strncat(mplp.cmdline, argv[i], sizeof(mplp.cmdline)-strlen(mplp.cmdline)-2);
+         strcat(mplp.cmdline, " ");
+    }
 
     if (argc == 1) {
         fprintf(stderr, "\n");
@@ -1346,6 +1373,9 @@ int main_call(int argc, char *argv[])
    
     mpileup(&mplp, 1, (const char **) argv + optind);
 
+    if (mplp.out == stdout) {
+         fclose(mplp.out);
+    }
     free(mplp.reg); 
     free(mplp.fa);
     if (mplp.fai) {
@@ -1355,7 +1385,7 @@ int main_call(int argc, char *argv[])
     if (mplp.bed) {
          bed_destroy(mplp.bed);
     }
-
+    LOG_VERBOSE("%s\n", "Successful exit.");
     return 0;
 }
 /* main_call */
