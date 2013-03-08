@@ -1,26 +1,27 @@
 #!/bin/bash
 
-pylint=$(which pylint 2>/dev/null || which pylint-2.7)
+source lib.sh || exit 1
 
-echoerror() {
-    echo "ERROR: $1" 1>&2
-}
-echook() {
-    echo "OK: $1" 1>&2
-}
+#files_to_test=$(grep 'scripts/' ../src/lofreq_python/setup.py | tr -d ",'" | tr -d '[\t ]' | sed -e 's,^,../,')
+files_to_test=$(grep '^[^#].*\.py'  ../src/lofreq_python/Makefile.am | grep -v PYTHON | cut -f 2 -d = | tr -d '\' | tr -d '[\t ]')
 
-scripts2test=$(grep 'scripts/' ../src/lofreq_python/setup.py | tr -d ",'" | sed -e 's,^,../,')
-log=$(mktemp -t pylint.XXXXX)
-for f in $scripts2test; do
-    $pylint -E --rcfile pylint.rc $f >> $log
-done 
-if [ -s $log ]; then
-    echoerror "pylint produced errors:"
-    cat $log
-    exit 1
-else
-    echook "pylint produced no errors"
-fi
-rm $log
+
+for pylint in pylint pylint-2.6 pylint-2.7; do
+   which $pylint >/dev/null 2>&1 || continue
+   echoinfo "Using $(which $pylint)"
+   log=$(mktemp -t ${pylint}.XXXXX)
+   for f in $files_to_test; do
+       echoinfo "Testing $f"
+       $pylint -E --rcfile pylint.rc $f >> $log
+   done 
+   if [ -s $log ]; then
+       echoerror "pylint produced errors:"
+       cat $log
+       exit 1
+   else
+       echook "pylint produced no errors"
+   fi
+   rm $log
+done
 
 
