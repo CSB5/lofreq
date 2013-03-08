@@ -14,6 +14,7 @@ lofreq/.fuse_hidden*
 
 # tmp
 tmp/
+schmock*
 
 # automake stuff which gets rebuild after autoreconf
 Makefile
@@ -28,3 +29,4 @@ ltmain.sh
 missing
 depcomp
 INSTALL
+
