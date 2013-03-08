@@ -1159,16 +1159,16 @@ static void usage(const mplp_conf_t *mplp_conf)
      /* */
      fprintf(stderr, "       -o|--out FILE          vcf output file [- = stdout]\n");
      /* base call quality and baq */
-     fprintf(stderr, "       -q|--min-bq INT        skip any base with bas-qual smaller than INT [%d]\n", mplp_conf->min_bq);
-     fprintf(stderr, "       -Q|--min-altbq INT     skip nonref-bases with base-qual smaller than INT [%d]. Not active if ref is N\n", mplp_conf->min_altbq);
+     fprintf(stderr, "       -q|--min-bq INT        skip any base with baseQ smaller than INT [%d]\n", mplp_conf->min_bq);
+     fprintf(stderr, "       -Q|--min-altbq INT     skip nonref-bases with baseQ smaller than INT [%d]. Not active if ref is N\n", mplp_conf->min_altbq);
      fprintf(stderr, "       -a|--def-altbq INT     nonref base qualities will be replace with this value [%d]\n", mplp_conf->def_altbq);
      fprintf(stderr, "       -B|--no-baq            disable BAQ computation\n");
      /* fprintf(stderr, "       -E           extended BAQ for higher sensitivity but lower specificity\n"); */
      /* mapping quality */
      fprintf(stderr, "       -m|--min_mq INT        skip alignments with mapQ smaller than INT [%d]\n", mplp_conf->min_mq);
      fprintf(stderr, "       -M|--max_mq INT        cap mapping quality at INT [%d]\n", mplp_conf->max_mq);
-     fprintf(stderr, "       -J|--no-mq             don't merge mapQ into base-qual: P_e = P_mq + (1-P_mq) P_bq\n");
-     fprintf(stderr, "       -S|--no-sq             don't merge sourceQ into base-qual\n");
+     fprintf(stderr, "       -J|--no-mq             don't merge mapQ into baseQ: P_e = P_mq + (1-P_mq) P_bq\n");
+     fprintf(stderr, "       -S|--no-sq             don't merge sourceQ into baseQ\n");
      /* stats */
      fprintf(stderr, "       -s|--sig               P-value cutoff / significance level [%f]\n", mplp_conf->sig);
      fprintf(stderr, "       -b|--bonf              Bonferroni factor. INT or 'auto' (default; non-zero-cov-pos * 3)\n");
