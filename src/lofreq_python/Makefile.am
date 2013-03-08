@@ -15,7 +15,7 @@ EXTRA_DIST = setup.py \
 	lofreq2/vcf.py \
 	lofreq2/utils.py \
 	scripts/lofreq2_filter.py \
-	setup_conf.py
+	setup_conf.py.in
 
 all:
 	$(PYTHON) setup.py build
