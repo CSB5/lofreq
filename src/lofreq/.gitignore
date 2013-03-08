@@ -7,10 +7,12 @@
 *.a
 *.lo
 *.la
-lofreq_snpcaller
 lofreq
+lofreq2
 
 Makefile
 Makefile.log
 .deps
 .libs
+
+schmock*
