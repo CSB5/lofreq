@@ -44,8 +44,6 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #define MPLP_USE_SQ      0x400
 
 
-#define MYNAME "lofreq call"
-
 
 const char *bam_nt4_rev_table = "ACGTN"; /* similar to bam_nt16_rev_table */
 
@@ -143,7 +141,8 @@ typedef struct {
 #define PLP_COL_ADD_QUAL(p, q)   int_varray_add_value((p), (q))
 
 
-void plp_col_init(plp_col_t *p) {
+void
+plp_col_init(plp_col_t *p) {
     int i;
 
     p->target =  NULL;
@@ -167,7 +166,8 @@ void plp_col_init(plp_col_t *p) {
     int_varray_init(& p->del_quals, 0);
 }
 
-void plp_col_free(plp_col_t *p) {
+void
+plp_col_free(plp_col_t *p) {
     int i;
 
     free(p->target);
@@ -213,7 +213,9 @@ void plp_col_debug_print(const plp_col_t *p, FILE *stream)
  * the last pre-c version which can be easily parsed from Python. Note
  * however, that defaults have changed and that filtering was done differently before.
  */
-void plp_col_mpileup_print(const plp_col_t *p, const mplp_conf_t *conf, FILE *stream)
+void
+plp_col_mpileup_print(const plp_col_t *p, const mplp_conf_t *conf, 
+                      FILE *stream)
 {
      int i, j;
      
@@ -231,10 +233,11 @@ void plp_col_mpileup_print(const plp_col_t *p, const mplp_conf_t *conf, FILE *st
           p->num_ins, p->num_ins ? p->sum_ins/(float)p->num_ins : 0,
           p->num_dels, p->num_dels ? p->sum_dels/(float)p->num_dels : 0);
 }
+/* plp_col_mpileup_print() */
 
 
-
-void report_var(FILE *stream, const plp_col_t *p, 
+void
+report_var(FILE *stream, const plp_col_t *p, 
                 const char ref, const char alt, 
                 const float af, const int qual,
                 const int is_indel, const int is_consvar)
@@ -270,12 +273,15 @@ void report_var(FILE *stream, const plp_col_t *p,
      vcf_write_var(stream, var);
      vcf_free_var(&var);
 }
+/* report_var() */
+
 
 
 /* "Merge" MQ and BQ if requested and if MAQP not 255 (not available):
  *  P_jq = P_mq * + (1-P_mq) P_bq.
  */
-int merge_baseq_and_mapq(const int bq, const int mq)
+int
+merge_baseq_and_mapq(const int bq, const int mq)
 {
      double mp, bp, jp; /* corresponding probs */
      int jq;
@@ -298,6 +304,8 @@ int merge_baseq_and_mapq(const int bq, const int mq)
 #endif
      return jq;
 }
+/* merge_baseq_and_mapq() */
+
 
 
 /* low-freq vars always called against cons_base, which might be
@@ -308,7 +316,8 @@ int merge_baseq_and_mapq(const int bq, const int mq)
  * upstream. altbase mangling happens here however.
  * 
  */
-void call_lowfreq_snps(const plp_col_t *p, const mplp_conf_t *conf)
+void
+call_lowfreq_snps(const plp_col_t *p, const mplp_conf_t *conf)
 {
      int *quals; /* qualities passed down to snpcaller */
      int quals_len; /* #elements in quals */
@@ -465,10 +474,13 @@ void call_lowfreq_snps(const plp_col_t *p, const mplp_conf_t *conf)
      }
      free(quals);
 }
+/* call_lowfreq_snps() */
+
 
 
 /* FIXME get rid in the future */
-static inline int printw(int c, FILE *fp)
+static inline int
+printw(int c, FILE *fp)
 {
     char buf[16];
     int l, x;
@@ -484,7 +496,9 @@ static inline int printw(int c, FILE *fp)
 }
 
 
-char *cigar_from_bam(const bam1_t *b) {
+
+char *
+cigar_from_bam(const bam1_t *b) {
      /* from char *bam_format1_core(const bam_header_t *header, const bam1_t *b, int of) */
      const bam1_core_t *c = &b->core;
      kstring_t str;
@@ -496,6 +510,8 @@ char *cigar_from_bam(const bam1_t *b) {
      }
      return str.s;
 }
+/* cigar_from_bam() */
+
 
 
 /* Count matches and mismatches for an aligned read and also return
@@ -503,8 +519,9 @@ char *cigar_from_bam(const bam1_t *b) {
  * qual array for n_match and n_mismatch (sum is size). allocated
  * here. user must free
  */
-int *count_matches(int *n_matches, int *n_mismatches,
-                   const bam1_t *b, const char *ref)
+int *
+count_matches(int *n_matches, int *n_mismatches,
+              const bam1_t *b, const char *ref)
 {
      /* modelled after bam.c:bam_calend(), bam_format1_core() and
       * pysam's aligned_pairs 
@@ -596,6 +613,8 @@ int *count_matches(int *n_matches, int *n_mismatches,
 
      return quals;
 }
+/* count_matches() */
+
 
 
 /* Estimate as to how likely it is that this read, given the mapping,
@@ -614,7 +633,8 @@ int *count_matches(int *n_matches, int *n_mismatches,
  * FIXME: old definition above and below in source
  *
  */
-int source_qual(const bam1_t *b, const char *ref)
+int
+source_qual(const bam1_t *b, const char *ref)
 {
      double *probvec;
      int src_qual = 255;
@@ -690,9 +710,12 @@ PJ = PM + (1-PM) * PB
 
      return src_qual;
 }
+/* source_qual() */
 
 
-static int mplp_func(void *data, bam1_t *b)
+
+static int
+mplp_func(void *data, bam1_t *b)
 {
     extern int bam_realn(bam1_t *b, const char *ref);
     extern int bam_prob_realn_core(bam1_t *b, const char *ref, int);
@@ -784,7 +807,19 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
      LOG_DEBUG("Processing %s:%d\n", plp_col.target, plp_col.pos+1);
      
      for (i = 0; i < n_plp; ++i) {
-          /* Used parts of pileup_seq() here */
+          /* inserted parts of pileup_seq() here.
+           * logic there goes like this:
+           *
+           * if is_head: put ^
+           *
+           * if ! is_del: put c
+           * else:        put * (or <> if refskip)
+           *
+           * if indel>0:   print + p[qpos +1...indel]
+           * elif indel<0: print - p[qpos +1...indel]
+           *
+           * if is_tail: put $ 
+           */
           const bam_pileup1_t *p = plp + i;
           int nt, nt4;
           int mq, bq; /* phred scores */
@@ -872,7 +907,7 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                     }
                     printf("\n");
 #endif
-                    /* only adding 1 value representing whole insert */
+                    /* adding 1 value representing whole insert */
                     PLP_COL_ADD_QUAL(& plp_col.ins_quals, t[p->qpos]);
                }
 
@@ -887,12 +922,16 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                     printf("\n");
 #endif
                     PLP_COL_ADD_QUAL(& plp_col.del_quals, t[p->qpos]);
-                    /* only adding 1 value representing whole insert */
+                    /* adding 1 value representing whole del */
                }
-                            
           } /* ! p->is_del */
+          
 #if 0
           /* FIXME so what happens if is_del?
+           *
+           * special case p->is_refskip is
+           * possible see ('spliced alignment'?)
+           *
            * Observation: if indel<0 == del then they are followed by
            * is_del's. shouldn't that rather happen for ins? 
            */
@@ -927,6 +966,7 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                 */
                if (p->indel > 0) {
                     plp_col.num_ins += 1;
+                    LOG_FIXME("%s\n", "FIXME:need-to-save-ins-allele-and-its-counts.above-is-just-a-total.use-list/array-instead-of-hash.dont-expect-many-alleles");
                     plp_col.sum_ins += p->indel;
 #ifdef PRINT_INDEL
                     putchar('+'); printw(p->indel, stdout);
@@ -941,6 +981,7 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                 */
                } else if (p->indel < 0) {
                     plp_col.num_dels += 1;
+                    LOG_FIXME("%s\n", "FIXME:need-to-save-del-allele-and-its-counts.above-is-just-a-total.use-list/array-instead-of-hash.dont-expect-many-alleles");
                     plp_col.sum_dels -= p->indel;
 #ifdef PRINT_INDEL                   
                     printw(p->indel, stdout);
@@ -979,11 +1020,12 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
 
      plp_col_free(& plp_col);
 }
-/* process_plp */
+/* process_plp() */
 
 
 
-static int mpileup(const mplp_conf_t *conf, const int n, const char **fn)
+static int
+mpileup(const mplp_conf_t *conf, const int n, const char **fn)
 {
     mplp_aux_t **data;
     int i, tid, pos, *n_plp, tid0 = -1, beg0 = 0, end0 = 1u<<29, ref_len, ref_tid = -1, max_depth;
@@ -1076,6 +1118,7 @@ static int mpileup(const mplp_conf_t *conf, const int n, const char **fn)
     bam_mplp_set_maxcnt(iter, max_depth);
 
     vcf_write_header(conf->out, PACKAGE_STRING, conf->fa);
+    /* FIXME would be nice to use full command line here instead of PACKAGE_STRING */
 
     LOG_DEBUG("%s\n", "Starting pileup loop");
     while (bam_mplp_auto(iter, &tid, &pos, n_plp, plp) > 0) {
@@ -1111,10 +1154,12 @@ static int mpileup(const mplp_conf_t *conf, const int n, const char **fn)
     free(data); free(plp); free(ref); free(n_plp);
     return 0;
 }
-/* mpileup */
+/* mpileup() */
 
 
-void dump_mplp_conf(const mplp_conf_t *c, FILE *stream) {
+
+void
+dump_mplp_conf(const mplp_conf_t *c, FILE *stream) {
      fprintf(stream, "mplp options\n");
      fprintf(stream, "  max_mq       = %d\n", c->max_mq);
      fprintf(stream, "  min_mq       = %d\n", c->min_mq);
@@ -1141,11 +1186,14 @@ void dump_mplp_conf(const mplp_conf_t *c, FILE *stream) {
      fprintf(stream, "  cmdline      = %s\n", c->cmdline);
      fprintf(stream, "  out          = %p\n", c->out);
 }
+/* dump_mplp_conf() */
 
 
-static void usage(const mplp_conf_t *mplp_conf)
+
+static void
+usage(const mplp_conf_t *mplp_conf)
 {
-     fprintf(stderr, "Usage: %s [options] in.bam\n\n", MYNAME);
+     fprintf(stderr, "Usage: %s call [options] in.bam\n\n", PACKAGE);
      fprintf(stderr, "Options:\n");
      /* generic */
      fprintf(stderr, "          --verbose           be verbose\n");
@@ -1178,10 +1226,12 @@ static void usage(const mplp_conf_t *mplp_conf)
      fprintf(stderr, "       -6|--illumina-1.3      assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
      fprintf(stderr, "       -A|--use-orphan        count anomalous read pairs\n");
 }
+/* usage() */
 
 
 
-int main_call(int argc, char *argv[])
+int 
+main_call(int argc, char *argv[])
 {
      /* based on bam_mpileup() */
      int c, i;
@@ -1194,6 +1244,7 @@ int main_call(int argc, char *argv[])
      LOG_FIXME("%s\n", "- Proper source qual use missing");
      LOG_FIXME("%s\n", "- Indel handling missing");
      LOG_FIXME("%s\n", "- Implement routine test against old SNV caller");
+     LOG_FIXME("%s\n", "- Test actual SNV and SB values for both types of SNVs");
 
     memset(&mplp, 0, sizeof(mplp_conf_t));
     /* default pileup options */
@@ -1393,8 +1444,11 @@ int main_call(int argc, char *argv[])
 
 #ifdef MAIN_TEST
 
+
 int main()
-{
+{     
+     fprintf(stderr, "WARNING: main replaced with test function. just monkeying around\n");
+
      if (1) {
           char test_nucs[] = "ACGTNRYacgtnryZ\0";
           int i;
@@ -1448,5 +1502,6 @@ int main()
      }
      return 0;
 }
+
 #endif
 
