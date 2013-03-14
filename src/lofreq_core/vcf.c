@@ -88,7 +88,10 @@ void vcf_var_sprintf_info(var_t *var,
 }
 
 
-void vcf_write_header(FILE *stream, const char *srcprog, const char *reffa)
+/* src can either be the program or the command. that's at least what
+ * the vcftools folks do as well.
+ */
+void vcf_write_header(FILE *stream, const char *src, const char *reffa)
 {
      char tbuf[9];
      struct tm tm;
@@ -100,7 +103,7 @@ void vcf_write_header(FILE *stream, const char *srcprog, const char *reffa)
      
      fprintf(stream, "##fileformat=VCFv4.0\n");
      fprintf(stream, "##fileDate=%s\n", tbuf);
-     fprintf(stream, "##source=\"%s\"\n", srcprog);
+     fprintf(stream, "##source=%s\n", src);
      fprintf(stream, "##reference=%s\n", reffa);
 
      fprintf(stream, "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Raw Depth\">\n");
