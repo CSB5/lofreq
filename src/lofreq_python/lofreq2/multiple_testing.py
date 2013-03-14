@@ -1,12 +1,12 @@
 #!/usr/bin/env python
-"""
-Commonly used multiple correction routines
+"""Commonly used multiple correction routines
 
 Original source: multiple_testing.py from goatools (see below).
+https://github.com/tanghaibao/goatools
+f75455067a7f7aad66f5b229ab514977b70c34d9
+
 Modified to get rid of numpy dependence.
 
-goatools: Tools for Gene Ontology.
-Source https://github.com/tanghaibao/goatools
 Original Authors:
 - Haibao Tang (tanghaibao),
 - Brent Pedersen (brentp),
