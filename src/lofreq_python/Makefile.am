@@ -13,6 +13,7 @@ EXTRA_DIST = setup.py \
 	lofreq2/__init__.py \
 	lofreq2/multiple_testing.py \
 	lofreq2/vcf.py \
+	lofreq2/fdr.py \
 	lofreq2/utils.py \
 	scripts/lofreq2_filter.py \
 	setup_conf.py.in
@@ -23,6 +24,7 @@ all:
 # make sure to actually install stuff via python's setup.py
 install-exec-hook:
 	$(PYTHON) setup.py install --prefix '$(prefix)'
+# FIXME tell users where stuff was installed and how to set PYTHONPATH
 
 # local clean target: call setup.py and remove ./build/
 clean-local:
