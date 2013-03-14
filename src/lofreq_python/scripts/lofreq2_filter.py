@@ -1,5 +1,8 @@
 #!/usr/bin/env python
-"""Apply number of filters to given list of SNVs
+"""Apply number of filters to given list of SNVs.
+
+Note, that each filter is applied to all SNVs, i.e. not just the
+previously PASSED ones!
 """
 
 
@@ -42,6 +45,8 @@ if True:
         sys.path.insert(0, d)
 
 from lofreq2 import multiple_testing
+from lofreq2 import vcf
+from lofreq2 import fdr
 from lofreq2.utils import prob_to_phredqual, phredqual_to_prob
 
 # invocation of ipython on exceptions
@@ -123,11 +128,15 @@ def cmdline_parser():
                       type='int',
                       help="Optional: Filter variant if coverage is"
                       " below this value (int)")    
-    parser.add_option("", "--snp-phred", 
-                      dest="min_snp_phred",
+    parser.add_option("", "--snv-phred", 
+                      dest="min_snv_phred",
                       type='int',
                       help="Optional: Filter variant if its phred-score"
                       " is below this value (int)")
+    parser.add_option("", "--snv-fdr", 
+                      dest="snv_fdr_q",
+                      type='float',
+                      help="Optional: Set SNV FDR to this value")
     #parser.add_option("", "--window-size",
     #                  dest="window_size",
     #                  type='int',
@@ -182,7 +191,7 @@ def main():
     LOG.info("Parsed %d SNVs from %s" % (len(snvs), opts.vcf_in))
     
     # list of tuples: first element is a filter func, which takes a
-    # snp and a filter-id as input. second is the filter id. variant
+    # snv and a filter-id as input. second is the filter id. variant
     # will be marked as filtered if func returns True
     filters = []
 
@@ -229,6 +238,7 @@ def main():
         
         pvals = [phredqual_to_prob(s.INFO['SB']) for s in snvs]
         corr_pvals = multiple_testing.HolmBonferroni(pvals).corrected_pvals
+        #import pdb; pdb.set_trace()
         for (cp, s) in zip(corr_pvals, snvs):
             s.INFO[vcf_info.id] = prob_to_phredqual(cp)
             if s.INFO[vcf_info.id] > sys.maxint:
@@ -254,7 +264,7 @@ def main():
         
     if opts.min_af != None:  
         vcf_filter = vcf._Filter(
-            id="minaf%dp" % int(opts.min_af*100), 
+            id=("minaf%f" % opts.min_af).rstrip('0'),
             desc="Minimum allele frequency")
         vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
 
@@ -288,17 +298,48 @@ def main():
             ))
 
         
-    if opts.min_snp_phred != None:  
+    if opts.min_snv_phred != None:  
         vcf_filter = vcf._Filter(
-            id="minqual%d" % opts.min_snp_phred, 
+            id="minqual%d" % opts.min_snv_phred, 
             desc="Minimum SNV quality")
         vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
 
         filters.append((
-            lambda s, f_id: f_id if s.QUAL != '.' and s.QUAL < opts.min_snp_phred else None,
+            lambda s, f_id: f_id if s.QUAL != '.' and s.QUAL < opts.min_snv_phred else None,
             vcf_filter.id
             ))
 
+    if opts.snv_fdr_q:
+        vcf_filter = vcf._Filter(
+            id=("fdr%f" % opts.snv_fdr_q).rstrip('0'),
+            desc="SNV Phred FDR")
+        vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
+
+        # we make this only temporary part of the vcf records
+        # and delete it later, so no need to add to header
+        
+        #vcf_info = vcf._Info(
+        #    id="FDR", num=1, type='Integer',
+        #    desc="Passed FDR test")        
+        #vcf_reader.infos[vcf_info.id] = vcf_info
+        vcf_info_id = "FDRPASS"
+        pvals = []
+        pidx = []
+        for (i, s) in enumerate(snvs):
+            if s.QUAL != '.':
+                pvals.append(phredqual_to_prob(s.QUAL))
+                pidx.append(i)
+            else:
+                s.INFO[vcf_info_id] = '.'
+        
+        for (i, r) in zip(pidx, fdr.fdr(pvals, opts.snv_fdr_q)):
+            snvs[i].INFO[vcf_info_id] = 1 if r else 0
+                
+        filters.append((
+            lambda s, f_id: f_id if s.INFO["FDRPASS"] != '.' and s.INFO["FDRPASS"] == 0 else None,
+            vcf_filter.id
+            ))                
+        
         
     if len(filters) == 0:
         LOG.error("No filters activated. Will exit now.")
@@ -330,7 +371,13 @@ def main():
             snvs[i] = s._replace(FILTER="PASS")
             n_passed += 1
     LOG.info("%d SNVs passed all filters." % n_passed)
-    
+
+    # remove temporary fdr markup
+    for tmpkey in ['FDRPASS']:
+        for s in snvs:
+            if s.INFO.has_key(tmpkey):
+                del s.INFO[tmpkey]
+
     if opts.vcf_out == '-':
         fh_out = sys.stdout
     else:
@@ -346,5 +393,5 @@ def main():
     
 if __name__ == "__main__":
     main()
-    LOG.critical("Test cases missing")
+    # FIXME need test cases
     LOG.info("Successful program exit")
