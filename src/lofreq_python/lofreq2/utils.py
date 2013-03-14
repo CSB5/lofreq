@@ -93,7 +93,10 @@ def phredqual_to_prob(phredqual):
     """
 
     #assert phredqual >= 0, ("Phred-quality must be >= 0, but is %s" % phredqual)
-    return 10**(-phredqual/10.0)
+    if phredqual == 0.0:
+        return sys.float_info.min
+    else:
+        return 10**(-phredqual/10.0)
 
     
 if __name__ == '__main__':
