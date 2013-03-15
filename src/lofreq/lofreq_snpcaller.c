@@ -40,8 +40,9 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #define MPLP_EXT_BAQ     0x40
 #define MPLP_ILLUMINA13  0x80
 #define MPLP_IGNORE_RG   0x100
-#define MPLP_USE_MQ      0x200
-#define MPLP_USE_SQ      0x400
+
+#define SNVCALL_USE_MQ      0x10
+#define SNVCALL_USE_SQ      0x20
 
 
 
@@ -68,26 +69,28 @@ unsigned char bam_nt4_table[256] = {
 #define NUM_NT4 5 /* strlen(bam_nt4_rev_table); */
 
 
+typedef struct {
+     int min_altbq, def_altbq;/* tag:snvcall */
+     unsigned long int bonf;/* tag: snvcall */
+     float sig;/* tag: snvcall */
+     FILE *out;
+     int flag;
+} snvcall_conf_t;
 
 /* mpileup configuration structure 
  * FIXME should be logically split into pileup, snvcall and others
  */
 typedef struct {
      int max_mq, min_mq;
-     int flag;
+     int flag; /* tag: shared */
      int capQ_thres;
      int max_depth;
-     int min_bq, min_altbq;
-     int def_altbq;
-     unsigned long int bonf;
-     float sig;
+     int min_bq;
      char *reg;
      char *fa;
      faidx_t *fai;
      void *bed;
-
      char cmdline[1024];
-     FILE *out;
 } mplp_conf_t;
 
 typedef struct {
@@ -214,8 +217,7 @@ void plp_col_debug_print(const plp_col_t *p, FILE *stream)
  * however, that defaults have changed and that filtering was done differently before.
  */
 void
-plp_col_mpileup_print(const plp_col_t *p, const mplp_conf_t *conf, 
-                      FILE *stream)
+plp_col_mpileup_print(const plp_col_t *p, FILE *stream)
 {
      int i, j;
      
@@ -317,7 +319,7 @@ merge_baseq_and_mapq(const int bq, const int mq)
  * 
  */
 void
-call_lowfreq_snps(const plp_col_t *p, const mplp_conf_t *conf)
+call_lowfreq_snps(const plp_col_t *p, const snvcall_conf_t *conf)
 {
      int *quals; /* qualities passed down to snpcaller */
      int quals_len; /* #elements in quals */
@@ -414,7 +416,7 @@ call_lowfreq_snps(const plp_col_t *p, const mplp_conf_t *conf)
                     alt_counts[alt_idx] += 1;
                }
 
-               if ((conf->flag & MPLP_USE_MQ)) {
+               if ((conf->flag & SNVCALL_USE_MQ)) {
                     final_q = merge_baseq_and_mapq(bq, mq);
 
                } else {
@@ -764,24 +766,29 @@ mplp_func(void *data, bam1_t *b)
         }
     } while (skip);
 
+#ifdef USE_SOURCEQUAL
     /* compute source qual if requested and have ref */
-    if (ma->ref && ma->ref_id == b->core.tid && ma->conf->flag & MPLP_USE_SQ) {
+    if (ma->ref && ma->ref_id == b->core.tid && ma->conf->flag & MPLP_USE_SQ:FIXME:now-in-snvcall_conf) {
          int sq = source_qual(b, ma->ref);
          LOG_FIXME("%s\n", "Got sq %d. What now?", sq);
     }
-
+#endif
     return ret;
 }
 
 
 
-void process_plp(const bam_pileup1_t *plp, const int n_plp, 
+/* Convenience function to press pileup info into one easy to handle data-structure.
+ * plp_col members allocated here. Called must free with
+ * plp_col_free(plp_col);
+ */
+void compile_plp_col(plp_col_t *plp_col,
+                 const bam_pileup1_t *plp, const int n_plp, 
                  const mplp_conf_t *conf, const char *ref, const int pos, 
                  const int ref_len, const char *target_name)
 {
      int i;
      char ref_base;
-     plp_col_t plp_col;
 
      /* "base counts" minus error-probs before base-level filtering
       * for each base. temporary data-structure for cheaply determining
@@ -798,13 +805,13 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
 
      ref_base = (ref && pos < ref_len)? ref[pos] : 'N';
      
-     plp_col_init(& plp_col);
-     plp_col.target = strdup(target_name);
-     plp_col.pos = pos;
-     plp_col.ref_base = toupper(ref_base);
-     plp_col.coverage = n_plp;  /* this is coverage as in the original mpileup, 
+     plp_col_init(plp_col);
+     plp_col->target = strdup(target_name);
+     plp_col->pos = pos;
+     plp_col->ref_base = toupper(ref_base);
+     plp_col->coverage = n_plp;  /* this is coverage as in the original mpileup, 
                                    i.e. after read-level filtering */
-     LOG_DEBUG("Processing %s:%d\n", plp_col.target, plp_col.pos+1);
+     LOG_DEBUG("Processing %s:%d\n", plp_col->target, plp_col->pos+1);
      
      for (i = 0; i < n_plp; ++i) {
           /* inserted parts of pileup_seq() here.
@@ -838,18 +845,18 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
 
 #if 0
           LOG_FIXME("At %s:%d %c: p->is_del=%d p->is_refskip=%d p->indel=%d p->is_head=%d p->is_tail=%d\n", 
-                    plp_col.target, 
-                    plp_col.pos+1,
+                    plp_col->target, 
+                    plp_col->pos+1,
                     bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos)],
                     p->is_del, p->is_refskip, p->indel, p->is_head, p->is_tail);
 #endif
 
           if (! p->is_del) {
                if (p->is_head) {
-                    plp_col.num_heads += 1;
+                    plp_col->num_heads += 1;
                }
                if (p->is_tail) {
-                    plp_col.num_tails += 1;
+                    plp_col->num_tails += 1;
                }
 
                /* nt for printing */
@@ -889,39 +896,39 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                 * if (mq > 126) mq = 126;
                 */
 
-               PLP_COL_ADD_QUAL(& plp_col.base_quals[nt4], bq);
-               PLP_COL_ADD_QUAL(& plp_col.map_quals[nt4], mq);
+               PLP_COL_ADD_QUAL(& plp_col->base_quals[nt4], bq);
+               PLP_COL_ADD_QUAL(& plp_col->map_quals[nt4], mq);
                if (bam1_strand(p->b)) {
-                    plp_col.rv_counts[nt4] += 1;
+                    plp_col->rv_counts[nt4] += 1;
                } else {
-                    plp_col.fw_counts[nt4] += 1;
+                    plp_col->fw_counts[nt4] += 1;
                }
                 
                if (bi) {
                     int j;
                     char *t = (char*)(bi+1); /* 1 is type */
 #if 0
-                    printf("At %d qpos %d: BI=%s", plp_col.pos+1, p->qpos+1, t);
+                    printf("At %d qpos %d: BI=%s", plp_col->pos+1, p->qpos+1, t);
                     for (j = 0; j < p->indel; ++j) {
                          printf(" %c:%d-%d-%d", t[p->qpos+j], t[p->qpos+j-1]-33, t[p->qpos+j]-33, t[p->qpos+j+1]-33);
                     }
                     printf("\n");
 #endif
                     /* adding 1 value representing whole insert */
-                    PLP_COL_ADD_QUAL(& plp_col.ins_quals, t[p->qpos]);
+                    PLP_COL_ADD_QUAL(& plp_col->ins_quals, t[p->qpos]);
                }
 
                if (bd) {
                     int j;
                     char *t = (char*)(bd+1);  /* 1 is type */
 #if 0
-                    printf("At %d qpos %d: BD=%sx", plp_col.pos+1, p->qpos+1, t);
+                    printf("At %d qpos %d: BD=%sx", plp_col->pos+1, p->qpos+1, t);
                     for (j = 0; j < p->indel; ++j) {
                          printf(" %c:%d-%d-%d", t[p->qpos+j], t[p->qpos+j-1]-33, t[p->qpos+j]-33, t[p->qpos+j+1]-33);
                     }
                     printf("\n");
 #endif
-                    PLP_COL_ADD_QUAL(& plp_col.del_quals, t[p->qpos]);
+                    PLP_COL_ADD_QUAL(& plp_col->del_quals, t[p->qpos]);
                     /* adding 1 value representing whole del */
                }
           } /* ! p->is_del */
@@ -938,7 +945,7 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
           if (p->is_del || p->indel) {
                fflush(stdout); fflush(stderr);
                LOG_FIXME("At %s:%d p->is_del=%d p->is_refskip=%d p->indel=%d\n", 
-                         plp_col.target, plp_col.pos+1, p->is_del, p->is_refskip, p->indel);
+                         plp_col->target, plp_col->pos+1, p->is_del, p->is_refskip, p->indel);
                fflush(stdout); fflush(stderr);
 
           }
@@ -965,9 +972,9 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                /* insertion (+)
                 */
                if (p->indel > 0) {
-                    plp_col.num_ins += 1;
+                    plp_col->num_ins += 1;
                     LOG_FIXME("%s\n", "FIXME:need-to-save-ins-allele-and-its-counts.above-is-just-a-total.use-list/array-instead-of-hash.dont-expect-many-alleles");
-                    plp_col.sum_ins += p->indel;
+                    plp_col->sum_ins += p->indel;
 #ifdef PRINT_INDEL
                     putchar('+'); printw(p->indel, stdout);
                     putchar(' ');
@@ -980,9 +987,9 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
                /* deletion (-)
                 */
                } else if (p->indel < 0) {
-                    plp_col.num_dels += 1;
+                    plp_col->num_dels += 1;
                     LOG_FIXME("%s\n", "FIXME:need-to-save-del-allele-and-its-counts.above-is-just-a-total.use-list/array-instead-of-hash.dont-expect-many-alleles");
-                    plp_col.sum_dels -= p->indel;
+                    plp_col->sum_dels -= p->indel;
 #ifdef PRINT_INDEL                   
                     printw(p->indel, stdout);
                     putchar(' ');
@@ -997,35 +1004,35 @@ void process_plp(const bam_pileup1_t *plp, const int n_plp,
           
      }  /* end: for (i = 0; i < n_plp; ++i) { */
 
-     plp_col.coverage -= num_skips;
+     plp_col->coverage -= num_skips;
      
      /* determine consensus from 'counts' */
-     plp_col.cons_base = bam_nt4_rev_table[
+     plp_col->cons_base = bam_nt4_rev_table[
           argmax_d(base_counts, NUM_NT4)];
 
      if (debug) {
-          plp_col_debug_print(& plp_col, stdout);
+          plp_col_debug_print(plp_col, stdout);
      }
 #if 0
-     plp_col_mpileup_print(& plp_col, conf, stdout);
+     plp_col_mpileup_print(plp_col, conf, stdout);
 #endif
 
      for (i = 0; i < NUM_NT4; ++i) {
-          assert(plp_col.fw_counts[i] + plp_col.rv_counts[i] == plp_col.base_quals[i].n);
-          assert(plp_col.base_quals[i].n == plp_col.map_quals[i].n);
-          /* FIXME assert(plp_col.map_quals[i].n == plp_col.source_quals[i].n); */
+          assert(plp_col->fw_counts[i] + plp_col->rv_counts[i] == plp_col->base_quals[i].n);
+          assert(plp_col->base_quals[i].n == plp_col->map_quals[i].n);
+          /* FIXME assert(plp_col->map_quals[i].n == plp_col->source_quals[i].n); */
      }
-
-     call_lowfreq_snps(& plp_col, conf);
-
-     plp_col_free(& plp_col);
 }
-/* process_plp() */
+/* compile_plp_col() */
 
 
 
+/* will call snvs only if snvcall_conf is not NULL */
 static int
-mpileup(const mplp_conf_t *conf, const int n, const char **fn)
+mpileup(const mplp_conf_t *mplp_conf, 
+        const snvcall_conf_t *snvcall_conf, 
+        void (*plp_proc_func)(const plp_col_t*, const snvcall_conf_t* /* fake for non snv callers */),
+        const int n, const char **fn)
 {
     mplp_aux_t **data;
     int i, tid, pos, *n_plp, tid0 = -1, beg0 = 0, end0 = 1u<<29, ref_len, ref_tid = -1, max_depth;
@@ -1043,7 +1050,7 @@ mpileup(const mplp_conf_t *conf, const int n, const char **fn)
          for (i=0; i<n; i++) {
               fprintf(stderr, "%s\n", fn[i]);
          }
-         exit(1);
+         return 1;
     }
 
     memset(&buf, 0, sizeof(kstring_t));
@@ -1051,14 +1058,6 @@ mpileup(const mplp_conf_t *conf, const int n, const char **fn)
     plp = calloc(n, sizeof(void*));
     n_plp = calloc(n, sizeof(int*));
 
-#if 0
-    fprintf(stderr, "[%s] Note: the format differs from regular pileup (see http://samtools.sourceforge.net/pileup.shtml) in the following ways\n", __func__);
-    fprintf(stderr, "[%s] - bases and qualities are merged into one field\n", __func__);
-    fprintf(stderr, "[%s] - each base is immediately followed by its quality\n", __func__);
-    fprintf(stderr, "[%s] - on request mapping and base call quality are merged (P_joined = P_mq + (1-P_mq)*P_bq\n", __func__);
-    fprintf(stderr, "[%s] - indel events are removed from bases and qualities and summarized in an additional field\n", __func__);
-    fprintf(stderr, "[%s] - reference matches are not replaced with , or .\n", __func__);
-#endif
 
     /* read the header and initialize data */
     for (i = 0; i < n; ++i) {
@@ -1071,11 +1070,11 @@ mpileup(const mplp_conf_t *conf, const int n, const char **fn)
         }
         data[i] = calloc(1, sizeof(mplp_aux_t));
         data[i]->fp = strcmp(fn[i], "-") == 0? bam_dopen(fileno(stdin), "r") : bam_open(fn[i], "r");
-        data[i]->conf = conf;
+        data[i]->conf = mplp_conf;
         h_tmp = bam_header_read(data[i]->fp);
         data[i]->h = i? h : h_tmp; /* for i==0, "h" has not been set yet */
 
-        if (conf->reg) {
+        if (mplp_conf->reg) {
             int beg, end;
             bam_index_t *idx;
             idx = bam_index_load(fn[i]);
@@ -1083,7 +1082,7 @@ mpileup(const mplp_conf_t *conf, const int n, const char **fn)
                 fprintf(stderr, "[%s] fail to load index for %d-th input.\n", __func__, i+1);
                 exit(1);
             }
-            if (bam_parse_region(h_tmp, conf->reg, &tid, &beg, &end) < 0) {
+            if (bam_parse_region(h_tmp, mplp_conf->reg, &tid, &beg, &end) < 0) {
                 fprintf(stderr, "[%s] malformatted region or wrong seqname for %d-th input.\n", __func__, i+1);
                 exit(1);
             }
@@ -1099,8 +1098,8 @@ mpileup(const mplp_conf_t *conf, const int n, const char **fn)
     }
     /*LOG_DEBUG("%s\n", "BAM header initialized");*/
 
-    if (tid0 >= 0 && conf->fai) { /* region is set */
-        ref = faidx_fetch_seq(conf->fai, h->target_name[tid0], 0, 0x7fffffff, &ref_len);
+    if (tid0 >= 0 && mplp_conf->fai) { /* region is set */
+        ref = faidx_fetch_seq(mplp_conf->fai, h->target_name[tid0], 0, 0x7fffffff, &ref_len);
         ref_tid = tid0;
         for (i = 0; i < n; ++i) data[i]->ref = ref, data[i]->ref_id = tid0;
     } else {
@@ -1108,7 +1107,7 @@ mpileup(const mplp_conf_t *conf, const int n, const char **fn)
          ref = 0;
     }
     iter = bam_mplp_init(n, mplp_func, (void**)data);
-    max_depth = conf->max_depth;
+    max_depth = mplp_conf->max_depth;
     if (max_depth * 1 > 1<<20)
         fprintf(stderr, "(%s) Max depth is above 1M. Potential memory hog!\n", __func__);
     if (max_depth * 1 < 8000) {
@@ -1117,21 +1116,20 @@ mpileup(const mplp_conf_t *conf, const int n, const char **fn)
     }
     bam_mplp_set_maxcnt(iter, max_depth);
 
-    vcf_write_header(conf->out, PACKAGE_STRING, conf->fa);
-    /* FIXME would be nice to use full command line here instead of PACKAGE_STRING */
 
     LOG_DEBUG("%s\n", "Starting pileup loop");
     while (bam_mplp_auto(iter, &tid, &pos, n_plp, plp) > 0) {
-         int i=0; /* NOTE: mpileup originally iterated over n */
+        plp_col_t plp_col;
+        int i=0; /* NOTE: mpileup originally iterated over n */
 
-        if (conf->reg && (pos < beg0 || pos >= end0))
+        if (mplp_conf->reg && (pos < beg0 || pos >= end0))
              continue; /* out of the region requested */
-        if (conf->bed && tid >= 0 && !bed_overlap(conf->bed, h->target_name[tid], pos, pos+1)) 
+        if (mplp_conf->bed && tid >= 0 && !bed_overlap(mplp_conf->bed, h->target_name[tid], pos, pos+1)) 
              continue;
         if (tid != ref_tid) {
             free(ref); ref = 0;
-            if (conf->fai) 
-                 ref = faidx_fetch_seq(conf->fai, h->target_name[tid], 0, 0x7fffffff, &ref_len);
+            if (mplp_conf->fai) 
+                 ref = faidx_fetch_seq(mplp_conf->fai, h->target_name[tid], 0, 0x7fffffff, &ref_len);
             for (i = 0; i < n; ++i) 
                  data[i]->ref = ref, data[i]->ref_id = tid;
             ref_tid = tid;
@@ -1139,8 +1137,13 @@ mpileup(const mplp_conf_t *conf, const int n, const char **fn)
         i=0; /* i is 1 for first pos which is a bug due to the removal
               * of one of the loops, so reset here */
 
-        process_plp(plp[i], n_plp[i], conf, 
+        compile_plp_col(&plp_col, plp[i], n_plp[i], mplp_conf, 
                     ref, pos, ref_len, h->target_name[tid]);
+
+        (*plp_proc_func)(& plp_col, snvcall_conf);
+
+        plp_col_free(& plp_col);
+
     } /* while bam_mplp_auto */
 
     free(buf.s);
@@ -1157,9 +1160,25 @@ mpileup(const mplp_conf_t *conf, const int n, const char **fn)
 /* mpileup() */
 
 
+void
+dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream) 
+{
+     fprintf(stream, "snvcall options\n");
+     fprintf(stream, "  min_altbq = %d\n", c->min_altbq);
+     fprintf(stream, "  def_altbq = %d\n", c->def_altbq);
+     fprintf(stream, "  bonf         = %lu  (might get recalculated later)\n", c->bonf);
+     fprintf(stream, "  sig          = %f\n", c->sig);
+     fprintf(stream, "  out          = %p\n", c->out);
+     fprintf(stream, "  flag & SNVCALL_USE_MQ     = %d\n", c->flag&SNVCALL_USE_MQ?1:0);
+#ifdef USE_SOURCEQUAL
+     fprintf(stream, "  flag & SNVCALL_USE_SQ     = %d\n", c->flag&SNVCALL_USE_SQ?1:0);
+#endif
+}
+
 
 void
-dump_mplp_conf(const mplp_conf_t *c, FILE *stream) {
+dump_mplp_conf(const mplp_conf_t *c, FILE *stream) 
+{
      fprintf(stream, "mplp options\n");
      fprintf(stream, "  max_mq       = %d\n", c->max_mq);
      fprintf(stream, "  min_mq       = %d\n", c->min_mq);
@@ -1169,29 +1188,22 @@ dump_mplp_conf(const mplp_conf_t *c, FILE *stream) {
      fprintf(stream, "  flag & MPLP_REALN      = %d\n", c->flag&MPLP_REALN?1:0);
      fprintf(stream, "  flag & MPLP_EXT_BAQ    = %d\n", c->flag&MPLP_EXT_BAQ?1:0);
      fprintf(stream, "  flag & MPLP_ILLUMINA13 = %d\n", c->flag&MPLP_ILLUMINA13?1:0);
-     fprintf(stream, "  flag & MPLP_USE_MQ     = %d\n", c->flag&MPLP_USE_MQ?1:0);
-     fprintf(stream, "  flag & MPLP_USE_SQ     = %d\n", c->flag&MPLP_USE_SQ?1:0);
      
      fprintf(stream, "  capQ_thres   = %d\n", c->capQ_thres);
      fprintf(stream, "  max_depth    = %d\n", c->max_depth);
      fprintf(stream, "  min_bq    = %d\n", c->min_bq);
-     fprintf(stream, "  min_altbq = %d\n", c->min_altbq);
-     fprintf(stream, "  def_altbq = %d\n", c->def_altbq);
-     fprintf(stream, "  bonf         = %lu  (might get recalculated later)\n", c->bonf);
-     fprintf(stream, "  sig          = %f\n", c->sig);
      fprintf(stream, "  reg          = %s\n", c->reg);
      fprintf(stream, "  fa           = %p\n", c->fa);
      /*fprintf(stream, "  fai          = %p\n", c->fai);*/
      fprintf(stream, "  bed          = %p\n", c->bed);
      fprintf(stream, "  cmdline      = %s\n", c->cmdline);
-     fprintf(stream, "  out          = %p\n", c->out);
 }
 /* dump_mplp_conf() */
 
 
 
 static void
-usage(const mplp_conf_t *mplp_conf)
+usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
 {
      fprintf(stderr, "Usage: %s call [options] in.bam\n\n", PACKAGE);
      fprintf(stderr, "Options:\n");
@@ -1208,8 +1220,8 @@ usage(const mplp_conf_t *mplp_conf)
      fprintf(stderr, "       -o|--out FILE          vcf output file [- = stdout]\n");
      /* base call quality and baq */
      fprintf(stderr, "       -q|--min-bq INT        skip any base with baseQ smaller than INT [%d]\n", mplp_conf->min_bq);
-     fprintf(stderr, "       -Q|--min-altbq INT     skip nonref-bases with baseQ smaller than INT [%d]. Not active if ref is N\n", mplp_conf->min_altbq);
-     fprintf(stderr, "       -a|--def-altbq INT     nonref base qualities will be replace with this value [%d]\n", mplp_conf->def_altbq);
+     fprintf(stderr, "       -Q|--min-altbq INT     skip nonref-bases with baseQ smaller than INT [%d]. Not active if ref is N\n", snvcall_conf->min_altbq);
+     fprintf(stderr, "       -a|--def-altbq INT     nonref base qualities will be replace with this value [%d]\n", snvcall_conf->def_altbq);
      fprintf(stderr, "       -B|--no-baq            disable BAQ computation\n");
      /* fprintf(stderr, "       -E           extended BAQ for higher sensitivity but lower specificity\n"); */
      /* mapping quality */
@@ -1218,7 +1230,7 @@ usage(const mplp_conf_t *mplp_conf)
      fprintf(stderr, "       -J|--no-mq             don't merge mapQ into baseQ: P_e = P_mq + (1-P_mq) P_bq\n");
      fprintf(stderr, "       -S|--no-sq             don't merge sourceQ into baseQ\n");
      /* stats */
-     fprintf(stderr, "       -s|--sig               P-value cutoff / significance level [%f]\n", mplp_conf->sig);
+     fprintf(stderr, "       -s|--sig               P-value cutoff / significance level [%f]\n", snvcall_conf->sig);
      fprintf(stderr, "       -b|--bonf              Bonferroni factor. INT or 'auto' (default; non-zero-cov-pos * 3)\n");
      fprintf(stderr, "                              'auto' needs to pre-parse the BAM file once, i.e. this won't work with input from stdin (or named pipes).\n");
      fprintf(stderr, "                              Higher numbers speed up computation on high-coverage data considerably.\n");
@@ -1239,25 +1251,29 @@ main_call(int argc, char *argv[])
      int bonf_auto = 1;
      char *bam_file;
      char *bed_file = NULL;
-     mplp_conf_t mplp;
+     mplp_conf_t mplp_conf;
+     snvcall_conf_t snvcall_conf;
      
      LOG_FIXME("%s\n", "- Proper source qual use missing");
      LOG_FIXME("%s\n", "- Indel handling missing");
      LOG_FIXME("%s\n", "- Implement routine test against old SNV caller");
      LOG_FIXME("%s\n", "- Test actual SNV and SB values for both types of SNVs");
 
-    memset(&mplp, 0, sizeof(mplp_conf_t));
+    memset(&mplp_conf, 0, sizeof(mplp_conf_t));
+    memset(&snvcall_conf, 0, sizeof(snvcall_conf_t));
     /* default pileup options */
-    mplp.max_mq = 255; /* 60 */
-    mplp.min_bq = 3; /* 13 */
-    mplp.min_altbq = 20; /* new */
-    mplp.def_altbq = mplp.min_altbq;
-    mplp.capQ_thres = 0;
-    mplp.max_depth = 1000000; /* 250 */
-    mplp.flag = MPLP_NO_ORPHAN | MPLP_REALN | MPLP_EXT_BAQ | MPLP_USE_MQ;/* | MPLP_USE_SQ; FIXME */
-    mplp.bonf = 1;
-    mplp.sig = 0.05;
-    mplp.out = stdout;
+    mplp_conf.max_mq = 255; /* 60 */
+    mplp_conf.min_bq = 3; /* 13 */
+    mplp_conf.capQ_thres = 0;
+    mplp_conf.max_depth = 1000000; /* 250 */
+    mplp_conf.flag = MPLP_NO_ORPHAN | MPLP_REALN | MPLP_EXT_BAQ;
+
+    snvcall_conf.min_altbq = 20; /* new */
+    snvcall_conf.def_altbq = snvcall_conf.min_altbq;
+    snvcall_conf.bonf = 1;
+    snvcall_conf.sig = 0.05;
+    snvcall_conf.out = stdout;
+    mplp_conf.flag = SNVCALL_USE_MQ;/* | MPLP_USE_SQ; FIXME */
 
     /* FIXME getopt should be replaced with something more sensible like
      * argtable2 ot Gopt. Otherwise there's always the risk between
@@ -1310,17 +1326,17 @@ main_call(int argc, char *argv[])
 
          switch (c) {
          /* see usage sync */
-         case 'r': mplp.reg = strdup(optarg); break;
+         case 'r': mplp_conf.reg = strdup(optarg); break; /* FIXME you can enter lots of invalid stuff and libbam won't complain. add checks here? */
          case 'l': 
-              mplp.bed = bed_read(optarg); 
+              mplp_conf.bed = bed_read(optarg); 
               bed_file = strdup(optarg);
               break;
               
-         case 'd': mplp.max_depth = atoi(optarg); break;
+         case 'd': mplp_conf.max_depth = atoi(optarg); break;
          case 'f':
-              mplp.fa = strdup(optarg);
-              mplp.fai = fai_load(optarg);
-              if (mplp.fai == 0) 
+              mplp_conf.fa = strdup(optarg);
+              mplp_conf.fai = fai_load(optarg);
+              if (mplp_conf.fai == 0) 
                    return 1;
               break;
          case 'o':
@@ -1329,23 +1345,24 @@ main_call(int argc, char *argv[])
                         LOG_FATAL("Cowardly refusing to overwrite file '%s'. Exiting...\n", optarg);
                         return 1;
                    }
-                   if (NULL == (mplp.out = fopen(optarg, "w"))) {
+                   if (NULL == (snvcall_conf.out = fopen(optarg, "w"))) {
                         LOG_FATAL("Couldn't open file '%s'. Exiting...\n", optarg);
                         return 1;
                    }
               } /* else: already set to stdout */
-         case 'q': mplp.min_bq = atoi(optarg); break;
-         case 'Q': mplp.min_altbq = atoi(optarg); break;
-         case 'a': mplp.def_altbq = atoi(optarg); break;
-         case 'B': mplp.flag &= ~MPLP_REALN; break;
+         case 'q': mplp_conf.min_bq = atoi(optarg); break;
+         case 'Q': snvcall_conf.min_altbq = atoi(optarg); break;
+         case 'a': snvcall_conf.def_altbq = atoi(optarg); break;
+         case 'B': mplp_conf.flag &= ~MPLP_REALN; break;
          /* case 'E': mplp.flag |= MPLP_EXT_BAQ; break; */
               
-         case 'm': mplp.min_mq = atoi(optarg); break;
-         case 'M': mplp.max_mq = atoi(optarg); break;
-         case 'J': mplp.flag &= ~MPLP_USE_MQ; break;
-         case 'S': mplp.flag &= ~MPLP_USE_SQ; break;
-              
-         case '6': mplp.flag |= MPLP_ILLUMINA13; break;
+         case 'm': mplp_conf.min_mq = atoi(optarg); break;
+         case 'M': mplp_conf.max_mq = atoi(optarg); break;
+         case 'J': snvcall_conf.flag &= ~SNVCALL_USE_MQ; break;
+#ifdef USE_SOURCEQUAL
+         case 'S': snvcall_conf.flag &= ~SNVCALL_USE_SQ; break;
+#endif
+         case '6': mplp_conf.flag |= MPLP_ILLUMINA13; break;
 
          case 'b': 
               if (0 == strncmp(optarg, "auto", 4)) {
@@ -1353,22 +1370,22 @@ main_call(int argc, char *argv[])
 
               } else {
                    bonf_auto = 0;
-                   mplp.bonf = strtol(optarg, (char **)NULL, 10); /* atol */ 
-                   if (0==mplp.bonf) {
+                   snvcall_conf.bonf = strtol(optarg, (char **)NULL, 10); /* atol */ 
+                   if (0==snvcall_conf.bonf) {
                         LOG_FATAL("%s\n", "Couldn't parse Bonferroni factor\n"); 
                         exit(1);
                    }
               }
               break;
          case 's': 
-              mplp.sig = strtof(optarg, (char **)NULL); /* atof */
-              if (0==mplp.sig) {
+              snvcall_conf.sig = strtof(optarg, (char **)NULL); /* atof */
+              if (0==snvcall_conf.sig) {
                    LOG_FATAL("%s\n", "Couldn't parse sign-threshold\n"); 
                    exit(1);
               }
               break;
               
-         case 'h': usage(& mplp); exit(0); /* WARN: not printing defaults if some args where parsed */
+         case 'h': usage(& mplp_conf, & snvcall_conf); exit(0); /* WARN: not printing defaults if some args where parsed */
          case '?': LOG_FATAL("%s\n", "unrecognized arguments found. Exiting...\n"); exit(1);
 #if 0
          case 0:  fprintf(stderr, "ERROR: long opt (%s) not mapping to short option. Exiting...\n", long_opts[long_opts_index].name); exit(1);
@@ -1378,17 +1395,17 @@ main_call(int argc, char *argv[])
          }
     }
     if (use_orphan) {
-         mplp.flag &= ~MPLP_NO_ORPHAN;
+         mplp_conf.flag &= ~MPLP_NO_ORPHAN;
     }
-    mplp.cmdline[0] = '\0';
+    mplp_conf.cmdline[0] = '\0';
     for (i=0; i<argc; i++) {
-         strncat(mplp.cmdline, argv[i], sizeof(mplp.cmdline)-strlen(mplp.cmdline)-2);
-         strcat(mplp.cmdline, " ");
+         strncat(mplp_conf.cmdline, argv[i], sizeof(mplp_conf.cmdline)-strlen(mplp_conf.cmdline)-2);
+         strcat(mplp_conf.cmdline, " ");
     }
 
     if (argc == 1) {
         fprintf(stderr, "\n");
-        usage(& mplp);
+        usage(& mplp_conf, & snvcall_conf);
         return 1;
     }
     if (1 != argc - optind) {
@@ -1402,39 +1419,45 @@ main_call(int argc, char *argv[])
          double cov_mean;
          long int num_non0cov_pos;
          LOG_DEBUG("Automatically determining Bonferroni factor for bam=%s reg=%s bed=%s\n",
-                   bam_file, mplp.reg, bed_file); 
-         if (depth_stats(&cov_mean, &num_non0cov_pos, bam_file, mplp.reg, bed_file,
-                         &mplp.min_bq, &mplp.min_mq)) {
+                   bam_file, mplp_conf.reg, bed_file); 
+         if (depth_stats(&cov_mean, &num_non0cov_pos, bam_file, mplp_conf.reg, bed_file,
+                         &mplp_conf.min_bq, &mplp_conf.min_mq)) {
               LOG_FATAL("%s\n", "Couldn't determine Bonferroni factor automatically\n"); 
               exit(1);
          }
-         mplp.bonf = num_non0cov_pos*3;
-         LOG_VERBOSE("Automatically determined Bonferroni factor = %lu\n", mplp.bonf);
+         snvcall_conf.bonf = num_non0cov_pos*3;
+         LOG_VERBOSE("Automatically determined Bonferroni factor = %lu\n", snvcall_conf.bonf);
     }
 
 
     if (debug) {
-         dump_mplp_conf(& mplp, stderr);
+         dump_mplp_conf(& mplp_conf, stderr);
+         dump_snvcall_conf(& snvcall_conf, stderr);
     }
 
     /* FIXME: implement logic_check_opts() */
-    assert(mplp.min_mq <= mplp.max_mq);
-    assert(mplp.min_bq <= mplp.min_altbq);
-    assert(! (mplp.bed && mplp.reg));
+    assert(mplp_conf.min_mq <= mplp_conf.max_mq);
+    assert(mplp_conf.min_bq <= snvcall_conf.min_altbq);
+    assert(! (mplp_conf.bed && mplp_conf.reg));
    
-    mpileup(&mplp, 1, (const char **) argv + optind);
+    void (*plp_proc_func)(const plp_col_t*, const snvcall_conf_t*) = &call_lowfreq_snps;
+    vcf_write_header(snvcall_conf.out, PACKAGE_STRING, mplp_conf.fa);
+    /* FIXME would be nice to use full command line here instead of PACKAGE_STRING */
+    (void) mpileup(&mplp_conf, &snvcall_conf, 
+                   plp_proc_func, 1, (const char **) argv + optind);
 
-    if (mplp.out == stdout) {
-         fclose(mplp.out);
+
+    if (snvcall_conf.out == stdout) {
+         fclose(snvcall_conf.out);
     }
-    free(mplp.reg); 
-    free(mplp.fa);
-    if (mplp.fai) {
-         fai_destroy(mplp.fai);
+    free(mplp_conf.reg); 
+    free(mplp_conf.fa);
+    if (mplp_conf.fai) {
+         fai_destroy(mplp_conf.fai);
     }
     free(bed_file);
-    if (mplp.bed) {
-         bed_destroy(mplp.bed);
+    if (mplp_conf.bed) {
+         bed_destroy(mplp_conf.bed);
     }
     LOG_VERBOSE("%s\n", "Successful exit.");
     return 0;
