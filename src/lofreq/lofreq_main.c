@@ -9,6 +9,7 @@
 #include "log.h"
 #include "utils.h"
 #include "lofreq_snpcaller.h"
+#include "lofreq_plp_summary.h"
 
 static void usage(const char *myname)
 {
@@ -16,9 +17,10 @@ static void usage(const char *myname)
      /*fprintf(stderr, "Version %s\n", PACKAGE_VERSION);*/
      fprintf(stderr, "\n");
      fprintf(stderr, "Usage: %s <command> [options], where command is one of:\n", myname);
-     fprintf(stderr, "  call    : call variants\n");
-     fprintf(stderr, "  version : prints version\n");
-     fprintf(stderr, "  filter : filter variants\n");
+     fprintf(stderr, "  call        : call variants\n");
+     fprintf(stderr, "  filter      : filter variants\n");
+     fprintf(stderr, "  plp_summary : print pileup summary\n");
+     fprintf(stderr, "  version     : prints version\n");
      fprintf(stderr, "\n");
 }
 
@@ -46,6 +48,9 @@ int main(int argc, char *argv[])
                free(argv_execvp);
                return 0;
           }
+
+     } else if (strcmp(argv[1], "plp_summary") == 0) {
+          return main_plp_summary(argc-1, argv+1);
 
      } else if (strcmp(argv[1], "version") == 0) {
           fprintf(stdout, "%s\n", PACKAGE_VERSION);
