@@ -82,10 +82,12 @@ def cmdline_parser():
     parser = OptionParser(usage=usage)
 
     parser.add_option("-v", "--verbose",
-                      action="store_true", dest="verbose",
+                      action="store_true", 
+                      dest="verbose",
                       help="be verbose")
     parser.add_option("", "--debug",
-                      action="store_true", dest="debug",
+                      action="store_true", 
+                      dest="debug",
                       help="enable debugging")
     parser.add_option("-i", "--vcf_in",
                       dest="vcf_in",
@@ -96,6 +98,11 @@ def cmdline_parser():
                       default=DEFAULT,
                       help="Output vcf file (- for stdout). Default = %s)" % DEFAULT)
 
+    parser.add_option("-p", "--pass-only",
+                      action="store_true",
+                      dest="pass_only",
+                      help="Only print PASSed variants")
+    
     parser.add_option("", "--strandbias-bonf",
                       dest="strandbias_bonf", 
                       action="store_true",
@@ -378,6 +385,9 @@ def main():
             if s.INFO.has_key(tmpkey):
                 del s.INFO[tmpkey]
 
+    if opts.pass_only:
+        snvs = [s for s in snvs if s.FILTER == 'PASS']
+        
     if opts.vcf_out == '-':
         fh_out = sys.stdout
     else:
