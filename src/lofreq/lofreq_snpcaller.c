@@ -16,10 +16,12 @@
 #include <limits.h>
 #include <float.h>
 #include <getopt.h>
+#include <stdlib.h>
 
-#include "sam.h"
 #include "faidx.h"
+#include "sam.h"
 #include "kstring.h"
+
 /* from bedidx.c */
 void *bed_read(const char *fn);
 void bed_destroy(void *_h);
@@ -31,42 +33,11 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #include "fet.h"
 #include "utils.h"
 #include "log.h"
+#include "plp.h"
 
-
-/* mpileup configuration flags 
- */
-#define MPLP_NO_ORPHAN   0x10
-#define MPLP_REALN       0x20
-#define MPLP_EXT_BAQ     0x40
-#define MPLP_ILLUMINA13  0x80
-#define MPLP_IGNORE_RG   0x100
 
 #define SNVCALL_USE_MQ      0x10
 #define SNVCALL_USE_SQ      0x20
-
-
-
-const char *bam_nt4_rev_table = "ACGTN"; /* similar to bam_nt16_rev_table */
-
-unsigned char bam_nt4_table[256] = {
-     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-     4,0,4,1,4,4,4,2,4,4,4,4,4,4,4,4,
-     4,4,4,4,3,4,4,4,4,4,4,4,4,4,4,4,
-     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-};
-#define NUM_NT4 5 /* strlen(bam_nt4_rev_table); */
 
 
 typedef struct {
@@ -77,165 +48,6 @@ typedef struct {
      int flag;
 } snvcall_conf_t;
 
-/* mpileup configuration structure 
- * FIXME should be logically split into pileup, snvcall and others
- */
-typedef struct {
-     int max_mq, min_mq;
-     int flag; /* tag: shared */
-     int capQ_thres;
-     int max_depth;
-     int min_bq;
-     char *reg;
-     char *fa;
-     faidx_t *fai;
-     void *bed;
-     char cmdline[1024];
-} mplp_conf_t;
-
-typedef struct {
-     bamFile fp;
-     bam_iter_t iter;
-     bam_header_t *h;
-     int ref_id;
-     char *ref;
-     const mplp_conf_t *conf;
-} mplp_aux_t;
-
-typedef struct {
-    int n;
-    int *n_plp, *m_plp;
-    bam_pileup1_t **plp;
-} mplp_pileup_t;
-
-
-
-typedef struct {
-     char *target; /* chromsome or sequence name */
-     int pos; /* position */
-     char ref_base; /* uppercase reference base (given by fasta) */
-     char cons_base; /* uppercase consensus base according to base-counts, after read-level filtering. */
-     int coverage; /* coverage after read-level filtering i.e. same as in samtools mpileup (n_plp) but without indels! */
-
-     /* list of qualities: keeping them all here in one place so that
-      * filtering can become separate step. alternative is to filter
-      * during pileup. the latter doesn't work if you want to filter
-      * based on a consensus which you don't know in advance */
-     int_varray_t base_quals[NUM_NT4]; 
-     int_varray_t map_quals[NUM_NT4]; 
-     int_varray_t source_quals[NUM_NT4]; 
-     long int fw_counts[NUM_NT4]; 
-     long int rv_counts[NUM_NT4]; 
-     /* fw_counts[b] + rv_counts[b] = x_quals.n = coverage */
-
-     int num_heads; /* number of read starts at this pos */
-     int num_tails; /* number of read ends at this pos */
-
-     int num_ins, sum_ins;
-     int_varray_t ins_quals; 
-
-     int num_dels, sum_dels;
-     int_varray_t del_quals; 
-
-     /* changes here should be reflected in plp_col_init, plp_col_free etc. */
-} plp_col_t;
-
-
-#define PLP_COL_ADD_QUAL(p, q)   int_varray_add_value((p), (q))
-
-
-void
-plp_col_init(plp_col_t *p) {
-    int i;
-
-    p->target =  NULL;
-    p->pos = -INT_MAX;
-    p->ref_base = '\0';
-    p->cons_base = 'N';
-    p->coverage = -INT_MAX;
-    for (i=0; i<NUM_NT4; i++) {
-         int_varray_init(& p->base_quals[i], 0);
-         int_varray_init(& p->map_quals[i], 0);
-         int_varray_init(& p->source_quals[i], 0); /* FIXME unused */
-         p->fw_counts[i] = 0;
-         p->rv_counts[i] = 0;
-    }
-
-    p->num_heads = p->num_tails = 0;
-
-    p->num_ins = p->sum_ins = 0;
-    int_varray_init(& p->ins_quals, 0);
-    p->num_dels = p->sum_dels = 0;
-    int_varray_init(& p->del_quals, 0);
-}
-
-void
-plp_col_free(plp_col_t *p) {
-    int i;
-
-    free(p->target);
-    for (i=0; i<NUM_NT4; i++) {
-         int_varray_free(& p->base_quals[i]);
-         int_varray_free(& p->map_quals[i]);
-         int_varray_free(& p->source_quals[i]);
-    }
-    int_varray_init(& p->ins_quals, 0);
-    int_varray_init(& p->del_quals, 0);
-}
-
-void plp_col_debug_print(const plp_col_t *p, FILE *stream)
-{
-     int i;
-     
-     fprintf(stream, "%s\t%d\t%c\t%c\tcounts:rv/fw",
-             p->target, p->pos+1, p->ref_base, p->cons_base);
-     for (i=0; i<NUM_NT4; i++) {
-          fprintf(stream, " %c:%lu/%lu",
-                  bam_nt4_rev_table[i],
-                  p->fw_counts[i],
-                  p->rv_counts[i]);
-     }
-
-     fprintf(stream, " heads:%d tails:%d", p->num_heads, p->num_tails);
-     fprintf(stream, " ins=%d del=%d", p->num_ins, p->num_dels);
-     fprintf(stream, "\n");
-
-#if 0
-     for (i=0; i<NUM_NT4; i++) {
-          int j;
-          fprintf(stream, "%c BQs (%lu): " , bam_nt4_rev_table[i], p->base_quals[i].n);
-          for (j=0; j<p->base_quals[i].n; j++) {
-               fprintf(stream, " %d", p->base_quals[i].data[j]);
-          }
-          fprintf(stream, "\n");
-     }
-#endif
-}
-
-/* attempt to keep a function in here that produces output similar to
- * the last pre-c version which can be easily parsed from Python. Note
- * however, that defaults have changed and that filtering was done differently before.
- */
-void
-plp_col_mpileup_print(const plp_col_t *p, FILE *stream)
-{
-     int i, j;
-     
-     fprintf(stream, "%s\t%d\t%c\t%d\t", 
-             p->target, p->pos+1, p->ref_base,p->coverage);
-     for (i=0; i<NUM_NT4; i++) {
-          for (j=0; j<p->base_quals[i].n; j++) {
-               fprintf(stream, "%c%c",
-                       bam_nt4_rev_table[i],  p->base_quals[i].data[j]+33);
-          }
-     }
-           
-     fprintf(stream, "\t#heads=%d #tails=%d #ins=%d ins_len=%.1f #del=%d del_len=%.1f\n",
-          p->num_heads, p->num_tails,
-          p->num_ins, p->num_ins ? p->sum_ins/(float)p->num_ins : 0,
-          p->num_dels, p->num_dels ? p->sum_dels/(float)p->num_dels : 0);
-}
-/* plp_col_mpileup_print() */
 
 
 void
@@ -479,26 +291,6 @@ call_lowfreq_snps(const plp_col_t *p, const snvcall_conf_t *conf)
 /* call_lowfreq_snps() */
 
 
-
-/* FIXME get rid in the future */
-static inline int
-printw(int c, FILE *fp)
-{
-    char buf[16];
-    int l, x;
-    if (c == 0) return fputc('0', fp);
-    for (l = 0, x = c < 0? -c : c; x > 0; x /= 10) buf[l++] = x%10 + '0';
-    if (c < 0) buf[l++] = '-';
-    buf[l] = 0;
-    for (x = 0; x < l/2; ++x) {
-        int y = buf[x]; buf[x] = buf[l-1-x]; buf[l-1-x] = y;
-    }
-    fputs(buf, fp);
-    return 0;
-}
-
-
-
 char *
 cigar_from_bam(const bam1_t *b) {
      /* from char *bam_format1_core(const bam_header_t *header, const bam1_t *b, int of) */
@@ -716,450 +508,6 @@ PJ = PM + (1-PM) * PB
 
 
 
-static int
-mplp_func(void *data, bam1_t *b)
-{
-    extern int bam_realn(bam1_t *b, const char *ref);
-    extern int bam_prob_realn_core(bam1_t *b, const char *ref, int);
-    extern int bam_cap_mapQ(bam1_t *b, char *ref, int thres);
-    mplp_aux_t *ma = (mplp_aux_t*)data;
-    int ret, skip = 0;
-    do {
-        int has_ref;
-        ret = ma->iter? bam_iter_read(ma->fp, ma->iter, b) : bam_read1(ma->fp, b);
-        if (ret < 0) 
-             break;
-        if (b->core.tid < 0 || (b->core.flag&BAM_FUNMAP)) { /* exclude unmapped reads */
-            skip = 1;
-            continue;
-        }
-        if (ma->conf->bed) { /* test overlap */
-            skip = !bed_overlap(ma->conf->bed, ma->h->target_name[b->core.tid], b->core.pos, bam_calend(&b->core, bam1_cigar(b)));
-            if (skip) 
-                 continue;
-        }
-
-        if (ma->conf->flag & MPLP_ILLUMINA13) {
-            int i;
-            uint8_t *qual = bam1_qual(b);
-            for (i = 0; i < b->core.l_qseq; ++i)
-                qual[i] = qual[i] > 31? qual[i] - 31 : 0;
-        }
-        has_ref = (ma->ref && ma->ref_id == b->core.tid)? 1 : 0;
-        skip = 0;
-        if (has_ref && (ma->conf->flag&MPLP_REALN)) 
-             bam_prob_realn_core(b, ma->ref, (ma->conf->flag & MPLP_EXT_BAQ)? 3 : 1);
-        if (has_ref && ma->conf->capQ_thres > 10) {
-            int q = bam_cap_mapQ(b, ma->ref, ma->conf->capQ_thres);
-            if (q < 0) {
-                 skip = 1;
-            } else if (b->core.qual > q) {
-                 b->core.qual = q;
-            }
-        } else if (b->core.qual > ma->conf->max_mq) {
-             b->core.qual = ma->conf->max_mq;
-        } else if (b->core.qual < ma->conf->min_mq) {
-             skip = 1; 
-        }
-        else if ((ma->conf->flag&MPLP_NO_ORPHAN) && (b->core.flag&1) && !(b->core.flag&2)) {
-             skip = 1;
-        }
-    } while (skip);
-
-#ifdef USE_SOURCEQUAL
-    /* compute source qual if requested and have ref */
-    if (ma->ref && ma->ref_id == b->core.tid && ma->conf->flag & MPLP_USE_SQ:FIXME:now-in-snvcall_conf) {
-         int sq = source_qual(b, ma->ref);
-         LOG_FIXME("%s\n", "Got sq %d. What now?", sq);
-    }
-#endif
-    return ret;
-}
-
-
-
-/* Convenience function to press pileup info into one easy to handle data-structure.
- * plp_col members allocated here. Called must free with
- * plp_col_free(plp_col);
- */
-void compile_plp_col(plp_col_t *plp_col,
-                 const bam_pileup1_t *plp, const int n_plp, 
-                 const mplp_conf_t *conf, const char *ref, const int pos, 
-                 const int ref_len, const char *target_name)
-{
-     int i;
-     char ref_base;
-
-     /* "base counts" minus error-probs before base-level filtering
-      * for each base. temporary data-structure for cheaply determining
-      * consensus which is saved in plp_col */
-     double base_counts[NUM_NT4] = { 0 }; 
-
-     /* computation of depth (after read-level *and* base-level filtering)
-      * samtools-0.1.18/bam2depth.c: 
-      *   if (p->is_del || p->is_refskip) ++m; 
-      *   else if (bam1_qual(p->b)[p->qpos] < bq) ++m
-      * n_plp[i] - m
-      */
-     int num_skips = 0;
-
-     ref_base = (ref && pos < ref_len)? ref[pos] : 'N';
-     
-     plp_col_init(plp_col);
-     plp_col->target = strdup(target_name);
-     plp_col->pos = pos;
-     plp_col->ref_base = toupper(ref_base);
-     plp_col->coverage = n_plp;  /* this is coverage as in the original mpileup, 
-                                   i.e. after read-level filtering */
-     LOG_DEBUG("Processing %s:%d\n", plp_col->target, plp_col->pos+1);
-     
-     for (i = 0; i < n_plp; ++i) {
-          /* inserted parts of pileup_seq() here.
-           * logic there goes like this:
-           *
-           * if is_head: put ^
-           *
-           * if ! is_del: put c
-           * else:        put * (or <> if refskip)
-           *
-           * if indel>0:   print + p[qpos +1...indel]
-           * elif indel<0: print - p[qpos +1...indel]
-           *
-           * if is_tail: put $ 
-           */
-          const bam_pileup1_t *p = plp + i;
-          int nt, nt4;
-          int mq, bq; /* phred scores */
-          int base_skip = 0; /* boolean */
-
-          /* GATKs BI & BD: "are per-base quantities which estimate
-           * the probability that the next base in the read was
-           * mis-incorporated or mis-deleted (due to slippage, for
-           * example)". See
-           * http://www.broadinstitute.org/gatk/guide/article?id=44
-           * and
-           * http://gatkforums.broadinstitute.org/discussion/1619/baserecalibratorprintreads-bd-and-bi-flags
-           */
-          uint8_t *bi = bam_aux_get(p->b, "BI"); /* GATK indels */
-          uint8_t *bd = bam_aux_get(p->b, "BD"); /* GATK deletions */
-
-#if 0
-          LOG_FIXME("At %s:%d %c: p->is_del=%d p->is_refskip=%d p->indel=%d p->is_head=%d p->is_tail=%d\n", 
-                    plp_col->target, 
-                    plp_col->pos+1,
-                    bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos)],
-                    p->is_del, p->is_refskip, p->indel, p->is_head, p->is_tail);
-#endif
-
-          if (! p->is_del) {
-               if (p->is_head) {
-                    plp_col->num_heads += 1;
-               }
-               if (p->is_tail) {
-                    plp_col->num_tails += 1;
-               }
-
-               /* nt for printing */
-               nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos)];
-               nt = bam1_strand(p->b)? tolower(nt) : toupper(nt);
-
-               /* nt4 for indexing */
-               nt4 = bam_nt16_nt4_table[bam1_seqi(bam1_seq(p->b), p->qpos)];                           
-
-               bq = bam1_qual(p->b)[p->qpos];
-
-               /* minimal base-call quality filtering
-                */
-               if (bq < conf->min_bq) {
-                    base_skip = 1;
-                    goto check_indel; /* FIXME: argh! */
-               }
-
-               /* the following will correct base-pairs down if they
-                * exceed the valid sanger/phred limits. is it wise to
-                * do this automatically? doesn't this indicate a
-                * problem with the input ? */
-               if (bq > 93) {
-                    bq = 93; /* Sanger/Phred max */
-               }
-
-               base_counts[nt4] += (1.0 - PHREDQUAL_TO_PROB(bq));
-
-               /* no need for check if mq is within user defined
-                * limits. check was done in mplp_func */
-               mq = p->b->core.qual;
-               /* samtools check to detect Sanger max value: problem
-                * is that an MQ Phred of 255 means NA according to the
-                * samtools spec (needed below). This however is not
-                * detectable if the following original samtools line
-                * gets executed, which is why we remove it:
-                * if (mq > 126) mq = 126;
-                */
-
-               PLP_COL_ADD_QUAL(& plp_col->base_quals[nt4], bq);
-               PLP_COL_ADD_QUAL(& plp_col->map_quals[nt4], mq);
-               if (bam1_strand(p->b)) {
-                    plp_col->rv_counts[nt4] += 1;
-               } else {
-                    plp_col->fw_counts[nt4] += 1;
-               }
-                
-               if (bi) {
-                    int j;
-                    char *t = (char*)(bi+1); /* 1 is type */
-#if 0
-                    printf("At %d qpos %d: BI=%s", plp_col->pos+1, p->qpos+1, t);
-                    for (j = 0; j < p->indel; ++j) {
-                         printf(" %c:%d-%d-%d", t[p->qpos+j], t[p->qpos+j-1]-33, t[p->qpos+j]-33, t[p->qpos+j+1]-33);
-                    }
-                    printf("\n");
-#endif
-                    /* adding 1 value representing whole insert */
-                    PLP_COL_ADD_QUAL(& plp_col->ins_quals, t[p->qpos]);
-               }
-
-               if (bd) {
-                    int j;
-                    char *t = (char*)(bd+1);  /* 1 is type */
-#if 0
-                    printf("At %d qpos %d: BD=%sx", plp_col->pos+1, p->qpos+1, t);
-                    for (j = 0; j < p->indel; ++j) {
-                         printf(" %c:%d-%d-%d", t[p->qpos+j], t[p->qpos+j-1]-33, t[p->qpos+j]-33, t[p->qpos+j+1]-33);
-                    }
-                    printf("\n");
-#endif
-                    PLP_COL_ADD_QUAL(& plp_col->del_quals, t[p->qpos]);
-                    /* adding 1 value representing whole del */
-               }
-          } /* ! p->is_del */
-          
-#if 0
-          /* FIXME so what happens if is_del?
-           *
-           * special case p->is_refskip is
-           * possible see ('spliced alignment'?)
-           *
-           * Observation: if indel<0 == del then they are followed by
-           * is_del's. shouldn't that rather happen for ins? 
-           */
-          if (p->is_del || p->indel) {
-               fflush(stdout); fflush(stderr);
-               LOG_FIXME("At %s:%d p->is_del=%d p->is_refskip=%d p->indel=%d\n", 
-                         plp_col->target, plp_col->pos+1, p->is_del, p->is_refskip, p->indel);
-               fflush(stdout); fflush(stderr);
-
-          }
-#endif     
-          
-     check_indel:
-          
-          /* for post read- and base-level coverage */
-          if (p->is_del || p->is_refskip || 1 == base_skip) {
-               num_skips += 1;
-          }
-          
-          /* A pattern \+[0-9]+[ACGTNacgtn]+' indicates there is an
-           * insertion between this reference position and the next
-           * reference position. The length of the insertion is given
-           * by the integer in the pattern, followed by the inserted
-           * sequence. Similarly, a pattern -[0-9]+[ACGTNacgtn]+
-           * represents a deletion from the reference. The deleted
-           * bases will be presented as ‘*’ in the following lines.
-           */
-
-          if (p->indel != 0) { /* seems to rule out is_del */
-               int j;
-               /* insertion (+)
-                */
-               if (p->indel > 0) {
-                    plp_col->num_ins += 1;
-                    LOG_FIXME("%s\n", "FIXME:need-to-save-ins-allele-and-its-counts.above-is-just-a-total.use-list/array-instead-of-hash.dont-expect-many-alleles");
-                    plp_col->sum_ins += p->indel;
-#ifdef PRINT_INDEL
-                    putchar('+'); printw(p->indel, stdout);
-                    putchar(' ');
-                    for (j = 1; j <= p->indel; ++j) {
-                         int c = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos + j)];
-                         putchar(bam1_strand(p->b)? tolower(c) : toupper(c));
-                    }
-                    printf("\n");
-#endif 
-               /* deletion (-)
-                */
-               } else if (p->indel < 0) {
-                    plp_col->num_dels += 1;
-                    LOG_FIXME("%s\n", "FIXME:need-to-save-del-allele-and-its-counts.above-is-just-a-total.use-list/array-instead-of-hash.dont-expect-many-alleles");
-                    plp_col->sum_dels -= p->indel;
-#ifdef PRINT_INDEL                   
-                    printw(p->indel, stdout);
-                    putchar(' ');
-                    for (j = 1; j <= -p->indel; ++j) {
-                         int c = (ref && (int)pos+j < ref_len)? ref[pos+j] : 'N';
-                         putchar(bam1_strand(p->b)? tolower(c) : toupper(c));
-                    }
-                    printf("\n");
-#endif
-               }
-          } /* if (p->indel != 0) ... */
-          
-     }  /* end: for (i = 0; i < n_plp; ++i) { */
-
-     plp_col->coverage -= num_skips;
-     
-     /* determine consensus from 'counts' */
-     plp_col->cons_base = bam_nt4_rev_table[
-          argmax_d(base_counts, NUM_NT4)];
-
-     if (debug) {
-          plp_col_debug_print(plp_col, stdout);
-     }
-#if 0
-     plp_col_mpileup_print(plp_col, conf, stdout);
-#endif
-
-     for (i = 0; i < NUM_NT4; ++i) {
-          assert(plp_col->fw_counts[i] + plp_col->rv_counts[i] == plp_col->base_quals[i].n);
-          assert(plp_col->base_quals[i].n == plp_col->map_quals[i].n);
-          /* FIXME assert(plp_col->map_quals[i].n == plp_col->source_quals[i].n); */
-     }
-}
-/* compile_plp_col() */
-
-
-
-/* will call snvs only if snvcall_conf is not NULL */
-static int
-mpileup(const mplp_conf_t *mplp_conf, 
-        const snvcall_conf_t *snvcall_conf, 
-        void (*plp_proc_func)(const plp_col_t*, const snvcall_conf_t* /* fake for non snv callers */),
-        const int n, const char **fn)
-{
-    mplp_aux_t **data;
-    int i, tid, pos, *n_plp, tid0 = -1, beg0 = 0, end0 = 1u<<29, ref_len, ref_tid = -1, max_depth;
-    const bam_pileup1_t **plp;
-    bam_mplp_t iter;
-    bam_header_t *h = 0;
-    char *ref;
-    kstring_t buf;
-  
-    /* paranoid exit. n only allowed to be one in our case (not much
-     * of an *m*pileup, I know...) */
-    if (1 != n) {
-         fprintf(stderr, "FATAL(%s:%s): need exactly one BAM files as input (got %d)\n",
-                 __FILE__, __FUNCTION__, n);
-         for (i=0; i<n; i++) {
-              fprintf(stderr, "%s\n", fn[i]);
-         }
-         return 1;
-    }
-
-    memset(&buf, 0, sizeof(kstring_t));
-    data = calloc(n, sizeof(void*));
-    plp = calloc(n, sizeof(void*));
-    n_plp = calloc(n, sizeof(int*));
-
-
-    /* read the header and initialize data */
-    for (i = 0; i < n; ++i) {
-        bam_header_t *h_tmp;
-        if (0 != strcmp(fn[i], "-")) {
-          if (! file_exists(fn[i])) {
-            fprintf(stderr, "File '%s' does not exist. Exiting...\n", fn[i]);
-            exit(1);
-          }
-        }
-        data[i] = calloc(1, sizeof(mplp_aux_t));
-        data[i]->fp = strcmp(fn[i], "-") == 0? bam_dopen(fileno(stdin), "r") : bam_open(fn[i], "r");
-        data[i]->conf = mplp_conf;
-        h_tmp = bam_header_read(data[i]->fp);
-        data[i]->h = i? h : h_tmp; /* for i==0, "h" has not been set yet */
-
-        if (mplp_conf->reg) {
-            int beg, end;
-            bam_index_t *idx;
-            idx = bam_index_load(fn[i]);
-            if (idx == 0) {
-                fprintf(stderr, "[%s] fail to load index for %d-th input.\n", __func__, i+1);
-                exit(1);
-            }
-            if (bam_parse_region(h_tmp, mplp_conf->reg, &tid, &beg, &end) < 0) {
-                fprintf(stderr, "[%s] malformatted region or wrong seqname for %d-th input.\n", __func__, i+1);
-                exit(1);
-            }
-            if (i == 0) tid0 = tid, beg0 = beg, end0 = end;
-            data[i]->iter = bam_iter_query(idx, tid, beg, end);
-            bam_index_destroy(idx);
-        }
-        if (i == 0) {
-             h = h_tmp;
-        } else {
-            bam_header_destroy(h_tmp);
-        }
-    }
-    /*LOG_DEBUG("%s\n", "BAM header initialized");*/
-
-    if (tid0 >= 0 && mplp_conf->fai) { /* region is set */
-        ref = faidx_fetch_seq(mplp_conf->fai, h->target_name[tid0], 0, 0x7fffffff, &ref_len);
-        ref_tid = tid0;
-        for (i = 0; i < n; ++i) data[i]->ref = ref, data[i]->ref_id = tid0;
-    } else {
-         ref_tid = -1;
-         ref = 0;
-    }
-    iter = bam_mplp_init(n, mplp_func, (void**)data);
-    max_depth = mplp_conf->max_depth;
-    if (max_depth * 1 > 1<<20)
-        fprintf(stderr, "(%s) Max depth is above 1M. Potential memory hog!\n", __func__);
-    if (max_depth * 1 < 8000) {
-        max_depth = 8000 / 1;
-        fprintf(stderr, "<%s> Set max per-file depth to %d\n", __func__, max_depth);
-    }
-    bam_mplp_set_maxcnt(iter, max_depth);
-
-
-    LOG_DEBUG("%s\n", "Starting pileup loop");
-    while (bam_mplp_auto(iter, &tid, &pos, n_plp, plp) > 0) {
-        plp_col_t plp_col;
-        int i=0; /* NOTE: mpileup originally iterated over n */
-
-        if (mplp_conf->reg && (pos < beg0 || pos >= end0))
-             continue; /* out of the region requested */
-        if (mplp_conf->bed && tid >= 0 && !bed_overlap(mplp_conf->bed, h->target_name[tid], pos, pos+1)) 
-             continue;
-        if (tid != ref_tid) {
-            free(ref); ref = 0;
-            if (mplp_conf->fai) 
-                 ref = faidx_fetch_seq(mplp_conf->fai, h->target_name[tid], 0, 0x7fffffff, &ref_len);
-            for (i = 0; i < n; ++i) 
-                 data[i]->ref = ref, data[i]->ref_id = tid;
-            ref_tid = tid;
-        }
-        i=0; /* i is 1 for first pos which is a bug due to the removal
-              * of one of the loops, so reset here */
-
-        compile_plp_col(&plp_col, plp[i], n_plp[i], mplp_conf, 
-                    ref, pos, ref_len, h->target_name[tid]);
-
-        (*plp_proc_func)(& plp_col, snvcall_conf);
-
-        plp_col_free(& plp_col);
-
-    } /* while bam_mplp_auto */
-
-    free(buf.s);
-    bam_mplp_destroy(iter);
-    bam_header_destroy(h);
-    for (i = 0; i < n; ++i) {
-        bam_close(data[i]->fp);
-        if (data[i]->iter) bam_iter_destroy(data[i]->iter);
-        free(data[i]);
-    }
-    free(data); free(plp); free(ref); free(n_plp);
-    return 0;
-}
-/* mpileup() */
-
-
 void
 dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream) 
 {
@@ -1168,38 +516,12 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
      fprintf(stream, "  def_altbq = %d\n", c->def_altbq);
      fprintf(stream, "  bonf         = %lu  (might get recalculated later)\n", c->bonf);
      fprintf(stream, "  sig          = %f\n", c->sig);
-     fprintf(stream, "  out          = %p\n", c->out);
+     fprintf(stream, "  out          = %p\n", (void*)c->out);
      fprintf(stream, "  flag & SNVCALL_USE_MQ     = %d\n", c->flag&SNVCALL_USE_MQ?1:0);
 #ifdef USE_SOURCEQUAL
      fprintf(stream, "  flag & SNVCALL_USE_SQ     = %d\n", c->flag&SNVCALL_USE_SQ?1:0);
 #endif
 }
-
-
-void
-dump_mplp_conf(const mplp_conf_t *c, FILE *stream) 
-{
-     fprintf(stream, "mplp options\n");
-     fprintf(stream, "  max_mq       = %d\n", c->max_mq);
-     fprintf(stream, "  min_mq       = %d\n", c->min_mq);
-     fprintf(stream, "  flag         = %d\n", c->flag);
-
-     fprintf(stream, "  flag & MPLP_NO_ORPHAN  = %d\n", c->flag&MPLP_NO_ORPHAN?1:0);
-     fprintf(stream, "  flag & MPLP_REALN      = %d\n", c->flag&MPLP_REALN?1:0);
-     fprintf(stream, "  flag & MPLP_EXT_BAQ    = %d\n", c->flag&MPLP_EXT_BAQ?1:0);
-     fprintf(stream, "  flag & MPLP_ILLUMINA13 = %d\n", c->flag&MPLP_ILLUMINA13?1:0);
-     
-     fprintf(stream, "  capQ_thres   = %d\n", c->capQ_thres);
-     fprintf(stream, "  max_depth    = %d\n", c->max_depth);
-     fprintf(stream, "  min_bq    = %d\n", c->min_bq);
-     fprintf(stream, "  reg          = %s\n", c->reg);
-     fprintf(stream, "  fa           = %p\n", c->fa);
-     /*fprintf(stream, "  fai          = %p\n", c->fai);*/
-     fprintf(stream, "  bed          = %p\n", c->bed);
-     fprintf(stream, "  cmdline      = %s\n", c->cmdline);
-}
-/* dump_mplp_conf() */
-
 
 
 static void
@@ -1228,7 +550,9 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -m|--min_mq INT        skip alignments with mapQ smaller than INT [%d]\n", mplp_conf->min_mq);
      fprintf(stderr, "       -M|--max_mq INT        cap mapping quality at INT [%d]\n", mplp_conf->max_mq);
      fprintf(stderr, "       -J|--no-mq             don't merge mapQ into baseQ: P_e = P_mq + (1-P_mq) P_bq\n");
+#ifdef USE_SOURCEQUAL
      fprintf(stderr, "       -S|--no-sq             don't merge sourceQ into baseQ\n");
+#endif
      /* stats */
      fprintf(stderr, "       -s|--sig               P-value cutoff / significance level [%f]\n", snvcall_conf->sig);
      fprintf(stderr, "       -b|--bonf              Bonferroni factor. INT or 'auto' (default; non-zero-cov-pos * 3)\n");
@@ -1253,7 +577,8 @@ main_call(int argc, char *argv[])
      char *bed_file = NULL;
      mplp_conf_t mplp_conf;
      snvcall_conf_t snvcall_conf;
-     
+     void (*plp_proc_func)(const plp_col_t*, const snvcall_conf_t*) = &call_lowfreq_snps;
+
      LOG_FIXME("%s\n", "- Proper source qual use missing");
      LOG_FIXME("%s\n", "- Indel handling missing");
      LOG_FIXME("%s\n", "- Implement routine test against old SNV caller");
@@ -1273,7 +598,7 @@ main_call(int argc, char *argv[])
     snvcall_conf.bonf = 1;
     snvcall_conf.sig = 0.05;
     snvcall_conf.out = stdout;
-    mplp_conf.flag = SNVCALL_USE_MQ;/* | MPLP_USE_SQ; FIXME */
+    snvcall_conf.flag = SNVCALL_USE_MQ;/* | MPLP_USE_SQ; FIXME */
 
     /* FIXME getopt should be replaced with something more sensible like
      * argtable2 ot Gopt. Otherwise there's always the risk between
@@ -1301,8 +626,9 @@ main_call(int argc, char *argv[])
               {"min-mq", required_argument, NULL, 'm'},
               {"max-mq", required_argument, NULL, 'M'},
               {"no-mq", no_argument, NULL, 'J'},
+#ifdef USE_SOURCEQUAL
               {"no-sq", no_argument, NULL, 'S'},
-
+#endif
               {"bonf", required_argument, NULL, 'b'},
               {"sig", required_argument, NULL, 's'},
                    
@@ -1315,7 +641,7 @@ main_call(int argc, char *argv[])
          };
 
          /* see usage sync */
-         static const char *long_opts_str = "r:l:d:f:o:q:Q:a:Bm:M:JSb:s:IA:h";
+         static const char *long_opts_str = "r:l:d:f:o:q:Q:a:Bm:M:JSb:s:Ih";
 
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
@@ -1362,7 +688,7 @@ main_call(int argc, char *argv[])
 #ifdef USE_SOURCEQUAL
          case 'S': snvcall_conf.flag &= ~SNVCALL_USE_SQ; break;
 #endif
-         case '6': mplp_conf.flag |= MPLP_ILLUMINA13; break;
+         case 'I': mplp_conf.flag |= MPLP_ILLUMINA13; break;
 
          case 'b': 
               if (0 == strncmp(optarg, "auto", 4)) {
@@ -1440,11 +766,10 @@ main_call(int argc, char *argv[])
     assert(mplp_conf.min_bq <= snvcall_conf.min_altbq);
     assert(! (mplp_conf.bed && mplp_conf.reg));
    
-    void (*plp_proc_func)(const plp_col_t*, const snvcall_conf_t*) = &call_lowfreq_snps;
     vcf_write_header(snvcall_conf.out, PACKAGE_STRING, mplp_conf.fa);
     /* FIXME would be nice to use full command line here instead of PACKAGE_STRING */
-    (void) mpileup(&mplp_conf, &snvcall_conf, 
-                   plp_proc_func, 1, (const char **) argv + optind);
+    (void) mpileup(&mplp_conf, (void*)plp_proc_func, (void*)&snvcall_conf,
+                   1, (const char **) argv + optind);
 
 
     if (snvcall_conf.out == stdout) {
