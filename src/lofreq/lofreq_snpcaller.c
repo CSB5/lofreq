@@ -122,6 +122,31 @@ merge_baseq_and_mapq(const int bq, const int mq)
 
 
 
+void
+plp_summary(const plp_col_t *plp_col, const void* confp) 
+{
+     FILE* stream = stdout;
+     int i;
+
+     fprintf(stream, "%s\t%d\t%c\t%c",
+             plp_col->target, plp_col->pos+1, plp_col->ref_base, plp_col->cons_base);
+     for (i=0; i<NUM_NT4; i++) {
+          fprintf(stream, "\t%c:%lu/%lu",
+                  bam_nt4_rev_table[i],
+                  plp_col->fw_counts[i],
+                  plp_col->rv_counts[i]);
+     }
+
+     fprintf(stream, "\theads:%d\ttails:%d", plp_col->num_heads, plp_col->num_tails);
+     fprintf(stream, "\tins=%d\tdels=%d", plp_col->num_ins, plp_col->num_dels);
+     fprintf(stream, "\n");
+
+     LOG_FIXME("%s\n", "unfinished");
+}
+
+
+
+
 /* low-freq vars always called against cons_base, which might be
  * different from ref_base. if cons_base != ref_base then it's a
  * cons-var.
@@ -131,12 +156,13 @@ merge_baseq_and_mapq(const int bq, const int mq)
  * 
  */
 void
-call_lowfreq_snps(const plp_col_t *p, const snvcall_conf_t *conf)
+call_lowfreq_snps(const plp_col_t *p, const void *confp)
 {
      int *quals; /* qualities passed down to snpcaller */
      int quals_len; /* #elements in quals */
      int i, j;
 
+     snvcall_conf_t *conf = (snvcall_conf_t *)confp;
      /* 4 bases ignoring N, -1 reference/consensus base makes 3 */
      double pvalues[3]; /* pvalues reported back from snpcaller */
      int alt_counts[3]; /* counts for alt bases handed down to snpcaller */
@@ -559,8 +585,9 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "                              'auto' needs to pre-parse the BAM file once, i.e. this won't work with input from stdin (or named pipes).\n");
      fprintf(stderr, "                              Higher numbers speed up computation on high-coverage data considerably.\n");
      /* misc */
-     fprintf(stderr, "       -6|--illumina-1.3      assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
-     fprintf(stderr, "       -A|--use-orphan        count anomalous read pairs\n");
+     fprintf(stderr, "       -I|--illumina-1.3      assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
+     fprintf(stderr, "          --use-orphan        count anomalous read pairs\n");
+     fprintf(stderr, "          --plp-summary-only  no snv-calling. just output pileup summary per column");
 }
 /* usage() */
 
@@ -572,12 +599,14 @@ main_call(int argc, char *argv[])
      /* based on bam_mpileup() */
      int c, i;
      static int use_orphan = 0;
+     static int plp_summary_only = 0;
      int bonf_auto = 1;
      char *bam_file;
      char *bed_file = NULL;
      mplp_conf_t mplp_conf;
      snvcall_conf_t snvcall_conf;
-     void (*plp_proc_func)(const plp_col_t*, const snvcall_conf_t*) = &call_lowfreq_snps;
+     /*void (*plp_proc_func)(const plp_col_t*, const snvcall_conf_t*);*/
+     void (*plp_proc_func)(const plp_col_t*, const void*);
 
      LOG_FIXME("%s\n", "- Proper source qual use missing");
      LOG_FIXME("%s\n", "- Indel handling missing");
@@ -600,9 +629,7 @@ main_call(int argc, char *argv[])
     snvcall_conf.out = stdout;
     snvcall_conf.flag = SNVCALL_USE_MQ;/* | MPLP_USE_SQ; FIXME */
 
-    /* FIXME getopt should be replaced with something more sensible like
-     * argtable2 ot Gopt. Otherwise there's always the risk between
-     * incosistent long opt, short opt and usage */
+    /* keep in sync with long_opts_str and usage */
     while (1) {
          static struct option long_opts[] = {
               /* see usage sync */
@@ -634,14 +661,15 @@ main_call(int argc, char *argv[])
                    
               {"illumina-1.3", no_argument, NULL, 'I'},
               {"use-orphan", no_argument, &use_orphan, 1},
+              {"plp-summary-only", no_argument, &plp_summary_only, 1},
 
               {"help", no_argument, NULL, 'h'},
 
               {0, 0, 0, 0} /* sentinel */
          };
 
-         /* see usage sync */
-         static const char *long_opts_str = "r:l:d:f:o:q:Q:a:Bm:M:JSb:s:Ih";
+         /* keep in sync with long_opts and usage */
+         static const char *long_opts_str = "r:l:d:f:o:q:Q:a:Bm:M:JSb:s:Ih"; 
 
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
@@ -766,8 +794,16 @@ main_call(int argc, char *argv[])
     assert(mplp_conf.min_bq <= snvcall_conf.min_altbq);
     assert(! (mplp_conf.bed && mplp_conf.reg));
    
-    vcf_write_header(snvcall_conf.out, PACKAGE_STRING, mplp_conf.fa);
-    /* FIXME would be nice to use full command line here instead of PACKAGE_STRING */
+    LOG_FIXME("plp_summary_only=%d\n", plp_summary_only);
+    if (! plp_summary_only) {
+         /* FIXME would be nice to use full command line here instead of PACKAGE_STRING */
+         vcf_write_header(snvcall_conf.out, PACKAGE_STRING, mplp_conf.fa);
+         plp_proc_func = &call_lowfreq_snps;
+    } else {
+         LOG_FIXME("%s\n", "plp_func is plp_summary_only");
+         plp_proc_func = &plp_summary;
+
+    }
     (void) mpileup(&mplp_conf, (void*)plp_proc_func, (void*)&snvcall_conf,
                    1, (const char **) argv + optind);
 
