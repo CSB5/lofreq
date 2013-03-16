@@ -9,7 +9,7 @@
 #include "log.h"
 #include "utils.h"
 #include "lofreq_snpcaller.h"
-#include "lofreq_plp_summary.h"
+
 
 static void usage(const char *myname)
 {
@@ -50,7 +50,18 @@ int main(int argc, char *argv[])
           }
 
      } else if (strcmp(argv[1], "plp_summary") == 0) {
-          return main_plp_summary(argc-1, argv+1);
+          /* call self with command 'call' but add --plp_summary */
+          char **argv_tmp = calloc(argc, sizeof(char*));
+          int i, rc;
+          fprintf(stderr, "NOTE: the plp_summary command is just an alias for %s call --plp-summary-only (ignoring all the snv-call specific options)\n", BASENAME(argv[0]));
+          argv_tmp[0] = strdup("call");
+          for (i=2; i<argc; i++) {
+               argv_tmp[i-1] = argv[i];
+          }
+          argv_tmp[argc-1] = "--plp-summary-only";
+          rc = main_call(argc, argv_tmp);
+          free(argv_tmp);
+          return rc;
 
      } else if (strcmp(argv[1], "version") == 0) {
           fprintf(stdout, "%s\n", PACKAGE_VERSION);
