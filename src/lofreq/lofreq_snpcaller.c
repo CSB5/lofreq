@@ -232,8 +232,10 @@ call_lowfreq_snps(const plp_col_t *p, const void *confp)
           }
 
           for (j=0; j<p->base_quals[i].n; j++) {
-               int bq, mq, sq, final_q;
-
+               int bq, mq, final_q;
+#ifdef USE_SOURCEQUAL
+               int sq;
+#endif
                assert(p->fw_counts[i] + p->rv_counts[i] == p->base_quals[i].n);
                assert(p->base_quals[i].n == p->map_quals[i].n);
                /* FIXME assert(plp_col.map_quals[i].n == plp_col.source_quals[i].n); */
@@ -804,7 +806,7 @@ main_call(int argc, char *argv[])
          plp_proc_func = &plp_summary;
 
     }
-    (void) mpileup(&mplp_conf, (void*)plp_proc_func, (void*)&snvcall_conf,
+    (void) mpileup(&mplp_conf, plp_proc_func, (void*)&snvcall_conf,
                    1, (const char **) argv + optind);
 
 

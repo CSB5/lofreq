@@ -144,14 +144,14 @@ probvec_tailsum(double *probvec, int tail_startindex, int probvec_len)
 double *
 naive_calc_prob_dist(const int *quals, int N, int K)
 {
-   double *probvec = NULL;
-   double *probvec_prev = NULL;
-   double *probvec_swp = NULL;
-
-   int n;
-   fprintf(stderr, "CRITICAL(%s:%s:%d): Use pruned_calc_prob_dist instead of me\n", 
-           __FILE__, __FUNCTION__, __LINE__);
-
+     double *probvec = NULL;
+     double *probvec_prev = NULL;
+     double *probvec_swp = NULL;
+     
+     int n;
+     fprintf(stderr, "CRITICAL(%s:%s:%d): Possibly buggy code. Use pruned_calc_prob_dist instead of me\n", 
+             __FILE__, __FUNCTION__, __LINE__);
+     exit(1);
 
     if (NULL == (probvec = malloc((N+1) * sizeof(double)))) {
         fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
@@ -161,6 +161,7 @@ naive_calc_prob_dist(const int *quals, int N, int K)
     if (NULL == (probvec_prev = malloc((N+1) * sizeof(double)))) {
         fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
                 __FILE__, __FUNCTION__, __LINE__);
+        free(probvec);
         return NULL;
     }
 
@@ -179,6 +180,7 @@ naive_calc_prob_dist(const int *quals, int N, int K)
         probvec[k] = probvec_prev[k] + log_1_pn;
 
         for (k=1; k<K; k++) {
+             /* FIXME clang: The left operand of '+' is a garbage value */
             probvec[k] = log_sum(probvec_prev[k] + log_1_pn,
                                  probvec_prev[k-1] + log_pn);
         }

@@ -343,9 +343,11 @@ void compile_plp_col(plp_col_t *plp_col,
                     plp_col->num_tails += 1;
                }
 
+#if 0
                /* nt for printing */
                nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos)];
                nt = bam1_strand(p->b)? tolower(nt) : toupper(nt);
+#endif
 
                /* nt4 for indexing */
                nt4 = bam_nt16_nt4_table[bam1_seqi(bam1_seq(p->b), p->qpos)];                           
@@ -518,7 +520,7 @@ mpileup(const mplp_conf_t *mplp_conf,
         const int n, const char **fn)
 {
     mplp_aux_t **data;
-    int i, tid, pos, *n_plp, tid0 = -1, beg0 = 0, end0 = 1u<<29, ref_len, ref_tid = -1, max_depth;
+    int i, tid, pos, *n_plp, tid0 = -1, beg0 = 0, end0 = 1u<<29, ref_len = -1, ref_tid = -1, max_depth;
     const bam_pileup1_t **plp;
     bam_mplp_t iter;
     bam_header_t *h = 0;
@@ -537,9 +539,9 @@ mpileup(const mplp_conf_t *mplp_conf,
     }
 
     memset(&buf, 0, sizeof(kstring_t));
-    data = calloc(n, sizeof(void*));
-    plp = calloc(n, sizeof(void*));
-    n_plp = calloc(n, sizeof(int*));
+    data = calloc(n, sizeof(mplp_aux_t*));
+    plp = calloc(n, sizeof(bam_pileup1_t*));
+    n_plp = calloc(n, sizeof(int));
 
 
     /* read the header and initialize data */

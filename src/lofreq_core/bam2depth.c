@@ -87,7 +87,7 @@ int depth_stats(double *ret_mean, long int *ret_num_nonzero_pos,
       * rest of code unchanged and c
       */
 
-     data = calloc(n, sizeof(void*)); // data[i] for the i-th input
+     data = calloc(n, sizeof(aux_t*)); // data[i] for the i-th input
      beg = 0; end = 1<<30; tid = -1;  // set the default region
      for (i = 0; i < n; ++i) {
           bam_header_t *htmp;
@@ -109,7 +109,7 @@ int depth_stats(double *ret_mean, long int *ret_num_nonzero_pos,
      // the core multi-pileup loop
      mplp = bam_mplp_init(n, read_bam, (void**)data); // initialization
      n_plp = calloc(n, sizeof(int)); // n_plp[i] is the number of covering reads from the i-th BAM
-     plp = calloc(n, sizeof(void*)); // plp[i] points to the array of covering reads (internal in mplp)
+     plp = calloc(n, sizeof(bam_pileup1_t *)); // plp[i] points to the array of covering reads (internal in mplp)
      while (bam_mplp_auto(mplp, &tid, &pos, n_plp, plp) > 0) { // come to the next covered position
           if (pos < beg || pos >= end) continue; /* out of range; skip */
           if (bed && bed_overlap(bed, h->target_name[tid], pos, pos + 1) == 0) continue; /* not in BED; skip */
