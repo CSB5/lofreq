@@ -52,7 +52,7 @@ def fdr(p_values, q=0.05):
     hypothesis, and "count" is the number of p-values for which the null
     hypothesis was rejected (these will always be the lowest "count" p-values).
 
-    Returns an array of bools: True if hypothesis is rejected
+    Same as p.adjust(pvs, method = 'BH') but returns an array of bools: True if hypothesis is rejected
     """
 
     N = len(p_values)
