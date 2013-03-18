@@ -589,7 +589,7 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      /* misc */
      fprintf(stderr, "       -I|--illumina-1.3      assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
      fprintf(stderr, "          --use-orphan        count anomalous read pairs\n");
-     fprintf(stderr, "          --plp-summary-only  no snv-calling. just output pileup summary per column");
+     fprintf(stderr, "          --plp-summary-only  no snv-calling. just output pileup summary per column\n");
 }
 /* usage() */
 
@@ -796,7 +796,6 @@ main_call(int argc, char *argv[])
     assert(mplp_conf.min_bq <= snvcall_conf.min_altbq);
     assert(! (mplp_conf.bed && mplp_conf.reg));
    
-    LOG_FIXME("plp_summary_only=%d\n", plp_summary_only);
     if (! plp_summary_only) {
          /* FIXME would be nice to use full command line here instead of PACKAGE_STRING */
          vcf_write_header(snvcall_conf.out, PACKAGE_STRING, mplp_conf.fa);
