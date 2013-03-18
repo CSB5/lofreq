@@ -38,6 +38,7 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 
 #define SNVCALL_USE_MQ      0x10
 #define SNVCALL_USE_SQ      0x20
+#define SNVCALL_CONS_AS_REF 0x40
 
 
 typedef struct {
@@ -171,6 +172,30 @@ call_lowfreq_snps(const plp_col_t *p, const void *confp)
      int alt_idx;
      int got_alt_bases = 0;
 
+     /* 
+      * as snv-ref we always report what the user wanted (given
+      * ref or determined cons if corresponding flag was given).
+      * we always use the determined cons for calculating a quality though.
+      *
+      *  Example with given ref A and cons/alt C
+      *  Alt bases are all non-cons bases: A(!), T, G
+      * 
+      *  if cons_as_ref:
+      *   C>A tested as A vs C
+      *   C>T tested as T vs C
+      *   C>G tested as G vs C
+      *   (no CONSVARs possible by definition)
+      *    
+      *  else (ref):
+      *   A>C tested as NIL (CONSVAR A vs C)
+      *   A>T tested as T vs C
+      *   A>G tested as G vs C
+      *   (A>A obviously not possible)
+      *
+      * First branch is "default" i.e. doesn't need exception checking
+      */
+     int cons_as_ref = conf->flag & SNVCALL_CONS_AS_REF;
+
      /* don't call if no coverage or if we don't know what to call
       * against */
      if (p->coverage == 0 || p->cons_base == 'N') {          
@@ -187,10 +212,10 @@ call_lowfreq_snps(const plp_col_t *p, const void *confp)
           }
      }
 
-     /* check for consensus snps, i.e. those where the consensus
-      * determined here is different from the reference coming from a
-      * fasta file */
-     if (p->ref_base != 'N' && p->ref_base != p->cons_base) {
+     /* CONSVAR, i.e. the consensus determined here is different from
+      * the reference coming from a fasta file 
+      */
+     if (p->ref_base != p->cons_base && !cons_as_ref && p->ref_base != 'N') {
           const int is_indel = 0;
           const int is_consvar = 1;
           const int qual = -1;
@@ -275,6 +300,7 @@ call_lowfreq_snps(const plp_col_t *p, const void *confp)
      }
      if (! got_alt_bases) {
           LOG_DEBUG("%s %d: only cons bases left after filtering.\n", p->target, p->pos+1);
+          /* ...and CONSVAR already reported */
           free(quals);
           return;
      }
@@ -294,17 +320,29 @@ call_lowfreq_snps(const plp_col_t *p, const void *confp)
           return;
      }
 
-
+     /* for all alt-bases, i.e. non-cons bases (which might include
+      * the ref-base!) */
      for (i=0; i<3; i++) {
           int alt_base = alt_bases[i];
           int alt_count = alt_counts[i];
           int alt_raw_count = alt_raw_counts[i];
           double pvalue = pvalues[i];
+          int reported_snv_ref = cons_as_ref ? p->cons_base : p->ref_base;
+
+          if (alt_base==reported_snv_ref) { /* p->ref_base && !cons_as_ref) {
+               /* self comparison */
+               continue;
+          }
+          if (p->ref_base==alt_base && !cons_as_ref) {
+               continue;
+          }
+
           if (pvalue * (double)conf->bonf < conf->sig) {
                const int is_indel = 0;
                const int is_consvar = 0;
                float af = alt_raw_count/(float)p->coverage;
-               report_var(conf->out, p, p->cons_base, alt_base, 
+
+               report_var(conf->out, p, reported_snv_ref, alt_base, 
                           af, PROB_TO_PHREDQUAL(pvalue), 
                           is_indel, is_consvar);
                LOG_DEBUG("low freq snp: %s %d %c>%c pv-prob:%g;pv-qual:%d counts-raw:%d/%d=%.6f counts-filt:%d/%d=%.6f\n",
@@ -545,10 +583,11 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
      fprintf(stream, "  bonf         = %lu  (might get recalculated later)\n", c->bonf);
      fprintf(stream, "  sig          = %f\n", c->sig);
      fprintf(stream, "  out          = %p\n", (void*)c->out);
-     fprintf(stream, "  flag & SNVCALL_USE_MQ     = %d\n", c->flag&SNVCALL_USE_MQ?1:0);
+     fprintf(stream, "  flag & SNVCALL_USE_MQ      = %d\n", c->flag&SNVCALL_USE_MQ?1:0);
 #ifdef USE_SOURCEQUAL
-     fprintf(stream, "  flag & SNVCALL_USE_SQ     = %d\n", c->flag&SNVCALL_USE_SQ?1:0);
+     fprintf(stream, "  flag & SNVCALL_USE_SQ      = %d\n", c->flag&SNVCALL_USE_SQ?1:0);
 #endif
+     fprintf(stream, "  flag & SNVCALL_CONS_AS_REF = %d\n", c->flag&SNVCALL_CONS_AS_REF?1:0);
 }
 
 
@@ -566,6 +605,7 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      /*  */
      fprintf(stderr, "       -d|--maxdepth INT      max per-BAM depth to avoid excessive memory usage [%d]\n", mplp_conf->max_depth);
      fprintf(stderr, "       -f|--reffa FILE        faidx indexed reference sequence file [null]\n");
+     fprintf(stderr, "       -c|--cons-as-ref       Use consensus base as ref, i.e. ignore base given in reffa (reffa still used for BAQ)\n");
      /* */
      fprintf(stderr, "       -o|--out FILE          vcf output file [- = stdout]\n");
      /* base call quality and baq */
@@ -643,7 +683,8 @@ main_call(int argc, char *argv[])
               
               {"maxdepth", required_argument, NULL, 'd'},
               {"reffa", required_argument, NULL, 'f'},
-               
+              {"cons-is-ref", no_argument, NULL, 'c'},
+
               {"out", required_argument, NULL, 'o'},
 
               {"min-bq", required_argument, NULL, 'q'},
@@ -671,7 +712,7 @@ main_call(int argc, char *argv[])
          };
 
          /* keep in sync with long_opts and usage */
-         static const char *long_opts_str = "r:l:d:f:o:q:Q:a:Bm:M:JSb:s:Ih"; 
+         static const char *long_opts_str = "r:l:d:f:co:q:Q:a:Bm:M:JSb:s:Ih"; 
 
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
@@ -683,6 +724,9 @@ main_call(int argc, char *argv[])
          switch (c) {
          /* see usage sync */
          case 'r': mplp_conf.reg = strdup(optarg); break; /* FIXME you can enter lots of invalid stuff and libbam won't complain. add checks here? */
+         case 'c': 
+              snvcall_conf.flag |= SNVCALL_CONS_AS_REF;
+              break;
          case 'l': 
               mplp_conf.bed = bed_read(optarg); 
               bed_file = strdup(optarg);
@@ -801,7 +845,6 @@ main_call(int argc, char *argv[])
          vcf_write_header(snvcall_conf.out, PACKAGE_STRING, mplp_conf.fa);
          plp_proc_func = &call_lowfreq_snps;
     } else {
-         LOG_FIXME("%s\n", "plp_func is plp_summary_only");
          plp_proc_func = &plp_summary;
 
     }
