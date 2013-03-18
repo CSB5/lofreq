@@ -1,4 +1,4 @@
-from distutils.core import setup, Extension
+from distutils.core import setup
 # see also http://docs.python.org/distutils/setupscript.html
 
 import os
