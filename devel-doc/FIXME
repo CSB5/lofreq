@@ -1,0 +1,36 @@
+- uniq pipeline next
+
+- add tests, tests, tests
+- missing license update
+- expose function to python ONLY for testing and easier prototyping
+- All production python stuff should be independent of any lib (C or Python)
+- before release diff all legacy scripts for changes
+- Master configure/makefile cleanup
+- Python 2.7 and Python 3. 2.6 not neccessarily anymore
+- Remove unnecessary stuff from lofreq_core
+- Replace optionparser with argparse
+- clang build error
+   /Users/wilma/Downloads/checker-272/scan-build ./configure CFLAGS='-I/opt/local/include'  LDFLAGS='-L/opt/local/lib' --prefix=$HOME/local CFLAGS='-Wall'
+   /Users/wilma/Downloads/checker-272/scan-build make
+      /bin/sh ../../libtool  --tag=CC   --mode=link /Users/wilma/Downloads/checker-272/libexec/ccc-analyzer -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -Wall -I../libbam/ -I../lofreq_core/ -Wall  -L/opt/local/lib -o lofreq2 lofreq_main.o lofreq_snpcaller.o ../lofreq_core/liblofreq_core.a ../libbam/libbam.a -lz -lm 
+      libtool: link: /Users/wilma/Downloads/checker-272/libexec/ccc-analyzer -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -Wall -I../libbam/ -I../lofreq_core/ -Wall -o lofreq2 lofreq_main.o lofreq_snpcaller.o  -L/opt/local/lib ../lofreq_core/liblofreq_core.a ../libbam/libbam.a -lz -lm
+      Undefined symbols:
+        "_unpackInt16", referenced from:
+            _bgzf_read_block in libbam.a(bgzf.o)
+            _check_header in libbam.a(bgzf.o)
+            _check_header in libbam.a(bgzf.o)
+        "_packInt16", referenced from:
+            _deflate_block in libbam.a(bgzf.o)
+        "_packInt32", referenced from:
+            _deflate_block in libbam.a(bgzf.o)
+            _deflate_block in libbam.a(bgzf.o)
+        "___ks_insertsort_uint64_t", referenced from:
+            _ks_combsort_uint64_t in libbam.a(bedidx.o)
+            _ks_introsort_uint64_t in libbam.a(bedidx.o)
+        "___ks_insertsort_off", referenced from:
+            _ks_combsort_off in libbam.a(bam_index.o)
+            _ks_introsort_off in libbam.a(bam_index.o)
+      ld: symbol(s) not found
+      clang: error: linker command failed with exit code 1 (use -v to see invocation)
+      make[1]: *** [lofreq2] Error 1
+      make: *** [all-recursive] Error 1
