@@ -31,15 +31,16 @@ int main(int argc, char *argv[])
           return 1;
      }
      if (strcmp(argv[1], "call") == 0)  {
-          return main_call(argc-1, argv+1);
+          return main_call(argc, argv);
 
      } else if (strcmp(argv[1], "filter") == 0) {
-          char **argv_execvp = calloc(argc-1, sizeof(char*));
+          char **argv_execvp = calloc(argc, sizeof(char*));
           int i;
           argv_execvp[0] = argv[0];
           for (i=2; i<argc; i++) {
                argv_execvp[i-1] = argv[i];
           }
+          argv_execvp[i-1] = NULL; /* sentinel */
           if (execvp("lofreq2_filter.py", argv_execvp)) {
                perror("Calling lofreq2_filter.py via execvp failed");
                free(argv_execvp);
@@ -50,22 +51,29 @@ int main(int argc, char *argv[])
           }
 
      } else if (strcmp(argv[1], "plp_summary") == 0) {
-          /* call self with command 'call' but add --plp_summary */
-          char **argv_tmp = calloc(argc, sizeof(char*));
+          /* use main_call() but add --plp_summary */
+          char **argv_tmp = calloc(argc+1, sizeof(char*));
           int i, rc;
           fprintf(stderr, "NOTE: the plp_summary command is just an alias for %s call --plp-summary-only (ignoring all the snv-call specific options)\n", BASENAME(argv[0]));
-          argv_tmp[0] = strdup("call");
+          argv_tmp[0] = argv[0];
+          argv_tmp[1] = "call";
+          argv_tmp[2] = "--plp-summary-only";
           for (i=2; i<argc; i++) {
-               argv_tmp[i-1] = argv[i];
+               argv_tmp[i+1] = argv[i];
           }
-          argv_tmp[argc-1] = "--plp-summary-only";
-          rc = main_call(argc, argv_tmp);
+#if 0
+          for (i=0; i<argc+1; i++) {
+               LOG_FIXME("New arg %d: %s\n", i, argv_tmp[i]);
+          }
+#endif
+          rc = main_call(argc+1, argv_tmp);
           free(argv_tmp);
           return rc;
 
      } else if (strcmp(argv[1], "version") == 0) {
           fprintf(stdout, "%s\n", PACKAGE_VERSION);
           return 0;
+
      } else {
           LOG_FATAL("Unrecognized command '%s'\n", argv[1]);
           return 1;
