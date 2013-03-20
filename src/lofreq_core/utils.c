@@ -115,24 +115,27 @@ int file_exists(const char *fname)
  *
  * returns file size (number of bytes) on success or negative number
  * on error
+ * 
+ * warnings:
+ * Function ae_load_file_to_memory returns loaded data size which does not take into account last null-terminate symbol.
+ * If you want to use this function to process string data, note that it may work incorrectly with multibyte encodings.
  */
 int ae_load_file_to_memory(const char *filename, char **result) 
 { 
 	int size = 0;
 	FILE *f = fopen(filename, "rb");
-	if (f == NULL) 
-	{ 
+	if (f == NULL) { 
 		*result = NULL;
-		return -1; // -1 means file opening fail 
+		return -1; /* -1 means file opening fail */
 	} 
 	fseek(f, 0, SEEK_END);
 	size = ftell(f);
 	fseek(f, 0, SEEK_SET);
 	*result = (char *)malloc(size+1);
-    if (NULL==result)
+    if (NULL==result) {
         return -2;
-	if (size != fread(*result, sizeof(char), size, f)) 
-	{ 
+    }
+	if (size != fread(*result, sizeof(char), size, f)) {
 		free(*result);
 		return -3; /* -2 means file reading fail  */
 	} 
@@ -140,3 +143,35 @@ int ae_load_file_to_memory(const char *filename, char **result)
 	(*result)[size] = 0;
 	return size;
 }
+
+/* count number of lines advise from
+ * http://stackoverflow.com/questions/8689344/portable-end-of-line-newline-in-c:
+ * open in binary mode and count \n. in text mode \n is replaced by a
+ * platform specific ELS.
+ *
+ * Returns value <0 on failure. Otherwise line count.
+ */
+long int
+count_lines(const char *filename)
+{
+    int c;
+    long int count = 0;
+	FILE *f = fopen(filename, "rb");
+
+	if (f == NULL) { 
+		return -1; /* -1 means file opening fail */
+	}
+    while (EOF != (c=getc(f))) {
+        if ('\n'==c) {
+            if (count==LONG_MAX) {
+                fprintf(stderr, "CRITICAL(%s|%s:%d): count overflow!\n",
+                        __FILE__, __FUNCTION__, __LINE__);
+                return -2;
+            }
+            count++;
+        }
+    }
+    fclose(f);
+    return count;
+}
+/* count_lines */
