@@ -40,7 +40,6 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #define SNVCALL_USE_SQ      0x20
 #define SNVCALL_CONS_AS_REF 0x40
 
-
 typedef struct {
      int min_altbq, def_altbq;/* tag:snvcall */
      unsigned long int bonf;/* tag: snvcall */
@@ -329,7 +328,7 @@ call_lowfreq_snps(const plp_col_t *p, const void *confp)
           double pvalue = pvalues[i];
           int reported_snv_ref = cons_as_ref ? p->cons_base : p->ref_base;
 
-          if (alt_base==reported_snv_ref) { /* p->ref_base && !cons_as_ref) {
+          if (alt_base==reported_snv_ref) { /* p->ref_base && !cons_as_ref) {*/
                /* self comparison */
                continue;
           }
@@ -597,39 +596,40 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "Usage: %s call [options] in.bam\n\n", PACKAGE);
      fprintf(stderr, "Options:\n");
      /* generic */
-     fprintf(stderr, "          --verbose           be verbose\n");
-     fprintf(stderr, "          --debug             enable debugging\n");
-     /* regions */
-     fprintf(stderr, "       -r|--region STR        region in which pileup should be generated [null]\n");
-     fprintf(stderr, "       -l|--bed FILE          list of positions (chr pos) or regions (BED) [null]\n");
-     /*  */
-     fprintf(stderr, "       -d|--maxdepth INT      max per-BAM depth to avoid excessive memory usage [%d]\n", mplp_conf->max_depth);
-     fprintf(stderr, "       -f|--reffa FILE        faidx indexed reference sequence file [null]\n");
-     fprintf(stderr, "       -c|--cons-as-ref       Use consensus base as ref, i.e. ignore base given in reffa (reffa still used for BAQ)\n");
-     /* */
-     fprintf(stderr, "       -o|--out FILE          vcf output file [- = stdout]\n");
-     /* base call quality and baq */
-     fprintf(stderr, "       -q|--min-bq INT        skip any base with baseQ smaller than INT [%d]\n", mplp_conf->min_bq);
-     fprintf(stderr, "       -Q|--min-altbq INT     skip nonref-bases with baseQ smaller than INT [%d]. Not active if ref is N\n", snvcall_conf->min_altbq);
-     fprintf(stderr, "       -a|--def-altbq INT     nonref base qualities will be replace with this value [%d]\n", snvcall_conf->def_altbq);
-     fprintf(stderr, "       -B|--no-baq            disable BAQ computation\n");
-     /* fprintf(stderr, "       -E           extended BAQ for higher sensitivity but lower specificity\n"); */
-     /* mapping quality */
-     fprintf(stderr, "       -m|--min_mq INT        skip alignments with mapQ smaller than INT [%d]\n", mplp_conf->min_mq);
-     fprintf(stderr, "       -M|--max_mq INT        cap mapping quality at INT [%d]\n", mplp_conf->max_mq);
-     fprintf(stderr, "       -J|--no-mq             don't merge mapQ into baseQ: P_e = P_mq + (1-P_mq) P_bq\n");
-#ifdef USE_SOURCEQUAL
-     fprintf(stderr, "       -S|--no-sq             don't merge sourceQ into baseQ\n");
-#endif
-     /* stats */
-     fprintf(stderr, "       -s|--sig               P-value cutoff / significance level [%f]\n", snvcall_conf->sig);
-     fprintf(stderr, "       -b|--bonf              Bonferroni factor. INT or 'auto' (default; non-zero-cov-pos * 3)\n");
-     fprintf(stderr, "                              'auto' needs to pre-parse the BAM file once, i.e. this won't work with input from stdin (or named pipes).\n");
-     fprintf(stderr, "                              Higher numbers speed up computation on high-coverage data considerably.\n");
-     /* misc */
-     fprintf(stderr, "       -I|--illumina-1.3      assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
-     fprintf(stderr, "          --use-orphan        count anomalous read pairs\n");
-     fprintf(stderr, "          --plp-summary-only  no snv-calling. just output pileup summary per column\n");
+     fprintf(stderr, "           --verbose                be verbose\n");
+     fprintf(stderr, "           --debug                  enable debugging\n");
+     /* regions */                                        
+     fprintf(stderr, "       -r | --region STR            region in which pileup should be generated [null]\n");
+     fprintf(stderr, "       -l | --bed FILE              list of positions (chr pos) or regions (BED) [null]\n");
+     /*  */                                               
+     fprintf(stderr, "       -d | --maxdepth INT          max per-BAM depth to avoid excessive memory usage [%d]\n", mplp_conf->max_depth);
+     fprintf(stderr, "       -f | --reffa FILE            faidx indexed reference sequence file [null]\n");
+     fprintf(stderr, "       -c | --cons-as-ref           Use consensus base as ref, i.e. ignore base given in reffa (reffa still used for BAQ)\n");
+     /* */                                                
+     fprintf(stderr, "       -o | --out FILE              vcf output file [- = stdout]\n");
+     /* base call quality and baq */                      
+     fprintf(stderr, "       -q | --min-bq INT            skip any base with baseQ smaller than INT [%d]\n", mplp_conf->min_bq);
+     fprintf(stderr, "       -Q | --min-altbq INT         skip nonref-bases with baseQ smaller than INT [%d]. Not active if ref is N\n", snvcall_conf->min_altbq);
+     fprintf(stderr, "       -a | --def-altbq INT         nonref base qualities will be replace with this value [%d]\n", snvcall_conf->def_altbq);
+     fprintf(stderr, "       -B | --no-baq                disable BAQ computation\n");
+     /* fprintf(stderr, "       -E           extended     BAQ for higher sensitivity but lower specificity\n"); */
+     /* mapping quality */                                
+     fprintf(stderr, "       -m | --min_mq INT            skip alignments with mapQ smaller than INT [%d]\n", mplp_conf->min_mq);
+     fprintf(stderr, "       -M | --max_mq INT            cap mapping quality at INT [%d]\n", mplp_conf->max_mq);
+     fprintf(stderr, "       -J | --no-mq                 don't merge mapQ into baseQ: P_e = P_mq + (1-P_mq) P_bq\n");
+#ifdef USE_SOURCEQUAL                                     
+     fprintf(stderr, "       -S | --no-sq                 don't merge sourceQ into baseQ\n");
+#endif                                                    
+     /* stats */                                          
+     fprintf(stderr, "       -s | --sig                   P-value cutoff / significance level [%f]\n", snvcall_conf->sig);
+     fprintf(stderr, "       -b | --bonf                  Bonferroni factor. INT or 'auto' (default; non-zero-cov-pos * 3)\n");
+     fprintf(stderr, "                                    'auto' needs to pre-parse the BAM file once, i.e. this won't work with input from stdin (or named pipes).\n");
+     fprintf(stderr, "                                    Higher numbers speed up computation on high-coverage data considerably.\n");
+     /* misc */                                           
+     fprintf(stderr, "       -I | --illumina-1.3          assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
+     fprintf(stderr, "            --use-orphan            count anomalous read pairs\n");
+     fprintf(stderr, "            --plp-summary-only      no snv-calling. just output pileup summary per column\n");
+     fprintf(stderr, "       -p | --pseudo-parallel INT   pseudo-parallel using INT processors, by splitting up the bed-file. NOTE: don't use if disk IO is a bottleneck\n");
 }
 /* usage() */
 
@@ -642,28 +642,32 @@ main_call(int argc, char *argv[])
      int c, i;
      static int use_orphan = 0;
      static int plp_summary_only = 0;
-     int bonf_auto = 1;
+     int bonf_auto = 0;
      char *bam_file;
      char *bed_file = NULL;
      mplp_conf_t mplp_conf;
      snvcall_conf_t snvcall_conf;
      /*void (*plp_proc_func)(const plp_col_t*, const snvcall_conf_t*);*/
      void (*plp_proc_func)(const plp_col_t*, const void*);
+     int pseudo_parallel = 0;
 
+     for (i=0; i<argc; i++) {
+          LOG_DEBUG("arg %d: %s\n", i, argv[i]);
+     }
      LOG_FIXME("%s\n", "- Proper source qual use missing");
      LOG_FIXME("%s\n", "- Indel handling missing");
      LOG_FIXME("%s\n", "- Implement routine test against old SNV caller");
      LOG_FIXME("%s\n", "- Test actual SNV and SB values for both types of SNVs");
 
-    memset(&mplp_conf, 0, sizeof(mplp_conf_t));
-    memset(&snvcall_conf, 0, sizeof(snvcall_conf_t));
-    /* default pileup options */
-    mplp_conf.max_mq = 255; /* 60 */
-    mplp_conf.min_bq = 3; /* 13 */
-    mplp_conf.capQ_thres = 0;
-    mplp_conf.max_depth = 1000000; /* 250 */
-    mplp_conf.flag = MPLP_NO_ORPHAN | MPLP_REALN | MPLP_EXT_BAQ;
-
+     memset(&mplp_conf, 0, sizeof(mplp_conf_t));
+     memset(&snvcall_conf, 0, sizeof(snvcall_conf_t));
+     /* default pileup options */
+     mplp_conf.max_mq = 255; /* 60 */
+     mplp_conf.min_bq = 3; /* 13 */
+     mplp_conf.capQ_thres = 0;
+     mplp_conf.max_depth = 1000000; /* 250 */
+     mplp_conf.flag = MPLP_NO_ORPHAN | MPLP_REALN | MPLP_EXT_BAQ;
+    
     snvcall_conf.min_altbq = 20; /* new */
     snvcall_conf.def_altbq = snvcall_conf.min_altbq;
     snvcall_conf.bonf = 1;
@@ -679,13 +683,13 @@ main_call(int argc, char *argv[])
               {"debug", no_argument, &debug, 1},
 
               {"region", required_argument, NULL, 'r'},
-              {"bed", required_argument, NULL, 'l'},
+              {"bed", required_argument, NULL, 'l'}, /* changes here must be reflected in pseudo_parallel code as well */
               
               {"maxdepth", required_argument, NULL, 'd'},
               {"reffa", required_argument, NULL, 'f'},
               {"cons-is-ref", no_argument, NULL, 'c'},
 
-              {"out", required_argument, NULL, 'o'},
+              {"out", required_argument, NULL, 'o'}, /* NOTE changes here must be reflected in pseudo_parallel code as well */
 
               {"min-bq", required_argument, NULL, 'q'},
               {"min-altbq", required_argument, NULL, 'Q'},
@@ -705,6 +709,7 @@ main_call(int argc, char *argv[])
               {"illumina-1.3", no_argument, NULL, 'I'},
               {"use-orphan", no_argument, &use_orphan, 1},
               {"plp-summary-only", no_argument, &plp_summary_only, 1},
+              {"pseudo-parallel", required_argument, NULL, 'p'}, /* name change here has to be reflected further down in code as well */
 
               {"help", no_argument, NULL, 'h'},
 
@@ -712,11 +717,12 @@ main_call(int argc, char *argv[])
          };
 
          /* keep in sync with long_opts and usage */
-         static const char *long_opts_str = "r:l:d:f:co:q:Q:a:Bm:M:JSb:s:Ih"; 
+         static const char *long_opts_str = "r:l:d:f:co:q:Q:a:Bm:M:JSb:s:Iph"; 
 
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
-         c = getopt_long(argc, argv, long_opts_str, long_opts, & long_opts_index);
+         c = getopt_long(argc-1, argv+1, /* skipping 'lofreq', just leaving 'command', i.e. call */
+                         long_opts_str, long_opts, & long_opts_index);
          if (c == -1) {
               break;
          }
@@ -773,7 +779,7 @@ main_call(int argc, char *argv[])
                    snvcall_conf.bonf = strtol(optarg, (char **)NULL, 10); /* atol */ 
                    if (0==snvcall_conf.bonf) {
                         LOG_FATAL("%s\n", "Couldn't parse Bonferroni factor\n"); 
-                        exit(1);
+                        return 1;
                    }
               }
               break;
@@ -781,14 +787,17 @@ main_call(int argc, char *argv[])
               snvcall_conf.sig = strtof(optarg, (char **)NULL); /* atof */
               if (0==snvcall_conf.sig) {
                    LOG_FATAL("%s\n", "Couldn't parse sign-threshold\n"); 
-                   exit(1);
+                   return 1;
               }
               break;
               
-         case 'h': usage(& mplp_conf, & snvcall_conf); exit(0); /* WARN: not printing defaults if some args where parsed */
-         case '?': LOG_FATAL("%s\n", "unrecognized arguments found. Exiting...\n"); exit(1);
+         case 'p':
+              pseudo_parallel = atoi(optarg); 
+              break;
+         case 'h': usage(& mplp_conf, & snvcall_conf); return 0; /* WARN: not printing defaults if some args where parsed */
+         case '?': LOG_FATAL("%s\n", "unrecognized arguments found. Exiting...\n"); return 1;
 #if 0
-         case 0:  fprintf(stderr, "ERROR: long opt (%s) not mapping to short option. Exiting...\n", long_opts[long_opts_index].name); exit(1);
+         case 0:  fprintf(stderr, "ERROR: long opt (%s) not mapping to short option. Exiting...\n", long_opts[long_opts_index].name); return 1;
 #endif
          default:
               break;
@@ -797,38 +806,48 @@ main_call(int argc, char *argv[])
     if (use_orphan) {
          mplp_conf.flag &= ~MPLP_NO_ORPHAN;
     }
+
     mplp_conf.cmdline[0] = '\0';
     for (i=0; i<argc; i++) {
          strncat(mplp_conf.cmdline, argv[i], sizeof(mplp_conf.cmdline)-strlen(mplp_conf.cmdline)-2);
          strcat(mplp_conf.cmdline, " ");
     }
 
-    if (argc == 1) {
+    if (argc == 2) {
         fprintf(stderr, "\n");
         usage(& mplp_conf, & snvcall_conf);
         return 1;
     }
-    if (1 != argc - optind) {
+    if (1 != argc - optind - 1) {
         fprintf(stderr, "Need exactly one BAM file as last argument\n");
-        return(EXIT_FAILURE);
+        return 1;
     }
-    bam_file = (argv + optind)[0];
+    bam_file = (argv + optind + 1)[0];
 
 
     if (bonf_auto) {
          double cov_mean;
          long int num_non0cov_pos;
+         if (pseudo_parallel>1) {
+              LOG_FATAL("%s\n", "Can't use auto bonf in pseudo-parallel mode.");
+              return 1;
+         }
+         if (plp_summary_only) {
+              LOG_FATAL("%s\n", "Automatically determining a Bonferroni"
+                        " factor for printing a pileup summary only"
+                        " doesn't make sense.");
+              return 1;
+         }
          LOG_DEBUG("Automatically determining Bonferroni factor for bam=%s reg=%s bed=%s\n",
                    bam_file, mplp_conf.reg, bed_file); 
          if (depth_stats(&cov_mean, &num_non0cov_pos, bam_file, mplp_conf.reg, bed_file,
                          &mplp_conf.min_bq, &mplp_conf.min_mq)) {
               LOG_FATAL("%s\n", "Couldn't determine Bonferroni factor automatically\n"); 
-              exit(1);
+              return 1;
          }
          snvcall_conf.bonf = num_non0cov_pos*3;
          LOG_VERBOSE("Automatically determined Bonferroni factor = %lu\n", snvcall_conf.bonf);
     }
-
 
     if (debug) {
          dump_mplp_conf(& mplp_conf, stderr);
@@ -839,6 +858,121 @@ main_call(int argc, char *argv[])
     assert(mplp_conf.min_mq <= mplp_conf.max_mq);
     assert(mplp_conf.min_bq <= snvcall_conf.min_altbq);
     assert(! (mplp_conf.bed && mplp_conf.reg));
+
+    if (pseudo_parallel>1) { /* to be able to break, which wouldn't be possible with an if */
+         int i;
+         long int line_count;
+         int num_splits;
+         char *lofreq_args = NULL;
+         char *tmpdir;
+         /* FIXME hardcoded /tmp/ */
+         char templ[] = "/tmp/lofreq2-call-pseudoparallel.XXXXXX";
+#define cmd_bufsize  1024
+         char cmd_buf[cmd_bufsize];
+         const char out_xargs[] = "-o @.vcf \0";
+         const char bed_xargs[] = "-l @ \0";
+
+         if (! bed_file) {
+              LOG_FATAL("%s\n", "Need bed file for pseudo-parallel execution");
+              return 1;
+         }
+         /* FIXME this will also count empty lines */
+         line_count =  count_lines(bed_file);
+         if (line_count<2) {
+              LOG_ERROR("Your bed-file has only %d entries."
+                        " Can't run in pseudo-parallel mode.\n", 
+                        line_count);
+              return 1;        
+
+         }
+         
+          LOG_VERBOSE("Will try to run %d split processes\n", pseudo_parallel);
+
+         /* split in how many files */
+         if (line_count<pseudo_parallel) {
+              LOG_WARN("The number of regions in your bed-file is smaller than"
+                       " the number of requested pseudo-parallel threads."
+                       " That's fine, but I can't use all %d threads\n", pseudo_parallel);             
+              num_splits = line_count;
+         } else {
+              num_splits = line_count / pseudo_parallel;
+         }
+
+         /* use system command 'split' to split files */
+         if (NULL == (tmpdir = mkdtemp(templ))) {
+              LOG_FATAL("%s\n", "Couldn't create temporary directory");
+              return 1;
+         }
+         if (0 > snprintf(cmd_buf, cmd_bufsize, "split -l %d %s %s/",
+                          num_splits, bed_file, tmpdir)) {
+              LOG_FATAL("%s\n", "snprintf failed");
+              return 1;
+         }
+         LOG_DEBUG("Running: %s\n", cmd_buf);
+         if (system(cmd_buf)) {
+              LOG_FATAL("%s\n", "Splitting your bed-file with split failed.");
+              return 1;
+         }
+         
+         lofreq_args = calloc(1, sizeof(char));
+         for (i=0; i<argc-1 /* leave out BAM */; i++) {
+              if (0 == strcmp(argv[i], "--pseudo-parallel") || 0 == strcmp(argv[i], "-p")) {
+                   i+=1; /* skip arg */ 
+                   continue;
+              }
+              if (0 == strcmp(argv[i], "--out") || 0 == strcmp(argv[i], "-o")) {
+                   i+=1; /* skip arg */ 
+                   continue;
+              }
+              if (0 == strcmp(argv[i], "--bed") || 0 == strcmp(argv[i], "-l")) {
+                   i+=1; /* skip arg */ 
+                   continue;
+              }
+              lofreq_args = realloc(lofreq_args,
+                                    strlen(lofreq_args) + strlen(argv[i]) + 1/*space*/); /* FIXME inefficient */
+              lofreq_args = strcat(lofreq_args, argv[i]);
+              lofreq_args = strcat(lofreq_args, " ");
+         }
+         lofreq_args = realloc(lofreq_args,
+                               strlen(lofreq_args) + strlen(out_xargs) + 1);
+         lofreq_args = strcat(lofreq_args, out_xargs);
+
+         lofreq_args = realloc(lofreq_args,
+                               strlen(lofreq_args) + strlen(bed_xargs) + 1);
+         lofreq_args = strcat(lofreq_args, bed_xargs);
+
+         /* BAM */
+         lofreq_args = realloc(lofreq_args,
+                               strlen(lofreq_args) + strlen(argv[argc-1]) + 1/*space*/); /* FIXME inefficient */
+         lofreq_args = strcat(lofreq_args, argv[argc-1]);
+
+         /* asterisk needed, otherwise @ becomes just basename */
+         snprintf(cmd_buf, cmd_bufsize, "ls %s/* | grep -v vcf$ | xargs -I@ -n 1 -P %d %s",
+                  tmpdir, pseudo_parallel, lofreq_args);
+
+         LOG_DEBUG("Running: %s\n", cmd_buf);
+         if (system(cmd_buf)) {
+              LOG_FATAL("%s\n", "Running in pseudo-parallel mode failed.");
+              return 1;
+         }
+
+         LOG_FIXME("Implement combining vcf and print to handle %p\n", snvcall_conf.out);
+#if 0
+         # combine
+         # vcfs should be insplit order and shouldnt need sorting
+         # just read one by one and only output header of first
+         awk '{if (/^#/) {if (! header_done) {print; if (/^#CHROM/) {header_done=1}}} else {print}}' ${bedsplitprefix}*-m${m}.vcf > ${bam%.bam}_lofreq-raw-m${m}.vcf
+#endif
+
+#if 0
+         free(lofreq_args);
+         (void) unlink(tmpdir);
+         return 1;
+#else
+         return 0;
+#endif
+    }
+
    
     if (! plp_summary_only) {
          /* FIXME would be nice to use full command line here instead of PACKAGE_STRING */
@@ -849,7 +983,7 @@ main_call(int argc, char *argv[])
 
     }
     (void) mpileup(&mplp_conf, plp_proc_func, (void*)&snvcall_conf,
-                   1, (const char **) argv + optind);
+                   1, (const char **) argv + optind + 1);
 
 
     if (snvcall_conf.out == stdout) {
