@@ -15,6 +15,7 @@ int file_exists(const char *fname);
 int ae_load_file_to_memory(const char *filename, char **result);
 int int_cmp(const void *a, const void *b);
 int argmax_d(const double *arr, const int n);
+long int count_lines(const char *filename);
 
 typedef struct {
      unsigned long int n; /* number of elements stored */
@@ -28,5 +29,6 @@ void int_varray_add_value(int_varray_t *a, const int value);
 void int_varray_free(int_varray_t *a);
 void int_varray_init(int_varray_t *a, 
                      const size_t grow_by_size);
+
 
 #endif
