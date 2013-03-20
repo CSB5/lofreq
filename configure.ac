@@ -159,8 +159,8 @@ if test x"$debugit" = x"yes"; then
     # are user variables):
     # switch off assert etc
     # AC_DEFINE([DEBUG],[],[Debug Mode])
-    CFLAGS="${CFLAGS} -g -ansi -Wall -O0"
-    CXXFLAGS="${CXXFLAGS} -g -ansi -Wall -O0"
+    CFLAGS="${CFLAGS} -g -c99 -Wall -O0 -pedantic"
+    CXXFLAGS="${CXXFLAGS} -g -c99 -Wall -O0 -pedantic"
 else
     # switch off assert etc
     AC_DEFINE([NDEBUG],[],[No-debug Mode])
