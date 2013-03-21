@@ -20,11 +20,11 @@
 extern double *
 poissbin(double *pvalue, const int *phred_quals,
          const int num_phred_quals, const int num_failures, 
-         const unsigned long int bonf, const double sig);
+         const long long int bonf, const double sig);
 extern int
- snpcaller(double *snp_pvalues, const int *phred_quals,
-           const int num_phred_quals, const int *noncons_counts,
-           const unsigned long int bonf_factor,
-           const double sig_level);
+snpcaller(double *snp_pvalues, const int *phred_quals,
+          const int num_phred_quals, const int *noncons_counts,
+          const long long int bonf_factor,
+          const double sig_level);
 
 #endif

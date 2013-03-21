@@ -16,6 +16,7 @@ int ae_load_file_to_memory(const char *filename, char **result);
 int int_cmp(const void *a, const void *b);
 int argmax_d(const double *arr, const int n);
 long int count_lines(const char *filename);
+long long int bed_pos_sum(const char *bedfile);
 
 typedef struct {
      unsigned long int n; /* number of elements stored */
