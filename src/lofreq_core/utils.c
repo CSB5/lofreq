@@ -4,6 +4,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <string.h>
+#include <limits.h>
+
+#include "log.h"
 #include "utils.h"
 
 #ifndef SIZE_MAX
@@ -164,8 +168,7 @@ count_lines(const char *filename)
     while (EOF != (c=getc(f))) {
         if ('\n'==c) {
             if (count==LONG_MAX) {
-                fprintf(stderr, "CRITICAL(%s|%s:%d): count overflow!\n",
-                        __FILE__, __FUNCTION__, __LINE__);
+                LOG_FATAL("%s\n", "count overflow!");
                 return -2;
             }
             count++;
@@ -175,3 +178,57 @@ count_lines(const char *filename)
     return count;
 }
 /* count_lines */
+
+
+/* returns -1 on error 
+ * FIXME we should be using libbam's bed_read()
+ */
+long long int
+bed_pos_sum(const char *bed_file) {
+#define BUF_SIZE 1024
+    long long int sum = 0;
+    char line[BUF_SIZE];
+    FILE *fh;
+
+    fh = fopen(bed_file, "r");
+    if (NULL == fh) {
+        LOG_ERROR("Couldn't open bed-file %s\n", bed_file);
+        return -1;
+    }
+
+    while (NULL != fgets(line, BUF_SIZE, fh)) {
+        char chrom[BUF_SIZE];
+        long int start, end;
+        if (line[0]=='#') {
+            continue;
+        }
+
+        if (1 == strlen(line)) {
+            LOG_WARN("Skippping empty line in bed-file %s", bed_file);
+            continue;
+        }
+
+        /* this works with any number of tabs and white-spaces */
+        if (3 != sscanf(line, "%s %ld %ld \n", chrom, &start, &end)) {
+            LOG_FATAL("Couldn't parse the following line"
+                      " from bed-file %s: %s", bed_file, line);
+            fclose(fh);
+            return -1;
+        }
+        if (start>end) {
+            LOG_FATAL("start > end in the following line"
+                      " from bed-file %s: %s", bed_file, line);
+            fclose(fh);
+            return -1;
+        }
+        if (sum > LLONG_MAX - (end-start)) {
+            LOG_FATAL("%s\n", "count overflow!");
+            return -1;
+        }
+        sum += (end-start);
+    }
+    fclose(fh);
+    return sum;
+}
+/* bed_pos_sum */
+

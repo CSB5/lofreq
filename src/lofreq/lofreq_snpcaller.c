@@ -42,7 +42,7 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 
 typedef struct {
      int min_altbq, def_altbq;/* tag:snvcall */
-     unsigned long int bonf;/* tag: snvcall */
+     long long int bonf;/* tag: snvcall */
      float sig;/* tag: snvcall */
      FILE *out;
      int flag;
@@ -579,7 +579,7 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
      fprintf(stream, "snvcall options\n");
      fprintf(stream, "  min_altbq = %d\n", c->min_altbq);
      fprintf(stream, "  def_altbq = %d\n", c->def_altbq);
-     fprintf(stream, "  bonf         = %lu  (might get recalculated later)\n", c->bonf);
+     fprintf(stream, "  bonf         = %lld  (might get recalculated later)\n", c->bonf);
      fprintf(stream, "  sig          = %f\n", c->sig);
      fprintf(stream, "  out          = %p\n", (void*)c->out);
      fprintf(stream, "  flag & SNVCALL_USE_MQ      = %d\n", c->flag&SNVCALL_USE_MQ?1:0);
@@ -622,9 +622,7 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
 #endif                                                    
      /* stats */                                          
      fprintf(stderr, "       -s | --sig                   P-value cutoff / significance level [%f]\n", snvcall_conf->sig);
-     fprintf(stderr, "       -b | --bonf                  Bonferroni factor. INT or 'auto' (default; non-zero-cov-pos * 3)\n");
-     fprintf(stderr, "                                    'auto' needs to pre-parse the BAM file once, i.e. this won't work with input from stdin (or named pipes).\n");
-     fprintf(stderr, "                                    Higher numbers speed up computation on high-coverage data considerably.\n");
+     fprintf(stderr, "       -b | --bonf                  Bonferroni factor. INT or 'auto' (needs bed-file) [auto]\n");
      /* misc */                                           
      fprintf(stderr, "       -I | --illumina-1.3          assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
      fprintf(stderr, "            --use-orphan            count anomalous read pairs\n");
@@ -642,7 +640,7 @@ main_call(int argc, char *argv[])
      int c, i;
      static int use_orphan = 0;
      static int plp_summary_only = 0;
-     int bonf_auto = 0;
+     int bonf_auto = 1;
      char *bam_file;
      char *bed_file = NULL;
      mplp_conf_t mplp_conf;
@@ -776,9 +774,9 @@ main_call(int argc, char *argv[])
 
               } else {
                    bonf_auto = 0;
-                   snvcall_conf.bonf = strtol(optarg, (char **)NULL, 10); /* atol */ 
-                   if (0==snvcall_conf.bonf) {
-                        LOG_FATAL("%s\n", "Couldn't parse Bonferroni factor\n"); 
+                   snvcall_conf.bonf = strtoll(optarg, (char **)NULL, 10); /* atol */ 
+                   if (1>snvcall_conf.bonf) {
+                        LOG_FATAL("%s\n", "Couldn't parse Bonferroni factor"); 
                         return 1;
                    }
               }
@@ -786,7 +784,7 @@ main_call(int argc, char *argv[])
          case 's': 
               snvcall_conf.sig = strtof(optarg, (char **)NULL); /* atof */
               if (0==snvcall_conf.sig) {
-                   LOG_FATAL("%s\n", "Couldn't parse sign-threshold\n"); 
+                   LOG_FATAL("%s\n", "Couldn't parse sign-threshold"); 
                    return 1;
               }
               break;
@@ -803,8 +801,17 @@ main_call(int argc, char *argv[])
               break;
          }
     }
+
     if (use_orphan) {
          mplp_conf.flag &= ~MPLP_NO_ORPHAN;
+    }
+
+    if ( ! (snvcall_conf.flag & SNVCALL_CONS_AS_REF) && ! mplp_conf.fa && ! plp_summary_only) {
+         LOG_FATAL("%s\n", "Need a reference when not calling in consensus mode...\n"); 
+         return 1;
+    }
+    if (! plp_summary_only & ! mplp_conf.fa) {
+         LOG_WARN("%s\n", "Calling SNVs without reference\n"); 
     }
 
     mplp_conf.cmdline[0] = '\0';
@@ -825,9 +832,10 @@ main_call(int argc, char *argv[])
     bam_file = (argv + optind + 1)[0];
 
 
-    if (bonf_auto) {
+    if (bonf_auto && ! plp_summary_only) {
          double cov_mean;
-         long int num_non0cov_pos;
+         long long int num_non0cov_pos;
+
          if (pseudo_parallel>1) {
               LOG_FATAL("%s\n", "Can't use auto bonf in pseudo-parallel mode.");
               return 1;
@@ -838,6 +846,8 @@ main_call(int argc, char *argv[])
                         " doesn't make sense.");
               return 1;
          }
+
+#if 0
          LOG_DEBUG("Automatically determining Bonferroni factor for bam=%s reg=%s bed=%s\n",
                    bam_file, mplp_conf.reg, bed_file); 
          if (depth_stats(&cov_mean, &num_non0cov_pos, bam_file, mplp_conf.reg, bed_file,
@@ -846,7 +856,17 @@ main_call(int argc, char *argv[])
               return 1;
          }
          snvcall_conf.bonf = num_non0cov_pos*3;
-         LOG_VERBOSE("Automatically determined Bonferroni factor = %lu\n", snvcall_conf.bonf);
+#else
+         /* FIXME should be using bed_read and mplp.bed instead of
+          * parsing bed file again */
+         snvcall_conf.bonf = 3*bed_pos_sum(bed_file);
+         if (snvcall_conf.bonf<1) {
+              LOG_FATAL("Automatically determining Bonferroni from bed"
+                        " regions listed in %s failed\n", bed_file);
+         }
+
+#endif
+         LOG_VERBOSE("Automatically determined Bonferroni factor = %lld\n", snvcall_conf.bonf);
     }
 
     if (debug) {

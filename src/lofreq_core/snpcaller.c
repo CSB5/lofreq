@@ -73,7 +73,7 @@ double probvec_tailsum(double *probvec, int tail_startindex,
                        int probvec_len);
 double *naive_calc_prob_dist(const int *quals, int N, int K);
 double *pruned_calc_prob_dist(const int *quals, int N, int K, 
-                      unsigned long int bonf_factor, double sig_level);
+                      long long int bonf_factor, double sig_level);
 
 
 /**
@@ -211,7 +211,7 @@ naive_calc_prob_dist(const int *quals, int N, int K)
  */
 double *
 pruned_calc_prob_dist(const int *quals, int N, int K, 
-                      unsigned long int bonf_factor, double sig_level)
+                      long long int bonf_factor, double sig_level)
 {
     double *probvec = NULL;
     double *probvec_prev = NULL;
@@ -324,7 +324,7 @@ pruned_calc_prob_dist(const int *quals, int N, int K,
 double *
 poissbin(double *pvalue, const int *phred_quals,
          const int num_phred_quals, const int num_failures, 
-         const unsigned long int bonf, const double sig) 
+         const long long int bonf, const double sig) 
 {
     double *probvec = NULL;
 #if TIMING
@@ -368,7 +368,7 @@ int
 snpcaller(double *snp_pvalues, 
                const int *phred_quals, const int num_phred_quals, 
                const int *noncons_counts, 
-               const unsigned long int bonf_factor, const double sig_level)
+               const long long int bonf_factor, const double sig_level)
 {
     double *probvec = NULL;
     int i;
@@ -376,7 +376,7 @@ snpcaller(double *snp_pvalues,
     double pvalue;
 
 #ifdef DEBUG
-    fprintf(stderr, "DEBUG(%s:%s():%d): num_phred_quals=%d noncons_counts=%d,%d,%d bonf_factor=%lu sig_level=%f\n", 
+    fprintf(stderr, "DEBUG(%s:%s():%d): num_phred_quals=%d noncons_counts=%d,%d,%d bonf_factor=%lld sig_level=%f\n", 
             __FILE__, __FUNCTION__, __LINE__, 
             num_phred_quals, noncons_counts[0], noncons_counts[1], noncons_counts[2],
             bonf_factor, sig_level);
