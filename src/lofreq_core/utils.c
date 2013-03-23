@@ -1,4 +1,4 @@
-/* -*- mode: c; tab-width: 4; c-basic-offset: 4;  indent-tabs-mode: nil -*- */
+/* -*- c-file-style: "k&r" -*- */
 
 #include <unistd.h>
 #include <stdio.h>
@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <string.h>
 #include <limits.h>
+#include <dirent.h>
 
 #include "log.h"
 #include "utils.h"
@@ -42,6 +43,11 @@ int int_cmp(const void *a, const void *b)
      const int ia = *(const int *)a;
      const int ib = *(const int *)b;
      return ia<ib ? -1 : ia>ib? 1 : 0;
+}
+
+
+int str_cmp(const void *a, const void *b) { 
+    return strcmp(*(char **)a, *(char **)b);
 }
 
 
@@ -180,55 +186,50 @@ count_lines(const char *filename)
 /* count_lines */
 
 
-/* returns -1 on error 
- * FIXME we should be using libbam's bed_read()
- */
-long long int
-bed_pos_sum(const char *bed_file) {
-#define BUF_SIZE 1024
-    long long int sum = 0;
-    char line[BUF_SIZE];
-    FILE *fh;
+/* returns -1 on error, otherwise number of matches. caller has to
+ * free matches */
+int
+ls_dir(char ***matches, const char *path, const char *pattern,
+       const int sort_lexi)
+{
+    DIR* d = opendir(path);
+    struct dirent *sd = NULL;
+    int num_matches = 0;
 
-    fh = fopen(bed_file, "r");
-    if (NULL == fh) {
-        LOG_ERROR("Couldn't open bed-file %s\n", bed_file);
+    (*matches) = NULL;
+
+    if (d == NULL) {
+        LOG_ERROR("Couldn't open path %s\n", path);
         return -1;
     }
 
-    while (NULL != fgets(line, BUF_SIZE, fh)) {
-        char chrom[BUF_SIZE];
-        long int start, end;
-        if (line[0]=='#') {
+    while (NULL != (sd = readdir(d))) {/* readdir not thread safe */
+        int match = 0;
+        if (pattern && strstr(sd->d_name, pattern)) {
+            match = 1;
+        } else if (NULL==pattern) {
+            match = 1;
+        }
+        if (0 == match) {
             continue;
         }
+        num_matches += 1;
 
-        if (1 == strlen(line)) {
-            LOG_WARN("Skippping empty line in bed-file %s", bed_file);
-            continue;
-        }
-
-        /* this works with any number of tabs and white-spaces */
-        if (3 != sscanf(line, "%s %ld %ld \n", chrom, &start, &end)) {
-            LOG_FATAL("Couldn't parse the following line"
-                      " from bed-file %s: %s", bed_file, line);
-            fclose(fh);
+        (*matches) = realloc((*matches), num_matches*sizeof(char*)); /* FIXME inefficient one by one allocation */
+        if (NULL == (*matches)) {
+            LOG_ERROR("%s\n", "Realloc failed");
             return -1;
         }
-        if (start>end) {
-            LOG_FATAL("start > end in the following line"
-                      " from bed-file %s: %s", bed_file, line);
-            fclose(fh);
-            return -1;
-        }
-        if (sum > LLONG_MAX - (end-start)) {
-            LOG_FATAL("%s\n", "count overflow!");
-            return -1;
-        }
-        sum += (end-start);
+        (*matches)[num_matches-1] = calloc(strlen(path) +
+                                        strlen(sd->d_name) +
+                                        1 /*/*/ +1 /*\0*/,
+                                        sizeof(char));
+        sprintf((*matches)[num_matches-1], "%s/%s", path, sd->d_name);
     }
-    fclose(fh);
-    return sum;
-}
-/* bed_pos_sum */
+    closedir(d);
 
+    if (sort_lexi) {
+        qsort((*matches), num_matches, sizeof(char*), *str_cmp);
+    }
+    return num_matches;
+}
