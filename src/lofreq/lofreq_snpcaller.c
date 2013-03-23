@@ -34,11 +34,15 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #include "utils.h"
 #include "log.h"
 #include "plp.h"
+#include "bed.h"
 
 
 #define SNVCALL_USE_MQ      0x10
 #define SNVCALL_USE_SQ      0x20
 #define SNVCALL_CONS_AS_REF 0x40
+
+#define BUF_SIZE 1024
+
 
 typedef struct {
      int min_altbq, def_altbq;/* tag:snvcall */
@@ -632,6 +636,159 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
 /* usage() */
 
 
+/* FIXME evil hack, use MP/I in main routine instead */
+int 
+main_call_pseudo_parallel(int argc, char *argv[], const int num_proc, 
+                          const char *bed_file,  FILE *vcfout)
+{
+     int i;
+     long int line_count;
+     int num_splits;
+     char *lofreq_args = NULL;
+     char *tmpdir;
+     /* FIXME hardcoded /tmp/ */
+     char templ[] = "/tmp/lofreq2-call-pseudoparallel.XXXXXX";
+     char cmd_buf[BUF_SIZE];
+     const char out_xargs[] = "-o @.vcf \0";
+     const char bed_xargs[] = "-l @ \0";
+     char **split_vcf_files;
+     int num_split_vcf_files;
+
+     if (! bed_file) {
+          LOG_FATAL("%s\n", "Pseudo-parallel mode requires a bed-file");
+          return -1;
+     }
+     if (num_proc<2) {
+          LOG_FATAL("%s\n", "Running in pseudo-parallel mode with less"
+                    " then 2 processors doesn't make sense");
+          return -1;
+     }
+
+     /* FIXME this will also count empty lines */
+     line_count =  count_lines(bed_file);
+     if (line_count<2) {
+          LOG_ERROR("Your bed-file has only %d entries."
+                    " Can't run in pseudo-parallel mode.\n", 
+                    line_count);
+          return -1;        
+     }
+         
+     LOG_VERBOSE("Will try to run %d split processes\n", num_proc);
+
+     /* split in how many files */
+     if (line_count<num_proc) {
+          LOG_WARN("The number of regions in your bed-file is smaller than"
+                   " the number of requested pseudo-parallel threads."
+                   " That's fine, but I can't use all %d threads\n", num_proc);             
+          num_splits = line_count;
+     } else {
+          num_splits = line_count / num_proc;
+     }
+
+     /* use system command 'split' to split files */
+     if (NULL == (tmpdir = mkdtemp(templ))) {
+          LOG_FATAL("%s\n", "Couldn't create temporary directory");
+          return -1;
+     }
+     if (0 > snprintf(cmd_buf, BUF_SIZE, "split -l %d %s %s/",
+                      num_splits, bed_file, tmpdir)) {
+          LOG_FATAL("%s\n", "snprintf failed");
+          return -1;
+     }
+     LOG_DEBUG("Running: %s\n", cmd_buf);
+     if (system(cmd_buf)) {
+          LOG_FATAL("%s\n", "Splitting your bed-file with split failed.");
+          return -1;
+     }
+         
+     lofreq_args = calloc(1, sizeof(char));
+     for (i=0; i<argc-1 /* leave out BAM */; i++) {
+          if (0 == strcmp(argv[i], "--pseudo-parallel") || 0 == strcmp(argv[i], "-p")) {
+               i+=1; /* skip arg */ 
+               continue;
+          }
+          if (0 == strcmp(argv[i], "--out") || 0 == strcmp(argv[i], "-o")) {
+               i+=1; /* skip arg */ 
+               continue;
+          }
+          if (0 == strcmp(argv[i], "--bed") || 0 == strcmp(argv[i], "-l")) {
+               i+=1; /* skip arg */ 
+               continue;
+          }
+          lofreq_args = realloc(lofreq_args,
+                                strlen(lofreq_args) + strlen(argv[i]) + 1/*space*/); /* FIXME inefficient */
+          lofreq_args = strcat(lofreq_args, argv[i]);
+          lofreq_args = strcat(lofreq_args, " ");
+     }
+     lofreq_args = realloc(lofreq_args,
+                           strlen(lofreq_args) + strlen(out_xargs) + 1);
+     lofreq_args = strcat(lofreq_args, out_xargs);
+     
+     lofreq_args = realloc(lofreq_args,
+                           strlen(lofreq_args) + strlen(bed_xargs) + 1);
+     lofreq_args = strcat(lofreq_args, bed_xargs);
+     
+     /* BAM */
+     lofreq_args = realloc(lofreq_args,
+                           strlen(lofreq_args) + strlen(argv[argc-1]) + 1/*space*/); /* FIXME inefficient */
+     lofreq_args = strcat(lofreq_args, argv[argc-1]);
+     
+     /* FIXME: replace xargs with forks */
+
+     /* asterisk needed, otherwise @ becomes just basename */
+     snprintf(cmd_buf, BUF_SIZE, "ls %s/* | grep -v vcf$ | xargs -I@ -n 1 -P %d %s",
+              tmpdir, num_proc, lofreq_args);
+     
+     LOG_FIXME("Running: %s\n", cmd_buf);
+     /* FIXME catch err by redirecting stderr to tmpfile */
+     /* could try popen her to parse output directly, but all
+      * subprocesses will print a header which might get mingled.
+      */
+     if (system(cmd_buf)) {
+          LOG_FATAL("%s\n", "Running in pseudo-parallel mode failed (at xargs stage)");
+          return -1;
+     }
+     
+
+     num_split_vcf_files = ls_dir(&split_vcf_files, tmpdir, ".vcf", 1);
+     if (num_split_vcf_files < 1) {
+          LOG_FATAL("%s\n", "Couldn't list output vcf files");
+          return -1;
+     }
+         
+     /* the sub vcf's are sorted lexicographically, which also means
+      * in bed order. therefore only print header from first.
+      */
+     for (i=0; i<num_split_vcf_files; i++) {
+          char *fn = split_vcf_files[i];
+          FILE *fh;
+          char line[BUF_SIZE];
+          LOG_FIXME("Reading from %s\n", fn);
+          if (NULL == (fh = fopen(fn, "r"))) {
+               LOG_FATAL("Couldn't open vcf file %s", fn);
+               return -1;
+          }
+          while (NULL != fgets(line, BUF_SIZE, fh)) {
+               if ((0==i && line[0]=='#') || (line[0]!='#')) {
+                    fprintf(vcfout, "%s", line);
+               }
+          }
+          fclose(fh);
+     }
+
+     for (i=0; i<num_split_vcf_files; i++) {
+          free(split_vcf_files[i]);
+     }
+     free(split_vcf_files);
+     free(lofreq_args);
+     if (0) {
+          (void) unlink(tmpdir);
+     } else {
+          LOG_FIXME("Not unlinking tmpdir %s\n", tmpdir);
+     }
+     return 0;
+}
+
 
 int 
 main_call(int argc, char *argv[])
@@ -643,11 +800,13 @@ main_call(int argc, char *argv[])
      int bonf_auto = 1;
      char *bam_file;
      char *bed_file = NULL;
+     bed_t bed;
      mplp_conf_t mplp_conf;
      snvcall_conf_t snvcall_conf;
      /*void (*plp_proc_func)(const plp_col_t*, const snvcall_conf_t*);*/
      void (*plp_proc_func)(const plp_col_t*, const void*);
      int pseudo_parallel = 0;
+     int rc = 0;
 
      for (i=0; i<argc; i++) {
           LOG_DEBUG("arg %d: %s\n", i, argv[i]);
@@ -657,21 +816,25 @@ main_call(int argc, char *argv[])
      LOG_FIXME("%s\n", "- Implement routine test against old SNV caller");
      LOG_FIXME("%s\n", "- Test actual SNV and SB values for both types of SNVs");
 
-     memset(&mplp_conf, 0, sizeof(mplp_conf_t));
-     memset(&snvcall_conf, 0, sizeof(snvcall_conf_t));
+
+     memset(&bed, 0, sizeof(bed_t));
+
      /* default pileup options */
-     mplp_conf.max_mq = 255; /* 60 */
-     mplp_conf.min_bq = 3; /* 13 */
+     memset(&mplp_conf, 0, sizeof(mplp_conf_t));
+     mplp_conf.max_mq = 255;
+     mplp_conf.min_bq = 3;
      mplp_conf.capQ_thres = 0;
-     mplp_conf.max_depth = 1000000; /* 250 */
+     mplp_conf.max_depth = 1000000;
      mplp_conf.flag = MPLP_NO_ORPHAN | MPLP_REALN | MPLP_EXT_BAQ;
     
-    snvcall_conf.min_altbq = 20; /* new */
-    snvcall_conf.def_altbq = snvcall_conf.min_altbq;
-    snvcall_conf.bonf = 1;
-    snvcall_conf.sig = 0.05;
-    snvcall_conf.out = stdout;
-    snvcall_conf.flag = SNVCALL_USE_MQ;/* | MPLP_USE_SQ; FIXME */
+     /* default snvcall options */
+     memset(&snvcall_conf, 0, sizeof(snvcall_conf_t));
+     snvcall_conf.min_altbq = 20;
+     snvcall_conf.def_altbq = snvcall_conf.min_altbq;
+     snvcall_conf.bonf = 1;
+     snvcall_conf.sig = 0.05;
+     snvcall_conf.out = stdout;
+     snvcall_conf.flag = SNVCALL_USE_MQ;/* | MPLP_USE_SQ; FIXME */
 
     /* keep in sync with long_opts_str and usage */
     while (1) {
@@ -727,22 +890,30 @@ main_call(int argc, char *argv[])
 
          switch (c) {
          /* see usage sync */
-         case 'r': mplp_conf.reg = strdup(optarg); break; /* FIXME you can enter lots of invalid stuff and libbam won't complain. add checks here? */
+         case 'r': 
+              mplp_conf.reg = strdup(optarg); 
+              break; /* FIXME you can enter lots of invalid stuff and libbam won't complain. add checks here? */
+
          case 'c': 
               snvcall_conf.flag |= SNVCALL_CONS_AS_REF;
               break;
+
          case 'l': 
-              mplp_conf.bed = bed_read(optarg); 
+              /*mplp_conf.bed = bed_read(optarg); */
               bed_file = strdup(optarg);
               break;
-              
-         case 'd': mplp_conf.max_depth = atoi(optarg); break;
+
+         case 'd': 
+              mplp_conf.max_depth = atoi(optarg); 
+              break;
+
          case 'f':
               mplp_conf.fa = strdup(optarg);
               mplp_conf.fai = fai_load(optarg);
               if (mplp_conf.fai == 0) 
                    return 1;
               break;
+
          case 'o':
               if (0 != strcmp(optarg, "-")) {
                    if (file_exists(optarg)) {
@@ -754,19 +925,45 @@ main_call(int argc, char *argv[])
                         return 1;
                    }
               } /* else: already set to stdout */
-         case 'q': mplp_conf.min_bq = atoi(optarg); break;
-         case 'Q': snvcall_conf.min_altbq = atoi(optarg); break;
-         case 'a': snvcall_conf.def_altbq = atoi(optarg); break;
-         case 'B': mplp_conf.flag &= ~MPLP_REALN; break;
+              break;
+
+         case 'q': 
+              LOG_FIXME("optarg=%s\n", optarg);
+              mplp_conf.min_bq = atoi(optarg); 
+              break;
+
+         case 'Q': 
+              snvcall_conf.min_altbq = atoi(optarg); 
+              break;
+
+         case 'a': snvcall_conf.def_altbq = atoi(optarg); 
+              break;
+
+         case 'B': 
+              mplp_conf.flag &= ~MPLP_REALN; 
+              break;
          /* case 'E': mplp.flag |= MPLP_EXT_BAQ; break; */
               
-         case 'm': mplp_conf.min_mq = atoi(optarg); break;
-         case 'M': mplp_conf.max_mq = atoi(optarg); break;
-         case 'J': snvcall_conf.flag &= ~SNVCALL_USE_MQ; break;
+         case 'm': 
+              mplp_conf.min_mq = atoi(optarg); 
+              break;
+
+         case 'M': 
+              mplp_conf.max_mq = atoi(optarg); 
+              break;
+
+         case 'J': 
+              snvcall_conf.flag &= ~SNVCALL_USE_MQ; 
+              break;
+
 #ifdef USE_SOURCEQUAL
-         case 'S': snvcall_conf.flag &= ~SNVCALL_USE_SQ; break;
+         case 'S': 
+              snvcall_conf.flag &= ~SNVCALL_USE_SQ;
+              break;
 #endif
-         case 'I': mplp_conf.flag |= MPLP_ILLUMINA13; break;
+         case 'I': 
+              mplp_conf.flag |= MPLP_ILLUMINA13; 
+              break;
 
          case 'b': 
               if (0 == strncmp(optarg, "auto", 4)) {
@@ -781,6 +978,7 @@ main_call(int argc, char *argv[])
                    }
               }
               break;
+
          case 's': 
               snvcall_conf.sig = strtof(optarg, (char **)NULL); /* atof */
               if (0==snvcall_conf.sig) {
@@ -790,12 +988,21 @@ main_call(int argc, char *argv[])
               break;
               
          case 'p':
+              /* FIXME if (NULL==optarg) {argh};e.g. -(!)pseudparallel */
               pseudo_parallel = atoi(optarg); 
               break;
-         case 'h': usage(& mplp_conf, & snvcall_conf); return 0; /* WARN: not printing defaults if some args where parsed */
-         case '?': LOG_FATAL("%s\n", "unrecognized arguments found. Exiting...\n"); return 1;
+
+         case 'h': 
+              usage(& mplp_conf, & snvcall_conf); 
+              return 0; /* WARN: not printing defaults if some args where parsed */
+
+         case '?': 
+              LOG_FATAL("%s\n", "unrecognized arguments found. Exiting...\n"); 
+              return 1;
 #if 0
-         case 0:  fprintf(stderr, "ERROR: long opt (%s) not mapping to short option. Exiting...\n", long_opts[long_opts_index].name); return 1;
+         case 0:
+              fprintf(stderr, "ERROR: long opt (%s) not mapping to short option. Exiting...\n", long_opts[long_opts_index].name); 
+              return 1;
 #endif
          default:
               break;
@@ -830,7 +1037,23 @@ main_call(int argc, char *argv[])
         return 1;
     }
     bam_file = (argv + optind + 1)[0];
+    if (0 == strcmp(bam_file, "-") && mplp_conf.reg) {
+         LOG_FATAL("%s\n", "Need index if region was given and index file can't be provided when using stdin mode.");
+         return 1;         
+    }
 
+    if (bed_file) {
+         /* FIXME should be using bed_read and mplp.bed instead of
+          * parsing bed file again */
+         if (-1 == parse_bed(&bed, bed_file)) {
+              LOG_FATAL("Parsing of %s failed\n", bed_file); 
+              return 1;
+         }
+#if 1
+         LOG_FIXME("%s\n", "debug bed dumping"); 
+         dump_bed(&bed);
+#endif
+    }
 
     if (bonf_auto && ! plp_summary_only) {
          double cov_mean;
@@ -838,6 +1061,10 @@ main_call(int argc, char *argv[])
 
          if (pseudo_parallel>1) {
               LOG_FATAL("%s\n", "Can't use auto bonf in pseudo-parallel mode.");
+              return 1;
+         }
+         if (! bed_file) {
+              LOG_FATAL("%s\n", "Need bed-file for auto bonferroni correction.");
               return 1;
          }
          if (plp_summary_only) {
@@ -857,9 +1084,8 @@ main_call(int argc, char *argv[])
          }
          snvcall_conf.bonf = num_non0cov_pos*3;
 #else
-         /* FIXME should be using bed_read and mplp.bed instead of
-          * parsing bed file again */
-         snvcall_conf.bonf = 3*bed_pos_sum(bed_file);
+
+         snvcall_conf.bonf = 3*bed_pos_sum(&bed);
          if (snvcall_conf.bonf<1) {
               LOG_FATAL("Automatically determining Bonferroni from bed"
                         " regions listed in %s failed\n", bed_file);
@@ -880,119 +1106,10 @@ main_call(int argc, char *argv[])
     assert(! (mplp_conf.bed && mplp_conf.reg));
 
     if (pseudo_parallel>1) { /* to be able to break, which wouldn't be possible with an if */
-         int i;
-         long int line_count;
-         int num_splits;
-         char *lofreq_args = NULL;
-         char *tmpdir;
-         /* FIXME hardcoded /tmp/ */
-         char templ[] = "/tmp/lofreq2-call-pseudoparallel.XXXXXX";
-#define cmd_bufsize  1024
-         char cmd_buf[cmd_bufsize];
-         const char out_xargs[] = "-o @.vcf \0";
-         const char bed_xargs[] = "-l @ \0";
-
-         if (! bed_file) {
-              LOG_FATAL("%s\n", "Need bed file for pseudo-parallel execution");
-              return 1;
-         }
-         /* FIXME this will also count empty lines */
-         line_count =  count_lines(bed_file);
-         if (line_count<2) {
-              LOG_ERROR("Your bed-file has only %d entries."
-                        " Can't run in pseudo-parallel mode.\n", 
-                        line_count);
-              return 1;        
-
-         }
-         
-          LOG_VERBOSE("Will try to run %d split processes\n", pseudo_parallel);
-
-         /* split in how many files */
-         if (line_count<pseudo_parallel) {
-              LOG_WARN("The number of regions in your bed-file is smaller than"
-                       " the number of requested pseudo-parallel threads."
-                       " That's fine, but I can't use all %d threads\n", pseudo_parallel);             
-              num_splits = line_count;
-         } else {
-              num_splits = line_count / pseudo_parallel;
-         }
-
-         /* use system command 'split' to split files */
-         if (NULL == (tmpdir = mkdtemp(templ))) {
-              LOG_FATAL("%s\n", "Couldn't create temporary directory");
-              return 1;
-         }
-         if (0 > snprintf(cmd_buf, cmd_bufsize, "split -l %d %s %s/",
-                          num_splits, bed_file, tmpdir)) {
-              LOG_FATAL("%s\n", "snprintf failed");
-              return 1;
-         }
-         LOG_DEBUG("Running: %s\n", cmd_buf);
-         if (system(cmd_buf)) {
-              LOG_FATAL("%s\n", "Splitting your bed-file with split failed.");
-              return 1;
-         }
-         
-         lofreq_args = calloc(1, sizeof(char));
-         for (i=0; i<argc-1 /* leave out BAM */; i++) {
-              if (0 == strcmp(argv[i], "--pseudo-parallel") || 0 == strcmp(argv[i], "-p")) {
-                   i+=1; /* skip arg */ 
-                   continue;
-              }
-              if (0 == strcmp(argv[i], "--out") || 0 == strcmp(argv[i], "-o")) {
-                   i+=1; /* skip arg */ 
-                   continue;
-              }
-              if (0 == strcmp(argv[i], "--bed") || 0 == strcmp(argv[i], "-l")) {
-                   i+=1; /* skip arg */ 
-                   continue;
-              }
-              lofreq_args = realloc(lofreq_args,
-                                    strlen(lofreq_args) + strlen(argv[i]) + 1/*space*/); /* FIXME inefficient */
-              lofreq_args = strcat(lofreq_args, argv[i]);
-              lofreq_args = strcat(lofreq_args, " ");
-         }
-         lofreq_args = realloc(lofreq_args,
-                               strlen(lofreq_args) + strlen(out_xargs) + 1);
-         lofreq_args = strcat(lofreq_args, out_xargs);
-
-         lofreq_args = realloc(lofreq_args,
-                               strlen(lofreq_args) + strlen(bed_xargs) + 1);
-         lofreq_args = strcat(lofreq_args, bed_xargs);
-
-         /* BAM */
-         lofreq_args = realloc(lofreq_args,
-                               strlen(lofreq_args) + strlen(argv[argc-1]) + 1/*space*/); /* FIXME inefficient */
-         lofreq_args = strcat(lofreq_args, argv[argc-1]);
-
-         /* asterisk needed, otherwise @ becomes just basename */
-         snprintf(cmd_buf, cmd_bufsize, "ls %s/* | grep -v vcf$ | xargs -I@ -n 1 -P %d %s",
-                  tmpdir, pseudo_parallel, lofreq_args);
-
-         LOG_DEBUG("Running: %s\n", cmd_buf);
-         if (system(cmd_buf)) {
-              LOG_FATAL("%s\n", "Running in pseudo-parallel mode failed.");
-              return 1;
-         }
-
-         LOG_FIXME("Implement combining vcf and print to handle %p\n", snvcall_conf.out);
-#if 0
-         # combine
-         # vcfs should be insplit order and shouldnt need sorting
-         # just read one by one and only output header of first
-         awk '{if (/^#/) {if (! header_done) {print; if (/^#CHROM/) {header_done=1}}} else {print}}' ${bedsplitprefix}*-m${m}.vcf > ${bam%.bam}_lofreq-raw-m${m}.vcf
-#endif
-
-#if 0
-         free(lofreq_args);
-         (void) unlink(tmpdir);
-         return 1;
-#else
-         return 0;
-#endif
+         rc = main_call_pseudo_parallel(argc, argv, pseudo_parallel, 
+                                        bed_file, snvcall_conf.out);
+         goto cleanup; 
     }
-
    
     if (! plp_summary_only) {
          /* FIXME would be nice to use full command line here instead of PACKAGE_STRING */
@@ -1002,24 +1119,49 @@ main_call(int argc, char *argv[])
          plp_proc_func = &plp_summary;
 
     }
-    (void) mpileup(&mplp_conf, plp_proc_func, (void*)&snvcall_conf,
-                   1, (const char **) argv + optind + 1);
 
+    if (bed.nregions) {
+         for (i=0; i<bed.nregions; i++) {
+              char buf[BUF_SIZE];
+              snprintf(buf, BUF_SIZE, "%s:%d-%d", bed.region[i].chrom, bed.region[i].start, bed.region[i].end);
+              mplp_conf.reg = strdup(buf);
+              LOG_VERBOSE("Running on region %s with bonf %lld (mplp_conf.bed is %p)\n", 
+                          mplp_conf.reg, snvcall_conf.bonf, mplp_conf.bed);
+              (void) mpileup(&mplp_conf, plp_proc_func, (void*)&snvcall_conf,
+                             1, (const char **) argv + optind + 1);
+              free(mplp_conf.reg);
+              mplp_conf.reg = NULL;
+         }
+    } else {
+         /* no bed. no reg. run on the whole BAM file */
+         (void) mpileup(&mplp_conf, plp_proc_func, (void*)&snvcall_conf,
+                        1, (const char **) argv + optind + 1);
+    }
 
-    if (snvcall_conf.out == stdout) {
+    rc = 0;
+
+cleanup:
+
+    if (snvcall_conf.out != stdout) {
          fclose(snvcall_conf.out);
     }
+    LOG_FIXME("%s\n", "before mplp_conf free");
     free(mplp_conf.reg); 
     free(mplp_conf.fa);
+    LOG_FIXME("%s\n", "before fai destroy");
     if (mplp_conf.fai) {
          fai_destroy(mplp_conf.fai);
     }
+    LOG_FIXME("%s\n", "before free_bed");
+    free_bed(&bed);
     free(bed_file);
+/*
     if (mplp_conf.bed) {
          bed_destroy(mplp_conf.bed);
     }
+*/
     LOG_VERBOSE("%s\n", "Successful exit.");
-    return 0;
+    return rc;
 }
 /* main_call */
 
