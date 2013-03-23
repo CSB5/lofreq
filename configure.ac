@@ -78,6 +78,12 @@ AC_PROG_INSTALL
 # systems where GCC does not accept `-g'), or `-g' for other
 # compilers.
 AC_PROG_CC
+AC_PROG_CC_STDC
+# If the C compiler cannot compile ISO Standard C (currently C99),
+# try to add an option to output variable `CC' to make it work.  If
+# the compiler does not support C99, fall back to supporting ANSI
+# C89 (ISO C90).
+
 # Set output variable CPP to a command that runs the C preprocessor. 
 AC_PROG_CPP
 #
