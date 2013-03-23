@@ -14,5 +14,6 @@ Makefile
 Makefile.log
 .deps
 .libs
+clang_output*
 
 schmock*
