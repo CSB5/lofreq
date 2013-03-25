@@ -725,9 +725,10 @@ main_call_pseudo_parallel(int argc, char *argv[], const int num_proc,
                continue;
           }
           lofreq_args = realloc(lofreq_args,
-                                strlen(lofreq_args) + strlen(argv[i]) + 1/*space*/); /* FIXME inefficient */
+                                strlen(lofreq_args) + strlen(argv[i]) 
+                                + 2/*space and \0*/ ); /* FIXME inefficient */
           lofreq_args = strcat(lofreq_args, argv[i]);
-          lofreq_args = strcat(lofreq_args, " ");
+          lofreq_args = strcat(lofreq_args, " \0");
      }
      /* out */
      lofreq_args = realloc(lofreq_args,
@@ -754,7 +755,6 @@ main_call_pseudo_parallel(int argc, char *argv[], const int num_proc,
      snprintf(cmd_buf, BUF_SIZE, "ls %s/* | grep -v vcf$ | xargs -I@ -n 1 -P %d %s",
               tmpdir, num_proc, lofreq_args);
      
-     LOG_FIXME("Running: %s\n", cmd_buf);
      /* FIXME catch err by redirecting stderr to tmpfile */
      /* could try popen her to parse output directly, but all
       * subprocesses will print a header which might get mingled.
@@ -778,7 +778,7 @@ main_call_pseudo_parallel(int argc, char *argv[], const int num_proc,
           char *fn = split_vcf_files[i];
           FILE *fh;
           char line[BUF_SIZE];
-          LOG_FIXME("Reading from %s\n", fn);
+          LOG_DEBUG("Reading from %s\n", fn);
           if (NULL == (fh = fopen(fn, "r"))) {
                LOG_FATAL("Couldn't open vcf file %s", fn);
                return -1;
@@ -1199,7 +1199,9 @@ cleanup:
          bed_destroy(mplp_conf.bed);
     }
 */
-    LOG_VERBOSE("%s\n", "Successful exit.");
+    if (0==rc) {
+         LOG_VERBOSE("%s\n", "Successful exit.");
+    }
     return rc;
 }
 /* main_call */
