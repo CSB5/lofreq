@@ -19,6 +19,8 @@ AC_SUBST(PACKAGE_VERSION)
 AC_SUBST(PACKAGE_STRING)
 AC_SUBST(PACKAGE_BUGREPORT)
 
+AC_REVISION([m4_esyscmd_s([git describe --always --dirty])])
+
 AC_MSG_NOTICE([configuring $PACKAGE_NAME (version $PACKAGE_VERSION) for your system...])
 
 
@@ -143,6 +145,7 @@ AM_PATH_PYTHON([2.6])
 #PYTHON_LDFLAGS=`python-config --ldflags`
 #AC_SUBST(PYTHON_CFLAGS)
 #AC_SUBST(PYTHON_LDFLAGS)
+
 
 
 
