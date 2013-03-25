@@ -120,6 +120,9 @@ merge_baseq_and_mapq(const int bq, const int mq)
      LOG_DEBUG("P_M + (1-P_M) P_B:   %g + (1.0 - %g) * %g = %g  ==  Q%d + (1.0 - Q%d) * Q%d  =  Q%d\n",
                mp, mp, bp, jp, mq+33, mq+33, bq+33, jq+33);
 #endif
+#if 0
+     LOG_DEBUG("BQ %d after merging with MQ %d = %d\n", bq+33, mq+33, jq+33);
+#endif
      return jq;
 }
 /* merge_baseq_and_mapq() */
@@ -1052,6 +1055,11 @@ main_call(int argc, char *argv[])
                         " using stdin for BAM input.");
               return 1;
          }
+    } else {
+         if (! file_exists(bam_file)) {
+              LOG_FATAL("BAM file %s does not exist. Exiting...\n", bam_file);
+              return 1;
+         }
     }
 
     if ( ! (snvcall_conf.flag & SNVCALL_CONS_AS_REF) && ! mplp_conf.fa && ! plp_summary_only) {
@@ -1112,6 +1120,7 @@ main_call(int argc, char *argv[])
          if (snvcall_conf.bonf<1) {
               LOG_FATAL("Automatically determining Bonferroni from bed"
                         " regions listed in %s failed\n", bed_file);
+              return 1;
          }
 
 #endif
