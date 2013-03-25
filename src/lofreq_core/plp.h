@@ -1,3 +1,4 @@
+/* -*- c-file-style: "k&r" -*- */
 #ifndef PLP_H
 #define PLP_H
 
