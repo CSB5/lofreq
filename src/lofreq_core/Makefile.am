@@ -1,4 +1,4 @@
-AM_CFLAGS = -Wall -I../cdflib90/ -I../libbam/ -fPIC
+AM_CFLAGS = -O2 -Wall -I../cdflib90/ -I../libbam/ -fPIC
 AM_LDFLAGS = -shared -fPIC
 noinst_LIBRARIES = liblofreq_core.a
 liblofreq_core_a_SOURCES = bam2depth.c bed.c fet.c log.c plp.c sam_view.c snpcaller.c utils.c vcf.c \
