@@ -1,4 +1,4 @@
-AM_CFLAGS = -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -Wall -fPIC
+AM_CFLAGS = -O2 -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -Wall -fPIC
 AM_LDFLAGS = -shared -fPIC
 # -D_USE_KNETFILE defined by toplevel configure to make it active across sub-sources
 KNETFILE = knetfile.c
