@@ -2,33 +2,16 @@
 
 myname=$(basename $0)
 
-errorecho() {
-    echo "ERROR: $@" 1>&2
-}
+source lib.sh || exit 1
 
-for f in $(find ../src/lofreq_python/lofreq/ -name \*py \
-    -not -name _\* -not -name \*20[0-9][0-9]\*); do
+PY_DIR=../src/lofreq_python/lofreq2
+files=$(find $PY_DIR  -name \*py -not -name _\*)
+for f in $files; do
     echo "$myname: testing $f"
-    python $f || errorecho "testing $f failed"
+    python $f || echo_error "testing $f failed"
 done
 
-for f in $(find ../src/lofreq_python/scripts/ -name \*py \
-    -not -name _\* -not -name \*20[0-9][0-9]\*); do
+for f in $files; do
     echo "$myname: testing $f"
-	python -m doctest $f || errorecho "testing $f failed"
+	python -m doctest $f || echo_error "testing $f failed"
 done
-
-
-#VERBOSE = False
-#
-#if __name__ == "__main__":
-#    
-#    for f in itertools.chain(
-#        glob.glob('./lofreq/*py'),
-#        glob.glob('./scripts/*py')
-#        ):
-#        if os.path.basename(f).startswith("_"):
-#            continue
-#        print "Testing %s" % f
-#        doctest.testfile(f, VERBOSE)
-#        print    
