@@ -1,4 +1,4 @@
-/* -*- mode: c; tab-width: 4; c-basic-offset: 4;  indent-tabs-mode: nil -*- */
+/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*-
 
 /* FIXME can we replace all of this libbam's bed_read() etc.
  * FIXME doesn't behave as expected if regions overlap

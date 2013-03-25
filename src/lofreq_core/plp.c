@@ -1,4 +1,4 @@
-/* -*- c-file-style: "k&r" -*-
+/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*-
  *
  * This file is partially based on samtools' bam_plcmd.c
  *

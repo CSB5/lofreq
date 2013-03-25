@@ -1,3 +1,5 @@
+/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*-
+
 #include "log.h"
 
 int debug = 0;
