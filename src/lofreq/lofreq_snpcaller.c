@@ -639,7 +639,8 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
 /* FIXME evil hack, use MP/I in main routine instead */
 int 
 main_call_pseudo_parallel(int argc, char *argv[], const int num_proc, 
-                          const char *bed_file,  FILE *vcfout)
+                          const char *bed_file, long long int bonf,
+                          FILE *vcfout)
 {
      int i;
      long int line_count;
@@ -651,6 +652,7 @@ main_call_pseudo_parallel(int argc, char *argv[], const int num_proc,
      char cmd_buf[BUF_SIZE];
      const char out_xargs[] = "-o @.vcf \0";
      const char bed_xargs[] = "-l @ \0";
+     char bonf_xargs[BUF_SIZE];
      char **split_vcf_files;
      int num_split_vcf_files;
 
@@ -715,20 +717,30 @@ main_call_pseudo_parallel(int argc, char *argv[], const int num_proc,
                i+=1; /* skip arg */ 
                continue;
           }
+          if (0 == strcmp(argv[i], "--bonf") || 0 == strcmp(argv[i], "-b")) {
+               i+=1; /* skip arg */ 
+               continue;
+          }
           lofreq_args = realloc(lofreq_args,
                                 strlen(lofreq_args) + strlen(argv[i]) + 1/*space*/); /* FIXME inefficient */
           lofreq_args = strcat(lofreq_args, argv[i]);
           lofreq_args = strcat(lofreq_args, " ");
      }
+     /* out */
      lofreq_args = realloc(lofreq_args,
                            strlen(lofreq_args) + strlen(out_xargs) + 1);
      lofreq_args = strcat(lofreq_args, out_xargs);
-     
+     /* bed */
      lofreq_args = realloc(lofreq_args,
                            strlen(lofreq_args) + strlen(bed_xargs) + 1);
      lofreq_args = strcat(lofreq_args, bed_xargs);
+     /* bonf */
+     snprintf(bonf_xargs, BUF_SIZE, "-b %lld ", bonf);;
+     lofreq_args = realloc(lofreq_args,
+                           strlen(lofreq_args) + strlen(bonf_xargs) + 1);
+     lofreq_args = strcat(lofreq_args, bonf_xargs);
      
-     /* BAM */
+     /* bam */
      lofreq_args = realloc(lofreq_args,
                            strlen(lofreq_args) + strlen(argv[argc-1]) + 1/*space*/); /* FIXME inefficient */
      lofreq_args = strcat(lofreq_args, argv[argc-1]);
@@ -781,11 +793,11 @@ main_call_pseudo_parallel(int argc, char *argv[], const int num_proc,
      }
      free(split_vcf_files);
      free(lofreq_args);
-     if (0) {
+#if 1
           (void) unlink(tmpdir);
-     } else {
+#else
           LOG_FIXME("Not unlinking tmpdir %s\n", tmpdir);
-     }
+#endif
      return 0;
 }
 
@@ -864,7 +876,7 @@ main_call(int argc, char *argv[])
 #ifdef USE_SOURCEQUAL
               {"no-sq", no_argument, NULL, 'S'},
 #endif
-              {"bonf", required_argument, NULL, 'b'},
+              {"bonf", required_argument, NULL, 'b'}, /* NOTE changes here must be reflected in pseudo_parallel code as well */
               {"sig", required_argument, NULL, 's'},
                    
               {"illumina-1.3", no_argument, NULL, 'I'},
@@ -988,7 +1000,11 @@ main_call(int argc, char *argv[])
               break;
               
          case 'p':
-              /* FIXME if (NULL==optarg) {argh};e.g. -(!)pseudparallel */
+              if (NULL==optarg) { /* e.g. -(!)pseudparallel */
+                   LOG_FATAL("%s\n", "Couldn't parse pseudo-parallel arg."
+                             " Did you mix up the short and long option?"); 
+                   return 1;
+              }
               pseudo_parallel = atoi(optarg); 
               break;
 
@@ -1001,7 +1017,8 @@ main_call(int argc, char *argv[])
               return 1;
 #if 0
          case 0:
-              fprintf(stderr, "ERROR: long opt (%s) not mapping to short option. Exiting...\n", long_opts[long_opts_index].name); 
+              fprintf(stderr, "ERROR: long opt (%s) not mapping to short option."
+                      " Exiting...\n", long_opts[long_opts_index].name); 
               return 1;
 #endif
          default:
@@ -1013,33 +1030,44 @@ main_call(int argc, char *argv[])
          mplp_conf.flag &= ~MPLP_NO_ORPHAN;
     }
 
+    if (argc == 2) {
+        fprintf(stderr, "\n");
+        usage(& mplp_conf, & snvcall_conf);
+        return 1;
+    }
+
+    if (1 != argc - optind - 1) {
+        fprintf(stderr, "Need exactly one BAM file as last argument\n");
+        return 1;
+    }
+    bam_file = (argv + optind + 1)[0];
+    if (0 == strcmp(bam_file, "-")) {
+         if (mplp_conf.reg) {
+              LOG_FATAL("%s\n", "Need index if region was given and"
+                        " index file can't be provided when using stdin mode.");
+              return 1;
+         }
+         if (pseudo_parallel>1) {
+              LOG_FATAL("%s\n", "Can't run in pseudo-parallel mode when"
+                        " using stdin for BAM input.");
+              return 1;
+         }
+    }
+
     if ( ! (snvcall_conf.flag & SNVCALL_CONS_AS_REF) && ! mplp_conf.fa && ! plp_summary_only) {
          LOG_FATAL("%s\n", "Need a reference when not calling in consensus mode...\n"); 
          return 1;
     }
+
     if (! plp_summary_only & ! mplp_conf.fa) {
          LOG_WARN("%s\n", "Calling SNVs without reference\n"); 
     }
 
     mplp_conf.cmdline[0] = '\0';
     for (i=0; i<argc; i++) {
-         strncat(mplp_conf.cmdline, argv[i], sizeof(mplp_conf.cmdline)-strlen(mplp_conf.cmdline)-2);
+         strncat(mplp_conf.cmdline, argv[i], 
+                 sizeof(mplp_conf.cmdline)-strlen(mplp_conf.cmdline)-2);
          strcat(mplp_conf.cmdline, " ");
-    }
-
-    if (argc == 2) {
-        fprintf(stderr, "\n");
-        usage(& mplp_conf, & snvcall_conf);
-        return 1;
-    }
-    if (1 != argc - optind - 1) {
-        fprintf(stderr, "Need exactly one BAM file as last argument\n");
-        return 1;
-    }
-    bam_file = (argv + optind + 1)[0];
-    if (0 == strcmp(bam_file, "-") && mplp_conf.reg) {
-         LOG_FATAL("%s\n", "Need index if region was given and index file can't be provided when using stdin mode.");
-         return 1;         
     }
 
     if (bed_file) {
@@ -1049,20 +1077,13 @@ main_call(int argc, char *argv[])
               LOG_FATAL("Parsing of %s failed\n", bed_file); 
               return 1;
          }
-#if 1
+#if 0
          LOG_FIXME("%s\n", "debug bed dumping"); 
          dump_bed(&bed);
 #endif
     }
 
     if (bonf_auto && ! plp_summary_only) {
-         double cov_mean;
-         long long int num_non0cov_pos;
-
-         if (pseudo_parallel>1) {
-              LOG_FATAL("%s\n", "Can't use auto bonf in pseudo-parallel mode.");
-              return 1;
-         }
          if (! bed_file) {
               LOG_FATAL("%s\n", "Need bed-file for auto bonferroni correction.");
               return 1;
@@ -1075,6 +1096,8 @@ main_call(int argc, char *argv[])
          }
 
 #if 0
+         double cov_mean;
+         long long int num_non0cov_pos;
          LOG_DEBUG("Automatically determining Bonferroni factor for bam=%s reg=%s bed=%s\n",
                    bam_file, mplp_conf.reg, bed_file); 
          if (depth_stats(&cov_mean, &num_non0cov_pos, bam_file, mplp_conf.reg, bed_file,
@@ -1100,14 +1123,15 @@ main_call(int argc, char *argv[])
          dump_snvcall_conf(& snvcall_conf, stderr);
     }
 
-    /* FIXME: implement logic_check_opts() */
+    /* FIXME: implement check_user_arg_logic() */
     assert(mplp_conf.min_mq <= mplp_conf.max_mq);
     assert(mplp_conf.min_bq <= snvcall_conf.min_altbq);
     assert(! (mplp_conf.bed && mplp_conf.reg));
 
     if (pseudo_parallel>1) { /* to be able to break, which wouldn't be possible with an if */
          rc = main_call_pseudo_parallel(argc, argv, pseudo_parallel, 
-                                        bed_file, snvcall_conf.out);
+                                        bed_file, snvcall_conf.bonf, 
+                                        snvcall_conf.out);
          goto cleanup; 
     }
    
@@ -1120,39 +1144,45 @@ main_call(int argc, char *argv[])
 
     }
 
-    if (bed.nregions) {
+    /* if bed file and BAM do not come from stdin using regions
+     * instead of bed to make use of fast, indexed reading
+     */
+    if (bed.nregions && 0 != strcmp(bam_file, "-")) {
+         mplp_conf.bed = NULL; /* paranoia */
          for (i=0; i<bed.nregions; i++) {
               char buf[BUF_SIZE];
               snprintf(buf, BUF_SIZE, "%s:%d-%d", bed.region[i].chrom, bed.region[i].start, bed.region[i].end);
               mplp_conf.reg = strdup(buf);
               LOG_VERBOSE("Running on region %s with bonf %lld (mplp_conf.bed is %p)\n", 
                           mplp_conf.reg, snvcall_conf.bonf, mplp_conf.bed);
-              (void) mpileup(&mplp_conf, plp_proc_func, (void*)&snvcall_conf,
+              rc = mpileup(&mplp_conf, plp_proc_func, (void*)&snvcall_conf,
                              1, (const char **) argv + optind + 1);
               free(mplp_conf.reg);
               mplp_conf.reg = NULL;
+              if (rc) {
+                   goto cleanup;
+              }
          }
     } else {
-         /* no bed. no reg. run on the whole BAM file */
-         (void) mpileup(&mplp_conf, plp_proc_func, (void*)&snvcall_conf,
+         if (bed.nregions) {
+              LOG_WARN("%s\n", "Won't be able to use indexing feature when reading BAM from stdin");
+              mplp_conf.bed = bed_read(bed_file);
+              mplp_conf.reg = NULL; /* paranoia */
+         }
+         rc = mpileup(&mplp_conf, plp_proc_func, (void*)&snvcall_conf,
                         1, (const char **) argv + optind + 1);
     }
-
-    rc = 0;
 
 cleanup:
 
     if (snvcall_conf.out != stdout) {
          fclose(snvcall_conf.out);
     }
-    LOG_FIXME("%s\n", "before mplp_conf free");
     free(mplp_conf.reg); 
     free(mplp_conf.fa);
-    LOG_FIXME("%s\n", "before fai destroy");
     if (mplp_conf.fai) {
          fai_destroy(mplp_conf.fai);
     }
-    LOG_FIXME("%s\n", "before free_bed");
     free_bed(&bed);
     free(bed_file);
 /*
