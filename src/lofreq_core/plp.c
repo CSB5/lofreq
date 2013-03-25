@@ -312,7 +312,7 @@ void compile_plp_col(plp_col_t *plp_col,
            * if is_tail: put $ 
            */
           const bam_pileup1_t *p = plp + i;
-          int nt, nt4;
+          int nt4;
           int mq, bq; /* phred scores */
           int base_skip = 0; /* boolean */
 
