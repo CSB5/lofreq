@@ -1,4 +1,4 @@
-/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*-
+/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*- */
 
 #include "log.h"
 
