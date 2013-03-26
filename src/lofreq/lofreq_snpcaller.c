@@ -634,7 +634,8 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -I | --illumina-1.3          assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
      fprintf(stderr, "            --use-orphan            count anomalous read pairs\n");
      fprintf(stderr, "            --plp-summary-only      no snv-calling. just output pileup summary per column\n");
-     fprintf(stderr, "       -p | --pseudo-parallel INT   pseudo-parallel using INT processors, by splitting up the bed-file. NOTE: don't use if disk IO is a bottleneck\n");
+     fprintf(stderr, "       -p | --pseudo-parallel INT   pseudo-parallel using INT processors, by splitting up the bed-file."
+             " NOTE: high values will create a disk IO bottleneck and might run even slower\n");
 }
 /* usage() */
 
@@ -690,7 +691,13 @@ main_call_pseudo_parallel(int argc, char *argv[], const int num_proc,
           num_splits = line_count / num_proc;
      }
 
-     /* use system command 'split' to split files */
+     /* use system command 'split' to split files
+      *
+      * FIXME: should use our own routine which splits according to
+      * sum of region length (using some greedy approach), .e.g given
+      * full region length fill each split bucket with largest region
+      * first.
+      */
      if (NULL == (tmpdir = mkdtemp(templ))) {
           LOG_FATAL("%s\n", "Couldn't create temporary directory");
           return -1;
@@ -826,11 +833,6 @@ main_call(int argc, char *argv[])
      for (i=0; i<argc; i++) {
           LOG_DEBUG("arg %d: %s\n", i, argv[i]);
      }
-     LOG_FIXME("%s\n", "- Proper source qual use missing");
-     LOG_FIXME("%s\n", "- Indel handling missing");
-     LOG_FIXME("%s\n", "- Implement routine test against old SNV caller");
-     LOG_FIXME("%s\n", "- Test actual SNV and SB values for both types of SNVs");
-
 
      memset(&bed, 0, sizeof(bed_t));
 
@@ -863,7 +865,7 @@ main_call(int argc, char *argv[])
               
               {"maxdepth", required_argument, NULL, 'd'},
               {"reffa", required_argument, NULL, 'f'},
-              {"cons-is-ref", no_argument, NULL, 'c'},
+              {"cons-as-ref", no_argument, NULL, 'c'},
 
               {"out", required_argument, NULL, 'o'}, /* NOTE changes here must be reflected in pseudo_parallel code as well */
 
@@ -893,7 +895,7 @@ main_call(int argc, char *argv[])
          };
 
          /* keep in sync with long_opts and usage */
-         static const char *long_opts_str = "r:l:d:f:co:q:Q:a:Bm:M:JSb:s:Iph"; 
+         static const char *long_opts_str = "r:l:d:f:co:q:Q:a:Bm:M:JSb:s:Ip:h"; 
 
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
@@ -1152,6 +1154,18 @@ main_call(int argc, char *argv[])
          plp_proc_func = &plp_summary;
 
     }
+
+#if 0
+    LOG_FIXME("%s\n", "TMP MODE");
+    if (bed.nregions) {
+         mplp_conf.bed = bed_read(bed_file);
+         mplp_conf.reg = NULL; /* paranoia */
+    }
+    rc = mpileup(&mplp_conf, plp_proc_func, (void*)&snvcall_conf,
+                 1, (const char **) argv + optind + 1);
+    goto cleanup;
+#endif
+
 
     /* if bed file and BAM do not come from stdin using regions
      * instead of bed to make use of fast, indexed reading
