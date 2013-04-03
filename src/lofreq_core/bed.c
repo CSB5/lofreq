@@ -98,7 +98,8 @@ dump_bed(bed_t *bed)
 /* returns -1 on error 
  */
 long long int
-bed_pos_sum(bed_t *bed) {
+bed_pos_sum(bed_t *bed)
+{
     long long int sum = 0;
     int i;
     for (i=0; i<bed->nregions; i++) {
@@ -112,3 +113,29 @@ bed_pos_sum(bed_t *bed) {
 }
 /* bed_pos_sum */
 
+
+long long int
+bonf_from_bedfile(char *bed_file)
+{
+     bed_t bed;
+     long long int bonf = 0;
+
+     memset(&bed, 0, sizeof(bed_t));
+     
+     /* FIXME should be using bed_read and mplp.bed instead of
+      * parsing bed file again 
+      */
+     if (-1 == parse_bed(&bed, bed_file)) {
+          LOG_FATAL("Parsing of %s failed\n", bed_file); 
+          return -1;
+     }
+#if 0
+         LOG_FIXME("%s\n", "debug bed dumping"); 
+         dump_bed(&bed);
+#endif
+
+     bonf = 3*bed_pos_sum(&bed);
+     free_bed(&bed);
+
+     return bonf;
+}

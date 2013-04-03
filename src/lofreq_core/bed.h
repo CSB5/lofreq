@@ -22,4 +22,6 @@ void dump_bed(bed_t *bed);
 
 void free_bed(bed_t *bed);
 
+long long int bonf_from_bedfile(char *bed_file);
+
 #endif
