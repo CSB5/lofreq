@@ -1,5 +1,14 @@
 #!/usr/bin/env python
-"""Perform set operations on two vcf-files (variant call format).
+"""Perform 'set' operations on two vcf-files (variant call format).
+
+Two SNV are regarded identical if their chromosome, their position and
+their (ref and) alt base are identical. Note, this definition differs
+from vcftools were the bases are ignored.
+
+The VCF meta information will be copied from first file.
+
+The exact SNV annotation will always be taken from SNV coming from
+first file.
 """
 
 #
@@ -8,7 +17,6 @@
 
 #--- standard library imports
 #
-from __future__ import division
 import sys
 import logging
 import os
@@ -53,6 +61,12 @@ logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
 
+def key_for_var(var):
+    """FIXME:add-doc"""
+
+    return "%s %d %s %s" % (var.CHROM, var.POS, 
+                            var.REF, ''.join(var.ALT))
+
 
 def get_vcfreader(vcffile):
     """gzip aware convenience wrapper for vcf.VCFReader
@@ -71,21 +85,29 @@ def cmdline_parser():
     # http://docs.python.org/dev/howto/argparse.html
     parser = argparse.ArgumentParser(description=__doc__)
 
-    parser.add_argument("-v", "--verbose", action="store_true",
+    parser.add_argument("-v", "--verbose", 
+                        action="store_true",
                         help="be verbose")
-    parser.add_argument("--debug", action="store_true",
+    parser.add_argument("--debug", 
+                        action="store_true",
                         help="enable debugging")
-    parser.add_argument("--ign-filtered", action="store_true",
+    parser.add_argument("--ign-filtered", 
+                        action="store_true",
                         help="only consider passed i.e. un-filtered variants")
     parser.add_argument("-1", "--vcf1", 
+                        required=True,
                         help="1st vcf file (gzip supported)")
     parser.add_argument("-2", "--vcf2", 
+                        required=True,
                         help="2nd vcf file (gzip supported)")
-    parser.add_argument("-a", "--action", choices=['intersect', 'complement'],
+    parser.add_argument("-a", "--action", 
+                        required=True, 
+                        choices=['intersect', 'complement'],
                         help="Set operation to perform. "
                         " intersect: vcf1 and vcf2."
                         " complement (rel.): vcf1 \ vcf2")
-    parser.add_argument("-o", "--vcfout", default="-",
+    parser.add_argument("-o", "--vcfout", 
+                        default="-",
                         help="Output file or '-' for stdout (default)."
                         " Meta-data will be copied from vcf1")
     return parser
@@ -130,6 +152,8 @@ def main():
                       " output file '%s'.\n" % out_file)
             sys.exit(1)
 
+    LOG.debug("args = %s" % args)
+
     # ----------------------------------------------------------------
     # arg logic check done
     # ----------------------------------------------------------------
@@ -138,45 +162,60 @@ def main():
     vcf2_reader = get_vcfreader(args.vcf2)
 
     if args.vcfout == '-':
-        vcf_writer = vcf.VCFWriter(sys.stdout)
+        fh_vcfout = sys.stdout
     else:
         fh_vcfout = open(args.vcfout, 'w')
-        vcf_writer = vcf.VCFWriter(fh_vcfout)
+    vcf_writer = vcf.VCFWriter(fh_vcfout)
     # meta-data copied from first vcf file
     vcf_writer.meta_from_reader(vcf1_reader)
-    # vcf_writer.write(snvs) =
-    # self.write_metainfo()
-    # self.write_header()
-    # for v in vars:
-    #    self.write_rec(v)     
-                                     
-    LOG.warn("args.ign_filtered = %s" % args.ign_filtered)
-    LOG.warn("args.action = %s" % args.action)
+    # FIXME should we add ourselve as source just like the vcftools folks do?
+    vcf_writer.write_metainfo()
+    vcf_writer.write_header()
 
+    #
+    # recipe:read B into memory and parse from A one by one
+    #
     
-    # read B into memory and parse A one by one
-    snvs2 = [r for r in vcf2_reader]
-    # FIXME make dict
-    # Record(CHROM='chr1', POS=334248, ID='.', REF='T', ALT=['C'], QUAL='.', FILTER='.', INFO={'SB': 0, 'DP4': [0, 0, 1, 0], 'CONSVAR': True, 'DP': 1, 'AF': 1.0}, FORMAT=None, samples=
-    # assert len(ALT) == 1 
-    # assert False if not rec.INFO.has_key(INDEL) else rec.INFO['INDEL']
-    # warn if INDEL
+    snvs2 = dict()
+    for var in vcf2_reader:
+        if args.ign_filtered and var.FILTER not in ['.', 'PASS']:
+            continue
+            
+        assert len(var.ALT) == 1, (
+            "Can't handle more then one alt base" 
+            " (doesn't look like this file came from LoFreq)"
+            " and therefore can't process: %s" % str(var))
+        if var.INFO.has_key('INDEL'):
+            assert not var.INFO['INDEL'], (
+                "Can't handle indels and therefore can't process"
+                " : %s" % str(var))
+        
+        k = key_for_var(var)
+        assert not snvs2.has_key(k), (
+            "I'm confused. Looks like I've already seen a SNV with"
+            " key %s" % k)
+        snvs2[k] = var        
 
-    # relative complement : elements in A but not B
+    for var in vcf1_reader:
+        if args.ign_filtered and var.FILTER not in ['.', 'PASS']:
+            continue
+        k = key_for_var(var)
 
-    import pdb; pdb.set_trace()
-    for snv1 in vcf1_reader:
-        LOG.critical("If snv2 present in snvs1 delete in snvs1")
-    
-    
-#    if opts.vcf_out == '-':
-#        fh_out = sys.stdout
-#    else:
-#        fh_out = open(opts.vcf_out, 'w')
-#        
-#    
-#    if fh_out != sys.stdout:
-#        fh_out.close()
+        if args.action == 'complement':
+            # relative complement : elements in A but not B
+            if not snvs2.has_key(k):
+                vcf_writer.write_rec(var)
+            else:
+                del snvs2[k]
+        elif args.action == 'intersect':
+            if snvs2.has_key(k):
+                vcf_writer.write_rec(var)
+        else:
+            raise ValueError
+            
+
+    if fh_vcfout != sys.stdout:
+        fh_vcfout.close()
 
     
 if __name__ == "__main__":
