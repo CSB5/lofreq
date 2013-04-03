@@ -19,7 +19,7 @@ static void usage(const char *myname)
      fprintf(stderr, "Usage: %s <command> [options], where command is one of:\n", myname);
      fprintf(stderr, "  call        : call variants\n");
      fprintf(stderr, "  filter      : filter variants\n");
-     fprintf(stderr, "  plp_summary : print pileup summary\n");
+     fprintf(stderr, "  plp_summary : FIXME:finish print pileup summary\n");
      fprintf(stderr, "  version     : prints version\n");
      fprintf(stderr, "\n");
 }

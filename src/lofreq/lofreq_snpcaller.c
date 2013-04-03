@@ -586,7 +586,7 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
      fprintf(stream, "snvcall options\n");
      fprintf(stream, "  min_altbq = %d\n", c->min_altbq);
      fprintf(stream, "  def_altbq = %d\n", c->def_altbq);
-     fprintf(stream, "  bonf         = %lld  (might get recalculated later)\n", c->bonf);
+     fprintf(stream, "  bonf         = %lld  (might get recalculated)\n", c->bonf);
      fprintf(stream, "  sig          = %f\n", c->sig);
      fprintf(stream, "  out          = %p\n", (void*)c->out);
      fprintf(stream, "  flag & SNVCALL_USE_MQ      = %d\n", c->flag&SNVCALL_USE_MQ?1:0);
@@ -634,12 +634,15 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -I | --illumina-1.3          assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
      fprintf(stderr, "            --use-orphan            count anomalous read pairs\n");
      fprintf(stderr, "            --plp-summary-only      no snv-calling. just output pileup summary per column\n");
+#ifdef USE_EVIL_PSEUDOPARALLEL_HACK_WHICH_IS_ACTUALLY_SLOW
      fprintf(stderr, "       -p | --pseudo-parallel INT   pseudo-parallel using INT processors, by splitting up the bed-file."
              " NOTE: high values will create a disk IO bottleneck and might run even slower\n");
+#endif
 }
 /* usage() */
 
 
+#ifdef USE_EVIL_PSEUDOPARALLEL_HACK_WHICH_IS_ACTUALLY_SLOW
 /* FIXME evil hack, use MP/I in main routine instead */
 int 
 main_call_pseudo_parallel(int argc, char *argv[], const int num_proc, 
@@ -810,7 +813,7 @@ main_call_pseudo_parallel(int argc, char *argv[], const int num_proc,
 #endif
      return 0;
 }
-
+#endif
 
 int 
 main_call(int argc, char *argv[])
@@ -822,19 +825,19 @@ main_call(int argc, char *argv[])
      int bonf_auto = 1;
      char *bam_file;
      char *bed_file = NULL;
-     bed_t bed;
      mplp_conf_t mplp_conf;
      snvcall_conf_t snvcall_conf;
      /*void (*plp_proc_func)(const plp_col_t*, const snvcall_conf_t*);*/
      void (*plp_proc_func)(const plp_col_t*, const void*);
+#ifdef USE_EVIL_PSEUDOPARALLEL_HACK_WHICH_IS_ACTUALLY_SLOW
      int pseudo_parallel = 0;
+#endif
      int rc = 0;
 
      for (i=0; i<argc; i++) {
           LOG_DEBUG("arg %d: %s\n", i, argv[i]);
      }
 
-     memset(&bed, 0, sizeof(bed_t));
 
      /* default pileup options */
      memset(&mplp_conf, 0, sizeof(mplp_conf_t));
@@ -853,7 +856,12 @@ main_call(int argc, char *argv[])
      snvcall_conf.out = stdout;
      snvcall_conf.flag = SNVCALL_USE_MQ;/* | MPLP_USE_SQ; FIXME */
 
-    /* keep in sync with long_opts_str and usage */
+    /* keep in sync with long_opts_str and usage 
+     *
+     * getopt is a pain in the whole when it comes to syncing of long
+     * and short args and usage. check out libcfu (also has hash
+     * functions etc)
+     */
     while (1) {
          static struct option long_opts[] = {
               /* see usage sync */
@@ -887,16 +895,20 @@ main_call(int argc, char *argv[])
               {"illumina-1.3", no_argument, NULL, 'I'},
               {"use-orphan", no_argument, &use_orphan, 1},
               {"plp-summary-only", no_argument, &plp_summary_only, 1},
+#ifdef USE_EVIL_PSEUDOPARALLEL_HACK_WHICH_IS_ACTUALLY_SLOW
               {"pseudo-parallel", required_argument, NULL, 'p'}, /* name change here has to be reflected further down in code as well */
-
+#endif
               {"help", no_argument, NULL, 'h'},
 
               {0, 0, 0, 0} /* sentinel */
          };
 
          /* keep in sync with long_opts and usage */
+#ifdef USE_EVIL_PSEUDOPARALLEL_HACK_WHICH_IS_ACTUALLY_SLOW
          static const char *long_opts_str = "r:l:d:f:co:q:Q:a:Bm:M:JSb:s:Ip:h"; 
-
+#else
+         static const char *long_opts_str = "r:l:d:f:co:q:Q:a:Bm:M:JSb:s:Ih"; 
+#endif
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
          c = getopt_long(argc-1, argv+1, /* skipping 'lofreq', just leaving 'command', i.e. call */
@@ -916,7 +928,6 @@ main_call(int argc, char *argv[])
               break;
 
          case 'l': 
-              /*mplp_conf.bed = bed_read(optarg); */
               bed_file = strdup(optarg);
               break;
 
@@ -945,7 +956,6 @@ main_call(int argc, char *argv[])
               break;
 
          case 'q': 
-              LOG_FIXME("optarg=%s\n", optarg);
               mplp_conf.min_bq = atoi(optarg); 
               break;
 
@@ -1003,7 +1013,8 @@ main_call(int argc, char *argv[])
                    return 1;
               }
               break;
-              
+
+#ifdef USE_EVIL_PSEUDOPARALLEL_HACK_WHICH_IS_ACTUALLY_SLOW              
          case 'p':
               if (NULL==optarg) { /* e.g. -(!)pseudparallel */
                    LOG_FATAL("%s\n", "Couldn't parse pseudo-parallel arg."
@@ -1012,7 +1023,7 @@ main_call(int argc, char *argv[])
               }
               pseudo_parallel = atoi(optarg); 
               break;
-
+#endif
          case 'h': 
               usage(& mplp_conf, & snvcall_conf); 
               return 0; /* WARN: not printing defaults if some args where parsed */
@@ -1052,11 +1063,13 @@ main_call(int argc, char *argv[])
                         " index file can't be provided when using stdin mode.");
               return 1;
          }
+#ifdef USE_EVIL_PSEUDOPARALLEL_HACK_WHICH_IS_ACTUALLY_SLOW
          if (pseudo_parallel>1) {
               LOG_FATAL("%s\n", "Can't run in pseudo-parallel mode when"
                         " using stdin for BAM input.");
               return 1;
          }
+#endif
     } else {
          if (! file_exists(bam_file)) {
               LOG_FATAL("BAM file %s does not exist. Exiting...\n", bam_file);
@@ -1073,6 +1086,7 @@ main_call(int argc, char *argv[])
          LOG_WARN("%s\n", "Calling SNVs without reference\n"); 
     }
 
+    /* save command-line for later reference */
     mplp_conf.cmdline[0] = '\0';
     for (i=0; i<argc; i++) {
          strncat(mplp_conf.cmdline, argv[i], 
@@ -1081,16 +1095,7 @@ main_call(int argc, char *argv[])
     }
 
     if (bed_file) {
-         /* FIXME should be using bed_read and mplp.bed instead of
-          * parsing bed file again */
-         if (-1 == parse_bed(&bed, bed_file)) {
-              LOG_FATAL("Parsing of %s failed\n", bed_file); 
-              return 1;
-         }
-#if 0
-         LOG_FIXME("%s\n", "debug bed dumping"); 
-         dump_bed(&bed);
-#endif
+         mplp_conf.bed = bed_read(bed_file);
     }
 
     if (bonf_auto && ! plp_summary_only) {
@@ -1118,7 +1123,7 @@ main_call(int argc, char *argv[])
          snvcall_conf.bonf = num_non0cov_pos*3;
 #else
 
-         snvcall_conf.bonf = 3*bed_pos_sum(&bed);
+         snvcall_conf.bonf = bonf_from_bedfile(bed_file);
          if (snvcall_conf.bonf<1) {
               LOG_FATAL("Automatically determining Bonferroni from bed"
                         " regions listed in %s failed\n", bed_file);
@@ -1139,13 +1144,15 @@ main_call(int argc, char *argv[])
     assert(mplp_conf.min_bq <= snvcall_conf.min_altbq);
     assert(! (mplp_conf.bed && mplp_conf.reg));
 
+#ifdef USE_EVIL_PSEUDOPARALLEL_HACK_WHICH_IS_ACTUALLY_SLOW
     if (pseudo_parallel>1) { /* to be able to break, which wouldn't be possible with an if */
          rc = main_call_pseudo_parallel(argc, argv, pseudo_parallel, 
                                         bed_file, snvcall_conf.bonf, 
                                         snvcall_conf.out);
          goto cleanup; 
     }
-   
+#endif
+
     if (! plp_summary_only) {
          /* FIXME would be nice to use full command line here instead of PACKAGE_STRING */
          vcf_write_header(snvcall_conf.out, PACKAGE_STRING, mplp_conf.fa);
@@ -1155,18 +1162,7 @@ main_call(int argc, char *argv[])
 
     }
 
-#if 0
-    LOG_FIXME("%s\n", "TMP MODE");
-    if (bed.nregions) {
-         mplp_conf.bed = bed_read(bed_file);
-         mplp_conf.reg = NULL; /* paranoia */
-    }
-    rc = mpileup(&mplp_conf, plp_proc_func, (void*)&snvcall_conf,
-                 1, (const char **) argv + optind + 1);
-    goto cleanup;
-#endif
-
-
+#ifdef USE_REG_INSTEAD_OF_BED_POSSIBLY_ALSO_NEEDED_FOR_PSEUDOPARALLEL
     /* if bed file and BAM do not come from stdin using regions
      * instead of bed to make use of fast, indexed reading
      */
@@ -1195,8 +1191,14 @@ main_call(int argc, char *argv[])
          rc = mpileup(&mplp_conf, plp_proc_func, (void*)&snvcall_conf,
                         1, (const char **) argv + optind + 1);
     }
+#endif
 
+    rc = mpileup(&mplp_conf, plp_proc_func, (void*)&snvcall_conf,
+                 1, (const char **) argv + optind + 1);
+
+#ifdef USE_REG_INSTEAD_OF_BED_POSSIBLY_ALSO_NEEDED_FOR_PSEUDOPARALLEL
 cleanup:
+#endif
 
     if (snvcall_conf.out != stdout) {
          fclose(snvcall_conf.out);
@@ -1206,13 +1208,10 @@ cleanup:
     if (mplp_conf.fai) {
          fai_destroy(mplp_conf.fai);
     }
-    free_bed(&bed);
     free(bed_file);
-/*
     if (mplp_conf.bed) {
          bed_destroy(mplp_conf.bed);
     }
-*/
     if (0==rc) {
          LOG_VERBOSE("%s\n", "Successful exit.");
     }
