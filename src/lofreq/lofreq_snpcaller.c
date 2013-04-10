@@ -47,6 +47,23 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #define BUF_SIZE 1<<16
 
 
+/* scale 0-60 to from 0-254 and shrink
+ * Y = 254.0/60.0 * MQ * (MQ**X)/(60**X)
+ *
+ * if 20 should stay 20
+ * 20 = 254/60.0 * 20 * (20**X)/(60**X) 
+ * 60/254.0 = (20**X)/(60**X)
+ * (20/60.0)**X = 60/254.0
+ * since a**x = y equals log_a(y) = x
+ * x = log_a(60/254.0); a=20/60.0;
+ * x = 1.3134658329243962 
+ */
+#define SCALE_MQ
+#define SCALE_MQ_FAC  1.3134658329243962
+#if 1
+#undef SCALE_MQ
+#endif
+
 typedef struct {
      int min_altbq, def_altbq;/* tag:snvcall */
      int bonf_dynamic; /* boolean: incr bonf as we go along. eventual
@@ -117,7 +134,11 @@ merge_baseq_and_mapq(const int bq, const int mq)
      /* No need to do computation in phred-space as
       * numbers won't get small enough.
       */
+#ifdef SCALE_MQ
+     mp = PHREDQUAL_TO_PROB(254/60.0*mq * pow(mq, SCALE_MQ_FAC)/pow(60, SCALE_MQ_FAC));
+#else
      mp = PHREDQUAL_TO_PROB(mq);
+#endif
      bp = PHREDQUAL_TO_PROB(bq);
 
      jp = mp + (1.0 - mp) * bp;
@@ -850,6 +871,9 @@ main_call(int argc, char *argv[])
 #endif
      int rc = 0;
 
+#ifdef SCALE_MQ
+     LOG_WARN("%s\n", "MQ scaling on!");
+#endif
      for (i=0; i<argc; i++) {
           LOG_DEBUG("arg %d: %s\n", i, argv[i]);
      }
