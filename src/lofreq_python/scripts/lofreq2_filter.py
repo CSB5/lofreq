@@ -35,15 +35,10 @@ from optparse import OptionParser, SUPPRESS_HELP
 
 #--- project specific imports
 #
-# FIXME a hack to make not installed versions work as well
-if True:
-    import sys, os
-    d = os.path.join(
-        os.path.dirname(sys.argv[0]), '..')
-    if os.path.exists(os.path.join(d, 'lofreq2')):
-        sys.stderr.write("Adding local dir %s to PYTHONPATH\n" % d)
-        sys.path.insert(0, d)
-
+try:
+    import lofreq2_local
+except:
+    pass    
 from lofreq2 import multiple_testing
 from lofreq2 import vcf
 from lofreq2 import fdr
