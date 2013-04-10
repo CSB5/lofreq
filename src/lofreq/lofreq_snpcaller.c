@@ -1,8 +1,10 @@
 /* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*-
  *
- * This file is partially based on samtools' bam_plcmd.c
+ * This file is partially based on samtools' bam_plcmd.c Whenever
+ * parts of the code looks like they've been written by a other-wordly
+ * wizard, then it was probably from Heng Li.
  *
- * FIXME missing license
+ * FIXME add missing license
  *
  */
 #include <math.h>
@@ -18,15 +20,16 @@
 #include <getopt.h>
 #include <stdlib.h>
 
+/* libbam includes */
 #include "faidx.h"
 #include "sam.h"
 #include "kstring.h"
-
 /* from bedidx.c */
 void *bed_read(const char *fn);
 void bed_destroy(void *_h);
 int bed_overlap(const void *_h, const char *chr, int beg, int end);
 
+/* lofreq includes */
 #include "snpcaller.h"
 #include "vcf.h"
 #include "bam2depth.h"
@@ -41,11 +44,14 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #define SNVCALL_USE_SQ      0x20
 #define SNVCALL_CONS_AS_REF 0x40
 
-#define BUF_SIZE 1024
+#define BUF_SIZE 1<<16
 
 
 typedef struct {
      int min_altbq, def_altbq;/* tag:snvcall */
+     int bonf_dynamic; /* boolean: incr bonf as we go along. eventual
+                        * filtering of all has to be done by
+                        * caller! */
      long long int bonf;/* tag: snvcall */
      float sig;/* tag: snvcall */
      FILE *out;
@@ -130,7 +136,7 @@ merge_baseq_and_mapq(const int bq, const int mq)
 
 
 void
-plp_summary(const plp_col_t *plp_col, const void* confp) 
+plp_summary(const plp_col_t *plp_col, void* confp) 
 {
      FILE* stream = stdout;
      int i;
@@ -163,7 +169,7 @@ plp_summary(const plp_col_t *plp_col, const void* confp)
  * 
  */
 void
-call_lowfreq_snps(const plp_col_t *p, const void *confp)
+call_snvs(const plp_col_t *p, void *confp)
 {
      int *quals; /* qualities passed down to snpcaller */
      int quals_len; /* #elements in quals */
@@ -207,6 +213,11 @@ call_lowfreq_snps(const plp_col_t *p, const void *confp)
      if (p->coverage == 0 || p->cons_base == 'N') {          
           return;
      }
+
+     if (conf->bonf_dynamic) {
+          conf->bonf += 3; /* will do one test per non-cons nuc */
+     }
+
      if (p->num_dels || p->num_ins) {
           LOG_FIXME("%s:%d (p->num_dels=%d p->del_quals=%d p->num_ins=%d p->ins_quals.n=%d\n", 
                     p->target, p->pos+1, p->num_dels, p->del_quals.n, p->num_ins, p->ins_quals.n);
@@ -360,7 +371,7 @@ call_lowfreq_snps(const plp_col_t *p, const void *confp)
      }
      free(quals);
 }
-/* call_lowfreq_snps() */
+/* call_snvs() */
 
 
 char *
@@ -584,11 +595,12 @@ void
 dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream) 
 {
      fprintf(stream, "snvcall options\n");
-     fprintf(stream, "  min_altbq = %d\n", c->min_altbq);
-     fprintf(stream, "  def_altbq = %d\n", c->def_altbq);
-     fprintf(stream, "  bonf         = %lld  (might get recalculated)\n", c->bonf);
-     fprintf(stream, "  sig          = %f\n", c->sig);
-     fprintf(stream, "  out          = %p\n", (void*)c->out);
+     fprintf(stream, "  min_altbq      = %d\n", c->min_altbq);
+     fprintf(stream, "  def_altbq      = %d\n", c->def_altbq);
+     fprintf(stream, "  bonf           = %lld  (might get recalculated)\n", c->bonf);
+     fprintf(stream, "  bonf_dynamic   = %d\n", c->bonf_dynamic);
+     fprintf(stream, "  sig            = %f\n", c->sig);
+     fprintf(stream, "  out            = %p\n", (void*)c->out);
      fprintf(stream, "  flag & SNVCALL_USE_MQ      = %d\n", c->flag&SNVCALL_USE_MQ?1:0);
 #ifdef USE_SOURCEQUAL
      fprintf(stream, "  flag & SNVCALL_USE_SQ      = %d\n", c->flag&SNVCALL_USE_SQ?1:0);
@@ -629,7 +641,7 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
 #endif                                                    
      /* stats */                                          
      fprintf(stderr, "       -s | --sig                   P-value cutoff / significance level [%f]\n", snvcall_conf->sig);
-     fprintf(stderr, "       -b | --bonf                  Bonferroni factor. INT or 'auto' (needs bed-file) [auto]\n");
+     fprintf(stderr, "       -b | --bonf                  Bonferroni factor. INT, 'dynamic' or 'auto' (needs bed-file) [auto]\n");
      /* misc */                                           
      fprintf(stderr, "       -I | --illumina-1.3          assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
      fprintf(stderr, "            --use-orphan            count anomalous read pairs\n");
@@ -662,6 +674,8 @@ main_call_pseudo_parallel(int argc, char *argv[], const int num_proc,
      char bonf_xargs[BUF_SIZE];
      char **split_vcf_files;
      int num_split_vcf_files;
+
+     LOG_CRITICAL("%s\n", "Function needs to be changed to support bonf_dynamic");
 
      if (! bed_file) {
           LOG_FATAL("%s\n", "Pseudo-parallel mode requires a bed-file");
@@ -823,12 +837,14 @@ main_call(int argc, char *argv[])
      static int use_orphan = 0;
      static int plp_summary_only = 0;
      int bonf_auto = 1;
-     char *bam_file;
+     char *bam_file = NULL;
      char *bed_file = NULL;
+     char *vcf_out = NULL; /* == - == stdout */
+     char *dyn_bonf_vcf_out = NULL;
      mplp_conf_t mplp_conf;
      snvcall_conf_t snvcall_conf;
      /*void (*plp_proc_func)(const plp_col_t*, const snvcall_conf_t*);*/
-     void (*plp_proc_func)(const plp_col_t*, const void*);
+     void (*plp_proc_func)(const plp_col_t*, void*);
 #ifdef USE_EVIL_PSEUDOPARALLEL_HACK_WHICH_IS_ACTUALLY_SLOW
      int pseudo_parallel = 0;
 #endif
@@ -851,10 +867,12 @@ main_call(int argc, char *argv[])
      memset(&snvcall_conf, 0, sizeof(snvcall_conf_t));
      snvcall_conf.min_altbq = 20;
      snvcall_conf.def_altbq = snvcall_conf.min_altbq;
+     snvcall_conf.bonf_dynamic = 0;
      snvcall_conf.bonf = 1;
      snvcall_conf.sig = 0.05;
      snvcall_conf.out = stdout;
      snvcall_conf.flag = SNVCALL_USE_MQ;/* | MPLP_USE_SQ; FIXME */
+
 
     /* keep in sync with long_opts_str and usage 
      *
@@ -948,11 +966,8 @@ main_call(int argc, char *argv[])
                         LOG_FATAL("Cowardly refusing to overwrite file '%s'. Exiting...\n", optarg);
                         return 1;
                    }
-                   if (NULL == (snvcall_conf.out = fopen(optarg, "w"))) {
-                        LOG_FATAL("Couldn't open file '%s'. Exiting...\n", optarg);
-                        return 1;
-                   }
-              } /* else: already set to stdout */
+              }
+              vcf_out = strdup(optarg);
               break;
 
          case 'q': 
@@ -995,6 +1010,10 @@ main_call(int argc, char *argv[])
          case 'b': 
               if (0 == strncmp(optarg, "auto", 4)) {
                    bonf_auto = 1;
+
+              } else if (0 == strncmp(optarg, "dynamic", 7)) {
+                   bonf_auto = 0;
+                   snvcall_conf.bonf_dynamic = 1;
 
               } else {
                    bonf_auto = 0;
@@ -1077,6 +1096,32 @@ main_call(int argc, char *argv[])
          }
     }
 
+
+    /* if Bonferroni factor is to be updated dynamically then you'll
+     * get the final number only after you've processed everything and
+     * that's where the filtering has to be done. Therefore we need to
+     * write the variants to a tmp file first and use that eventually
+     * for filtering in a subsequent step.
+     */
+    if (snvcall_conf.bonf_dynamic) {
+         char template[] = "/tmp/lofreq2-call-dyn-bonf.XXXXXX";
+         dyn_bonf_vcf_out = strdup(mktemp(template));
+         if (NULL == dyn_bonf_vcf_out) {
+              LOG_FATAL("%s\n", "Couldn't create temporary file");
+              return 1;
+         }
+         snvcall_conf.out = fopen(dyn_bonf_vcf_out, "w");
+    } else {
+         if (NULL == vcf_out || 0 == strcmp(vcf_out, "-")) {
+              snvcall_conf.out = stdout;
+         } else {
+              if (NULL == (snvcall_conf.out = fopen(vcf_out, "w"))) {
+                   LOG_FATAL("Couldn't open file '%s'. Exiting...\n", vcf_out);
+                   return 1;
+              }
+         }
+    }
+
     if ( ! (snvcall_conf.flag & SNVCALL_CONS_AS_REF) && ! mplp_conf.fa && ! plp_summary_only) {
          LOG_FATAL("%s\n", "Need a reference when not calling in consensus mode...\n"); 
          return 1;
@@ -1098,15 +1143,18 @@ main_call(int argc, char *argv[])
          mplp_conf.bed = bed_read(bed_file);
     }
 
+    if (plp_summary_only) {
+         if (1 != snvcall_conf.bonf || bonf_auto || snvcall_conf.bonf_dynamic) {
+              LOG_FATAL("%s\n", "Setting or calculating a Bonferroni"
+                        " factor for printing a pileup summary only"
+                        " doesn't make sense.");
+              return 1;
+         }
+    }
+
     if (bonf_auto && ! plp_summary_only) {
          if (! bed_file) {
               LOG_FATAL("%s\n", "Need bed-file for auto bonferroni correction.");
-              return 1;
-         }
-         if (plp_summary_only) {
-              LOG_FATAL("%s\n", "Automatically determining a Bonferroni"
-                        " factor for printing a pileup summary only"
-                        " doesn't make sense.");
               return 1;
          }
 
@@ -1154,9 +1202,9 @@ main_call(int argc, char *argv[])
 #endif
 
     if (! plp_summary_only) {
-         /* FIXME would be nice to use full command line here instead of PACKAGE_STRING */
-         vcf_write_header(snvcall_conf.out, PACKAGE_STRING, mplp_conf.fa);
-         plp_proc_func = &call_lowfreq_snps;
+         /* or use PACKAGE_STRING */
+         vcf_write_header(snvcall_conf.out, mplp_conf.cmdline, mplp_conf.fa);
+         plp_proc_func = &call_snvs;
     } else {
          plp_proc_func = &plp_summary;
 
@@ -1184,7 +1232,10 @@ main_call(int argc, char *argv[])
          }
     } else {
          if (bed.nregions) {
+#if 0
               LOG_WARN("%s\n", "Won't be able to use indexing feature when reading BAM from stdin");
+              /* FIXME: does it matter? */
+#endif
               mplp_conf.bed = bed_read(bed_file);
               mplp_conf.reg = NULL; /* paranoia */
          }
@@ -1196,13 +1247,32 @@ main_call(int argc, char *argv[])
     rc = mpileup(&mplp_conf, plp_proc_func, (void*)&snvcall_conf,
                  1, (const char **) argv + optind + 1);
 
+
 #ifdef USE_REG_INSTEAD_OF_BED_POSSIBLY_ALSO_NEEDED_FOR_PSEUDOPARALLEL
 cleanup:
 #endif
 
+
     if (snvcall_conf.out != stdout) {
          fclose(snvcall_conf.out);
     }
+    if (snvcall_conf.bonf_dynamic) {
+         /* final bonf value in snvcall_conf.bonf */
+         char cmd[BUF_SIZE];
+         snprintf(cmd, BUF_SIZE, "lofreq2_filter.py -p -i %s -o %s --snv-phred %d",
+                  dyn_bonf_vcf_out, NULL==vcf_out ? "-" : vcf_out, 
+                  PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf));
+         LOG_WARN("Executing %s\n", cmd);
+         if (0 != (rc = system(cmd))) {
+              LOG_ERROR("The following command failed: %s\n", cmd);
+         } else {
+              LOG_FIXME("%s\n", "write test on full cov data-set. should give identical results");
+              (void) unlink(dyn_bonf_vcf_out);
+         }
+    }
+
+    free(dyn_bonf_vcf_out);
+    free(vcf_out);
     free(mplp_conf.reg); 
     free(mplp_conf.fa);
     if (mplp_conf.fai) {
@@ -1212,6 +1282,8 @@ cleanup:
     if (mplp_conf.bed) {
          bed_destroy(mplp_conf.bed);
     }
+    
+
     if (0==rc) {
          LOG_VERBOSE("%s\n", "Successful exit.");
     }
