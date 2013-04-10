@@ -492,7 +492,7 @@ void compile_plp_col(plp_col_t *plp_col,
 
      plp_col->coverage -= num_skips;
      
-     /* determine consensus from 'counts' */
+     /* determine consensus from 'counts'. will never produce N on tie  */
      plp_col->cons_base = bam_nt4_rev_table[
           argmax_d(base_counts, NUM_NT4)];
 
@@ -515,8 +515,8 @@ void compile_plp_col(plp_col_t *plp_col,
 
 int
 mpileup(const mplp_conf_t *mplp_conf, 
-        void (*plp_proc_func)(const plp_col_t*, const void*),
-        const void *plp_proc_conf, 
+        void (*plp_proc_func)(const plp_col_t*, void*),
+        void *plp_proc_conf, 
         const int n, const char **fn)
 {
     mplp_aux_t **data;
@@ -526,7 +526,8 @@ mpileup(const mplp_conf_t *mplp_conf,
     bam_header_t *h = 0;
     char *ref;
     kstring_t buf;
-  
+    long long int plp_counter = 0; /* note: some cols are simply skipped */
+
     /* paranoid exit. n only allowed to be one in our case (not much
      * of an *m*pileup, I know...) */
     if (1 != n) {
@@ -621,6 +622,12 @@ mpileup(const mplp_conf_t *mplp_conf,
         }
         i=0; /* i is 1 for first pos which is a bug due to the removal
               * of one of the loops, so reset here */
+
+        plp_counter += 1;
+        if (0 == plp_counter%100000) {
+             LOG_VERBOSE("Still alive and happily crunching away on pos"
+                         " %d of %s...\n", pos+1, h->target_name[tid]);
+        }
 
         compile_plp_col(&plp_col, plp[i], n_plp[i], mplp_conf, 
                     ref, pos, ref_len, h->target_name[tid]);
