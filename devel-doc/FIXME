@@ -1,13 +1,25 @@
+- Proper source qual use missing
+- Indel handling missing
+- rename bonf auto to bed once dynamic works and make dynamic default
 - check GATK's BAQ correction
-- check for diffs between -l bed, -r region and none, all with and without BAQ
 - add tests, tests, tests
-- license update in all files
-- expose function to python ONLY for testing and easier prototyping
-- All production python stuff should be independent of any lib (C or Python)
+-- Implement routine test against old SNV caller
+-- Test actual SNV and SB values for both types of SNVs
+-- check for diffs between -l bed, -r region and none, all with and without BAQ
 - before release diff all legacy scripts for changes
-- Master configure/makefile cleanup
 - Python 2.7 and Python 3. 2.6 not neccessarily anymore
-- Remove unnecessary stuff from lofreq_core
 - Python Replace optionparser with argparse
+- add internal sens test as in original version
+
+Before Release:
+- Master configure/makefile cleanup
 - update AUTHORS
+- license update in all files
+- Remove unnecessary stuff from lofreq_core
+
+Goodies:
+- add faidx and index: run if corresponding files are not
+  indexed
+
+
 
