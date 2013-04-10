@@ -75,8 +75,8 @@ dump_mplp_conf(const mplp_conf_t *c, FILE *stream);
 
 int
 mpileup(const mplp_conf_t *mplp_conf, 
-        void (*plp_proc_func)(const plp_col_t*, const void*),
-        const void *plp_proc_conf, 
+        void (*plp_proc_func)(const plp_col_t*, void*),
+        void *plp_proc_conf, 
         const int n, const char **fn);
 
 #endif
