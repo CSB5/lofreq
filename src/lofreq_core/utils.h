@@ -34,5 +34,7 @@ int
 ls_dir(char ***matches, const char *path, const char *pattern,
        const int sort_lexi);
 
+char *
+join_paths(char **p1, const char *p2);
 
 #endif
