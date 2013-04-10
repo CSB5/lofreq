@@ -5,10 +5,73 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <libgen.h>
 
 #include "log.h"
 #include "utils.h"
 #include "lofreq_snpcaller.h"
+
+
+
+
+
+void 
+add_src_dir_to_path(char *argv0) {
+     const char *path_name = "PATH";
+     char *path_var = NULL;
+     char *old_path = NULL;
+     char *argv0_cp = NULL;
+     char *dirname_argv0 = NULL;
+     char lofreq2_script_rel[] = "../lofreq_python/scripts/lofreq2_filter.py";
+     char *lofreq2_script_abs = NULL;
+
+     argv0_cp = strdup(argv0); /* dirname might change contents */
+     if (NULL == (dirname_argv0 = strdup(dirname(argv0_cp)))) {
+          free(argv0_cp);
+          return;
+     }
+
+     if (NULL == (lofreq2_script_abs = strdup(dirname_argv0))) {
+          free(dirname_argv0);
+          free(argv0_cp);
+          return;
+     }
+
+     if (NULL == join_paths(&lofreq2_script_abs, lofreq2_script_rel)) {
+          LOG_WARN("%s\n", "Couldn't join lofreq2_script paths");
+          free(lofreq2_script_abs);
+          free(dirname_argv0);
+          free(argv0_cp);
+          return;          
+     }
+
+
+     if (! file_exists(lofreq2_script_abs)) {
+          free(lofreq2_script_abs);
+          free(dirname_argv0);
+          free(argv0_cp);
+          return;
+     }
+
+     path_var = strdup(dirname(lofreq2_script_abs));
+     LOG_VERBOSE("Adding local source directory %s to PATH\n", path_var);
+
+     old_path = getenv(path_name);
+     if (NULL == old_path) {
+          setenv(path_name, path_var, 1);
+     } else {
+          path_var = realloc(
+               path_var, (strlen(path_var) + 1 + strlen(old_path) + 1) * sizeof(char));
+          (void) strcat(path_var, ":");
+          (void) strcat(path_var, old_path);
+          setenv(path_name, path_var, 1);
+     }
+
+     free(path_var);
+     free(lofreq2_script_abs);
+     free(dirname_argv0);
+     free(argv0_cp);
+}
 
 
 static void usage(const char *myname)
@@ -26,6 +89,8 @@ static void usage(const char *myname)
 
 int main(int argc, char *argv[])
 {
+     add_src_dir_to_path(argv[0]);
+
      if (argc < 2) {
           usage(BASENAME(argv[0]));
           return 1;
