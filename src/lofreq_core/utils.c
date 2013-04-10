@@ -15,6 +15,9 @@
 #define SIZE_MAX ((size_t)-1)
 #endif
 
+#define DIR_SEP "/"
+
+
 /*********************************************************************
  *
  * Copyright (C) 2011, 2012 Genome Institute of Singapore
@@ -232,4 +235,44 @@ ls_dir(char ***matches, const char *path, const char *pattern,
         qsort((*matches), num_matches, sizeof(char*), *str_cmp);
     }
     return num_matches;
+}
+
+
+
+/* appends dir p2 to p1 and canonicalizes the pathname. returns NULL
+ * on error. will allocate memory for p1 as needed.
+ */
+char * 
+join_paths(char **p1, const char *p2) {
+     int bufsize;
+     char *buf;
+     char *buf_resolved;
+
+     if (NULL == p1 || NULL == p2) {
+          return NULL;
+     }
+
+     bufsize = strlen(*p1) + 1 + strlen(p2) + 1;
+     if (bufsize < PATH_MAX) {
+          bufsize = PATH_MAX; /* realpath requirement */
+     }
+     buf = malloc(bufsize * sizeof(char));
+     buf_resolved = malloc(bufsize * sizeof(char));
+
+     buf[0] = '\0';
+     (void) strcat(buf, *p1);
+     (void) strcat(buf, DIR_SEP);
+     (void) strcat(buf, p2);
+     if (NULL == realpath(buf, buf_resolved)) {
+          free(buf_resolved);
+          free(buf);
+          return NULL;
+     } 
+     *p1 = realloc(*p1, (strlen(buf_resolved)+1)*sizeof(char));
+     (void) strcpy(*p1, buf_resolved);
+
+     free(buf_resolved);
+     free(buf);
+
+     return *p1;
 }
