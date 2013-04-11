@@ -1016,8 +1016,10 @@ for cov in coverage_range:
          case 'f':
               mplp_conf.fa = strdup(optarg);
               mplp_conf.fai = fai_load(optarg);
-              if (mplp_conf.fai == 0) 
+              if (mplp_conf.fai == 0)  {
+                   free(mplp_conf.fa);
                    return 1;
+              }
               break;
 
          case 'o':
@@ -1184,6 +1186,7 @@ for cov in coverage_range:
 
     if ( ! (snvcall_conf.flag & SNVCALL_CONS_AS_REF) && ! mplp_conf.fa && ! plp_summary_only) {
          LOG_FATAL("%s\n", "Need a reference when not calling in consensus mode...\n"); 
+         free(dyn_bonf_vcf_out);
          return 1;
     }
 
