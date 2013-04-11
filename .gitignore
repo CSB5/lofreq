@@ -15,6 +15,7 @@ lofreq/.fuse_hidden*
 # tmp
 tmp/
 schmock*
+clang_output*
 
 # automake stuff which gets rebuild after autoreconf
 Makefile
