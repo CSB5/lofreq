@@ -1,46 +1,92 @@
 #!/bin/bash
 
-# FIXME:add-doc
+# Call SNVs on simulated data and make sure we got the expected number
+# of SNVs
 
 source lib.sh || exit 1
 
 basedir=data/denv2-simulation
 bam=$basedir/denv2-10haplo.bam
 reffa=$basedir/denv2-refseq.fa
-truesnv=$basedir/denv2-10haplo_true-snp.snp
+truesnv=$basedir/denv2-10haplo_true-snp.vcf
+# samtools mpileup $bam | wc -l;# *3
+bonf=32169
 
-outdir=$(mktemp -d)
-outraw=$outdir/raw.vcf
-outfinal=$outdir/final.vcf
+outdir=$(mktemp -d -t $(basename $0).XXXXXX)
+outraw_def=$outdir/raw_def.vcf
+outfinal_def=$outdir/final_def.vcf
+outraw_nomq=$outdir/raw_nomq.vcf
+outfinal_nomq=$outdir/final_nomq.vcf
+log=$outdir/log.txt
 
-$LOFREQ2 call -b 30000 -f $reffa -o $outraw $bam || exit 1
+KEEP_TMP=0
 
-$LOFREQ2 filter -p --strandbias-holmbonf --min-cov 10 -i $outraw -o $outfinal || exit 1
-
-
-snvs_raw=$(cut -f1,2,4,5 $outraw | grep -v '^#' | tr '\t' ' ' | sort)
-snvs_true=$(cut -f 1-3 -d ' ' $truesnv | tr '>' ' ' | sort
-
-nexp=$(echo $snvs_raw | wc -l)
-nraw=$(echo $snvs_true | wc -l)
-if [ $nexp -ne $ncommon ]; then
-    echoerror "Number of common SNVs differs (expected $nexp got $ncommon)"
+cmd="$LOFREQ2 call -b $bonf -f $reffa -o $outraw_def $bam"
+if ! eval $cmd >> $log 2>&1; then
+    echoerror "The following command failed (see $log for more): $cmd"
+    exit 1
+fi
+cmd="$LOFREQ2 filter -p --strandbias-holmbonf --min-cov 10 -i $outraw_def -o $outfinal_def"
+if ! eval $cmd >> $log 2>&1; then
+    echoerror "The following command failed (see $log for more): $cmd"
+    exit 1
 fi
 
-md5exp=$(echo $snvs_raw | $md5)
-md5raw=$(echo $snvs_true | $md5)
-if [ $md5exp != $md5raw ]; then
-    echoerror "Number of SNV matches but content differs"
+
+cmd="$LOFREQ2 call -b $bonf -f $reffa -o $outraw_nomq -J $bam"
+if ! eval $cmd >> $log 2>&1; then
+    echoerror "The following command failed (see $log for more): $cmd"
+    exit 1
+fi
+cmd="$LOFREQ2 filter -p --strandbias-holmbonf --min-cov 10 -i $outraw_nomq -o $outfinal_nomq"
+if ! eval $cmd >> $log 2>&1; then
+    echoerror "The following command failed (see $log for more): $cmd"
+    exit 1
 fi
 
-echook "Tests passed"
 
+#nexp=$(grep -v -c '^#' $truesnv)
+#nfinal_def=$(grep -v -c '^#' $outfinal_def)
+#nfinal_nomq=$(grep -v -c '^#' $outfinal_nomq)
+#echodebug "nexp=$nexp nfinal_def=$nfinal_def $nfinal_nomq=$nfinal_nomq"
+
+
+ndiff=$(lofreq2_vcfset.py -a complement --ign-filtered -1 $outfinal_def -2 $truesnv  | grep -c '^[^#]')
+if [ $ndiff -ne 0 ]; then
+    echoerror "Found extra SNVs in default predictions, which are not part of the list of true SNVs"
+    exit 1
+fi
+ndiff=$(lofreq2_vcfset.py -a complement --ign-filtered -2 $outfinal_def -1 $truesnv  | grep -c '^[^#]')
+nexp=19
+if [ $ndiff -ne $nexp ]; then
+    echoerror "Expected $nexp missing SNVs in default predictions but got $ndiff"
+    exit 1
+fi
+
+
+
+ndiff=$(lofreq2_vcfset.py -a complement --ign-filtered -1 $outfinal_nomq -2 $truesnv  | grep -c '^[^#]')
+if [ $ndiff -ne 0 ]; then
+    echoerror "Found extra SNVs in no-mq predictions, which are not part of the list of true SNVs"
+    exit 1
+fi
+ndiff=$(lofreq2_vcfset.py -a complement --ign-filtered -2 $outfinal_nomq -1 $truesnv  | grep -c '^[^#]')
+nexp=14
+if [ $ndiff -ne $nexp ]; then
+    echoerror "Expected $nexp missing SNVs in no-mq predictions but got $ndiff"
+    exit 1
+fi
 
 
 # FIXME outfinal should not look different, i.e. filtering shouldn't do much/anything.
 # see /home/wilma/snpcaller/lofreq/lofreq-sourceforge.git/tests/denv2-simulation.sh 
 
-echoerror "Compare $outraw and $outfinal with $truesnv"
-rm $outraw $outfinal
-rmdir $outdir
+echook "Tests passed"
+
+if [ $KEEP_TMP -eq 1 ]; then
+    echowarn "Not deleting tmp dir $outdir"
+else 
+    rm  $outdir/*
+    rmdir $outdir
+fi
 
