@@ -1,6 +1,11 @@
-/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*-
+/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*- */
+
+/*********************************************************************
  *
- */
+ * FIXME update license
+ *
+ *********************************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,7 +19,9 @@
 
 
 
-
+/* prepend python source dir to PATH making sure that package works
+ * even without properly installing it 
+*/
 void 
 add_src_dir_to_path(char *argv0) {
      const char *path_name = "PATH";
@@ -38,14 +45,13 @@ add_src_dir_to_path(char *argv0) {
      }
 
      if (NULL == join_paths(&lofreq2_script_abs, lofreq2_script_rel)) {
-          LOG_WARN("%s\n", "Couldn't join lofreq2_script paths");
           free(lofreq2_script_abs);
           free(dirname_argv0);
           free(argv0_cp);
           return;          
      }
-
-
+     /* check also done by realpath in join_path but doesn't hurt to
+      * check again */
      if (! file_exists(lofreq2_script_abs)) {
           free(lofreq2_script_abs);
           free(dirname_argv0);
@@ -54,7 +60,7 @@ add_src_dir_to_path(char *argv0) {
      }
 
      path_var = strdup(dirname(lofreq2_script_abs));
-     LOG_VERBOSE("Adding local source directory %s to PATH\n", path_var);
+     LOG_NOTE("Adding local source directory %s to PATH\n", path_var);
 
      old_path = getenv(path_name);
      if (NULL == old_path) {
@@ -86,6 +92,7 @@ static void usage(const char *myname)
      fprintf(stderr, "  version     : prints version\n");
      fprintf(stderr, "\n");
 }
+
 
 int main(int argc, char *argv[])
 {
