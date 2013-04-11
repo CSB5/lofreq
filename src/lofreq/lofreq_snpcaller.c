@@ -1,12 +1,19 @@
-/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*-
+/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*- */
+
+
+/*********************************************************************
  *
+ * FIXME update license
+ *
+ *********************************************************************/
+
+/*
  * This file is partially based on samtools' bam_plcmd.c Whenever
  * parts of the code looks like they've been written by a other-wordly
  * wizard, then it was probably from Heng Li.
  *
- * FIXME add missing license
- *
  */
+
 #include <math.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -64,6 +71,7 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #undef SCALE_MQ
 #endif
 
+
 typedef struct {
      int min_altbq, def_altbq;/* tag:snvcall */
      int bonf_dynamic; /* boolean: incr bonf as we go along. eventual
@@ -76,12 +84,10 @@ typedef struct {
 } snvcall_conf_t;
 
 
-
 void
-report_var(FILE *stream, const plp_col_t *p, 
-                const char ref, const char alt, 
-                const float af, const int qual,
-                const int is_indel, const int is_consvar)
+report_var(FILE *stream, const plp_col_t *p, const char ref, 
+           const char alt, const float af, const int qual,
+           const int is_indel, const int is_consvar)
 {
      var_t *var;
      dp4_counts_t dp4;
@@ -162,8 +168,8 @@ plp_summary(const plp_col_t *plp_col, void* confp)
      FILE* stream = stdout;
      int i;
 
-     fprintf(stream, "%s\t%d\t%c\t%c",
-             plp_col->target, plp_col->pos+1, plp_col->ref_base, plp_col->cons_base);
+     fprintf(stream, "%s\t%d\t%c\t%c", plp_col->target, plp_col->pos+1,
+             plp_col->ref_base, plp_col->cons_base);
      for (i=0; i<NUM_NT4; i++) {
           fprintf(stream, "\t%c:%lu/%lu",
                   bam_nt4_rev_table[i],
@@ -171,8 +177,10 @@ plp_summary(const plp_col_t *plp_col, void* confp)
                   plp_col->rv_counts[i]);
      }
 
-     fprintf(stream, "\theads:%d\ttails:%d", plp_col->num_heads, plp_col->num_tails);
-     fprintf(stream, "\tins=%d\tdels=%d", plp_col->num_ins, plp_col->num_dels);
+     fprintf(stream, "\theads:%d\ttails:%d", plp_col->num_heads, 
+             plp_col->num_tails);
+     fprintf(stream, "\tins=%d\tdels=%d", plp_col->num_ins, 
+             plp_col->num_dels);
      fprintf(stream, "\n");
 
      LOG_FIXME("%s\n", "unfinished");
@@ -240,8 +248,10 @@ call_snvs(const plp_col_t *p, void *confp)
      }
 
      if (p->num_dels || p->num_ins) {
-          LOG_FIXME("%s:%d (p->num_dels=%d p->del_quals=%d p->num_ins=%d p->ins_quals.n=%d\n", 
-                    p->target, p->pos+1, p->num_dels, p->del_quals.n, p->num_ins, p->ins_quals.n);
+          LOG_FIXME("%s:%d (p->num_dels=%d p->del_quals=%d"
+                    " p->num_ins=%d p->ins_quals.n=%d\n", 
+                    p->target, p->pos+1, p->num_dels, p->del_quals.n,
+                    p->num_ins, p->ins_quals.n);
           if (p->num_dels && p->del_quals.n) {
                LOG_FIXME("Call deletions at %s:%d\n", p->target, p->pos+1);
           }
@@ -262,7 +272,8 @@ call_snvs(const plp_col_t *p, void *confp)
                       p->rv_counts[bam_nt4_table[(int) p->cons_base]]) 
                / (float)p->coverage;
 
-          report_var(conf->out, p, p->ref_base, p->cons_base, af, qual, is_indel, is_consvar);
+          report_var(conf->out, p, p->ref_base, p->cons_base,
+                     af, qual, is_indel, is_consvar);
           LOG_DEBUG("cons var snp: %s %d %c>%c\n",
                     p->target, p->pos+1, p->ref_base, p->cons_base);          
      }
@@ -337,7 +348,8 @@ call_snvs(const plp_col_t *p, void *confp)
           }
      }
      if (! got_alt_bases) {
-          LOG_DEBUG("%s %d: only cons bases left after filtering.\n", p->target, p->pos+1);
+          LOG_DEBUG("%s %d: only cons bases left after filtering.\n", 
+                    p->target, p->pos+1);
           /* ...and CONSVAR already reported */
           free(quals);
           return;
@@ -347,8 +359,9 @@ call_snvs(const plp_col_t *p, void *confp)
       * make snpcallerfaster */
      qsort(quals, quals_len, sizeof(int), int_cmp);
 
-     LOG_DEBUG("%s %d: passing down %d quals with noncons_counts (%d, %d, %d) to snpcaller()\n",
-               p->target, p->pos+1, quals_len, alt_counts[0], alt_counts[1], alt_counts[2]);
+     LOG_DEBUG("%s %d: passing down %d quals with noncons_counts"
+               " (%d, %d, %d) to snpcaller()\n", p->target, p->pos+1,
+               quals_len, alt_counts[0], alt_counts[1], alt_counts[2]);
 
      if (snpcaller(pvalues, quals, quals_len, 
                   alt_counts, conf->bonf, conf->sig)) {
@@ -383,7 +396,8 @@ call_snvs(const plp_col_t *p, void *confp)
                report_var(conf->out, p, reported_snv_ref, alt_base, 
                           af, PROB_TO_PHREDQUAL(pvalue), 
                           is_indel, is_consvar);
-               LOG_DEBUG("low freq snp: %s %d %c>%c pv-prob:%g;pv-qual:%d counts-raw:%d/%d=%.6f counts-filt:%d/%d=%.6f\n",
+               LOG_DEBUG("low freq snp: %s %d %c>%c pv-prob:%g;pv-qual:%d"
+                         " counts-raw:%d/%d=%.6f counts-filt:%d/%d=%.6f\n",
                          p->target, p->pos+1, p->cons_base, alt_base,
                          pvalue, PROB_TO_PHREDQUAL(pvalue),
                          /* counts-raw */ alt_raw_count, p->coverage, alt_raw_count/(float)p->coverage,
@@ -447,7 +461,7 @@ count_matches(int *n_matches, int *n_mismatches,
      }
 
      if (0) {
-          fprintf(stderr, "SOURCEQUAL: core.pos %d - calend %d - cigar %s", 
+          fprintf(stderr, "SOURCEQUAL: core.pos %d - calend %d - cigar %s",
                   b->core.pos, bam_calend(&b->core, bam1_cigar(b)), cigar_from_bam(b));
      }
      
@@ -559,7 +573,8 @@ source_qual(const bam1_t *b, const char *ref)
           src_pvalue = 1.0;/*-DBL_EPSILON;*/
      }
 
-     LOG_FIXME("src_pvalue = %g. Actual prob = %g\n", src_pvalue, exp(probvec[n_mismatches]));
+     LOG_FIXME("src_pvalue = %g. Actual prob = %g\n", 
+               src_pvalue, exp(probvec[n_mismatches]));
 
      /* src_pvalue: what's the prob of seeing n_mismatches or more by
       * chance, given quals? or: how likely is this read from the
@@ -945,6 +960,27 @@ main_call(int argc, char *argv[])
               {0, 0, 0, 0} /* sentinel */
          };
 
+
+/* FIXME add sens test:
+construct p such with
+quality_range = [20, 25, 30, 35, 40]
+coverage_range = [10, 50, 100, 500, 1000, 5000, 10000]
+refbase = 'A'
+snpbase = 'C'
+for cov in coverage_range:
+    for q in quality_range:
+        num_noncons = 1
+        while True:
+            void call_snvs(const plp_col_t *p, &snvcall_conf);
+            count snvs in output
+            if len(snps):
+                print num_noncons
+                break
+            num_noncons += 1
+            if num_noncons == cov:
+                break
+*/
+
          /* keep in sync with long_opts and usage */
 #ifdef USE_EVIL_PSEUDOPARALLEL_HACK_WHICH_IS_ACTUALLY_SLOW
          static const char *long_opts_str = "r:l:d:f:co:q:Q:a:Bm:M:JSb:s:Ip:h"; 
@@ -1286,11 +1322,10 @@ cleanup:
          snprintf(cmd, BUF_SIZE, "lofreq2_filter.py -p -i %s -o %s --snv-phred %d",
                   dyn_bonf_vcf_out, NULL==vcf_out ? "-" : vcf_out, 
                   PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf));
-         LOG_WARN("Executing %s\n", cmd);
+         LOG_VERBOSE("Executing %s\n", cmd);
          if (0 != (rc = system(cmd))) {
               LOG_ERROR("The following command failed: %s\n", cmd);
          } else {
-              LOG_FIXME("%s\n", "write test on full cov data-set. should give identical results");
               (void) unlink(dyn_bonf_vcf_out);
          }
     }
