@@ -34,8 +34,13 @@ try:
 except:
     pass    
 
-from lofreq2 import vcf
-
+try:
+    from lofreq2 import vcf
+except:
+    sys.stderr.write("FATAL: Couldn't LoFreq's vcf module."
+                     " Are you sure your PYTHONPATH is set correctly?\n")
+    sys.exit(1)
+    
 # invocation of ipython on exceptions
 #import sys, pdb
 #from IPython.core import ultratb
