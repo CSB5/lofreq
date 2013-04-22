@@ -10,13 +10,14 @@
 # echo $source | sed -e 's, , \\\n,g' | sed -e 's,^,\t,';
 #
 EXTRA_DIST = setup.py \
-	lofreq2/__init__.py \
-	lofreq2/multiple_testing.py \
-	lofreq2/vcf.py \
-	lofreq2/fdr.py \
-	lofreq2/utils.py \
+	lofreq_star/__init__.py \
+	lofreq_star/multiple_testing.py \
+	lofreq_star/vcf.py \
+	lofreq_star/fdr.py \
+	lofreq_star/utils.py \
 	scripts/lofreq2_filter.py \
 	scripts/lofreq2_local.py \
+	scripts/lofreq2_somatic.py \
 	scripts/lofreq2_vcfset.py \
 	setup_conf.py.in
 

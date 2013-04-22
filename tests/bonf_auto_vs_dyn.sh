@@ -20,19 +20,19 @@ log=$outdir/log.txt
 
 KEEP_TMP=0
 
-cmd="$LOFREQ2 call -l $bed -b auto -f $reffa -o $out_auto $bam"
+cmd="$LOFREQ call -l $bed -b auto -f $reffa -o $out_auto $bam"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
 fi
 
-cmd="$LOFREQ2 call -l $bed -b dynamic -f $reffa -o $out_dynamic $bam"
+cmd="$LOFREQ call -l $bed -b dynamic -f $reffa -o $out_dynamic $bam"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
 fi
 
-cmd="$LOFREQ2 call -l $bed -b 29727 -f $reffa -o $out_29727 $bam"
+cmd="$LOFREQ call -l $bed -b 29727 -f $reffa -o $out_29727 $bam"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1

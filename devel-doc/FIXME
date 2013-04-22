@@ -1,21 +1,24 @@
-- Proper source qual use missing
+- split cmd parsing: plp, snv, others (do they change argv?) 
 - Indel handling missing
 - rename bonf auto to bed once dynamic works and make dynamic default
-- check GATK's BAQ correction
 - add tests, tests, tests
+- Python Replace optionparser with argparse
+- add internal sens test as in original version
+
+- Proper source qual use missing
+- check GATK's BAQ correction
 -- Implement routine test against old SNV caller
 -- Test actual SNV and SB values for both types of SNVs
 -- check for diffs between -l bed, -r region and none, all with and without BAQ
-- before release diff all legacy scripts for changes
-- Python 2.7 and Python 3. 2.6 not neccessarily anymore
-- Python Replace optionparser with argparse
-- add internal sens test as in original version
+- Python 2.7 and Python 3. 2.6 not neccessary anymore
+
 
 Before Release:
 - Master configure/makefile cleanup
 - update AUTHORS
 - license update in all files
 - Remove unnecessary stuff from lofreq_core
+- diff all legacy scripts for changes
 
 Goodies:
 - add faidx and index: run if corresponding files are not

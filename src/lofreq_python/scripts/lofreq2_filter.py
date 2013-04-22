@@ -41,14 +41,14 @@ except:
     pass    
 
 try:
-    from lofreq2 import vcf
+    from lofreq_star import vcf
 except:
     sys.stderr.write("FATAL: Couldn't LoFreq's vcf module."
                      " Are you sure your PYTHONPATH is set correctly?\n")
     sys.exit(1)
-from lofreq2 import multiple_testing
-from lofreq2 import fdr
-from lofreq2.utils import prob_to_phredqual, phredqual_to_prob
+from lofreq_star import multiple_testing
+from lofreq_star import fdr
+from lofreq_star.utils import prob_to_phredqual, phredqual_to_prob
 
 # invocation of ipython on exceptions
 #import sys, pdb
