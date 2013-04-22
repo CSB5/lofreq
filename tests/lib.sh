@@ -19,4 +19,6 @@ md5=$(which md5sum 2>/dev/null || which md5)
 
 seq=$(which seq 2>/dev/null || which gseq)
 
-LOFREQ2=../src/lofreq/lofreq2
+LOFREQ=../src/lofreq/lofreq
+
+

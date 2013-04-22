@@ -14,10 +14,10 @@ ref=$indir/denv2-pseudoclonal_cons.fa
 bed=$indir/denv2-pseudoclonal_incl.fake.bed
 
 
-CMD[1]="$LOFREQ2 call -l $bed -f $ref --verbose $bam"
-CMD[2]="$LOFREQ2 call -l $bed -f $ref --verbose --pseudo-parallel 4 $bam"
-CMD[3]="cat $bam | $LOFREQ2 call -f $ref -l $bed --verbose -"
-# cannot: CMD[4]="cat $bam | $LOFREQ2 call -f $ref -l $bed --verbose --pseudo-parallel 4 -"
+CMD[1]="$LOFREQ call -l $bed -f $ref --verbose $bam"
+CMD[2]="$LOFREQ call -l $bed -f $ref --verbose --pseudo-parallel 4 $bam"
+CMD[3]="cat $bam | $LOFREQ call -f $ref -l $bed --verbose -"
+# cannot: CMD[4]="cat $bam | $LOFREQ call -f $ref -l $bed --verbose --pseudo-parallel 4 -"
 for i in $($seq 1 ${#CMD[@]}); do
     cmd=${CMD[$i]}
     out=$(mktemp -t $(basename $0).XXXXXX.vcf)

@@ -5,7 +5,7 @@ import sys, os
 
 d = os.path.join(
     os.path.dirname(sys.argv[0]), '..')
-if os.path.exists(os.path.join(d, 'lofreq2')):
+if os.path.exists(os.path.join(d, 'lofreq_star')):
     sys.stderr.write("NOTE: Adding local dir %s to PYTHONPATH\n" % d)
     sys.path.insert(0, d)
 

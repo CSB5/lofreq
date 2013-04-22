@@ -38,6 +38,7 @@ setup(name = setup_conf.PACKAGE_NAME,
       url='https://sourceforge.net/p/lofreq/',
       scripts = [
           'scripts/lofreq2_filter.py',
+          'scripts/lofreq2_somatic.py', 
           'scripts/lofreq2_vcfset.py'
       ],
       # http://pypi.python.org/pypi?%3Aaction=list_classifiers

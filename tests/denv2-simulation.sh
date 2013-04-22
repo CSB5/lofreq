@@ -21,24 +21,24 @@ log=$outdir/log.txt
 
 KEEP_TMP=0
 
-cmd="$LOFREQ2 call -b $bonf -f $reffa -o $outraw_def $bam"
+cmd="$LOFREQ call -b $bonf -f $reffa -o $outraw_def $bam"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
 fi
-cmd="$LOFREQ2 filter -p --strandbias-holmbonf --min-cov 10 -i $outraw_def -o $outfinal_def"
+cmd="$LOFREQ filter -p --strandbias-holmbonf --min-cov 10 -i $outraw_def -o $outfinal_def"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
 fi
 
 
-cmd="$LOFREQ2 call -b $bonf -f $reffa -o $outraw_nomq -J $bam"
+cmd="$LOFREQ call -b $bonf -f $reffa -o $outraw_nomq -J $bam"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
 fi
-cmd="$LOFREQ2 filter -p --strandbias-holmbonf --min-cov 10 -i $outraw_nomq -o $outfinal_nomq"
+cmd="$LOFREQ filter -p --strandbias-holmbonf --min-cov 10 -i $outraw_nomq -o $outfinal_nomq"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
