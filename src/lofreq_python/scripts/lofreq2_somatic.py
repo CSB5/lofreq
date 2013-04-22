@@ -72,10 +72,10 @@ def cmdline_parser():
                         " Final somatic SNV calls will be stored in"
                         " PREFIX_lofreq_somatic_final.vcf. If empty"
                         " will be set to tumor BAM file.")
-    parser.add_argument("-r", "--ref", 
+    parser.add_argument("-f", "--ref", 
                         required=True,
                         help="Reference fasta file")
-    parser.add_argument("-b", "--bed", 
+    parser.add_argument("-l", "--bed", 
                         required=True,
                         help="BED file listing regions to restrict analysis to")
 
