@@ -76,7 +76,6 @@ def cmdline_parser():
                         required=True,
                         help="Reference fasta file")
     parser.add_argument("-l", "--bed", 
-                        required=True,
                         help="BED file listing regions to restrict analysis to")
 
     default = 0.001
