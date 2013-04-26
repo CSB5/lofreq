@@ -28,6 +28,8 @@ import logging
 import os
 # optparse deprecated from Python 2.7 on
 from optparse import OptionParser, SUPPRESS_HELP
+import gzip
+
 
 #--- third-party imports
 #
@@ -43,8 +45,8 @@ except:
 try:
     from lofreq_star import vcf
 except:
-    sys.stderr.write("FATAL: Couldn't LoFreq's vcf module."
-                     " Are you sure your PYTHONPATH is set correctly?\n")
+    sys.stderr.write("FATAL(%s): Couldn't LoFreq's vcf module."
+                     " Are you sure your PYTHONPATH is set correctly?\n" % (sys.argv0))
     sys.exit(1)
 from lofreq_star import multiple_testing
 from lofreq_star import fdr
@@ -92,12 +94,12 @@ def cmdline_parser():
                       help="enable debugging")
     parser.add_option("-i", "--vcf_in",
                       dest="vcf_in",
-                      help="Input vcf file (- for stdin).")
-    DEFAULT = "-"
+                      help="Input vcf file (gzip supported; - for stdin).")
+    default = "-"
     parser.add_option("-o", "--outfile",
                       dest="vcf_out",
-                      default=DEFAULT,
-                      help="Output vcf file (- for stdout). Default = %s)" % DEFAULT)
+                      default=default,
+                      help="Output vcf file (gzip supported; - for stdout). Default = %s)" % default)
 
     parser.add_option("-p", "--pass-only",
                       action="store_true",
@@ -194,7 +196,10 @@ def main():
     if opts.vcf_in == '-':
         vcf_reader = vcf.VCFReader(sys.stdin)
     else:
-        vcf_reader = vcf.VCFReader(open(opts.vcf_in,'r'))
+        if opts.vcf_in[-3:] == '.gz':
+            vcf_reader = vcf.VCFReader(gzip.open(opts.vcf_in,'r'))            
+        else:
+            vcf_reader = vcf.VCFReader(open(opts.vcf_in,'r'))
     snvs = [r for r in vcf_reader]
     LOG.info("Parsed %d SNVs from %s" % (len(snvs), opts.vcf_in))
     
@@ -392,7 +397,10 @@ def main():
     if opts.vcf_out == '-':
         fh_out = sys.stdout
     else:
-        fh_out = open(opts.vcf_out, 'w')
+        if opts.vcf_out[-3:] == '.gz':
+            fh_out = gzip.open(opts.vcf_out, 'w')
+        else:
+            fh_out = open(opts.vcf_out, 'w')
         
     vcf_writer = vcf.VCFWriter(fh_out)
     vcf_writer.meta_from_reader(vcf_reader)
