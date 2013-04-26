@@ -51,12 +51,12 @@ fi
 #echodebug "nexp=$nexp nfinal_def=$nfinal_def $nfinal_nomq=$nfinal_nomq"
 
 
-ndiff=$(lofreq2_vcfset.py -a complement --ign-filtered -1 $outfinal_def -2 $truesnv  | grep -c '^[^#]')
+ndiff=$($LOFREQ vcfset -a complement --ign-filtered -1 $outfinal_def -2 $truesnv  | grep -c '^[^#]')
 if [ $ndiff -ne 0 ]; then
     echoerror "Found extra SNVs in default predictions, which are not part of the list of true SNVs"
     exit 1
 fi
-ndiff=$(lofreq2_vcfset.py -a complement --ign-filtered -2 $outfinal_def -1 $truesnv  | grep -c '^[^#]')
+ndiff=$($LOFREQ vcfset -a complement --ign-filtered -2 $outfinal_def -1 $truesnv  | grep -c '^[^#]')
 nexp=19
 if [ $ndiff -ne $nexp ]; then
     echoerror "Expected $nexp missing SNVs in default predictions but got $ndiff"
@@ -65,12 +65,12 @@ fi
 
 
 
-ndiff=$(lofreq2_vcfset.py -a complement --ign-filtered -1 $outfinal_nomq -2 $truesnv  | grep -c '^[^#]')
+ndiff=$($LOFREQ vcfset -a complement --ign-filtered -1 $outfinal_nomq -2 $truesnv  | grep -c '^[^#]')
 if [ $ndiff -ne 0 ]; then
     echoerror "Found extra SNVs in no-mq predictions, which are not part of the list of true SNVs"
     exit 1
 fi
-ndiff=$(lofreq2_vcfset.py -a complement --ign-filtered -2 $outfinal_nomq -1 $truesnv  | grep -c '^[^#]')
+ndiff=$($LOFREQ vcfset -a complement --ign-filtered -2 $outfinal_nomq -1 $truesnv  | grep -c '^[^#]')
 nexp=14
 if [ $ndiff -ne $nexp ]; then
     echoerror "Expected $nexp missing SNVs in no-mq predictions but got $ndiff"
