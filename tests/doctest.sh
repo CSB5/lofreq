@@ -13,5 +13,5 @@ done
 
 for f in $files; do
     echo "$myname: testing $f"
-	python -m doctest $f || echo_error "testing $f failed"
+	python -m doctest $f || echoerror "testing $f failed"
 done
