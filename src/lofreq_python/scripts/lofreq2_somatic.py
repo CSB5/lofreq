@@ -133,13 +133,15 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
         cmd.extend(['-l', bed])
     cmd.extend(['-b', "%d" % 1, '-s', "%f" % sig_n, '-o', vcf_n, bam_n])
     somatic_commands.append(cmd)
-
+    
     cmd = ['lofreq', 'call', '-f', ref,]
     if bed:
         cmd.extend(['-l', bed])
     cmd.extend(['-b', 'dynamic', '-s', "%f" % sig_t, 
                 '-m', "%d" % mq_filter_n, '-o', vcf_t, bam_t])
     somatic_commands.append(cmd)
+
+    # FIXME both of the above can run in theory be simultaneously
     
     cmd = ['lofreq2_vcfset.py', '-1', vcf_t, '-2', vcf_n, 
            '-a', 'complement', '-o', vcf_som_raw]
@@ -154,12 +156,13 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
     cmd = ['gzip', vcf_n, vcf_t, vcf_som_raw]
     somatic_commands.append(cmd)
 
-    for cmd in somatic_commands:
-        LOG.info("Running: %s" % ' '.join(cmd))
+    for (i, cmd) in enumerate(somatic_commands):
+        LOG.info("Running cmd %d out of %d: %s" % (
+            i+1, len(somatic_commands), ' '.join(cmd)))
         #LOG.critical("DEBUG continue before executing %s" % ' '.join(cmd)); continue
         
         try:
-            subprocess.check_call(cmd)              
+            subprocess.check_call(cmd)
         except subprocess.CalledProcessError:
             LOG.fatal("The following command failed: %s" % ' '.join(cmd))
             raise
