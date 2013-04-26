@@ -42,8 +42,8 @@ except:
 try:
     from lofreq_star import vcf
 except:
-    sys.stderr.write("FATAL: Couldn't LoFreq's vcf module."
-                     " Are you sure your PYTHONPATH is set correctly?\n")
+    sys.stderr.write("FATAL(%s): Couldn't LoFreq's vcf module."
+                     " Are you sure your PYTHONPATH is set correctly?\n" % (sys.argv0))
     sys.exit(1)
     
 # invocation of ipython on exceptions
