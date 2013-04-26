@@ -1,11 +1,13 @@
-- split cmd parsing: plp, snv, others (do they change argv?) 
 - Indel handling missing
+- Add unique logic
+- Add transparent SNV read support
 - rename bonf auto to bed once dynamic works and make dynamic default
 - add tests, tests, tests
-- Python Replace optionparser with argparse
 - add internal sens test as in original version
-
 - Proper source qual use missing
+
+- Python Replace optionparser with argparse
+- split cmd parsing: plp, snv, others (do they change argv?) 
 - check GATK's BAQ correction
 -- Implement routine test against old SNV caller
 -- Test actual SNV and SB values for both types of SNVs
