@@ -7,9 +7,9 @@ source lib.sh || exit 1
 
 vcf_t=data/vcf/CHH966-tumor-100x-100pur-hg19.bwa_6431925.vcf.gz
 vcf_n=data/vcf/CHH966-normal-100x-100pur-hg19.bwa.renamed_6431925.vcf.gz
-vcf_out=/tmp/FIXMEtest.vcf
+vcf_out=$(mktemp -t $(basename $0).XXXXXX.vcf)
 
-$LOFREQ vcfset.py \
+$LOFREQ vcfset \
   -1 $vcf_t -2 $vcf_n -a complement -o - | cut -f 1-7 > $vcf_out
 
 num_diffs=$(gzip -dc data/vcf/CHH966-tumor-only.f-7.vcf.gz | \
