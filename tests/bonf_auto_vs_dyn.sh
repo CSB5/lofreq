@@ -47,24 +47,28 @@ if [ $(grep -c '^[^#]' $out_auto) -eq 0 ]; then
     exit 1
 fi
 
-ndiff=$($LOFREQ vcfset -a complement --ign-filtered -1 $out_auto -2 $out_dynamic  | grep -c '^[^#]') || exit 1
+#echodebug "out_auto=$out_auto"
+#echodebug "out_dynamic=$out_dynamic"
+#echodebug "out_29727=$out_29727"
+
+ndiff=$($LOFREQ vcfset -a complement --ign-filtered -1 $out_auto -2 $out_dynamic 2>>$log | grep -c '^[^#]')
 if [ $ndiff -ne 0 ]; then
     echoerror "Found differences between bonf auto and bonf dynamic outputs"
     exit 1
 fi
-ndiff=$($LOFREQ vcfset -a complement --ign-filtered -2 $out_dynamic -1 $out_auto  | grep -c '^[^#]') || exit 1
+ndiff=$($LOFREQ vcfset -a complement --ign-filtered -2 $out_dynamic -1 $out_auto 2>>$log | grep -c '^[^#]')
 if [ $ndiff -ne 0 ]; then
     echoerror "Found differences between bonf auto and bonf dynamic outputs"
     exit 1
 fi
 
-ndiff=$($LOFREQ vcfset -a complement --ign-filtered -1 $out_auto -2 $out_29727  | grep -c '^[^#]') || exit 1
+ndiff=$($LOFREQ vcfset -a complement --ign-filtered -1 $out_auto -2 $out_29727 2>>$log | grep -c '^[^#]')
 if [ $ndiff -ne 0 ]; then
     echoerror "Found differences between bonf auto and bonf 29727 outputs"
     exit 1
 fi
 
-ndiff=$($LOFREQ vcfset -a complement --ign-filtered -2 $out_29727 -1 $out_auto  | grep -c '^[^#]') || exit 1
+ndiff=$($LOFREQ vcfset -a complement --ign-filtered -2 $out_29727 -1 $out_auto 2>>$log | grep -c '^[^#]')
 if [ $ndiff -ne 0 ]; then
     echoerror "Found differences between bonf auto and bonf 29727 outputs"
     exit 1
