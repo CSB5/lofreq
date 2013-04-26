@@ -73,7 +73,7 @@ add_local_dir_to_path(char *argv0) {
           setenv(PATH_NAME, path_var, 1);
      }
 
-
+#ifdef NO_NEED
      free(path_var);
      old_path = getenv(PATH_NAME);
      path_var = strdup(dirname(argv0));
@@ -84,7 +84,7 @@ add_local_dir_to_path(char *argv0) {
      (void) strcat(path_var, old_path);
      setenv(PATH_NAME, path_var, 1);
      LOG_DEBUG("New PATH = %s\n", path_var);
-
+#endif
 
      free(path_var);
      free(lofreq_script_abs);
@@ -103,6 +103,7 @@ static void usage(const char *myname)
      fprintf(stderr, "  somatic     : call somatic variants\n");
      fprintf(stderr, "  filter      : filter variants\n");
      fprintf(stderr, "  plp_summary : FIXME:finish print pileup summary\n");
+     fprintf(stderr, "  vcfset      : vcf set operations\n");
      fprintf(stderr, "  version     : prints version\n");
      fprintf(stderr, "\n");
 }
@@ -110,6 +111,11 @@ static void usage(const char *myname)
 
 int main(int argc, char *argv[])
 {
+/* #include <sys/stat.h>
+ * int x = lstat("junklink", &buf);
+ * if if (S_ISLNK(buf.st_mode))
+ * warning things might not work as expected
+ * else */
      add_local_dir_to_path(argv[0]);
 
      if (argc < 2) {
@@ -119,33 +125,34 @@ int main(int argc, char *argv[])
      if (strcmp(argv[1], "call") == 0)  {
           return main_call(argc, argv);
 
-     } else if (strcmp(argv[1], "filter") == 0) {
+     } else if (strcmp(argv[1], "filter") == 0 || 
+                strcmp(argv[1], "somatic") == 0 ||
+                strcmp(argv[1], "vcfset") == 0) {
           char **argv_execvp = calloc(argc, sizeof(char*));
           int i;
-          argv_execvp[0] = argv[0];
-          for (i=2; i<argc; i++) {
-               argv_execvp[i-1] = argv[i];
-          }
-          argv_execvp[i-1] = NULL; /* sentinel */
-          if (execvp("lofreq2_filter.py", argv_execvp)) {
-               perror("Calling lofreq2_filter.py via execvp failed");
-               free(argv_execvp);
-               return -1;
+          char *filter_script = "lofreq2_filter.py";
+          char *somatic_script = "lofreq2_somatic.py";
+          char *vcfset_script = "lofreq2_vcfset.py";
+          char *script_to_call;;
+
+          if (strcmp(argv[1], "filter") == 0) {
+               script_to_call = filter_script;
+          } else if (strcmp(argv[1], "somatic") == 0) {
+               script_to_call = somatic_script;
+          } else if (strcmp(argv[1], "vcfset") == 0) {
+               script_to_call = vcfset_script;
           } else {
-               free(argv_execvp);
-               return 0;
+               LOG_FATAL("%s\n", "Internal error: unknown option");
+               return -1;
           }
 
-     } else if (strcmp(argv[1], "somatic") == 0) {
-          char **argv_execvp = calloc(argc, sizeof(char*));
-          int i;
           argv_execvp[0] = argv[0];
           for (i=2; i<argc; i++) {
                argv_execvp[i-1] = argv[i];
           }
           argv_execvp[i-1] = NULL; /* sentinel */
-          if (execvp("lofreq2_somatic.py", argv_execvp)) {
-               perror("Calling lofreq2_filter.py via execvp failed");
+          if (execvp(script_to_call, argv_execvp)) {
+               perror("Calling external LoFreq script via execvp failed");
                free(argv_execvp);
                return -1;
           } else {
