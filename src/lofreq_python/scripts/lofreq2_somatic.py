@@ -26,7 +26,13 @@ import datetime
 
 #--- project specific imports
 #
-#/
+# sets PATH so that local scripts/binary is used if present, i.e.
+# stuff can be run without installing it
+try:
+    import lofreq2_local
+except:
+    pass    
+
     
 # invocation of ipython on exceptions
 #import sys, pdb
@@ -143,7 +149,7 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
 
     # FIXME both of the above can run in theory be simultaneously
     
-    cmd = ['lofreq2_vcfset.py', '-1', vcf_t, '-2', vcf_n, 
+    cmd = ['lofreq' 'vcfset', '-1', vcf_t, '-2', vcf_n, 
            '-a', 'complement', '-o', vcf_som_raw]
     somatic_commands.append(cmd)
     
