@@ -127,11 +127,6 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
     for outf in [vcf_n, vcf_t, vcf_som_raw, vcf_som_final]:
         assert not os.path.exists(outf), (
             "Cowardly refusing to overwrite already existing file %s" % outf)
-
-    # DEBUG
-    #for s in ['lofreq2', 'lofreq2_vcfset.py']:
-    #    LOG.warning("which %s" % s)
-    #    subprocess.check_call(['which', s])
             
     somatic_commands = []
     cmd = ['lofreq', 'call', '-f', ref]
@@ -166,12 +161,19 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
         LOG.info("Running cmd %d out of %d: %s" % (
             i+1, len(somatic_commands), ' '.join(cmd)))
         #LOG.critical("DEBUG continue before executing %s" % ' '.join(cmd)); continue
-        
+
         try:
             subprocess.check_call(cmd)
-        except subprocess.CalledProcessError:
-            LOG.fatal("The following command failed: %s" % ' '.join(cmd))
+        except subprocess.CalledProcessError as e:
+            LOG.fatal("The following command failed: %s (%s)" % (
+                ' '.join(cmd), str(e)))
             raise
+        except OSError as e:
+            LOG.fatal("The following command failed: %s (%s)" % (
+                ' '.join(cmd), str(e)))
+            LOG.fatal("Looks like the lofreq binary is not in your PATH (which is: %s)" % (os.environ["PATH"]))
+            sys.exit(1)
+
 
     
 
