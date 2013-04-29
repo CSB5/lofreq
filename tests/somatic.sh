@@ -15,7 +15,7 @@ outprefix=${outprefix%.log}_
 finalout=${outprefix}lofreq_somatic_final.vcf
 $LOFREQ somatic -n $bam_n -t $bam_t -f $reffa -l $bed -o $outprefix || exit 1
 n_intersect=$($LOFREQ vcfset -1 $truesnv -2 $finalout -a intersect | grep -vc '^#')
-if [ "$n_intersect" -le 2 ]; then
+if [ "$n_intersect" -lt 2 ]; then
 	echoerror "Expected at least two true predictions but got $n_intersect (compare $finalout and $truesnv)"
 else
 	echook "Got $n_intersect true predictions"
