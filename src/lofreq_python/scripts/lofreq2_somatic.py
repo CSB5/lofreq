@@ -144,7 +144,7 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
 
     # FIXME both of the above can run in theory be simultaneously
     
-    cmd = ['lofreq' 'vcfset', '-1', vcf_t, '-2', vcf_n, 
+    cmd = ['lofreq', 'vcfset', '-1', vcf_t, '-2', vcf_n, 
            '-a', 'complement', '-o', vcf_som_raw]
     somatic_commands.append(cmd)
     
