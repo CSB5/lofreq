@@ -39,7 +39,6 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 /* lofreq includes */
 #include "snpcaller.h"
 #include "vcf.h"
-#include "bam2depth.h"
 #include "fet.h"
 #include "utils.h"
 #include "log.h"
