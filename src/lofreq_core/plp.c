@@ -93,8 +93,8 @@ plp_col_free(plp_col_t *p) {
          int_varray_free(& p->map_quals[i]);
          int_varray_free(& p->source_quals[i]);
     }
-    int_varray_init(& p->ins_quals, 0);
-    int_varray_init(& p->del_quals, 0);
+    int_varray_free(& p->ins_quals);
+    int_varray_free(& p->del_quals);
 }
 
 void plp_col_debug_print(const plp_col_t *p, FILE *stream)
@@ -433,7 +433,6 @@ void compile_plp_col(plp_col_t *plp_col,
                LOG_FIXME("At %s:%d p->is_del=%d p->is_refskip=%d p->indel=%d\n", 
                          plp_col->target, plp_col->pos+1, p->is_del, p->is_refskip, p->indel);
                fflush(stdout); fflush(stderr);
-
           }
 #endif     
           
@@ -459,7 +458,9 @@ void compile_plp_col(plp_col_t *plp_col,
                 */
                if (p->indel > 0) {
                     plp_col->num_ins += 1;
+#ifdef FIXME
                     LOG_FIXME("%s\n", "FIXME:need-to-save-ins-allele-and-its-counts.above-is-just-a-total.use-list/array-instead-of-hash.dont-expect-many-alleles");
+#endif
                     plp_col->sum_ins += p->indel;
 #ifdef PRINT_INDEL
                     putchar('+'); printw(p->indel, stdout);
@@ -474,7 +475,9 @@ void compile_plp_col(plp_col_t *plp_col,
                 */
                } else if (p->indel < 0) {
                     plp_col->num_dels += 1;
+#ifdef FIXME
                     LOG_FIXME("%s\n", "FIXME:need-to-save-del-allele-and-its-counts.above-is-just-a-total.use-list/array-instead-of-hash.dont-expect-many-alleles");
+#endif
                     plp_col->sum_dels -= p->indel;
 #ifdef PRINT_INDEL                   
                     printw(p->indel, stdout);
