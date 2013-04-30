@@ -145,7 +145,10 @@ AC_CHECK_LIB(z, gzread,, AC_MSG_ERROR([Could not find libz]))
 
 
 # http://www.gnu.org/software/automake/manual/html_node/Python.html
-AM_PATH_PYTHON([2.6])
+AM_PATH_PYTHON([2.7])
+# argparse and a lot of other stuff is not available in 2.7
+# Anyway py3 seems the way to go
+#
 #AC_MSG_CHECKING([for python-config to get compiler flags])
 #AC_CHECK_PROG(python_config, 'python-config', yes)
 #if test "${python_config}" != "yes"; then
