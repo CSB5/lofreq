@@ -558,6 +558,10 @@ mpileup(const mplp_conf_t *mplp_conf,
         data[i]->fp = strcmp(fn[i], "-") == 0? bam_dopen(fileno(stdin), "r") : bam_open(fn[i], "r");
         data[i]->conf = mplp_conf;
         h_tmp = bam_header_read(data[i]->fp);
+        if ( !h_tmp ) {
+             fprintf(stderr,"[%s] fail to read the header of %s\n", __func__, fn[i]);
+             exit(1);
+        }
         data[i]->h = i? h : h_tmp; /* for i==0, "h" has not been set yet */
 
         if (mplp_conf->reg) {

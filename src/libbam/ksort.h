@@ -26,6 +26,10 @@
 /* Contact: Heng Li <lh3@sanger.ac.uk> */
 
 /*
+  2012-12-11 (0.1.4):
+
+    * Defined __ks_insertsort_##name as static to compile with C99.
+
   2008-11-16 (0.1.4):
 
     * Fixed a bug in introsort() that happens in rare cases.
