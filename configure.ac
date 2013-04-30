@@ -1,10 +1,9 @@
 # configure.ac for LoFreq
-#
-# Based on configure.ac for Clustal Omega
 
-
-AC_PREREQ(2.6) # 2.60 needed for AC_USE_SYSTEM_EXTENSIONS
-# consider 2.64 which allows to define a URL as well
+AC_PREREQ(2.63)
+# 2.60 needed for AC_USE_SYSTEM_EXTENSIONS
+# 2.64 which allows to define a URL as well
+# 2.68 seems to have updated ax_pthread
 
 # NOTE set version here and replace in setup.py
 AC_INIT([LoFreq_Star], [2.0.0a], [wilma@gis.a-star.edu.sg])
@@ -119,6 +118,17 @@ AC_C_INLINE
 # AC_CHECK_FUNCS(strdup strstr strchr erand48)
 # AW is there an automatic way to extract library functions used in the program?
 
+AC_MSG_CHECKING([if we have pthreads support])
+m4_include([m4/ax_pthread.m4])
+AC_CONFIG_MACRO_DIR([m4])
+AX_PTHREAD([
+        AC_DEFINE(HAVE_PTHREAD,1,[Define if you have POSIX threads libraries and header files.])
+        CLIBS="$PTHREAD_LIBS $LIBS"
+        CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
+        LDFLAGS="$LDFLAGS $PTHREAD_CFLAGS"
+        CC="$PTHREAD_CC"],
+        AC_MSG_ERROR([No pthread support on this machine]))
+#AX_PTHREAD()
 
 # FIXME explicit libm check
 #AC_CHECK_LIB(m, log,, AC_MSG_ERROR([Could not find libm]))
