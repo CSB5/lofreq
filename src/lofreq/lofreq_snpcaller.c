@@ -245,7 +245,7 @@ call_snvs(const plp_col_t *p, void *confp)
      if (conf->bonf_dynamic) {
           conf->bonf += 3; /* will do one test per non-cons nuc */
      }
-
+#ifdef FIXME
      if (p->num_dels || p->num_ins) {
           LOG_FIXME("%s:%d (p->num_dels=%d p->del_quals=%d"
                     " p->num_ins=%d p->ins_quals.n=%d\n", 
@@ -258,7 +258,7 @@ call_snvs(const plp_col_t *p, void *confp)
                LOG_FIXME("Call insertions at %s:%d\n", p->target, p->pos+1);
           }
      }
-
+#endif
      /* CONSVAR, i.e. the consensus determined here is different from
       * the reference coming from a fasta file 
       */
@@ -1205,6 +1205,7 @@ for cov in coverage_range:
          mplp_conf.bed = bed_read(bed_file);
     }
 
+#if TRUST_DEFAULT
     if (plp_summary_only) {
          if (1 != snvcall_conf.bonf || bonf_auto || snvcall_conf.bonf_dynamic) {
               LOG_FATAL("%s\n", "Setting or calculating a Bonferroni"
@@ -1213,6 +1214,7 @@ for cov in coverage_range:
               return 1;
          }
     }
+#endif
 
     if (bonf_auto && ! plp_summary_only) {
          if (! bed_file) {
