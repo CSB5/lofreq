@@ -9,14 +9,14 @@ import os
 d = os.path.normpath(os.path.join(
     os.path.dirname(sys.argv[0]), '..'))
 if os.path.exists(os.path.join(d, "lofreq_star")):
-    sys.stderr.write("NOTE: Adding local dir %s to PYTHONPATH\n" % d)
+    #sys.stderr.write("NOTE: Adding local dir %s to PYTHONPATH\n" % d)
     sys.path.insert(0, d)
 
 # Set PATH such that we find lofreq binary first
 d = os.path.normpath(os.path.join(
     os.path.dirname(sys.argv[0]), '../../lofreq'))
 if os.path.exists(os.path.join(d, 'lofreq')):
-    sys.stderr.write("NOTE: Adding local dir %s to PATH\n" % d)
+    #sys.stderr.write("NOTE: Adding local dir %s to PATH\n" % d)
     os.environ["PATH"] = d + os.pathsep + os.environ["PATH"]
 
 # No need to find scripts because the main binary knows about them
