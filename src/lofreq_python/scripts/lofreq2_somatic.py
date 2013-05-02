@@ -47,6 +47,13 @@ LOG = logging.getLogger("")
 logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
+VCF_NORMAL_EXT = "normal.vcf"
+VCF_TUMOR_EXT = "tumor.vcf"
+VCF_RAW_EXT = "lofreq_somatic_raw.vcf"
+VCF_FINAL_EXT = "lofreq_somatic_final.vcf"
+
+
+
 def timestamp():
     """Generate a timestamp string
     """
@@ -76,8 +83,8 @@ def cmdline_parser():
     parser.add_argument("-o", "--outprefix", 
                         help="Prefix for output files."
                         " Final somatic SNV calls will be stored in"
-                        " PREFIX_lofreq_somatic_final.vcf. If empty"
-                        " will be set to tumor BAM file.")
+                        " PREFIX+%s. If empty"
+                        " will be set to tumor BAM file." % VCF_FINAL_EXT)
     parser.add_argument("-f", "--ref", 
                         required=True,
                         help="Reference fasta file")
@@ -88,14 +95,14 @@ def cmdline_parser():
     parser.add_argument("-s", "--normal-sig", 
                         type=float,
                         default=default,
-                        help="Significance threshold evalue for"
+                        help="Significance threshold / evalue for"
                         " SNV prediction on normal sample"
                         " (default: %f)" % default)
     default = 10
     parser.add_argument("-S", "--tumor-sig", 
                         type=float,
                         default=default,
-                        help="Significance threshold evalue for"
+                        help="Significance threshold / evalue for"
                         " SNV prediction on tumor sample"
                         " (default: %f)" % default)
     default = 20
@@ -104,12 +111,17 @@ def cmdline_parser():
                         default=default,
                         help="mapping quality filter for"
                         " tumor sample (default=%d)" % default)
+    parser.add_argument("--reuse-normal-vcf", 
+                        help="Expert only: reuse already compute normal"
+                        " prediction (PREFIX+%s)" % VCF_NORMAL_EXT)
+
     return parser
 
 
 
 def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
-            sig_n=0.001, sig_t=10, mq_filter_n=20):
+            sig_n=0.001, sig_t=10, mq_filter_n=20,
+            reuse_normal=None):
     """Core of the somatic SNV callers, which calls all the necessary
     parts and glues them together
     """
@@ -119,21 +131,32 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
         infiles.append(bed)
     for inf in infiles:
         assert os.path.exists(inf), ("File %s does not exist" % inf)
+
+    vcf_n = out_prefix + VCF_NORMAL_EXT
+    if reuse_normal:
+        assert os.path.exists(reuse_normal), (
+            "%s does not exist" % reuse_normal)
+        vcf_n = reuse_normal
+        
+    vcf_t = out_prefix + VCF_TUMOR_EXT
+    vcf_som_raw = out_prefix + VCF_RAW_EXT
+    vcf_som_final = out_prefix + VCF_FINAL_EXT
     
-    vcf_n = out_prefix + "normal.vcf"
-    vcf_t = out_prefix + "tumor.vcf"
-    vcf_som_raw = out_prefix + "lofreq_somatic_raw.vcf"
-    vcf_som_final = out_prefix + "lofreq_somatic_final.vcf"# FIXME change here need to be reflected in usage/argparse
-    for outf in [vcf_n, vcf_t, vcf_som_raw, vcf_som_final]:
+    outfiles = [vcf_t, vcf_som_raw, vcf_som_final]
+    if not reuse_normal:
+        outfiles.append(vcf_n)
+    for outf in outfiles:
         assert not os.path.exists(outf), (
             "Cowardly refusing to overwrite already existing file %s" % outf)
             
     somatic_commands = []
-    cmd = ['lofreq', 'call', '-f', ref]
-    if bed:
-        cmd.extend(['-l', bed])
-    cmd.extend(['-b', "%d" % 1, '-s', "%f" % sig_n, '-o', vcf_n, bam_n])
-    somatic_commands.append(cmd)
+
+    if not reuse_normal:
+        cmd = ['lofreq', 'call', '-f', ref]
+        if bed:
+            cmd.extend(['-l', bed])
+        cmd.extend(['-b', "%d" % 1, '-s', "%f" % sig_n, '-o', vcf_n, bam_n])
+        somatic_commands.append(cmd)
     
     cmd = ['lofreq', 'call', '-f', ref,]
     if bed:
@@ -175,7 +198,6 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
             sys.exit(1)
 
 
-    
 
 def main():
     """The main function
@@ -201,15 +223,21 @@ def main():
             #parser.print_help()
             sys.exit(1)
             
-    if  args.outprefix:
+    if args.outprefix:
         outprefix = args.outprefix
     else:
         outprefix = args.tumor.replace(".bam", "")
-        
+
+    if args.reuse_normal_vcf:
+        if not os.path.exists(args.reuse_normal_vcf):
+            LOG.error("file '%s' does not exist.\n" % (args.reuse_normal_vcf))
+            sys.exit(1)
+
     LOG.debug("args = %s" % args)
 
     somatic(args.normal, args.tumor, args.ref, outprefix, args.bed,
-            args.normal_sig, args.tumor_sig, args.mq_filter)
+            args.normal_sig, args.tumor_sig, args.mq_filter, 
+            args.reuse_normal_vcf)
 
 
     
