@@ -181,8 +181,9 @@ plp_summary(const plp_col_t *plp_col, void* confp)
      fprintf(stream, "\tins=%d\tdels=%d", plp_col->num_ins, 
              plp_col->num_dels);
      fprintf(stream, "\n");
-
+#if 0
      LOG_FIXME("%s\n", "unfinished");
+#endif
 }
 
 
@@ -1323,6 +1324,7 @@ cleanup:
     if (snvcall_conf.bonf_dynamic) {
          /* final bonf value in snvcall_conf.bonf */
          char cmd[BUF_SIZE];
+         LOG_VERBOSE("Final Bonferroni factor: %lld", snvcall_conf.bonf);
          snprintf(cmd, BUF_SIZE, "lofreq2_filter.py -p -i %s -o %s --snv-phred %d",
                   dyn_bonf_vcf_out, NULL==vcf_out ? "-" : vcf_out, 
                   PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf));
