@@ -19,7 +19,8 @@ if [ "$n_intersect" -lt 2 ]; then
 	echoerror "Expected at least two true predictions but got $n_intersect (compare $finalout and $truesnv)"
 else
 	echook "Got $n_intersect true predictions"
-	rm $finalout
+	rm ${outprefix}*vcf*
+    #echodebug "Not deleting ${outprefix}*vcf*"
 fi
 
 
