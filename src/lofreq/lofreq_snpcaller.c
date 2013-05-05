@@ -127,29 +127,28 @@ report_var(FILE *stream, const plp_col_t *p, const char ref,
  *  P_jq = P_mq * + (1-P_mq) P_bq.
  *  If MQ==255 (i.e. not available) return BQ
  */
-int
+double
 merge_baseq_and_mapq(const int bq, const int mq)
 {
      double mp, bp, jp; /* corresponding probs */
-     int jq;
 
-     if (mq == 255) {
-          return bq;
+     bp = PHREDQUAL_TO_PROB(bq);
+     if (255 == mq) {
+          return bp;
      }
-      
-     /* No need to do computation in phred-space as
-      * numbers won't get small enough.
-      */
+
 #ifdef SCALE_MQ
      mp = PHREDQUAL_TO_PROB(254/60.0*mq * pow(mq, SCALE_MQ_FAC)/pow(60, SCALE_MQ_FAC));
 #else
      mp = PHREDQUAL_TO_PROB(mq);
 #endif
-     bp = PHREDQUAL_TO_PROB(bq);
+      
+     /* No need to do computation in phred-space as
+      * numbers won't get small enough.
+      */
 
      /* note: merging Q1 with anything else will result in Q0. */
      jp = mp + (1.0 - mp) * bp;
-     jq = PROB_TO_PHREDQUAL(jp);
 #ifdef DEBUG
      LOG_DEBUG("P_M + (1-P_M) P_B:   %g + (1.0 - %g) * %g = %g  ==  Q%d + (1.0 - Q%d) * Q%d  =  Q%d\n",
                mp, mp, bp, jp, mq, mq, bq, jq);
@@ -157,7 +156,8 @@ merge_baseq_and_mapq(const int bq, const int mq)
 #if 0
      LOG_DEBUG("BQ %d after merging with MQ %d = %d\n", bq, mq, jq);
 #endif
-     return jq;
+
+     return jp;
 }
 /* merge_baseq_and_mapq() */
 
@@ -202,8 +202,8 @@ plp_summary(const plp_col_t *plp_col, void* confp)
 void
 call_snvs(const plp_col_t *p, void *confp)
 {
-     int *quals; /* qualities passed down to snpcaller */
-     int quals_len; /* #elements in quals */
+     double *err_probs; /* error probs (qualities) passed down to snpcaller */
+     int num_err_probs; /* #elements in err_probs */
      int i, j;
 
      snvcall_conf_t *conf = (snvcall_conf_t *)confp;
@@ -280,15 +280,15 @@ call_snvs(const plp_col_t *p, void *confp)
                     p->target, p->pos+1, p->ref_base, p->cons_base);          
      }
 
-     if (NULL == (quals = malloc(p->coverage * sizeof(int)))) {
+     if (NULL == (err_probs = malloc(p->coverage * sizeof(double)))) {
           /* coverage = base-count after read level filtering */
           fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
                   __FILE__, __FUNCTION__, __LINE__);
-          free(quals);
+          free(err_probs);
           return;
      }
     
-     quals_len = 0;
+     num_err_probs = 0;
      alt_idx = -1;
      for (i=0; i<NUM_NT4; i++) {
           int is_alt_base;
@@ -308,7 +308,8 @@ call_snvs(const plp_col_t *p, void *confp)
           }
 
           for (j=0; j<p->base_quals[i].n; j++) {
-               int bq, mq, final_q;
+               int bq, mq;
+               double final_err_prob; /* == final quality used for snv calling */
 #ifdef USE_SOURCEQUAL
                int sq;
 #endif
@@ -333,13 +334,13 @@ call_snvs(const plp_col_t *p, void *confp)
                }
 
                if ((conf->flag & SNVCALL_USE_MQ)) {
-                    final_q = merge_baseq_and_mapq(bq, mq);
+                    final_err_prob = merge_baseq_and_mapq(bq, mq);
 
                } else {
-                    final_q = bq;
+                    final_err_prob = PHREDQUAL_TO_PROB(bq);
                }
 
-               quals[quals_len++] = final_q;
+               err_probs[num_err_probs++] = final_err_prob;
           }
      }
 
@@ -353,32 +354,32 @@ call_snvs(const plp_col_t *p, void *confp)
           LOG_DEBUG("%s %d: only cons bases left after filtering.\n", 
                     p->target, p->pos+1);
           /* ...and CONSVAR already reported */
-          free(quals);
+          free(err_probs);
           return;
      }
 
      /* sorting in ascending order should in theory be numerically
       * more stable and also make snpcaller faster */
-     qsort(quals, quals_len, sizeof(int), int_cmp);
+     qsort(err_probs, num_err_probs, sizeof(double), dbl_cmp);
      
 #ifdef TRACE
      {
           int i=0;
-          for (i=0; i<quals_len; i++) {
-               LOG_FATAL("after sorting i=%d qual=%d\n", i, quals[i]);
+          for (i=0; i<num_err_probs; i++) {
+               LOG_FATAL("after sorting i=%d err_prob=%g\n", i, err_probs[i]);
           }
 
      }
 #endif
      LOG_DEBUG("%s %d: passing down %d quals with noncons_counts"
                " (%d, %d, %d) to snpcaller()\n", p->target, p->pos+1,
-               quals_len, alt_counts[0], alt_counts[1], alt_counts[2]);
+               num_err_probs, alt_counts[0], alt_counts[1], alt_counts[2]);
 
-     if (snpcaller(pvalues, quals, quals_len, 
+     if (snpcaller(pvalues, err_probs, num_err_probs, 
                   alt_counts, conf->bonf, conf->sig)) {
           fprintf(stderr, "FATAL: snpcaller() failed at %s:%s():%d\n",
                   __FILE__, __FUNCTION__, __LINE__);
-          free(quals);
+          free(err_probs);
           return;
      }
 
@@ -418,7 +419,7 @@ call_snvs(const plp_col_t *p, void *confp)
                          p->target, p->pos+1, p->cons_base, alt_base,
                          pvalue, PROB_TO_PHREDQUAL(pvalue),
                          /* counts-raw */ alt_raw_count, p->coverage, alt_raw_count/(float)p->coverage,
-                         /* counts-filt */ alt_count, quals_len, alt_count/(float)quals_len);
+                         /* counts-filt */ alt_count, num_err_probs, alt_count/(float)num_err_probs);
           }
 #if DEBUG
           else {
@@ -426,7 +427,7 @@ call_snvs(const plp_col_t *p, void *confp)
           }
 #endif
      }
-     free(quals);
+     free(err_probs);
 }
 /* call_snvs() */
 
@@ -551,6 +552,7 @@ count_matches(int *n_matches, int *n_mismatches,
 
 
 
+#if 0
 /* Estimate as to how likely it is that this read, given the mapping,
  * comes from this reference genome. P(r not from g|mapping) = 1 - P(r
  * from g). Use qualities of all bases for and poisson-binomial dist
@@ -646,6 +648,7 @@ PJ = PM + (1-PM) * PB
      return src_qual;
 }
 /* source_qual() */
+#endif
 
 
 

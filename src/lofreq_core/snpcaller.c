@@ -28,18 +28,12 @@
 
 #include "fet.h"
 #include "utils.h"
+#include "snpcaller.h"
 
 #if TIMING
 #include <time.h>
 #endif
 
-#if 0
-/* defined in utils.h, including a check if prob~0.0*/
-#define PHREDQUAL_TO_PROB(phred) (pow(10.0, -1.0*(phred)/10.0))
-#define PROB_TO_PHREDQUAL(prob) ((int)(-10.0 * log10(prob)))
-#endif
-
-#define BASECALLQUAL_VALID_RANGE(phred) ((phred)>=0 && (phred)<100)
 
 #ifndef MIN
 #define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
@@ -70,10 +64,10 @@
 
 double log_sum(double log_a, double log_b);
 double log_diff(double log_a, double log_b);
-double probvec_tailsum(double *probvec, int tail_startindex,
+double probvec_tailsum(const double *probvec, int tail_startindex,
                        int probvec_len);
-double *naive_calc_prob_dist(const int *quals, int N, int K);
-double *pruned_calc_prob_dist(const int *quals, int N, int K, 
+double *naive_calc_prob_dist(const double *err_probs, int N, int K);
+double *pruned_calc_prob_dist(const double *err_probs, int N, int K, 
                       long long int bonf_factor, double sig_level);
 
 
@@ -122,7 +116,7 @@ log_diff(double log_a, double log_b)
  *
  */
 double
-probvec_tailsum(double *probvec, int tail_startindex, int probvec_len)
+probvec_tailsum(const double *probvec, int tail_startindex, int probvec_len)
 {
     double tailsum;
     int i;
@@ -143,7 +137,7 @@ probvec_tailsum(double *probvec, int tail_startindex, int probvec_len)
  *
  */
 double *
-naive_calc_prob_dist(const int *quals, int N, int K)
+naive_calc_prob_dist(const double *err_probs, int N, int K)
 {
      double *probvec = NULL;
      double *probvec_prev = NULL;
@@ -171,8 +165,8 @@ naive_calc_prob_dist(const int *quals, int N, int K)
 
     for (n=1; n<N+1; n++) {
         int k;
-        double pn = PHREDQUAL_TO_PROB(quals[n-1]);
         double log_pn, log_1_pn;
+        double pn = err_probs[n-1];
 
         
         /* if pn=0 log(on) will fail. likewise if pn=1 (Q0) then
@@ -189,10 +183,9 @@ naive_calc_prob_dist(const int *quals, int N, int K)
         }
 
 #if 0
-        fprintf(stderr, "DEBUG(%s:%s:%d): pn=%g log_pn=%g log_1_pn=%g quals[n=%d-1]=%d\n",
-                __FILE__, __FUNCTION__, __LINE__, pn, log_pn, log_1_pn, n, quals[n-1]);
+        fprintf(stderr, "DEBUG(%s:%s:%d): pn=%g log_pn=%g log_1_pn=%g err_probs[n=%d-1]=%g\n",
+                __FILE__, __FUNCTION__, __LINE__, pn, log_pn, log_1_pn, n, err_probs[n-1]);
 #endif
-        assert(BASECALLQUAL_VALID_RANGE(quals[n-1]));
 
         k = 0;
         probvec[k] = probvec_prev[k] + log_1_pn;
@@ -228,7 +221,7 @@ naive_calc_prob_dist(const int *quals, int N, int K)
  *
  */
 double *
-pruned_calc_prob_dist(const int *quals, int N, int K, 
+pruned_calc_prob_dist(const double *err_probs, int N, int K, 
                       long long int bonf_factor, double sig_level)
 {
     double *probvec = NULL;
@@ -248,8 +241,7 @@ pruned_calc_prob_dist(const int *quals, int N, int K,
     }
 
     for (n=0; n<N; n++) {
-        /* test for valid phred quality boundaries */
-         assert(BASECALLQUAL_VALID_RANGE(quals[n]));
+         assert(err_probs[n]>=0.0 && err_probs[i]<=1.0);
     }
 
 #ifdef DEBUG
@@ -264,7 +256,7 @@ pruned_calc_prob_dist(const int *quals, int N, int K,
     for (n=1; n<=N; n++) {
         int k;
         double pvalue;
-        double pn = PHREDQUAL_TO_PROB(quals[n-1]);
+        double pn = err_probs[n-1];
         double log_pn, log_1_pn;
 
         assert(! isinf(probvec[0])); /* used to happen when first q=0 */
@@ -283,8 +275,8 @@ pruned_calc_prob_dist(const int *quals, int N, int K,
         }
         
 #ifdef TRACE
-		fprintf(stderr, "DEBUG(%s:%s:%d): n=%d quals[n-1]=%d pn=%g log_pn=%g log_1_pn=%g\n", 
-                __FILE__, __FUNCTION__, __LINE__, n, quals[n-1], pn, log_pn, log_1_pn);
+		fprintf(stderr, "DEBUG(%s:%s:%d): n=%d err_probs[n-1]=%g pn=%g log_pn=%g log_1_pn=%g\n", 
+                __FILE__, __FUNCTION__, __LINE__, n, err_probs[n-1], pn, log_pn, log_1_pn);
 #endif
 
         if(n < K) {
@@ -360,8 +352,8 @@ pruned_calc_prob_dist(const int *quals, int N, int K,
    default pvalue is DBL_MAX (1 might still be significant).
  */       
 double *
-poissbin(double *pvalue, const int *phred_quals,
-         const int num_phred_quals, const int num_failures, 
+poissbin(double *pvalue, const double *err_probs,
+         const int num_err_probs, const int num_failures, 
          const long long int bonf, const double sig) 
 {
     double *probvec = NULL;
@@ -375,10 +367,10 @@ poissbin(double *pvalue, const int *phred_quals,
     start = clock();
 #endif
 #ifdef NAIVE
-    probvec = pruned_calc_prob_dist(phred_quals, num_phred_quals,
+    probvec = naive_prob_dist(err_probs, num_err_probs,
                                     num_failures);
 #else
-    probvec = pruned_calc_prob_dist(phred_quals, num_phred_quals,
+    probvec = pruned_calc_prob_dist(err_probs, num_err_probs,
                                     num_failures, bonf, sig);    
 #endif
 #if TIMING
@@ -405,7 +397,7 @@ poissbin(double *pvalue, const int *phred_quals,
  */
 int
 snpcaller(double *snp_pvalues, 
-          const int *phred_quals, const int num_phred_quals, 
+          const double *err_probs, const int num_err_probs, 
           const int *noncons_counts, 
           const long long int bonf_factor, const double sig_level)
 {
@@ -415,9 +407,9 @@ snpcaller(double *snp_pvalues,
     double pvalue;
 
 #ifdef DEBUG
-    fprintf(stderr, "DEBUG(%s:%s():%d): num_phred_quals=%d noncons_counts=%d,%d,%d bonf_factor=%lld sig_level=%f\n", 
+    fprintf(stderr, "DEBUG(%s:%s():%d): num_err_probs=%d noncons_counts=%d,%d,%d bonf_factor=%lld sig_level=%f\n", 
             __FILE__, __FUNCTION__, __LINE__, 
-            num_phred_quals, noncons_counts[0], noncons_counts[1], noncons_counts[2],
+            num_err_probs, noncons_counts[0], noncons_counts[1], noncons_counts[2],
             bonf_factor, sig_level);
 #endif
 
@@ -438,7 +430,7 @@ snpcaller(double *snp_pvalues,
         goto free_and_exit;
     }
 
-    probvec = poissbin(&pvalue, phred_quals, num_phred_quals,
+    probvec = poissbin(&pvalue, err_probs, num_err_probs,
                        max_noncons_count, bonf_factor, sig_level);
     
     if (pvalue * (double)bonf_factor >= sig_level) {

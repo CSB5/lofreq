@@ -18,12 +18,12 @@
  *********************************************************************/
 
 extern double *
-poissbin(double *pvalue, const int *phred_quals,
-         const int num_phred_quals, const int num_failures, 
+poissbin(double *pvalue, const double *err_probs,
+         const int num_err_probs, const int num_failures, 
          const long long int bonf, const double sig);
 extern int
-snpcaller(double *snp_pvalues, const int *phred_quals,
-          const int num_phred_quals, const int *noncons_counts,
+snpcaller(double *snp_pvalues, const double *err_probs,
+          const int num_err_probs, const int *noncons_counts,
           const long long int bonf_factor,
           const double sig_level);
 
