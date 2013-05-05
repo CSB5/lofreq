@@ -39,7 +39,7 @@
 #define PROB_TO_PHREDQUAL(prob) ((int)(-10.0 * log10(prob)))
 #endif
 
-#define BASECALLQUAL_VALID_RANGE(phred) ((phred)>1 && (phred)<100)
+#define BASECALLQUAL_VALID_RANGE(phred) ((phred)>=0 && (phred)<100)
 
 #ifndef MIN
 #define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
@@ -49,6 +49,7 @@
 #endif
 
 #define LOGZERO -1e100 
+/* FIXME shouldn't we use something from float.h ? */
 
 /* Four nucleotides, with one consensus, makes three
    non-consensus bases */
@@ -171,9 +172,26 @@ naive_calc_prob_dist(const int *quals, int N, int K)
     for (n=1; n<N+1; n++) {
         int k;
         double pn = PHREDQUAL_TO_PROB(quals[n-1]);
-        double log_pn = log(pn);
-        double log_1_pn = log1p(-pn);
+        double log_pn, log_1_pn;
 
+        
+        /* if pn=0 log(on) will fail. likewise if pn=1 (Q0) then
+         * log1p(-pn) = log(1-1) = log(0) will fail. therefore test */
+        if (fabs(pn) < DBL_EPSILON) {             
+             log_pn = log(DBL_EPSILON);
+        } else {
+             log_pn = log(pn);
+        }
+        if (fabs(pn-1.0) < DBL_EPSILON) {             
+             log_1_pn = log1p(-pn+DBL_EPSILON);
+        } else {
+             log_1_pn = log1p(-pn);
+        }
+
+#if 0
+        fprintf(stderr, "DEBUG(%s:%s:%d): pn=%g log_pn=%g log_1_pn=%g quals[n=%d-1]=%d\n",
+                __FILE__, __FUNCTION__, __LINE__, pn, log_pn, log_1_pn, n, quals[n-1]);
+#endif
         assert(BASECALLQUAL_VALID_RANGE(quals[n-1]));
 
         k = 0;
@@ -229,6 +247,11 @@ pruned_calc_prob_dist(const int *quals, int N, int K,
         return NULL;
     }
 
+    for (n=0; n<N; n++) {
+        /* test for valid phred quality boundaries */
+         assert(BASECALLQUAL_VALID_RANGE(quals[n]));
+    }
+
 #ifdef DEBUG
     for (n=0; n<K+1; n++) {
         probvec_prev[n] = probvec[n] = 666.666;
@@ -242,11 +265,27 @@ pruned_calc_prob_dist(const int *quals, int N, int K,
         int k;
         double pvalue;
         double pn = PHREDQUAL_TO_PROB(quals[n-1]);
-        double log_pn = log(pn);
-        double log_1_pn = log1p(-pn); /* 0.0 = log(1.0) */
+        double log_pn, log_1_pn;
+
+        assert(! isinf(probvec[0])); /* used to happen when first q=0 */
+
+        /* if pn=0 log(on) will fail. likewise if pn=1 (Q0) then
+         * log1p(-pn) = log(1-1) = log(0) will fail. therefore test */
+        if (fabs(pn) < DBL_EPSILON) {             
+             log_pn = log(DBL_EPSILON);
+        } else {
+             log_pn = log(pn);
+        }
+        if (fabs(pn-1.0) < DBL_EPSILON) {             
+             log_1_pn = log1p(-pn+DBL_EPSILON);
+        } else {
+             log_1_pn = log1p(-pn);/* 0.0 = log(1.0) */
+        }
         
-        /* test for valid phred quality boundaries */
-        assert(BASECALLQUAL_VALID_RANGE(quals[n-1]));
+#ifdef TRACE
+		fprintf(stderr, "DEBUG(%s:%s:%d): n=%d quals[n-1]=%d pn=%g log_pn=%g log_1_pn=%g\n", 
+                __FILE__, __FUNCTION__, __LINE__, n, quals[n-1], pn, log_pn, log_1_pn);
+#endif
 
         if(n < K) {
 #ifdef TRACE
@@ -295,7 +334,6 @@ pruned_calc_prob_dist(const int *quals, int N, int K,
 		fprintf(stderr, "DEBUG(%s:%s:%d): early exit at n=%d with pvalue %g\n", 
                 __FILE__, __FUNCTION__, __LINE__, n, pvalue);
 #endif
-         
                goto free_and_exit;
             }
         }
@@ -349,6 +387,7 @@ poissbin(double *pvalue, const int *phred_quals,
 #endif
 
     *pvalue = exp(probvec[num_failures]);
+    assert(! isnan(*pvalue));
     return probvec;
 }
 
@@ -366,9 +405,9 @@ poissbin(double *pvalue, const int *phred_quals,
  */
 int
 snpcaller(double *snp_pvalues, 
-               const int *phred_quals, const int num_phred_quals, 
-               const int *noncons_counts, 
-               const long long int bonf_factor, const double sig_level)
+          const int *phred_quals, const int num_phred_quals, 
+          const int *noncons_counts, 
+          const long long int bonf_factor, const double sig_level)
 {
     double *probvec = NULL;
     int i;
@@ -404,7 +443,7 @@ snpcaller(double *snp_pvalues,
     
     if (pvalue * (double)bonf_factor >= sig_level) {
 #ifdef DEBUG
-        fprintf(stderr, "DEBUG(%s:%s():%d): Most frequent SNV candidate already gets not signifcant pvalue of %g * %ul >= %g\n", 
+        fprintf(stderr, "DEBUG(%s:%s():%d): Most frequent SNV candidate already gets not signifcant pvalue of %g * %lld >= %g\n", 
                 __FILE__, __FUNCTION__, __LINE__, 
                 pvalue, bonf_factor, sig_level);
 #endif
@@ -423,10 +462,15 @@ snpcaller(double *snp_pvalues,
 #endif
     for (i=0; i<NUM_NONCONS_BASES; i++) { 
         if (0 != noncons_counts[i]) {
+#ifdef DEBUG
+                  fprintf(stderr, "DEBUG(%s:%s():%d): i=%d noncons_counts=%d max_noncons_count=%d probvec_tailsum=%g\n", 
+                          __FILE__, __FUNCTION__, __LINE__, 
+                          i, noncons_counts[i], max_noncons_count, probvec_tailsum(probvec, noncons_counts[i], max_noncons_count+1));                  
+#endif
             pvalue = exp(probvec_tailsum(probvec, noncons_counts[i], max_noncons_count+1));
             snp_pvalues[i] = pvalue;
 #ifdef DEBUG
-            fprintf(stderr, "DEBUG(%s:%s():%d): pvalue=%g for noncons_counts[i]=%d bonf_factor=%ul\n", 
+            fprintf(stderr, "DEBUG(%s:%s():%d): pvalue=%g for noncons_counts[i]=%d bonf_factor=%lld\n", 
                     __FILE__, __FUNCTION__, __LINE__, 
                     pvalue, noncons_counts[i], bonf_factor);
 #endif
