@@ -38,8 +38,21 @@ int int_cmp(const void *a, const void *b)
      return ia<ib ? -1 : ia>ib? 1 : 0;
 }
 
+int dbl_cmp(const void *a, const void *b)
+{
+     const double da = *(const double *)a;
+     const double db = *(const double *)b;
 
-int str_cmp(const void *a, const void *b) { 
+     /* epsilon stuff needed/working at all? */
+     if (fabs(da-db) < DBL_EPSILON) {
+          return 0;
+     }
+     return da<db ? -1 : da>db? 1 : 0;
+}
+
+
+int str_cmp(const void *a, const void *b)
+{ 
     return strcmp(*(char **)a, *(char **)b);
 }
 
