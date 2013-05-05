@@ -123,8 +123,9 @@ report_var(FILE *stream, const plp_col_t *p, const char ref,
 
 
 
-/* "Merge" MQ and BQ if requested and if MAQP not 255 (not available):
+/* "Merge" MQ and BQ if requested using the following equation:
  *  P_jq = P_mq * + (1-P_mq) P_bq.
+ *  If MQ==255 (i.e. not available) return BQ
  */
 int
 merge_baseq_and_mapq(const int bq, const int mq)
@@ -146,14 +147,15 @@ merge_baseq_and_mapq(const int bq, const int mq)
 #endif
      bp = PHREDQUAL_TO_PROB(bq);
 
+     /* note: merging Q1 with anything else will result in Q0. */
      jp = mp + (1.0 - mp) * bp;
      jq = PROB_TO_PHREDQUAL(jp);
 #ifdef DEBUG
      LOG_DEBUG("P_M + (1-P_M) P_B:   %g + (1.0 - %g) * %g = %g  ==  Q%d + (1.0 - Q%d) * Q%d  =  Q%d\n",
-               mp, mp, bp, jp, mq+33, mq+33, bq+33, jq+33);
+               mp, mp, bp, jp, mq, mq, bq, jq);
 #endif
 #if 0
-     LOG_DEBUG("BQ %d after merging with MQ %d = %d\n", bq+33, mq+33, jq+33);
+     LOG_DEBUG("BQ %d after merging with MQ %d = %d\n", bq, mq, jq);
 #endif
      return jq;
 }
@@ -355,10 +357,19 @@ call_snvs(const plp_col_t *p, void *confp)
           return;
      }
 
-     /* sorting in theory should be numerically more stable and also
-      * make snpcallerfaster */
+     /* sorting in ascending order should in theory be numerically
+      * more stable and also make snpcaller faster */
      qsort(quals, quals_len, sizeof(int), int_cmp);
+     
+#ifdef TRACE
+     {
+          int i=0;
+          for (i=0; i<quals_len; i++) {
+               LOG_FATAL("after sorting i=%d qual=%d\n", i, quals[i]);
+          }
 
+     }
+#endif
      LOG_DEBUG("%s %d: passing down %d quals with noncons_counts"
                " (%d, %d, %d) to snpcaller()\n", p->target, p->pos+1,
                quals_len, alt_counts[0], alt_counts[1], alt_counts[2]);
@@ -382,9 +393,15 @@ call_snvs(const plp_col_t *p, void *confp)
 
           if (alt_base==reported_snv_ref) { /* p->ref_base && !cons_as_ref) {*/
                /* self comparison */
+#if DEBUG
+               LOG_DEBUG("%s\n", "continue because self comparison")
+#endif
                continue;
           }
           if (p->ref_base==alt_base && !cons_as_ref) {
+#if DEBUG
+               LOG_DEBUG("%s\n", "continue because: p->ref_base==alt_base && !cons_as_ref")
+#endif
                continue;
           }
 
@@ -403,6 +420,11 @@ call_snvs(const plp_col_t *p, void *confp)
                          /* counts-raw */ alt_raw_count, p->coverage, alt_raw_count/(float)p->coverage,
                          /* counts-filt */ alt_count, quals_len, alt_count/(float)quals_len);
           }
+#if DEBUG
+          else {
+               LOG_DEBUG("non sig: pvalue=%g * (double)conf->bonf=%lld < conf->sig=%f\n", pvalue, conf->bonf, conf->sig);
+          }
+#endif
      }
      free(quals);
 }
