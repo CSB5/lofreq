@@ -19,14 +19,10 @@ object and acts as a reader::
     >>> buff = EXAMPLE_VCF_STR
     >>> with contextlib.closing(StringIO.StringIO(textwrap.dedent(buff))) as sock:
     ...    #vcf_reader = vcf.VCFReader(open('example.vcf', 'rb'))
-    ...    vcf_reader = vcf.VCFReader(sock, aggressive=True)
-    ...    for record in vcf_reader:
-    ...        print record
-    Record(CHROM='20', POS=14370, ID='rs6054257', REF='G', ALT=['A'], QUAL=29,
-    FILTER='PASS', INFO={'H2': True, 'NS': 3, 'DB': True, 'DP': 14, 'AF': [0.5]
-    }, FORMAT='GT:GQ:DP:HQ', samples=[{'GT': '0', 'HQ': [58, 50], 'DP': 3, 'GQ'
-    : 49, 'name': 'NA00001'}, {'GT': '0', 'HQ': [65, 3], 'DP': 5, 'GQ': 3, 'nam
-    e' : 'NA00002'}, {'GT': '0', 'DP': 3, 'GQ': 41, 'name': 'NA00003'}])
+    ...    vcf_reader = vcf.VCFReader(sock)
+    ...    record = vcf_reader.next()
+    ...    print record
+    Record(CHROM='20', POS=14370, ID='rs6054257', REF='G', ALT=['A'], QUAL=29, FILTER='PASS', INFO={'H2': True, 'NS': 3, 'DB': True, 'DP': 14, 'AF': [0.5]}, FORMAT='GT:GQ:DP:HQ', samples=[{'GT': '0|0', 'HQ': [51, 51], 'DP': [1], 'GQ': [48], 'name': 'NA00001'}, {'GT': '1|0', 'HQ': [51, 51], 'DP': [8], 'GQ': [48], 'name': 'NA00002'}, {'GT': '1/1', 'HQ': ['.', '.'], 'DP': [5], 'GQ': [43], 'name': 'NA00003'}])
 
 This produces a great deal of information, but it is conveniently accessed.
 The attributes of a Record are the 8 fixed fields from the VCF spec plus two
@@ -53,12 +49,12 @@ one-entry Python lists (see, e.g., ``Record.ALT``).  Semicolon-delimited lists
 of key=value pairs are converted to Python dictionaries, with flags being given
 a ``True`` value. Integers and floats are handled exactly as you'd expect::
 
-    >>> record = vcf_reader.next()
-    >>> print record.POS
+    ...    record = vcf_reader.next()
+    ...    print record.POS
     17330
-    >>> print record.ALT
+    ...    print record.ALT
     ['A']
-    >>> print record.INFO['AF']
+    ...   print record.INFO['AF']
     [0.017]
 
 ``record.FORMAT`` will be a string specifying the format of the genotype
@@ -66,9 +62,9 @@ fields.  In case the FORMAT column does not exist, ``record.FORMAT`` is
 ``None``.  Finally, ``record.samples`` is a list of dictionaries containing the
 parsed sample column::
 
-    >>> record = vcf_reader.next()
-    >>> for sample in record.samples:
-    ...     print sample['GT']
+    ...    record = vcf_reader.next()
+    ...    for sample in record.samples:
+    ...       print sample['GT']
     '1|2'
     '2|1'
     '2/2'
@@ -84,15 +80,14 @@ following attributes:
 
 For example::
 
-    >>> vcf_reader.metadata['fileDate']
-    20090805
-    >>> vcf_reader.samples
+    ...    vcf_reader.metadata['fileDate']
+    '20090805'
+    ...    vcf_reader.samples
     ['NA00001', 'NA00002', 'NA00003']
-    >>> vcf_reader.filters
-    {'q10': Filter(id='q10', desc='Quality below 10'),
-    's50': Filter(id='s50', desc='Less than 50% of samples have data')}
-    >>> vcf_reader.infos['AA'].desc
-    Ancestral Allele
+    ...    vcf_reader.filters
+    {'q10': Filter(id='q10', desc='Quality below 10'), 's50': Filter(id='s50', desc='Less than 50% of samples have data')}
+    ...    vcf_reader.infos['AA'].desc
+    'Ancestral Allele'
 
 '''
 import collections
@@ -328,7 +323,8 @@ class VCFReader(object):
             line = self.reader.next()
 
         fields = line.split()
-        self._samples = fields[8:]
+        # AW this used to be 8: which included FORMAT as well
+        self._samples = fields[9:]
 
     def _none_map(self, func, iterable, bad='.'):
         '''``map``, but make bad values None.'''
