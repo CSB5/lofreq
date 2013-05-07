@@ -199,8 +199,9 @@ AC_DEFINE([_USE_KNETFILE],[],[KNETFILE for samtools])
 
 #        src/cdflib90/Makefile
 AC_CONFIG_FILES(Makefile
-        src/libbam/Makefile
+        src/cdflib90/Makefile   
         src/helper_scripts/Makefile
+        src/libbam/Makefile
         src/lofreq_core/Makefile
         src/lofreq/Makefile
         src/lofreq_python/setup_conf.py        
