@@ -28,6 +28,7 @@
 
 #include "fet.h"
 #include "utils.h"
+#include "log.h"
 #include "snpcaller.h"
 
 #if TIMING
@@ -241,7 +242,7 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
     }
 
     for (n=0; n<N; n++) {
-         assert(err_probs[n]>=0.0 && err_probs[i]<=1.0);
+         assert(err_probs[n]>=0.0 && err_probs[n]<=1.0);
     }
 
 #ifdef DEBUG
@@ -343,13 +344,48 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
 /* pruned_calc_prob_dist */
 
 
+#ifdef RETURNS_WRONG_PVALUES_FOR_HIGH_PROBS
+/* binomial test using poissbin. inefficient but allows us to reuse
+ * existing code. returns -1 on error */
+int
+pseudo_binomial(double *pvalue, 
+                int num_success, int num_trials, double succ_prob)
+{
+     const long long int bonf = 1.0;
+     const double sig = 1.0;
+     /* returned pvalues > sig/bonf are not computed properly */
+     double *probvec = NULL;
+     double *probs;
+     int i;
 
+     if (NULL == (probs = malloc((num_trials) * sizeof(double)))) {
+          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
+                  __FILE__, __FUNCTION__, __LINE__);
+          return -1;
+     }
+
+     for (i=0; i<num_trials; i++) {
+          probs[i] = succ_prob;
+     }
+     
+
+     probvec = poissbin(pvalue, probs,
+                        num_trials, num_success,
+                        bonf, sig);
+     free(probvec);
+     free(probs);
+
+     return 0;
+}
+#endif
 
 /* main logic. return of probvec (needs to be freed by caller allows
-   to check pvalues for other numbers < (original num_failures), like
-   so: exp(probvec_tailsum(probvec, smaller_numl, orig_num+1)) but
-   only if first pvalue was below limits implied by bonf and sig.
-   default pvalue is DBL_MAX (1 might still be significant).
+ *  to check pvalues for other numbers < (original num_failures), like
+ *  so: exp(probvec_tailsum(probvec, smaller_numl, orig_num+1)) but
+ *  only if first pvalue was below limits implied by bonf and sig.
+ *  default pvalue is DBL_MAX (1 might still be significant).
+ *
+ *  note: pvalues > sig/bonf are not computed properly
  */       
 double *
 poissbin(double *pvalue, const double *err_probs,
@@ -478,3 +514,36 @@ snpcaller(double *snp_pvalues,
 }
 /* snpcaller() */
 
+#ifdef SNPCALLER_MAIN
+
+
+/* 
+gcc -pedantic -Wall -g -std=gnu99 -O2 -DSNPCALLER_MAIN -o snpcaller snpcaller.c utils.c log.c
+*/
+
+int main(int argc, char *argv[]) {
+     int num_success;
+     int num_trials;
+     double succ_prob;
+     double pvalue;
+     verbose = 1;
+     if (argc<4) {
+          LOG_ERROR("%s\n", "need num_success num_trials and succ_prob as args");
+          return -1;
+     }
+
+     num_success = atoi(argv[1]);
+     num_trials = atoi(argv[2]);
+     succ_prob = atof(argv[3]);
+
+
+     LOG_VERBOSE("num_success=%d num_trials=%d succ_prob=%f\n", num_success, num_trials, succ_prob);
+     if (-1 == pseudo_binomial(&pvalue, 
+                               num_success, num_trials, succ_prob)) {
+          LOG_ERROR("%s\n", "pseudo_binomial() failed");
+          return -1;
+     }
+
+     printf("%g\n", pvalue);
+}
+#endif
