@@ -8,24 +8,14 @@ valgrind_log=$(mktemp -t $(basename $0).XXXXXX.valgrind)
 vcf_out=$(mktemp -t $(basename $0).XXXXXX.vcf)
 rm $vcf_out $valgrind_log
 
-reffa=data/denv2-pseudoclonal/denv2-pseudoclonal_cons.fa
-bam=data/denv2-pseudoclonal/denv2-pseudoclonal.bam
-# use region, otherwise execution will take ages
-region=consensus:100-300 # FIXME
-# use hard-coded bonf because:
-# 1. can't use auto since we don't have a bed-file
-# 2. can't use dynamic since that would eventually call a filtering
-# script which valgrind won'tlike
-bonf=600
+# FIXME better to use somatic SNVs
+bam=data/denv2-simulation/denv2-10haplo.bam
+vcf=data/denv2-simulation/denv2-10haplo_true-snp.vcf
 
-valgrind --log-file=$valgrind_log --tool=memcheck \
-    $LOFREQ call -r $region -b $bonf -f $reffa -o $vcf_out $bam || exit 1 
-
-num_snvs=$(grep -cv '^#' $vcf_out)
-if [ "$num_snvs" -lt 1 ]; then
-    echoerror "Found no SNVs in $vcf_out"
-    exit 1
-fi
+# use only head. otherwise too slow
+head $vcf | valgrind  --log-file=$valgrind_log --tool=memcheck \
+    $LOFREQ uniq -v - $bam -o $vcf_out || exit 1
+ 
 
 num_err=$(grep 'ERROR SUMMARY' $valgrind_log | grep -cv ': 0 errors')
 if [ "$num_err" -ne 0 ]; then

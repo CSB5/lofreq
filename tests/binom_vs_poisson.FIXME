@@ -1,0 +1,3 @@
+binom_sf should be the same as poissbin
+Is that trye only for small numbers?
+See pseudo_binomial() in snpcaller.c
