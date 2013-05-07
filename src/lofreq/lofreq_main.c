@@ -15,6 +15,7 @@
 #include "log.h"
 #include "utils.h"
 #include "lofreq_snpcaller.h"
+#include "lofreq_uniq.h"
 
 
 
@@ -73,7 +74,8 @@ add_local_dir_to_path(char *argv0) {
           setenv(PATH_NAME, path_var, 1);
      }
 
-#ifdef NO_NEED
+
+#ifdef FIXME_NO_NEED
      free(path_var);
      old_path = getenv(PATH_NAME);
      path_var = strdup(dirname(argv0));
@@ -102,7 +104,8 @@ static void usage(const char *myname)
      fprintf(stderr, "  call        : call variants\n");
      fprintf(stderr, "  somatic     : call somatic variants\n");
      fprintf(stderr, "  filter      : filter variants\n");
-     fprintf(stderr, "  plp_summary : FIXME:finish print pileup summary\n");
+     fprintf(stderr, "  uniq        : test whether SNVs predicted in one sample were missing in the other due to coverage fluctuations\n");
+     fprintf(stderr, "  plp_summary : prints a pileup summary per position\n");
      fprintf(stderr, "  vcfset      : vcf set operations\n");
      fprintf(stderr, "  version     : prints version\n");
      fprintf(stderr, "\n");
@@ -111,11 +114,13 @@ static void usage(const char *myname)
 
 int main(int argc, char *argv[])
 {
-/* #include <sys/stat.h>
- * int x = lstat("junklink", &buf);
- * if if (S_ISLNK(buf.st_mode))
- * warning things might not work as expected
- * else */
+    /* FIXME warn if link
+     * #include <sys/stat.h>
+     * int x = lstat("junklink", &buf);
+     * if if (S_ISLNK(buf.st_mode))
+     * warning things might not work as expected
+     * else 
+     */
      add_local_dir_to_path(argv[0]);
 
      if (argc < 2) {
@@ -124,6 +129,9 @@ int main(int argc, char *argv[])
      }
      if (strcmp(argv[1], "call") == 0)  {
           return main_call(argc, argv);
+
+     } else if (strcmp(argv[1], "uniq") == 0)  {
+          return main_uniq(argc, argv);
 
      } else if (strcmp(argv[1], "filter") == 0 || 
                 strcmp(argv[1], "somatic") == 0 ||
@@ -164,7 +172,8 @@ int main(int argc, char *argv[])
           /* use main_call() but add --plp_summary */
           char **argv_tmp = calloc(argc+1, sizeof(char*));
           int i, rc;
-          fprintf(stderr, "NOTE: the plp_summary command is just an alias for %s call --plp-summary-only (ignoring all the snv-call specific options)\n", BASENAME(argv[0]));
+          LOG_VERBOSE("'plp_summary' is just an alias for %s call --plp-summary-only"
+                      "  (ignoring all the snv-call specific options)\n", BASENAME(argv[0]));
           argv_tmp[0] = argv[0];
           argv_tmp[1] = "call";
           argv_tmp[2] = "--plp-summary-only";
