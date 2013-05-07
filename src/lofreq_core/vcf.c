@@ -26,6 +26,19 @@
 #define LINE_BUF_SIZE 1<<12
 
 
+int vcf_var_filtered(const var_t *var)
+{
+     if (! var->filter) {
+          return 0;
+     } else if (0 == strcmp(var->filter, ".")) {
+          return 0;
+     } else if (strlen(var->filter)>=4 && 0 == strcmp(var->filter, "PASS")) {
+          return 0;
+     } else {
+          return 1;
+     }
+}
+
 /* value for key will be stored in value if not NULL. value will NULL
  * if not found. Otherwise its allocated here and caller must free. FIXME
  * shoddily written */
@@ -34,6 +47,7 @@ vcf_var_has_info_key(char **value, const var_t *var, const char *key) {
      const char field_delimiter[] = ";";
      char *token;
      char *info;
+     char *info_ptr;
 
      if (value) {
           (*value) = NULL;
@@ -44,7 +58,8 @@ vcf_var_has_info_key(char **value, const var_t *var, const char *key) {
      } 
 
      info = strdup(var->info); /* strsep modifies string */
-     while (NULL != (token = strsep(&info, field_delimiter))) {
+     info_ptr = info;
+     while (NULL != (token = strsep(&info_ptr, field_delimiter))) {
           if (0 == strncasecmp(key, token, strlen(key))) {
                if (value) {
                     char *s = strchr(token, '=');
@@ -306,6 +321,7 @@ int vcf_parse_vars(FILE *stream, var_t ***vars)
                return -1;
           }
           if (1 == rc) {/* EOF */
+               free(var);
                break;
           }
           num_vars += 1;
