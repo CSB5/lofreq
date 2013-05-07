@@ -269,10 +269,7 @@ call_snvs(const plp_col_t *p, void *confp)
           const int is_indel = 0;
           const int is_consvar = 1;
           const int qual = -1;
-          float af = (p->fw_counts[bam_nt4_table[(int) p->cons_base]] 
-                      + 
-                      p->rv_counts[bam_nt4_table[(int) p->cons_base]]) 
-               / (float)p->coverage;
+          float af = base_count(p, p->cons_base) / (float)p->coverage;
 
           report_var(conf->out, p, p->ref_base, p->cons_base,
                      af, qual, is_indel, is_consvar);
@@ -701,7 +698,7 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -S | --no-sq                 don't merge sourceQ into baseQ\n");
 #endif                                                    
      /* stats */                                          
-     fprintf(stderr, "       -s | --sig                   P-value cutoff / significance level [%f]\n", snvcall_conf->sig);
+     fprintf(stderr, "       -s | --sig                   p-value cutoff / significance level [%f]\n", snvcall_conf->sig);
      fprintf(stderr, "       -b | --bonf                  Bonferroni factor. INT, 'dynamic' or 'auto' (needs bed-file) [auto]\n");
      /* misc */                                           
      fprintf(stderr, "       -I | --illumina-1.3          assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
