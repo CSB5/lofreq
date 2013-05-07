@@ -57,6 +57,13 @@ typedef struct {
 } mplp_pileup_t;
 
 
+/* convenience function */
+int
+base_count(const plp_col_t *p, char base)
+{
+     int b = bam_nt4_table[(int)base];
+     return p->fw_counts[b] + p->rv_counts[b];
+}
 
 void
 plp_col_init(plp_col_t *p) {

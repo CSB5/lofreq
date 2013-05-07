@@ -2,6 +2,7 @@
 #ifndef PLP_H
 #define PLP_H
 
+#include "faidx.h"
 #include "utils.h"
 
 
@@ -69,6 +70,8 @@ typedef struct {
 
 #define PLP_COL_ADD_QUAL(p, q)   int_varray_add_value((p), (q))
 
+int
+base_count(const plp_col_t *p, char base);
 
 void
 dump_mplp_conf(const mplp_conf_t *c, FILE *stream);
