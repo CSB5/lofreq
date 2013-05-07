@@ -39,4 +39,7 @@ ls_dir(char ***matches, const char *path, const char *pattern,
 char *
 join_paths(char **p1, const char *p2);
 
+void
+chomp(char *s);
+
 #endif

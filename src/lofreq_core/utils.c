@@ -38,6 +38,7 @@ int int_cmp(const void *a, const void *b)
      return ia<ib ? -1 : ia>ib? 1 : 0;
 }
 
+
 int dbl_cmp(const void *a, const void *b)
 {
      const double da = *(const double *)a;
@@ -114,7 +115,6 @@ void int_varray_add_value(int_varray_t *a, const int value)
 }
 
 
-
 int file_exists(const char *fname) 
 {
   /* from 
@@ -126,6 +126,7 @@ int file_exists(const char *fname)
       return 0;
   }
 }
+
 
 /* from http://www.anyexample.com/programming/c/how_to_load_file_into_memory_using_plain_ansi_c_language.xml
  *
@@ -283,4 +284,13 @@ join_paths(char **p1, const char *p2) {
      free(buf);
 
      return *p1;
+}
+
+
+void chomp(char *s)
+{
+     int end = strlen(s)-1;
+     if (end >= 0 && s[end]=='\n') {
+          s[end]='\0';
+     }
 }
