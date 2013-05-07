@@ -9,8 +9,12 @@
 *.lo
 *.la
 bam2depth
+binom
+vcf_main
+snpcaller
 
 Makefile
 Makefile.log
 .deps
 .libs
+
