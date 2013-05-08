@@ -22,7 +22,6 @@ AC_REVISION([m4_esyscmd_s([git describe --always --dirty])])
 
 AC_MSG_NOTICE([configuring $PACKAGE_NAME (version $PACKAGE_VERSION) for your system...])
 
-
 # The AM_INIT_AUTOMAKE line adds several standard checks. This macro
 # is always needed for automake. Obsolete: It takes the program name
 # and version number as arguments.
@@ -45,7 +44,6 @@ AM_INIT_AUTOMAKE
 # extensions to C or Posix on hosts that normally disable the
 # extensions.
 AC_USE_SYSTEM_EXTENSIONS
-
 
 # for cross compilation
 #
@@ -77,7 +75,9 @@ AC_PROG_INSTALL
 # shell variable GCC to `yes'. If output variable CFLAGS was not
 # already set, set it to `-g -O2' for the GNU C compiler (`-O2' on
 # systems where GCC does not accept `-g'), or `-g' for other
-# compilers.
+# compilers. 
+# Note, optimization level can be overriden by user with env var
+# CFLAGS
 AC_PROG_CC
 # If the C compiler cannot compile ISO Standard C (currently C99),
 # try to add an option to output variable `CC' to make it work.  If
@@ -87,17 +87,7 @@ AC_PROG_CC_STDC
 
 # Set output variable CPP to a command that runs the C preprocessor. 
 AC_PROG_CPP
-#
-# Determine a C++ compiler to use. If output variable CXXFLAGS was not
-# already set, set it to `-g -O2' for the GNU C++ compiler (`-O2' on
-# systems where G++ does not accept `-g'), or `-g' for other
-# compilers.
-#AC_PROG_CXX
-# Set CXXCPP to a command that runs the C++ preprocessor
-#AC_PROG_CXXCPP
-#
-# reset compiler flags to initial flags
-#CXXFLAGS=$OLD_CXXFLAGS
+
 
 # safety check: AC_CONFIG_SRCDIR([src/clustal.h])
 
@@ -118,6 +108,8 @@ AC_C_INLINE
 # AC_CHECK_FUNCS(strdup strstr strchr erand48)
 # AW is there an automatic way to extract library functions used in the program?
 
+# pthread support
+#
 AC_MSG_CHECKING([if we have pthreads support])
 m4_include([m4/ax_pthread.m4])
 AC_CONFIG_MACRO_DIR([m4])
@@ -130,36 +122,15 @@ AX_PTHREAD([
         AC_MSG_ERROR([No pthread support on this machine]))
 #AX_PTHREAD()
 
-# FIXME explicit libm check
-#AC_CHECK_LIB(m, log,, AC_MSG_ERROR([Could not find libm]))
-#AC_CHECK_LIB(m, log2, AC_DEFINE(HAVE_LOG2, 1, [Has log2()]))
+
+# explicit libm check
 AC_CHECK_LIB(m, log,, AC_MSG_ERROR([Could not find libm]))
 AC_CHECK_LIB(z, gzread,, AC_MSG_ERROR([Could not find libz]))
-
-# ---    argtable header and library check
-#
-#AC_CHECK_HEADERS([argtable2.h], [],
-#                 AC_MSG_ERROR([Could not find argtable2.h. Try $ ./configure CFLAGS='-Iyour-argtable2-include-path]))
-#AC_CHECK_LIB(argtable2, arg_parse, [],
-#             AC_MSG_ERROR([Could not find libargtable2. Try $ ./configure LDFLAGS="-Lyour-argtable2-lib-path']))
 
 
 # http://www.gnu.org/software/automake/manual/html_node/Python.html
 AM_PATH_PYTHON([2.7])
 # argparse and a lot of other stuff is not available in 2.7
-# Anyway py3 seems the way to go
-#
-#AC_MSG_CHECKING([for python-config to get compiler flags])
-#AC_CHECK_PROG(python_config, 'python-config', yes)
-#if test "${python_config}" != "yes"; then
-#   AC_MSG_ERROR("Could not run python-config.")
-#fi
-#PYTHON_CFLAGS=`python-config --cflags`
-#PYTHON_LDFLAGS=`python-config --ldflags`
-#AC_SUBST(PYTHON_CFLAGS)
-#AC_SUBST(PYTHON_LDFLAGS)
-
-
 
 
 # ---   debugging
@@ -181,15 +152,14 @@ if test x"$debugit" = x"yes"; then
     # are user variables):
     # switch off assert etc
     # AC_DEFINE([DEBUG],[],[Debug Mode])
-    CFLAGS="${CFLAGS} -g -c99 -Wall -O0 -pedantic"
-    CXXFLAGS="${CXXFLAGS} -g -c99 -Wall -O0 -pedantic"
+    CFLAGS="${CFLAGS} -O0 -pedantic"
+    CXXFLAGS="${CXXFLAGS} -O0 -pedantic"
 else
     # switch off assert etc
     AC_DEFINE([NDEBUG],[],[No-debug Mode])
-    # if no debugging is requested, we make optimisation explicit
-    AM_CXXFLAGS="${AM_CXXFLAGS} -O3"
-    AM_CFLAGS="${AM_CFLAGS} -O3"
+    # Could set -O3 but that should be a user choice (env var CFLAGS)
 fi
+
 
 
 AC_SUBST([AM_CFLAGS])
