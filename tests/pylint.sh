@@ -2,11 +2,11 @@
 
 source lib.sh || exit 1
 
-#files_to_test=$(grep 'scripts/' ../src/lofreq_python/setup.py | tr -d ",'" | tr -d '[\t ]' | sed -e 's,^,../,')
-files_to_test=$(grep '^[^#].*\.py'  ../src/lofreq_python/Makefile.am | grep -v PYTHON | cut -f 2 -d = | tr -d '\' | tr -d '[\t ]')
+#files_to_test=$(grep 'scripts/' ../src/lofreq_python/setup.py | tr -d "[,']" | tr -d '[\t ]' | sed -e 's,^,../,')
+files_to_test=$(grep '^[^#].*\.py'  ../src/lofreq_python/Makefile.am | grep -v PYTHON | cut -f 2 -d = | tr -d '\\' | tr -d '[\t ]')
 
-
-for pylint in pylint pylint-2.6 pylint-2.7; do
+#  2.6 support dropped
+for pylint in pylint pylint-2.7; do
    which $pylint >/dev/null 2>&1 || continue
    echoinfo "Using $(which $pylint)"
    log=$(mktemp -t ${pylint}.XXXXX)
