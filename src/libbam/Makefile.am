@@ -1,6 +1,6 @@
-AM_CFLAGS = -Wall -fPIC -O2 -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE 
+AM_CFLAGS = -Wall -fPIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE @AM_CFLAGS@
 # -D_USE_KNETFILE defined in configure.ac to be passed down to all
-AM_LDFLAGS = -shared -fPIC
+AM_LDFLAGS = -shared -fPIC @AM_LDFLAGS@
 # -D_USE_KNETFILE defined by toplevel configure to make it active across sub-sources
 KNETFILE = knetfile.c
 noinst_LIBRARIES = libbam.a
