@@ -2,61 +2,65 @@
 
 /*********************************************************************
  *
- * Copyright (C) 2011, 2012 Genome Institute of Singapore
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the GNU
- * General Public License for more details.
+ * FIXME update license
  *
  *********************************************************************/
+#include <stdlib.h>
+#include <stdio.h>
 
 #include "cdflib.h"
 #include "binom.h"
 
+
+
+#define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
+
+
+
+
+
 /**
- * @brief Survival function (1-cdf) computed by means of DCDFLIB to get rid of scipy
- * dependency. Same as scipy.stats.binom.sf().
+ * @brief Compute cdf and sf
  *
- * q will hold the probability of seeing num_successes or more in num_trials
- * given a probabilty of prob_success
+ * P is the cdf evaluated at X, Q is the compliment of the cdf
+ * evaluated at X, i.e. 1-P (AKA sf)
  *
  * Returns non-zero status on failure
  *
  */
-int binom_sf(double *q,
-			 int num_trials, int num_successes, double prob_success) 
+int binom(double *p, double *q,
+          int num_trials, int num_success, double prob_success) 
 {
 		int which=1;
 		int status=1; /* error by default */
 		double ompr = 1.0 - prob_success;
 		double bound;
-		double p;
+        double q2, p2;
 
-		double s = (double)num_successes;
+		double s = (double)num_success;
 		double xn = (double)num_trials;
 		double pr = (double)prob_success;
 
-		(void) cdfbin(&which, &p, q,
+        /* P is always the cdf evaluated at X, Q is always the compliment of the
+           cdf evaluated at X, i.e.  1-P, and X is always the value at which the
+           cdf  is evaluated. */
+
+		(void) cdfbin(&which, p?p:&p2, q?q:&q2,
 			   &s, &xn, &pr, &ompr,
 			   &status, &bound);
+        
+#ifdef DEBUG
 
-#if 0
-		fprintf(stderr, "DEBUG(%s:%s:%d): in num_successes = %d\n", 
-                __FILE__, __FUNCTION__, __LINE__, num_successes);
+		fprintf(stderr, "DEBUG(%s:%s:%d): in num_success = %d\n", 
+                __FILE__, __FUNCTION__, __LINE__, num_success);
 		fprintf(stderr, "DEBUG(%s:%s:%d): in num_trials = %d\n", 
                 __FILE__, __FUNCTION__, __LINE__, num_trials);
 		fprintf(stderr, "DEBUG(%s:%s:%d): in pr = %g\n", 
                 __FILE__, __FUNCTION__, __LINE__, prob_success);
 		fprintf(stderr, "DEBUG(%s:%s:%d): out p=%g\n", 
-                __FILE__, __FUNCTION__, __LINE__, p);
-		fprintf(stderr, "DEBUG(%s:%s:%d): out binom.sf() q=%g\n", 
-                __FILE__, __FUNCTION__, __LINE__, *q);
+                __FILE__, __FUNCTION__, __LINE__, p?*p:p2);
+		fprintf(stderr, "DEBUG(%s:%s:%d): out q=%g\n", 
+                __FILE__, __FUNCTION__, __LINE__, q?*q:q2);
 		fprintf(stderr, "DEBUG(%s:%s:%d): out status=%d\n",
                 __FILE__, __FUNCTION__, __LINE__, status);
 		fprintf(stderr, "DEBUG(%s:%s:%d): out bound=%g\n", 
@@ -65,7 +69,7 @@ int binom_sf(double *q,
 		
 		return status;
 }
-/* end of binom_sf */
+/* end of binom */
 
 
 
@@ -73,7 +77,7 @@ int binom_sf(double *q,
 
 
 /* 
-gcc -pedantic -Wall -g -std=gnu99 -O2 -DBINOM_MAIN -I../cdflib90/ -o binom binom.c utils.c log.c ../cdflib90/libcdf.a
+gcc -pedantic -Wall -g -std=gnu99 -O2 -DBINOM_MAIN -I../cdflib90/ -o binom binom.c utils.c log.c ../cdflib90/libcdf.a -lm
 */
 #include <stdlib.h>
 #include "log.h"
@@ -81,28 +85,30 @@ gcc -pedantic -Wall -g -std=gnu99 -O2 -DBINOM_MAIN -I../cdflib90/ -o binom binom
 int main(int argc, char *argv[]) {
      int num_success;
      int num_trials;
-     double succ_prob;
-     double pvalue;
-     verbose = 1;
+     double prob_success;
+     double sf_pvalue;
+     double cdf_pvalue;
+
      if (argc<4) {
-          LOG_ERROR("%s\n", "need num_success num_trials and succ_prob as args");
-          return -1;
+         fprintf(stderr, "need num_success num_trials and prob_success as args");
+         return -1;
      }
 
      num_success = atoi(argv[1]);
      num_trials = atoi(argv[2]);
-     succ_prob = atof(argv[3]);
+     prob_success = atof(argv[3]);
 
 
-     LOG_VERBOSE("num_success=%d num_trials=%d succ_prob=%f\n", num_success, num_trials, succ_prob);
-     if (0 != binom_sf(&pvalue, num_trials, num_success, succ_prob)) {
-         LOG_ERROR("%s\n", "binom_sf() failed");
+     fprintf(stdout, "num_success=%d num_trials=%d prob_success=%f\n", num_success, num_trials, prob_success);
+     if (0 != binom(&cdf_pvalue, &sf_pvalue, num_trials, num_success, prob_success)) {
+         fprintf(stderr, "%s\n", "binom() failed");
          return EXIT_FAILURE;
      }
+     
+     printf("sf: %g\tcdf: %g\n", sf_pvalue, cdf_pvalue);
 
-     printf("%g\n", pvalue);
-
-     printf("Should be identical to scipy.stats.binom.sf(%d, %d, %f)\n", num_success, num_trials, succ_prob);
+     printf("sf should be identical to scipy.stats.binom.sf(%d, %d, %f)\n", num_success, num_trials, prob_success);
+     printf("cdf should be identical to scipy.stats.binom.cdf(%d, %d, %f)\n", num_success, num_trials, prob_success);
      return EXIT_SUCCESS;
 }
 #endif
