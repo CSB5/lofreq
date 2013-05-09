@@ -104,8 +104,8 @@ uniq_snv(const plp_col_t *p, void *confp)
                af, p->coverage, alt_count, p->target, p->pos+1);
 #endif
 
-     if (0 != binom_sf(&pvalue, p->coverage, alt_count, af)) {
-          LOG_ERROR("%s\n", "binom_sf() failed");
+     if (0 != binom(&pvalue, NULL, p->coverage, alt_count, af)) {
+          LOG_ERROR("%s\n", "binom() failed");
           return;
      }
 
@@ -115,7 +115,7 @@ uniq_snv(const plp_col_t *p, void *confp)
                  is_sig ? "unique" : "not necessarily unique", pvalue, conf->sig/(float)conf->bonf,
                  alt_count, p->coverage, alt_count/(float)p->coverage);
      if (is_sig) {
-          vcf_write_var(stderr, conf->var);
+          vcf_write_var(conf->vcf_out, conf->var);
      }
 }
 
@@ -126,9 +126,9 @@ usage(const uniq_conf_t* uniq_conf)
      fprintf(stderr, "Usage: %s uniq [options] in.bam\n\n", PACKAGE);
      fprintf(stderr, "Checks whether variants predicted in one sample (listed in vcf input)\n");
      fprintf(stderr, "are truly 'unique', i.e. coverage in other sample (bam input) is high\n");
-     fprintf(stderr, "enough and alt counts are significantly low.\n");
-     fprintf(stderr, "Will ignore filtered input variants and will only output variants\n");
-     fprintf(stderr, "considered unique.\n\n");
+     fprintf(stderr, "enough and alt counts are significantly low (1-sided Binomial test).\n");
+     fprintf(stderr, "Will ignore filtered input variants as well as indels and will only\n");
+     fprintf(stderr, "output variants considered unique (Bonferroni corrected p-value<sig).\n\n");
 
      fprintf(stderr,"Usage: %s uniq [options] in.bam\n\n", PACKAGE);
      fprintf(stderr,"Options:\n");
@@ -301,7 +301,7 @@ main_uniq(int argc, char *argv[])
          LOG_DEBUG("pileup for var no %d at %s %d\n", 
                    i+1, uniq_conf.var->chrom, uniq_conf.var->pos+1);
          if (vcf_var_has_info_key(NULL, uniq_conf.var, "INDEL")) {
-              LOG_WARN("Skipping indel var at %s %d\n", 
+              LOG_VERBOSE("Skipping indel var at %s %d\n", 
                        uniq_conf.var->chrom, uniq_conf.var->pos+1);
               free(mplp_conf.reg); 
               mplp_conf.reg = NULL;
@@ -340,10 +340,6 @@ main_uniq(int argc, char *argv[])
     if (0==rc) {
          LOG_VERBOSE("%s\n", "Successful exit.");
     }
-
-    LOG_FIXME("%s\n", "make sure region access is fast?");
-    LOG_FIXME("%s\n", "clang static checker");
-    LOG_FIXME("%s\n", "add positive control test for unique snvs");
 
     return rc;
 }
