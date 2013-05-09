@@ -33,3 +33,19 @@ else
     echook "Got zero SNVs when checking indels and filtered variants only"
 fi
 rm $vcf_out
+
+
+vcf_in=data/somatic/hg19_chr22_true_snv.vcf
+bam=data/somatic/CHH966-tumor-100x-10pur-hg19.chr22-bed-only.bam
+$LOFREQ uniq -v $vcf_in $bam -o $vcf_out || exit 1
+# previously 4, but now 2 true snvs in vcf_in, which both should be unique
+num_snvs=$(grep -cv '^#' $vcf_out)
+if [ "$num_snvs" -ne 2 ]; then
+    echoerror "Expected two SNVs from somatic check but got $num_snvs"
+    exit 1
+else
+    echook "Got expected number of SNVs from somatic check"
+fi
+rm $vcf_out
+
+
