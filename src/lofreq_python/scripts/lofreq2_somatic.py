@@ -50,6 +50,7 @@ logging.basicConfig(level=logging.WARN,
 VCF_NORMAL_EXT = "normal.vcf"
 VCF_TUMOR_EXT = "tumor.vcf"
 VCF_RAW_EXT = "lofreq_somatic_raw.vcf"
+VCF_FILTERED_EXT = "lofreq_somatic_filtered.vcf"
 VCF_FINAL_EXT = "lofreq_somatic_final.vcf"
 
 
@@ -140,9 +141,10 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
         
     vcf_t = out_prefix + VCF_TUMOR_EXT
     vcf_som_raw = out_prefix + VCF_RAW_EXT
+    vcf_som_filtered = out_prefix + VCF_FILTERED_EXT
     vcf_som_final = out_prefix + VCF_FINAL_EXT
     
-    outfiles = [vcf_t, vcf_som_raw, vcf_som_final]
+    outfiles = [vcf_t, vcf_som_raw, vcf_som_filtered, vcf_som_final]
     if not reuse_normal:
         outfiles.append(vcf_n)
     for outf in outfiles:
@@ -173,11 +175,17 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
     
     cmd = ['lofreq', 'filter', '-i', vcf_som_raw, 
            '--min-cov', "%d" % 10, '--strandbias-holmbonf', 
-           '-p', '-o', vcf_som_final]
+           '-p', '-o', vcf_som_filtered]
     somatic_commands.append(cmd)
 
-    # FIXME gzip should be supported internally
-    cmd = ['gzip', vcf_n, vcf_t, vcf_som_raw]
+    # filter and uniq could be combined into one
+    
+    cmd = ['lofreq', 'uniq', '-v', vcf_som_filtered,
+           '-o', vcf_som_final, bam_n]
+    somatic_commands.append(cmd)
+
+    # FIXME gzip in and output should be supported internally 
+    cmd = ['gzip', vcf_n, vcf_t, vcf_som_raw, vcf_som_filtered]
     somatic_commands.append(cmd)
 
     for (i, cmd) in enumerate(somatic_commands):
