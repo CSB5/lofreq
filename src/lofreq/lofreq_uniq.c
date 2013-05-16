@@ -155,7 +155,7 @@ main_uniq(int argc, char *argv[])
      int rc = 0;
      var_t **vars = NULL;
      int num_vars = 0;
-     char *vcf_header;
+     char *vcf_header = NULL;
 
      for (i=0; i<argc; i++) {
           LOG_DEBUG("arg %d: %s\n", i, argv[i]);
@@ -275,11 +275,21 @@ main_uniq(int argc, char *argv[])
          uniq_conf.vcf_in = fopen(vcf_in, "r");
     }
     if (0 !=  vcf_parse_header(&vcf_header, uniq_conf.vcf_in)) {
-         LOG_FATAL("%s\n", "vcf_parse_header() failed");
-         free(vcf_header);
-         return -1;
-    } 
-    fprintf(uniq_conf.vcf_out, "%s", vcf_header);
+         LOG_WARN("%s\n", "vcf_parse_header() failed");
+         if (stdin == uniq_conf.vcf_in) {
+              LOG_FATAL("%s\n", "Won't be able to parse variants");
+              return -1;
+         } else {
+              if (fseek(uniq_conf.vcf_in, 0, SEEK_SET)) {
+                   LOG_FATAL("%s\n", "Couldn't rewind file to parse variants"
+                             " after header parsing failed");
+                   return -1;
+              }
+              vcf_write_header(uniq_conf.vcf_in, NULL, NULL);
+         }
+    } else {
+         fprintf(uniq_conf.vcf_out, "%s", vcf_header);
+    }
     free(vcf_header);
 
     if (-1 == (num_vars = vcf_parse_vars(uniq_conf.vcf_in, &vars))) {
@@ -289,6 +299,9 @@ main_uniq(int argc, char *argv[])
 
     plp_proc_func = &uniq_snv;
     uniq_conf.bonf = num_vars;
+    if (0 == num_vars) {
+         LOG_WARN("%s\n", "Didn't find any variants in input");
+    }
     for (i=0; i<num_vars; i++) {
          char reg_buf[BUF_SIZE];
 
