@@ -180,10 +180,14 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
 
     # filter and uniq could be combined into one
     
-    cmd = ['lofreq', 'uniq', '-v', vcf_som_filtered,
-           '-o', vcf_som_final, bam_n]
+    if False:
+        cmd = ['lofreq', 'uniq', '-v', vcf_som_filtered,
+               '-o', vcf_som_final, bam_n]
+    else:
+        LOG.warn("'uniq' is temporarily disabled")
+        cmd = ['cp', vcf_som_filtered, vcf_som_final]
     somatic_commands.append(cmd)
-
+    
     # FIXME gzip in and output should be supported internally 
     cmd = ['gzip', vcf_n, vcf_t, vcf_som_raw, vcf_som_filtered]
     somatic_commands.append(cmd)
