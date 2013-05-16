@@ -64,10 +64,74 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
  * x = log_a(60/254.0); a=20/60.0;
  * x = 1.3134658329243962 
  */
-#define SCALE_MQ
-#define SCALE_MQ_FAC  1.3134658329243962
-#if 1
 #undef SCALE_MQ
+#define SCALE_MQ_FAC  1.3134658329243962
+
+/* filled in missing values with the min of the two neighbouring values */
+#define TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
+#ifdef TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
+const int MQ_TRANS_TABLE[61] = {
+1,
+1,
+3,
+4,
+5,
+5,
+8,
+9,
+4,
+8,
+14,
+17,
+22,
+25,
+25,
+29,
+32,
+33,
+34,
+34, /* NA */
+34,
+34, /* NA */
+34, /* NA */
+34,
+34, /* NA */
+34, /* NA */
+34, /* NA */
+34, /* NA */
+34, /* NA */
+41,
+41, /* NA */
+41, /* NA */
+41, /* NA */
+41, /* NA */
+41, /* NA */
+41, /* NA */
+41, /* NA */
+41, /* NA */
+50,
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46,
+46, /* NA */
+46, /* NA */
+54,
+37,
+37, /* NA */
+45,
+45, /* NA */
+45, /* NA */
+67};
 #endif
 
 
@@ -143,6 +207,10 @@ merge_baseq_and_mapq(const int bq, const int mq)
      mp = PHREDQUAL_TO_PROB(mq);
 #endif
       
+#ifdef TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
+     assert(mq <= 60);
+     mp = PHREDQUAL_TO_PROB(MQ_TRANS_TABLE[mq]); 
+#endif
      /* No need to do computation in phred-space as
       * numbers won't get small enough.
       */
@@ -909,7 +977,10 @@ main_call(int argc, char *argv[])
      int rc = 0;
 
 #ifdef SCALE_MQ
-     LOG_WARN("%s\n", "MQ scaling on!");
+     LOG_WARN("%s\n", "MQ scaling switched on!");
+#endif
+#ifdef TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
+     LOG_WARN("%s\n", "MQ translation switched on!");
 #endif
      for (i=0; i<argc; i++) {
           LOG_DEBUG("arg %d: %s\n", i, argv[i]);
