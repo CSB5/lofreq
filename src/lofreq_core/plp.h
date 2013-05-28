@@ -10,7 +10,7 @@
  */
 #define MPLP_NO_ORPHAN   0x10
 #define MPLP_REALN       0x20
-#define MPLP_EXT_BAQ     0x40
+#define MPLP_REDO_BAQ    0x40
 #define MPLP_ILLUMINA13  0x80
 #define MPLP_IGNORE_RG   0x100
 

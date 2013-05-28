@@ -1,6 +1,7 @@
 /* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*-
  *
- * This file is partially based on samtools' bam_plcmd.c
+ * This file is partially based on samtools' bam_plcmd.c and very
+ * likely needs an update whenever samtools/libbam is updated
  *
  * FIXME missing license
  *
@@ -171,7 +172,7 @@ dump_mplp_conf(const mplp_conf_t *c, FILE *stream)
 
      fprintf(stream, "  flag & MPLP_NO_ORPHAN  = %d\n", c->flag&MPLP_NO_ORPHAN?1:0);
      fprintf(stream, "  flag & MPLP_REALN      = %d\n", c->flag&MPLP_REALN?1:0);
-     fprintf(stream, "  flag & MPLP_EXT_BAQ    = %d\n", c->flag&MPLP_EXT_BAQ?1:0);
+     fprintf(stream, "  flag & MPLP_REDO_BAQ    = %d\n", c->flag&MPLP_REDO_BAQ?1:0);
      fprintf(stream, "  flag & MPLP_ILLUMINA13 = %d\n", c->flag&MPLP_ILLUMINA13?1:0);
      
      fprintf(stream, "  capQ_thres   = %d\n", c->capQ_thres);
@@ -238,8 +239,9 @@ mplp_func(void *data, bam1_t *b)
         }
         has_ref = (ma->ref && ma->ref_id == b->core.tid)? 1 : 0;
         skip = 0;
-        if (has_ref && (ma->conf->flag&MPLP_REALN)) 
-             bam_prob_realn_core(b, ma->ref, (ma->conf->flag & MPLP_EXT_BAQ)? 3 : 1);
+        if (has_ref && (ma->conf->flag & MPLP_REALN)) {
+             bam_prob_realn_core(b, ma->ref, (ma->conf->flag & MPLP_REDO_BAQ)? 7 : 3);
+        }
         if (has_ref && ma->conf->capQ_thres > 10) {
             int q = bam_cap_mapQ(b, ma->ref, ma->conf->capQ_thres);
             if (q < 0) {
