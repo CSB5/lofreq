@@ -46,6 +46,9 @@ add_local_dir_to_path(char *argv0) {
      }
 
      if (NULL == join_paths(&lofreq_script_abs, lofreq_script_rel)) {
+#if 0
+          LOG_WARN("join_paths %s and %s failed\n", lofreq_script_abs, lofreq_script_rel);
+#endif
           free(lofreq_script_abs);
           free(dirname_argv0);
           free(argv0_cp);
@@ -54,6 +57,9 @@ add_local_dir_to_path(char *argv0) {
      /* check also done by realpath in join_path but doesn't hurt to
       * check again */
      if (! file_exists(lofreq_script_abs)) {
+#if 0
+          LOG_WARN("%s doesnt' exist\n", lofreq_script_abs);
+#endif
           free(lofreq_script_abs);
           free(dirname_argv0);
           free(argv0_cp);
@@ -61,7 +67,9 @@ add_local_dir_to_path(char *argv0) {
      }
 
      path_var = strdup(dirname(lofreq_script_abs));
-     LOG_VERBOSE("Adding local source directory %s to PATH\n", path_var);
+#if 0
+     LOG_WARN("Adding local source directory %s to PATH\n", path_var);
+#endif
 
      old_path = getenv(PATH_NAME);
      if (NULL == old_path) {
