@@ -115,14 +115,16 @@ def cmdline_parser():
     parser.add_argument("--reuse-normal-vcf", 
                         help="Expert only: reuse already compute normal"
                         " prediction (PREFIX+%s)" % VCF_NORMAL_EXT)
-
+    parser.add_argument("-E", "--baq", 
+                        action="store_true",
+                        help="Enable (extended) BAQ computation")
     return parser
 
 
 
 def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
             sig_n=0.001, sig_t=10, mq_filter_n=20,
-            reuse_normal=None):
+            reuse_normal=None, baq_on=False):
     """Core of the somatic SNV callers, which calls all the necessary
     parts and glues them together
     """
@@ -155,12 +157,16 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
 
     if not reuse_normal:
         cmd = ['lofreq', 'call', '-f', ref]
+        if baq_on:
+            cmd.append('-E')
         if bed:
             cmd.extend(['-l', bed])
         cmd.extend(['-b', "%d" % 1, '-s', "%f" % sig_n, '-o', vcf_n, bam_n])
         somatic_commands.append(cmd)
     
     cmd = ['lofreq', 'call', '-f', ref,]
+    if baq_on:
+        cmd.append('-E')    
     if bed:
         cmd.extend(['-l', bed])
     cmd.extend(['-b', 'dynamic', '-s', "%f" % sig_t, 
@@ -192,6 +198,8 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
     cmd = ['gzip', vcf_n, vcf_t, vcf_som_raw, vcf_som_filtered]
     somatic_commands.append(cmd)
 
+    #import pdb; pdb.set_trace()
+    
     for (i, cmd) in enumerate(somatic_commands):
         LOG.info("Running cmd %d out of %d: %s" % (
             i+1, len(somatic_commands), ' '.join(cmd)))
@@ -249,7 +257,7 @@ def main():
 
     somatic(args.normal, args.tumor, args.ref, outprefix, args.bed,
             args.normal_sig, args.tumor_sig, args.mq_filter, 
-            args.reuse_normal_vcf)
+            args.reuse_normal_vcf, args.baq)
 
 
     
