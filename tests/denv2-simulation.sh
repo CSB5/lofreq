@@ -57,7 +57,9 @@ if [ $ndiff -ne 0 ]; then
     exit 1
 fi
 ndiff=$($LOFREQ vcfset -a complement --ign-filtered -2 $outfinal_def -1 $truesnv  | grep -c '^[^#]')
-nexp=19
+nexp=15
+# BAQ on: 19
+# BAQ off: 15
 if [ $ndiff -ne $nexp ]; then
     echoerror "Expected $nexp missing SNVs in default predictions but got $ndiff"
     exit 1
@@ -71,7 +73,9 @@ if [ $ndiff -ne 0 ]; then
     exit 1
 fi
 ndiff=$($LOFREQ vcfset -a complement --ign-filtered -2 $outfinal_nomq -1 $truesnv  | grep -c '^[^#]')
-nexp=14
+nexp=11
+# BAQ on: 14
+# BAQ off: 11
 if [ $ndiff -ne $nexp ]; then
     echoerror "Expected $nexp missing SNVs in no-mq predictions but got $ndiff"
     exit 1
