@@ -190,7 +190,7 @@ int main(int argc, char *argv[])
           return rc;
 
      } else if (strcmp(argv[1], "version") == 0) {
-          fprintf(stdout, "%s\n", PACKAGE_VERSION);
+          fprintf(stdout, "version: %s\ncommit: %s\n", PACKAGE_VERSION, GIT_VERSION);
           return 0;
 
      } else {
