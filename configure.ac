@@ -19,6 +19,14 @@ AC_SUBST(PACKAGE_STRING)
 AC_SUBST(PACKAGE_BUGREPORT)
 
 AC_REVISION([m4_esyscmd_s([git describe --always --dirty])])
+# saves revision to configure
+
+git_version=`git describe --always --dirty`
+if test x"$git_version" = x; then
+   AC_DEFINE(GIT_VERSION, ["unknown"])
+else
+   AC_DEFINE_UNQUOTED(GIT_VERSION, "$git_version")
+fi
 
 AC_MSG_NOTICE([configuring $PACKAGE_NAME (version $PACKAGE_VERSION) for your system...])
 
