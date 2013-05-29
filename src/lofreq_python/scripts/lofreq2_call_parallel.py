@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 """Parallel wrapper for LoFreq* SNV Caller.
+
+The idea is to run one thread per region listed in a bed-file.
+Additionally, mpileup + region makes use of the BAM index which
+mpileup + bed doesn't, i.e. the latter parses the whole file.
 """
 
 __author__ = "Andreas Wilm"
@@ -340,5 +344,5 @@ def main():
 
     
 if __name__ == "__main__":
+    sys.stderr.write("WARNING: this is for unknown reasons slower than the non-threaded version.\n")
     main()
-    LOG.info("Successful program exit")
