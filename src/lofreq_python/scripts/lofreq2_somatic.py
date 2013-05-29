@@ -269,7 +269,7 @@ def main():
 
     somatic(args.normal, args.tumor, args.ref, outprefix, args.bed,
             args.normal_sig, args.tumor_sig, args.mq_filter, 
-            args.reuse_normal_vcf, args.baq, arg.num_threads)
+            args.reuse_normal_vcf, args.baq, args.num_threads)
 
 
     
