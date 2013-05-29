@@ -775,8 +775,8 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -I | --illumina-1.3          assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
      fprintf(stderr, "            --use-orphan            count anomalous read pairs\n");
      fprintf(stderr, "            --plp-summary-only      no snv-calling. just output pileup summary per column\n");
-     fprintf(stderr, "           --verbose                be verbose\n");
-     fprintf(stderr, "           --debug                  enable debugging\n");
+     fprintf(stderr, "            --verbose                be verbose\n");
+     fprintf(stderr, "            --debug                  enable debugging\n");
 }
 /* usage() */
 
