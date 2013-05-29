@@ -118,13 +118,16 @@ def cmdline_parser():
     parser.add_argument("-E", "--baq", 
                         action="store_true",
                         help="Enable (extended) BAQ computation")
+    parser.add_argument("-p", "--num-threads", 
+                        type=int,
+                        help="Enable parallel computation with this many threads")
     return parser
 
 
 
 def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
             sig_n=0.001, sig_t=10, mq_filter_n=20,
-            reuse_normal=None, baq_on=False):
+            reuse_normal=None, baq_on=False, num_threads=0):
     """Core of the somatic SNV callers, which calls all the necessary
     parts and glues them together
     """
@@ -156,15 +159,23 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
     somatic_commands = []
 
     if not reuse_normal:
-        cmd = ['lofreq', 'call', '-f', ref]
+        if num_threads>1:
+            cmd = ['lofreq2_call_parallel.py', '-n', '%s' % num_threads]    
+        else:
+            cmd = ['lofreq', 'call']
+        cmd.extend(['-f', ref])
         if baq_on:
             cmd.append('-E')
         if bed:
             cmd.extend(['-l', bed])
         cmd.extend(['-b', "%d" % 1, '-s', "%f" % sig_n, '-o', vcf_n, bam_n])
         somatic_commands.append(cmd)
-    
-    cmd = ['lofreq', 'call', '-f', ref,]
+        
+    if num_threads>1:
+        cmd = ['lofreq2_call_parallel.py', '-n', '%s' % num_threads]    
+    else:
+        cmd = ['lofreq', 'call']
+    cmd.extend(['-f', ref])
     if baq_on:
         cmd.append('-E')    
     if bed:
@@ -257,7 +268,7 @@ def main():
 
     somatic(args.normal, args.tumor, args.ref, outprefix, args.bed,
             args.normal_sig, args.tumor_sig, args.mq_filter, 
-            args.reuse_normal_vcf, args.baq)
+            args.reuse_normal_vcf, args.baq, arg.num_threads)
 
 
     
