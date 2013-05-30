@@ -119,9 +119,9 @@ def cmdline_parser():
                         action="store_true",
                         help="Enable (extended) BAQ computation")
     # disabled because not working
-    #parser.add_argument("-p", "--num-threads", 
-    #                    type=int,
-    #                    help="Enable parallel computation with this many threads")
+    parser.add_argument("-p", "--num-threads", 
+                        type=int, help=argparse.SUPPRESS,
+                        help="Enable parallel computation with this many threads")
     return parser
 
 
