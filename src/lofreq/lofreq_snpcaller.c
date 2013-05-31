@@ -824,7 +824,7 @@ main_call(int argc, char *argv[])
      memset(&snvcall_conf, 0, sizeof(snvcall_conf_t));
      snvcall_conf.min_altbq = 20;
      snvcall_conf.def_altbq = snvcall_conf.min_altbq;
-     snvcall_conf.min_cov = 10;
+     snvcall_conf.min_cov = 1;
      snvcall_conf.bonf_dynamic = 1;
      snvcall_conf.bonf = 1;
      snvcall_conf.sig = 0.05;
