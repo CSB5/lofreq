@@ -775,8 +775,9 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -I | --illumina-1.3          assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
      fprintf(stderr, "            --use-orphan            count anomalous read pairs\n");
      fprintf(stderr, "            --plp-summary-only      no snv-calling. just output pileup summary per column\n");
-     fprintf(stderr, "            --verbose                be verbose\n");
-     fprintf(stderr, "            --debug                  enable debugging\n");
+     fprintf(stderr, "            --no-default-filter     Don't apply default filter command after calling variants\n");
+     fprintf(stderr, "            --verbose               be verbose\n");
+     fprintf(stderr, "            --debug                 enable debugging\n");
 }
 /* usage() */
 
@@ -790,11 +791,13 @@ main_call(int argc, char *argv[])
      int c, i;
      static int use_orphan = 0;
      static int plp_summary_only = 0;
+     static int no_default_filter = 0;
      int bonf_auto = 0;
      char *bam_file = NULL;
      char *bed_file = NULL;
      char *vcf_out = NULL; /* == - == stdout */
-     char *dyn_bonf_vcf_out = NULL;
+     char vcf_tmp_template[] = "/tmp/lofreq2-call-dyn-bonf.XXXXXX";
+     char *vcf_tmp_out = NULL; /* write to this file first, then filter */
      mplp_conf_t mplp_conf;
      snvcall_conf_t snvcall_conf;
      /*void (*plp_proc_func)(const plp_col_t*, const snvcall_conf_t*);*/
@@ -869,6 +872,7 @@ main_call(int argc, char *argv[])
               {"illumina-1.3", no_argument, NULL, 'I'},
               {"use-orphan", no_argument, &use_orphan, 1},
               {"plp-summary-only", no_argument, &plp_summary_only, 1},
+              {"no-default-filter", no_argument, &no_default_filter, 1},
               {"verbose", no_argument, &verbose, 1},
               {"debug", no_argument, &debug, 1},
               {"help", no_argument, NULL, 'h'},
@@ -1020,7 +1024,7 @@ for cov in coverage_range:
               mplp_conf.flag |= MPLP_ILLUMINA13; 
               break;
 
-         /* already set: use-orphan, plp-summaru-only, verbose, debug */
+         /* already set: use-orphan, plp-summary-only, verbose, debug */
 
          case 'h': 
               usage(& mplp_conf, & snvcall_conf); 
@@ -1043,13 +1047,15 @@ for cov in coverage_range:
     if (use_orphan) {
          mplp_conf.flag &= ~MPLP_NO_ORPHAN;
     }
-
+    
     if (argc == 2) {
         fprintf(stderr, "\n");
         usage(& mplp_conf, & snvcall_conf);
         return 1;
     }
 
+   /* get bam file argument
+    */
     if (1 != argc - optind - 1) {
         fprintf(stderr, "Need exactly one BAM file as last argument\n");
         return 1;
@@ -1069,21 +1075,25 @@ for cov in coverage_range:
     }
 
 
-    /* if Bonferroni factor is to be updated dynamically then you'll
-     * get the final number only after you've processed everything and
-     * that's where the filtering has to be done. Therefore we need to
-     * write the variants to a tmp file first and use that eventually
-     * for filtering in a subsequent step.
+    /* FIXME: implement check_user_arg_logic() */
+    assert(mplp_conf.min_mq <= mplp_conf.max_mq);
+    assert(mplp_conf.min_bq <= snvcall_conf.min_altbq);
+    assert(! (mplp_conf.bed && mplp_conf.reg));
+
+    if ( ! (snvcall_conf.flag & SNVCALL_CONS_AS_REF) && ! mplp_conf.fa && ! plp_summary_only) {
+         LOG_FATAL("%s\n", "Need a reference when not calling in consensus mode...\n"); 
+         return 1;
+    }
+    if (! plp_summary_only & ! mplp_conf.fa) {
+         LOG_WARN("%s\n", "Calling SNVs without reference\n"); 
+    }
+
+  
+    /* if we don't apply a default filter and bonf is not dynamic then
+     * we can directly write to requested output file. otherwise we
+     * use a tmp file that gets filtered.
      */
-    if (snvcall_conf.bonf_dynamic) {
-         char template[] = "/tmp/lofreq2-call-dyn-bonf.XXXXXX";
-         dyn_bonf_vcf_out = strdup(mktemp(template));
-         if (NULL == dyn_bonf_vcf_out) {
-              LOG_FATAL("%s\n", "Couldn't create temporary file");
-              return 1;
-         }
-         snvcall_conf.out = fopen(dyn_bonf_vcf_out, "w");
-    } else {
+    if (no_default_filter && ! snvcall_conf.bonf_dynamic) {
          if (NULL == vcf_out || 0 == strcmp(vcf_out, "-")) {
               snvcall_conf.out = stdout;
          } else {
@@ -1092,17 +1102,18 @@ for cov in coverage_range:
                    return 1;
               }
          }
+    } else {
+         vcf_tmp_out = strdup(mktemp(vcf_tmp_template));
+         if (NULL == vcf_tmp_out) {
+              LOG_FATAL("%s\n", "Couldn't create temporary vcf file");
+              return 1;
+         }
+         if (NULL == (snvcall_conf.out = fopen(vcf_tmp_out, "w"))) {
+              LOG_FATAL("Couldn't open file '%s'. Exiting...\n", vcf_tmp_out);
+              return 1;
+         }
     }
 
-    if ( ! (snvcall_conf.flag & SNVCALL_CONS_AS_REF) && ! mplp_conf.fa && ! plp_summary_only) {
-         LOG_FATAL("%s\n", "Need a reference when not calling in consensus mode...\n"); 
-         free(dyn_bonf_vcf_out);
-         return 1;
-    }
-
-    if (! plp_summary_only & ! mplp_conf.fa) {
-         LOG_WARN("%s\n", "Calling SNVs without reference\n"); 
-    }
 
     /* save command-line for later reference */
     mplp_conf.cmdline[0] = '\0';
@@ -1112,20 +1123,11 @@ for cov in coverage_range:
          strcat(mplp_conf.cmdline, " ");
     }
 
+
     if (bed_file) {
          mplp_conf.bed = bed_read(bed_file);
     }
 
-#if TRUST_DEFAULT
-    if (plp_summary_only) {
-         if (1 != snvcall_conf.bonf || bonf_auto || snvcall_conf.bonf_dynamic) {
-              LOG_FATAL("%s\n", "Setting or calculating a Bonferroni"
-                        " factor for printing a pileup summary only"
-                        " doesn't make sense.");
-              return 1;
-         }
-    }
-#endif
 
     if (bonf_auto && ! plp_summary_only) {
          if (! bed_file) {
@@ -1162,12 +1164,6 @@ for cov in coverage_range:
          dump_snvcall_conf(& snvcall_conf, stderr);
     }
 
-    /* FIXME: implement check_user_arg_logic() */
-    assert(mplp_conf.min_mq <= mplp_conf.max_mq);
-    assert(mplp_conf.min_bq <= snvcall_conf.min_altbq);
-    assert(! (mplp_conf.bed && mplp_conf.reg));
-
-
     if (! plp_summary_only) {
          /* or use PACKAGE_STRING */
          vcf_write_header(snvcall_conf.out, mplp_conf.cmdline, mplp_conf.fa);
@@ -1184,22 +1180,56 @@ for cov in coverage_range:
     if (snvcall_conf.out != stdout) {
          fclose(snvcall_conf.out);
     }
-    if (snvcall_conf.bonf_dynamic) {
-         /* final bonf value in snvcall_conf.bonf */
-         char cmd[BUF_SIZE];
-         LOG_VERBOSE("Dynamic Bonferroni factor: %lld\n", snvcall_conf.bonf);
-         snprintf(cmd, BUF_SIZE, "lofreq2_filter.py -p -i %s -o %s --snv-phred %d",
-                  dyn_bonf_vcf_out, NULL==vcf_out ? "-" : vcf_out, 
-                  PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf));
-         LOG_VERBOSE("Executing %s\n", cmd);
-         if (0 != (rc = system(cmd))) {
-              LOG_ERROR("The following command failed: %s\n", cmd);
+
+    /* snv calling completed. now filter according to the following schema:
+     *  1. no_default_filter and ! dyn
+     *     print
+     *  2.1 no_ default_filter and dyn
+     *     filter snvphred only
+     *  2.2 ! no_default_filter and dyn
+     *     filter snvphred and default
+     *  2.3 ! no_default_filter and ! dyn 
+     *     filter default
+     */
+    if (no_default_filter && ! snvcall_conf.bonf_dynamic) {
+         /* vcf file needs no filtering and was already printed to
+          * final destination. already taken care of above. */
+         LOG_VERBOSE("%s\n", "No filtering needed. Variants already written to final destination");
+
+    } else {
+         char base_cmd[BUF_SIZE];
+         char full_cmd[BUF_SIZE];
+         snprintf(base_cmd, BUF_SIZE, 
+                  "lofreq2_filter.py -p -i %s -o %s",
+                  vcf_tmp_out, NULL==vcf_out ? "-" : vcf_out);
+
+         if (no_default_filter && snvcall_conf.bonf_dynamic) {
+              snprintf(full_cmd, BUF_SIZE, 
+                      "%s --no-defaults --snv-phred %d", 
+                      base_cmd, PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf));
+
+         } else if (! no_default_filter && snvcall_conf.bonf_dynamic) {
+              snprintf(full_cmd, BUF_SIZE, 
+                      "%s --snv-phred %d", 
+                      base_cmd, PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf));
+
+         } else if (! no_default_filter && ! snvcall_conf.bonf_dynamic) {
+              snprintf(full_cmd, BUF_SIZE, "%s", base_cmd);
+
          } else {
-              (void) unlink(dyn_bonf_vcf_out);
+              LOG_FATAL("%s\n", "internal logic error during filtering");
+              return 1;
+         }
+
+         LOG_VERBOSE("Executing %s\n", full_cmd);
+         if (0 != (rc = system(full_cmd))) {
+              LOG_ERROR("The following command failed: %s\n", full_cmd);
+         } else {
+              (void) unlink(vcf_tmp_out);
          }
     }
 
-    free(dyn_bonf_vcf_out);
+    free(vcf_tmp_out);
     free(vcf_out);
     free(mplp_conf.reg); 
     free(mplp_conf.fa);
@@ -1211,75 +1241,9 @@ for cov in coverage_range:
          bed_destroy(mplp_conf.bed);
     }
     
-
     if (0==rc) {
          LOG_VERBOSE("%s\n", "Successful exit.");
     }
     return rc;
 }
 /* main_call */
-
-
-#ifdef MAIN_TEST
-
-
-int main()
-{     
-     fprintf(stderr, "WARNING: main replaced with test function. just monkeying around\n");
-
-     if (1) {
-          char test_nucs[] = "ACGTNRYacgtnryZ\0";
-          int i;
-          
-          for (i=0; i<strlen(test_nucs); i++) {
-               printf("%d %c - %d - %d - %d\n", i, test_nucs[i],
-                      bam_nt16_table[(int)test_nucs[i]],
-                      bam_nt16_nt4_table[bam_nt16_table[(int)test_nucs[i]]],
-                      bam_nt4_table[(int)test_nucs[i]]);
-          }
-     }
-
-     if (1) {
-          int quals[] = {30, 30, 30, 30, 30, 30, 30, 30, 30, 30,
-                         30, 30, 30, 30, 30, 30, 30, 30, 30, 30,
-                         30, 30, 30, 30, 30, 30, 30, 30, 30, 30,
-                         30, 30, 30, 30, 30, 30, 30, 30, 30, 30,
-                         30, 30, 30, 30, 30, 30, 30, 30, 30, 30};
-          int n_quals = 50;
-          int n_mismatches = 1;
-          double *probvec;
-          double src_pvalue;
-          int src_qual; 
-          int i;
-
-          qsort(quals, n_quals, sizeof(int), int_cmp);
-
-          for (n_mismatches=0; n_mismatches<n_quals/2; n_mismatches++) {
-               probvec = poissbin(&src_pvalue, quals,
-                                  n_quals, n_mismatches, 1.0, 0.05);
-               
-               if (src_pvalue>1.0) {/* DBL_MAX is default return value */
-                    src_pvalue = 1.0;/*-DBL_EPSILON;*/
-               }
-               /* src_pvalue: what's the chance of seeing n_mismatches or more
-                * given quals? or: how likely is this read from the genome.
-                * 1-src_value = prob read is not from genome
-                */
-               LOG_FIXME("Orig src_pv = %f", src_pvalue);
-               src_pvalue = 1.0-src_pvalue;
-               free(probvec);
-               
-               src_qual =  PROB_TO_PHREDQUAL(src_pvalue);
-               fprintf(stderr, "| src_pv = %f = Q%d for %d/%d mismatches. All quals: ", 
-                       src_pvalue, src_qual, n_mismatches, n_quals);
-               for (i=0; i<n_quals; i++) {
-                    fprintf(stderr, " %d", quals[i]);
-               }
-               fprintf(stderr, "\n");
-          }
-     }
-     return 0;
-}
-
-#endif
-
