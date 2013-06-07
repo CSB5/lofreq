@@ -68,8 +68,9 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #define SCALE_MQ_FAC  1.3134658329243962
 
 /* filled in missing values with the min of the two neighbouring values */
+#if 0
 #define TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
-#undef TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
+#endif
 #ifdef TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
 const int MQ_TRANS_TABLE[61] = {
 1,
