@@ -106,39 +106,35 @@ def cmdline_parser():
                       action="store_true",
                       dest="pass_only",
                       help="Only print PASSed variants")
-    
-    parser.add_option("", "--strandbias-bonf",
-                      dest="strandbias_bonf", 
-                      action="store_true",
-                      help="Optional: Filter variant if Bonferroni"
-                      " corrected strand-bias pvalue is <0.05"
-                      " (i.e. > phred qual 13)")
-    parser.add_option("", "--strandbias-holmbonf",
-                      dest="strandbias_holmbonf", 
-                      action="store_true",
-                      help="Optional: Filter variant if Holm-Bonferroni"
-                      " corrected strand-bias pvalue is <0.05"
-                      " (i.e. > phred qual 13)")
-    parser.add_option("", "--strandbias-phred",
-                      dest="max_strandbias_phred", 
+
+    default = "holm-bonf"
+    parser.add_option("", "--strandbias",
+                      default="holm-bonf",
+                      help="Filter variant with strandbias."
+                      " Valid values are 'bonf' (Bonferroni),"
+                      " 'holm-bonf' (Holm-Bonferroni), an integer or off."  
+                      " If 'bonf' or 'holm-bonf', variants with accordingly"
+                      " corrected strand-bias pvalue <0.05 will be filtered."
+                      " Otherwise, a variant will be filtered if the strand-bias"
+                      " phred-score is larger than the given int."
+                      " (default: %s)" % default)
+    default = 10
+    parser.add_option("", "--min-cov",
+                      dest="min_cov", 
                       type='int',
-                      help="Optional: Filter variant if its strand-bias"
-                      " phred-score is above this value (int)")
-    parser.add_option("", "--min-af",
-                      dest="min_af", 
-                      type="float",
-                      help="Optional: Filter if (allele) freq is"
-                      " below this threshold (float)")
+                      default=default,
+                      help="Filter variant if coverage is"
+                      " below this value (int; default = %d)" % default)
     parser.add_option("", "--max-cov",
                       dest="max_cov", 
                       type='int',
                       help="Optional: Filter variant if coverage is"
                       " above this cap (int)")
-    parser.add_option("", "--min-cov",
-                      dest="min_cov", 
-                      type='int',
-                      help="Optional: Filter variant if coverage is"
-                      " below this value (int)")    
+    parser.add_option("", "--min-af",
+                      dest="min_af", 
+                      type="float",
+                      help="Optional: Filter if (allele) freq is"
+                      " below this threshold (float)")
     parser.add_option("", "--snv-phred", 
                       dest="min_snv_phred",
                       type='int',
@@ -163,7 +159,15 @@ def cmdline_parser():
 
 def main():
 
-    parser = cmdline_parser()
+
+    parser = cmdline_parser()            
+
+    # warning: undocumented arg to remove all defaults
+    if '--no-defaults' in sys.argv:
+        for (k, v) in parser.defaults.items(): 
+            parser.defaults[k] = None
+        sys.argv = [x for x in sys.argv if x != "--no-defaults"]
+
     (opts, args) = parser.parse_args()
 
     if len(args):
@@ -171,6 +175,7 @@ def main():
             ' '.join(args)))
         sys.exit(1)
 
+    
     if opts.verbose:
         LOG.setLevel(logging.INFO)
     if opts.debug:
@@ -209,10 +214,7 @@ def main():
     # will be marked as filtered if func returns True
     filters = []
 
-    if opts.strandbias_bonf:
-        assert opts.max_strandbias_phred == None and opts.strandbias_holmbonf == None, (
-            "Can't filter strand bias twice")
-
+    if opts.strandbias and opts.strandbias == 'bonf':            
         vcf_filter = vcf._Filter(
             id="sbb", 
             desc="Strand-bias filter on Bonferroni corrected p-values")
@@ -236,10 +238,7 @@ def main():
             ))
 
         
-    if opts.strandbias_holmbonf:
-        assert opts.max_strandbias_phred == None and opts.strandbias_bonf == None, (
-            "Can't filter strand bias twice")
-
+    elif opts.strandbias and opts.strandbias == 'holm-bonf':
         vcf_filter = vcf._Filter(
             id="sbh", 
             desc="Strand-bias filter on Holm-Bonferroni corrected p-values")
@@ -263,11 +262,18 @@ def main():
             vcf_filter.id
             ))                
 
-        
-    if opts.max_strandbias_phred != None:
+    elif opts.strandbias and opts.strandbias != 'off':
+        try:
+            max_strandbias_phred = int(opts.strandbias)
+            assert max_strandbias_phred >= 0
+        except (ValueError, AssertionError) as e:
+            LOG.fatal("Invalid strandbias argument: %s" % (opts.strandbias))
+            sys.exit(1)
+            
         vcf_filter = vcf._Filter(
+            max_strandbias_phred = int(
             id="sbp%d" % opts.max_strandbias_phred, 
-            desc="Phred-based strand-bias filter (max)")
+            desc="Phred-based strand-bias filter (max)"))
         vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
 
         filters.append((
@@ -275,7 +281,6 @@ def main():
             vcf_filter.id
             ))
 
-        
     if opts.min_af != None:  
         vcf_filter = vcf._Filter(
             id=("minaf%f" % opts.min_af).rstrip('0'),
