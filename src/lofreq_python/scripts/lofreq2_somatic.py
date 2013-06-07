@@ -192,7 +192,7 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
     somatic_commands.append(cmd)
     
     cmd = ['lofreq', 'filter', '-i', vcf_som_raw, 
-           '--min-cov', "%d" % 10, '--strandbias-holmbonf', 
+           '--min-cov', "%d" % 10, '--strandbias', 'holm-bonf', 
            '-p', '-o', vcf_som_filtered]
     somatic_commands.append(cmd)
 
