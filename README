@@ -1,14 +1,24 @@
-LoFreq: A sequence-quality aware, ultra-sensitive variant caller for
-high-throughput sequencing data
+LoFreq-Star: A sequence-quality aware, ultra-sensitive variant caller
+for high-throughput sequencing data
 
 
 INSTALLATION
 ------------
 
-See INSTALL for generic installation instructions.
+You will very likely have downloaded an already compiled version of
+LoFreq-Star. Simply add the directory in which the LoFreq binary
+('lofreq') resides to your PATH environment variable. Do not simply
+copy it to your bin-directory, since this binary relies on a couple of
+scripts in the package.
 
-You will need a C compiler, Python 2.7 including header files and zlib
-including header files to install LoFreq.
+
+COMPILATION
+-----------
+
+You will need a C compiler and a Python 2.7 installation to compile
+and use
+
+See INSTALL for generic installation instructions.
 
 The following will build and install LoFreq:
 $ ./configure
@@ -17,68 +27,29 @@ $ make install
 You will likely need to use sudo for the last step. If you however
 don't have admin rights or want to install LoFreq into a non-standard
 directory use the --prefix flag for configure. You will then very
-likely have to adjust your PATH and/or PYTHONPATH environment variable
+likely have to adjust your PATH environment variable
 as well. An example:
 
 $ ./configure --prefix $HOME/local/
 $ make install
-$ export PYTHONPATH=$PYTHONPATH:$HOME/local/lib/python2.7/site-packages/
-$ export PATH=$PATH:$HOME/local/bin
+$ export PATH=$HOME/local/bin:$PATH
 
 
 USAGE
 -----
 
-All script-names start with lofreq_ and print a simple help message
-when invoked with -h.
-
-For a full description see https://sourceforge.net/p/lofreq/
-and also read the publication (www.ncbi.nlm.nih.gov/pubmed/23066108)
+The main command is simply lofreq, which has several subcommands.
+Simply typing
+$ lofreq
+will display a list of sub-commands, the most importantly of which are
+'call' (to call variants), 'filter' (to filter predicted variants) and
+'somatic' (to call somatic variants). If you simply call lofreq with
+one of the sub-commands usage information will be displayed.
 
 
 VERSION HISTORY
 ---------------
 
-0.5.0 (2013-01-25):
-- Base-call (P_bq) and mapping qualities (P_mq) are now joined by default:
-  P_joined = P_mq + (1-P_mq)*P_bq
-- GNU autotools now used for compilation and installation
-- Included helper scripts to create a stringent, recalibrated mapping
-(bwa_unique.sh and base_qual_calib_wrapper.sh)
-- Incorporated a modified version of samtools mpileup
-- Fixed mixup between --bonf options auto-ign-zero-cov and auto. The
-  former is now default (needs extra parsing of BAM
-- Added script lofreq_alnoffset.py which makes comparison of SNV
-  calls made on different coordinate systems / against different
-  reference sequences easier
-- lofreq_varpos_to_vcf.py now easier to use (takes BAM as input)
-
-0.4.0 (2012-11-08):
-- Fixed overflow for very large Bonferroni factors (relevant for auto
-  Bonferroni on WGS of HG for example)
-- Reported base-counts and frequencies are now before filtering with
-  the exception of Q<3 which is always removed
-- Added Bonferroni option 'auto-ign-zero-cov'
-- Added --force option for forced overwriting of files
-
-0.3.2 (2012-10-17):
-- Bonferroni factor now determined automatically by default in
-  lofreq_snpcaller.py
-- Check for samtools during installation
-- lofreq_uniq_pipeline.py summarizes result files
-
-0.3.1 (2012-10-10):
-- Made LoFreq chromosome aware
-- Samtools pileup is now generated internally
-- Added LoFreq uniq pipeline
-- Added support for region bed files
-- Added more helper scripts
-
-0.2 (2012-07-12):
-- Used for producing results in the Wilm et al. (2012)
-- Optimal implementation of LoFreq-Q as described in publication
-- SNV calls always against consensus, which is determined on-the-fly
-- If consensus differs from ref, we call it consensus-variant
-
-0.1 (2011-11-10):
-- First public release. Initially hosted on github.
+LoFreq-Star is partially based on LoFreq (see
+https://sourceforge.net/p/lofreq/ and
+www.ncbi.nlm.nih.gov/pubmed/23066108)
