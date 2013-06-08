@@ -1,9 +1,0 @@
-./configure supports --enable-debug which configures the code in debug
-mode
-
-Try
- make CFLAGS='-c99 -Wall -pedantic'
-every now and then. Ignore the following warnings:
-"ISO C does not permit named variadic macros"
-
-

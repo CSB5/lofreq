@@ -1,3 +1,14 @@
+General
+-------
+
+Try
+ make CFLAGS='-c99 -Wall -pedantic'
+Every now and then. Ignore the following warnings:
+"ISO C does not permit named variadic macros"
+
+
+
+
 Memory checks
 -------------
 
