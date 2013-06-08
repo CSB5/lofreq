@@ -1,31 +1,28 @@
-- Indel handling missing
-- Add unique logic
-- Add transparent SNV read support
+Important:
+- Predict indels
+- Fix unique logic
 - enabled pthreads in libbam:
     --- enable at compile time (http://stackoverflow.com/questions/1699113/autoconf-with-pthread)
     --- how to set num_threads (only exposed to command line in view?)
     --- test!
-- rename bonf auto to bed once dynamic works and make dynamic default
 - add internal sens test as in original version
-- Proper source qual use missing
-
 - add tests, tests, tests
 
-- Python Replace optionparser with argparse
+Some time:
+- Python eplace optionparser with argparse
+- Gradually replace Python scripts with C-version (or include Python
+- interpreter)
 - split cmd parsing: plp, snv, others (do they change argv?) 
-- Implement routine test against old SNV caller
+- Implement test against old SNV caller
 - Test actual SNV and SB values for both types of SNVs
 - check for diffs between -l bed, -r region and none, all with and without BAQ
-- Python 2.7 and Python 3. 2.6 not neccessary anymore
-- what happens if fai or bai don't exist?
+- Check what happens if fai or bai don't exist?
 
-Before Release:
+Before release:
 - Master configure/makefile cleanup
 - update AUTHORS
 - license update in all files
 - Remove unnecessary stuff from lofreq_core
 - diff all legacy scripts for changes
-
-
-
-
+- remove gnu stuff incl autotools
+- installation script
