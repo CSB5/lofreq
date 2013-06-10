@@ -1,17 +1,6 @@
 /* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*-
  *
- *
- * Copyright (C) 2011, 2012 Genome Institute of Singapore
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the GNU
- * General Public License for more details.
+ * FIXME Copyright update
  *
  *********************************************************************/
 
@@ -133,8 +122,6 @@ probvec_tailsum(const double *probvec, int tail_startindex, int probvec_len)
 
 
 /**
- * @brief FIXME:missing-doc
- *
  *
  */
 double *
@@ -192,7 +179,7 @@ naive_calc_prob_dist(const double *err_probs, int N, int K)
         probvec[k] = probvec_prev[k] + log_1_pn;
 
         for (k=1; k<K; k++) {
-             /* FIXME clang: The left operand of '+' is a garbage value */
+             /* FIXME clang says: The left operand of '+' is a garbage value */
             probvec[k] = log_sum(probvec_prev[k] + log_1_pn,
                                  probvec_prev[k-1] + log_pn);
         }
@@ -215,8 +202,6 @@ naive_calc_prob_dist(const double *err_probs, int N, int K)
 
 
 /**
- * @brief FIXME:missing-doc
- *
  * Should really get rid of bonf_factor and sig_level here and
  * upstream as well
  *
@@ -424,9 +409,7 @@ poissbin(double *pvalue, const double *err_probs,
 /**
  * @brief
  * 
- * Call per pileup column
- *
- * P-Values computed for each of the NUM_NONCONS_BASES noncons_counts
+ * pvalues computed for each of the NUM_NONCONS_BASES noncons_counts
  * will be written to snp_pvalues in the same order. If pvalue was not
  * computed (always insignificant) its value will be set to DBL_MAX
  * 
