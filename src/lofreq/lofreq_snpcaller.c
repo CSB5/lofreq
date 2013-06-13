@@ -384,13 +384,11 @@ call_snvs(const plp_col_t *p, void *confp)
 #ifdef USE_SOURCEQUAL
                int sq;
 #endif
-               assert(p->fw_counts[i] + p->rv_counts[i] == p->base_quals[i].n);
-               assert(p->base_quals[i].n == p->map_quals[i].n);
-               /* FIXME assert(plp_col.map_quals[i].n == plp_col.source_quals[i].n); */
-            
                bq = p->base_quals[i].data[j];
                mq = p->map_quals[i].data[j];
-               /* FIXME sq = p->source_quals[i].data[j]; */
+#ifdef USE_SOURCEQUAL
+               sq = p->source_quals[i].data[j];
+#endif
                
                if (is_alt_base) {
                     alt_raw_counts[alt_idx] += 1;
@@ -623,7 +621,7 @@ count_matches(int *n_matches, int *n_mismatches,
 
 
 
-#if 0
+#ifdef USE_SOURCEQUAL
 /* Estimate as to how likely it is that this read, given the mapping,
  * comes from this reference genome. P(r not from g|mapping) = 1 - P(r
  * from g). Use qualities of all bases for and poisson-binomial dist
@@ -916,7 +914,9 @@ for cov in coverage_range:
          /* see usage sync */
          case 'r': 
               mplp_conf.reg = strdup(optarg); 
-              break; /* FIXME you can enter lots of invalid stuff and libbam won't complain. add checks here? */
+              /* FIXME you can enter lots of invalid stuff and libbam
+               * won't complain. add checks here or late */
+              break;
 
          case 'l': 
               bed_file = strdup(optarg);
@@ -1076,10 +1076,21 @@ for cov in coverage_range:
     }
 
 
-    /* FIXME: implement check_user_arg_logic() */
-    assert(mplp_conf.min_mq <= mplp_conf.max_mq);
-    assert(mplp_conf.min_bq <= snvcall_conf.min_altbq);
+    /* FIXME: implement function for checking user arg logic */
+    if (mplp_conf.min_mq > mplp_conf.max_mq) {
+         LOG_FATAL("%s\n", "Minimum mapping quality larger than maximum mapping quality...\n"); 
+         return 1;
+    }
+    if (mplp_conf.min_bq > snvcall_conf.min_altbq) {
+         LOG_FATAL("%s\n", "Minimum base-call quality larger than maximum base-call quality...\n"); 
+         return 1;
+    }
     assert(! (mplp_conf.bed && mplp_conf.reg));
+
+    if (mplp_conf.flag & MPLP_REALN && ! mplp_conf.fa) {
+         LOG_FATAL("%s\n", "Can't compute BAQ with no reference...\n"); 
+         return 1;
+    }
 
     if ( ! (snvcall_conf.flag & SNVCALL_CONS_AS_REF) && ! mplp_conf.fa && ! plp_summary_only) {
          LOG_FATAL("%s\n", "Need a reference when not calling in consensus mode...\n"); 
