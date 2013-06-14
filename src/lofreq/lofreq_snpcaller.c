@@ -1085,17 +1085,21 @@ for cov in coverage_range:
          LOG_FATAL("%s\n", "Minimum base-call quality larger than maximum base-call quality...\n"); 
          return 1;
     }
-    assert(! (mplp_conf.bed && mplp_conf.reg));
+    if (bed_file && mplp_conf.reg) {
+         LOG_FATAL("%s\n", "Can only use either bed-file or region but not both...\n"); 
+         return 1;
+    }
 
     if (mplp_conf.flag & MPLP_REALN && ! mplp_conf.fa) {
          LOG_FATAL("%s\n", "Can't compute BAQ with no reference...\n"); 
          return 1;
     }
-
     if ( ! (snvcall_conf.flag & SNVCALL_CONS_AS_REF) && ! mplp_conf.fa && ! plp_summary_only) {
          LOG_FATAL("%s\n", "Need a reference when not calling in consensus mode...\n"); 
          return 1;
     }
+
+
     if (! plp_summary_only & ! mplp_conf.fa) {
          LOG_WARN("%s\n", "Calling SNVs without reference\n"); 
     }
