@@ -32,11 +32,14 @@
 
 #define DEFAULT_SIG 0.05
 
+#define DEFAULT_UNI_FREQ -1.0
+
 #define BUF_SIZE 1<<16
 
 typedef struct {
      /* fix values once established */
      float sig;
+     float uni_freq;
      FILE *vcf_out;
      FILE *vcf_in;
      long long int bonf;
@@ -83,18 +86,23 @@ uniq_snv(const plp_col_t *p, void *confp)
           return;
      }
 
-     vcf_var_has_info_key(&af_char, conf->var, "AF");
-     if (NULL == af_char) {
-          LOG_ERROR("%s\n", "Couldn't parse AF (key not found) from the following variant:");
-          vcf_write_var(stderr, conf->var);
-          return;
-     }
-     af = strtof(af_char, (char **)NULL); /* atof */
-     free(af_char);
-     if (af < 0.0 || af > 1.0) {
-          LOG_ERROR("%s\n", "Couldn't parse AF (value out of bound) from the following variant:");
-          vcf_write_var(stderr, conf->var);
-          return;
+     if (conf->uni_freq <= 0.0) {
+          vcf_var_has_info_key(&af_char, conf->var, "AF");
+          if (NULL == af_char) {
+               LOG_ERROR("%s\n", "Couldn't parse AF (key not found) from the following variant:");
+               vcf_write_var(stderr, conf->var);
+               return;
+          }
+          af = strtof(af_char, (char **)NULL); /* atof */
+          free(af_char);
+          if (af < 0.0 || af > 1.0) {
+               LOG_ERROR("%s\n", "Couldn't parse AF (value out of bound) from the following variant:");
+               vcf_write_var(stderr, conf->var);
+               return;
+          }
+     } else {
+          assert(conf->uni_freq <= 1.0);
+          af = conf->uni_freq;
      }
 
      alt_count = base_count(p, conf->var->alt);
@@ -137,6 +145,7 @@ usage(const uniq_conf_t* uniq_conf)
      fprintf(stderr, "  -v | --vcf-in FILE       Input vcf file listing variants [- = stdin]\n");
      fprintf(stderr, "  -o | --vcf-out FILE      Output vcf file [- = stdout]\n");
      fprintf(stderr, "  -s | --sig               Significance threshold [%f]\n", uniq_conf->sig);
+     fprintf(stderr, "  -f | --uni-freq          Assume variants have uniform test frequency of this value (unused if <=0) [%f]\n", uniq_conf->uni_freq);
 }
 /* usage() */
 
@@ -167,6 +176,7 @@ main_uniq(int argc, char *argv[])
      uniq_conf.vcf_in = stdin;
      uniq_conf.vcf_out = stdout;
      uniq_conf.sig = DEFAULT_SIG;
+     uniq_conf.uni_freq = DEFAULT_UNI_FREQ;
      uniq_conf.bonf = 1;
 
      /* default pileup options */
@@ -193,13 +203,14 @@ main_uniq(int argc, char *argv[])
 
               {"vcf-in", required_argument, NULL, 'v'},
               {"vcf-out", required_argument, NULL, 'o'},
+              {"uni-freq", required_argument, NULL, 'f'},
               {"sig", required_argument, NULL, 's'},
 
               {0, 0, 0, 0} /* sentinel */
          };
 
          /* keep in sync with long_opts and usage */
-         static const char *long_opts_str = "hv:o:s:"; 
+         static const char *long_opts_str = "hv:o:s:f:"; 
 
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
@@ -239,6 +250,17 @@ main_uniq(int argc, char *argv[])
               uniq_conf.sig = strtof(optarg, (char **)NULL); /* atof */
               if (0==uniq_conf.sig) {
                    LOG_FATAL("%s\n", "Couldn't parse sign-threshold"); 
+                   return 1;
+              }
+              break;
+
+         case 'f': 
+              uniq_conf.uni_freq = strtof(optarg, (char **)NULL); /* atof */
+              if (uniq_conf.uni_freq<=0) {
+                   LOG_WARN("%s\n", "Ignoring uni-freq option"); 
+              }
+              if (uniq_conf.uni_freq>1.0) {
+                   LOG_FATAL("%s\n", "Value for uni-freq has to be <1.0"); 
                    return 1;
               }
               break;
