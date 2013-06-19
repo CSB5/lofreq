@@ -1,12 +1,14 @@
 To create a new distribution:
 
-- Install and test changes by running test/run_all.sh
+- Make sure tests work test/run_all.sh
 - Update version in configure.ac
 - Update top-level README
-- Commit your changes:
+- Commit your changes
   commit
-  tag .e.g git tag -a v0.3.1 -m 'my version 0.3.1')
+- Tag this version
+  e.g git tag -a v0.3.1 -m 'my version 0.3.1')
   push and push origin --tags
 - run 'make dist' to compile a tarball
-- Upload source and update the websites
+- Upload source and update the websites with info on new usage/bug-fixes/new
+  function
 

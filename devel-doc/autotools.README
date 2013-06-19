@@ -43,10 +43,3 @@ Adding source files
 Normally, the only thing you will have to do is to just add your
 c-files to the corresponding Makefile.am _SOURCES variable.
 
-Exception: Python script: Since we also install Python scripts (and a
-Python extension) we are using a non-automake system
-(distutils/setup.py) from inside automake. Both can't communicate
-properly. Therefore Python scripts have to be added to setup.py and
-the corresponding Makefile.am there.
-
-

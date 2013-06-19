@@ -2,8 +2,8 @@ General
 -------
 
 Try
- make CFLAGS='-c99 -Wall -pedantic'
-Every now and then. Ignore the following warnings:
+$ make CFLAGS='-c99 -Wall -pedantic'
+every now and then. Ignore the following warnings:
 "ISO C does not permit named variadic macros"
 
 
@@ -16,16 +16,19 @@ make clean; make CFLAGS='-O0 -g' LDFLAGS='-O0 -g'
 cd src/lofreq
 # and then for example
 valgrind --tool=memcheck --leak-check=full \
-  ./lofreq2 call -r consensus:100-200 -f ~/scratch/ref.fa  ../../../lofreq-test-data/denv2-multiplex-replicates/ACAGTG_1.bam  --verbose >/dev/null
+  ./lofreq call -r consensus:100-200 -f ~/scratch/ref.fa  ../../../lofreq-test-data/denv2-multiplex-replicates/ACAGTG_1.bam  --verbose >/dev/null
 
 
 Profiling
 ---------
 
 make clean; make CFLAGS='-pg' LDFLAGS='-pg'
-cd src/lofreq
-./lofreq2 call -r consensus:100-200 -f ~/scratch/ref.fa  ../../../lofreq-test-data/denv2-multiplex-replicates/ACAGTG_1.bam  --verbose >/dev/null
-gprof lofreq2 gmon.out > analysis.txt
+and then for example
+./src/lofreq/lofreq call \
+  -f tests/data/denv2-pseudoclonal/denv2-pseudoclonal_cons.fa \
+  -l tests/data/denv2-pseudoclonal/denv2-pseudoclonal_incl.bed \
+   tests/data/denv2-pseudoclonal/denv2-pseudoclonal.bam
+gprof ./src/lofreq/lofreq gmon.out > gmon.txt
 
 
 static code checker
