@@ -198,7 +198,8 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
 
     # filter and uniq could be combined into one
     
-    cmd = ['lofreq', 'uniq', '-v', vcf_som_filtered,
+    cmd = ['lofreq', 'uniq', '--uni-freq', "0.5",
+           '-v', vcf_som_filtered,
            '-o', vcf_som_final, bam_n]
     somatic_commands.append(cmd)
     
