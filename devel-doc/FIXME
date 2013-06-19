@@ -1,4 +1,6 @@
 Important:
+- gzip support to lofreq uniq
+- uniq should add uniq filter and set columns accordingly (and also add dp4n for normal sample values)
 - Predict indels
 - Fix unique logic
 - enabled pthreads in libbam:
