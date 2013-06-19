@@ -9,10 +9,11 @@ Important:
 - add tests, tests, tests
 
 Some time:
-- Python eplace optionparser with argparse
 - Gradually replace Python scripts with C-version (or include Python
-- interpreter)
-- split cmd parsing: plp, snv, others (do they change argv?) 
+  interpreter)
+- Replace use of optionparser with argparse (only in scripts that will not
+  be ported to C)
+- split lofreq_snpcaller cmd parsing: plp, snv, others (do they change argv?) 
 - Implement test against old SNV caller
 - Test actual SNV and SB values for both types of SNVs
 - check for diffs between -l bed, -r region and none, all with and without BAQ

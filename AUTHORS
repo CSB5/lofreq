@@ -1,9 +1,15 @@
-See http://www.ncbi.nlm.nih.gov/pubmed/23066108
-
-- Grace Hui Ting Yeo implemented an early prototype of the EM (NQ) SNV caller
-- Niranjan Nagarajan sketched out the core algorithm and implemented
-the pruned DP properly
+LoFreq-Star authors:
+- Niranjan Nagarajan had all the brilliant ideas
+- Grace Hui Ting Yeo implemented the indel calling functions
 - Andreas Wilm did the rest
 
-See respective sub-directories for a list of authors whose software we
-incorporate
+LoFreq-Star uses some BSD licensed pieces of software. See READMEs in
+sub-directories for a list of authors whose software we incorporate
+
+LoFreq-Star is based on LoFreq (<1.0), which is described here
+http://www.ncbi.nlm.nih.gov/pubmed/23066108. For that version:
+- Grace Hui Ting Yeo implemented an early prototype of the EM (NQ) SNV caller
+- Niranjan Nagarajan sketched out the core algorithm and implemented the
+pruned DP properly
+- Andreas Wilm did the rest
+
