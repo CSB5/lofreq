@@ -6,20 +6,6 @@ previously PASSED ones!
 """
 
 
-# Copyright (C) 2011, 2012 Genome Institute of Singapore
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful, but
-# WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# General Public License for more details.
-
-
-
 #--- standard library imports
 #
 from __future__ import division
@@ -60,10 +46,11 @@ from lofreq_star.utils import prob_to_phredqual, phredqual_to_prob
 #                                     color_scheme='Linux', call_pdb=1)
 
 
+
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
-__copyright__ = "2011, 2012 Genome Institute of Singapore"
-__license__ = "GPL2"
+__copyright__ = "2013 Genome Institute of Singapore"
+__license__ = "Free for non-commercial use"
 
 
 
