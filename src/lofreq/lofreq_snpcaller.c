@@ -624,19 +624,20 @@ count_matches(int *n_matches, int *n_mismatches,
 #ifdef USE_SOURCEQUAL
 /* Estimate as to how likely it is that this read, given the mapping,
  * comes from this reference genome. P(r not from g|mapping) = 1 - P(r
- * from g). Use qualities of all bases for and poisson-binomial dist
- * (as for core SNV calling). Assumed independence of errors okay: if
- * they are not independent, then the assumption is conservative. Keep
- * all qualities as they are, i.e. don’t replace mismatches with lower
- * values. Rationale: higher SNV quals, means higher chance SNVs are
- * real, therefore higher prob. read does not come from genome. 
+ * from g). Use qualities of all bases for and poisson-binomial dist,
+ * as for core SNV calling but return prob instead of pvalue (and
+ * subtract one mismatch which is the SNV we are checking). Assumed
+ * independence of errors okay: if they are not independent, then the
+ * assumption is conservative. Keep all qualities as they are, i.e.
+ * don’t replace mismatches with lower values. Rationale: higher SNV
+ * quals, means higher chance SNVs are real, therefore higher prob.
+ * read does not come from genome.
  *
+ * Use 
  * FIXME: should always ignore heterozygous or known SNV pos!
  *
- * Returns -1 on error. otherwise phred score of source error prob.
- *
- * FIXME: old definition above and below in source
- *
+ * Returns -1 on error. otherwise prob to see the observed number of
+ * mismatches-1
  */
 int
 source_qual(const bam1_t *b, const char *ref)
@@ -648,19 +649,30 @@ source_qual(const bam1_t *b, const char *ref)
      int n_matches = 0;
      int n_mismatches = 0;
      int n_quals = 0;
-
+     double *err_probs; /* error probs (qualities) passed down to snpcaller */
+     int num_err_probs; /* #elements in err_probs */
+ 
      quals = count_matches(&n_matches, &n_mismatches, b, ref);
      if (NULL == quals) {
           return -1;
      }
-     n_quals = n_matches + n_mismatches;
+
+     num_err_probs = n_matches + n_mismatches;
+     if (NULL == (err_probs = malloc(num_err_probs * sizeof(double)))) {
+          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
+                  __FILE__, __FUNCTION__, __LINE__);
+          free(err_probs);
+          return -1;
+     }
+
 
      /* sorting in theory should be numerically more stable and also
-      * make snpcallerfaster */
-     qsort(quals, n_quals, sizeof(int), int_cmp);
-     probvec = poissbin(&src_pvalue, quals,
-                        n_quals, n_mismatches, 1.0, 0.05);
+      * make poissbin faster */
+     qsort(err_probs, num_err_probs, sizeof(double), dbl_cmp);
+     probvec = poissbin(&src_pvalue, err_probs,
+                        num_err_probs, n_mismatches, 1.0, 0.05);
 
+     FIXME neet prob not pvalue and should alos use n_mismatches-1, but what if already 0?
 
      if (src_pvalue>1.0) {/* DBL_MAX is default return value */
           src_pvalue = 1.0;/*-DBL_EPSILON;*/
