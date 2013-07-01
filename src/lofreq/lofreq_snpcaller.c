@@ -829,6 +829,7 @@ main_call(int argc, char *argv[])
      /* default pileup options */
      memset(&mplp_conf, 0, sizeof(mplp_conf_t));
      mplp_conf.max_mq = 255;
+     mplp_conf.min_mq = 1;
      mplp_conf.min_bq = 3;
      mplp_conf.capQ_thres = 0;
      mplp_conf.max_depth = 1000000;
