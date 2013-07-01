@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 """Report joined nucleotide frequencies for given positions. Positions
- have to be on the same read or in a read pair, for it to be counted
+ have to be on the same read or in a read pair, for them to be counted.
+ Positions can also be annotated with SNV info in the form of ref-alt
+ bases, in which case different base-call quality filtering mechanisms
+ can be used and any bases not in the ref-alt combo will be ignored.
  """
 
 
@@ -16,6 +19,7 @@ import sys
 import os
 import logging
 import argparse
+from collections import namedtuple
 
 #--- third-party imports
 #
@@ -51,7 +55,67 @@ LOG = logging.getLogger("")
 logging.basicConfig(level=logging.WARN, 
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
+SnvPos = namedtuple('SnvPos', ['pos', 'ref', 'alt'])
 
+
+class ParseSnvPos(argparse.Action):
+    def __init__(self,
+                 option_strings,
+                 dest,
+                 nargs=None,
+                 const=None,
+                 default=None,
+                 type=None,
+                 choices=None,
+                 required=False,
+                 help=None,
+                 metavar=None):
+        argparse.Action.__init__(self,
+                                 option_strings=option_strings,
+                                 dest=dest,
+                                 nargs=nargs,
+                                 const=const,
+                                 default=default,
+                                 type=type,
+                                 choices=choices,
+                                 required=required,
+                                 help=help,
+                                 metavar=metavar,
+                                 )
+        #print 'Initializing CustomAction'
+        for name,value in sorted(locals().items()):
+            if name == 'self' or value is None:
+                continue
+            #print '  %s = %r' % (name, value)
+        return
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        #print
+        #print 'Processing CustomAction for "%s"' % self.dest
+        #print '  parser = %s' % id(parser)
+        #print '  values = %r' % values
+        #print '  option_string = %r' % option_string
+        
+        # Do some arbitrary processing of the input values
+        assert isinstance(values, list)
+
+        snv_pos = []
+        for v in values:
+            if not ':' in v:
+                snv_pos.append(SnvPos(int(v)-1, 'N', 'N'))
+            elif '-' in v:
+                (pos, bases) = v.split(':')
+                pos = int(pos) - 1 
+                (refbase, altbase) = bases.upper().split('-')
+                snv_pos.append(SnvPos(pos, refbase, altbase))
+            else:
+                raise ValueError, (
+                    "Was expecting a snv_position in the form of"
+                    " pos:ref-alt where ref and alt can be ommited")
+            #print "Saving snv_pos %s" % (str(snv_pos[-1]))
+        setattr(namespace, self.dest, snv_pos)
+
+        
 def cmdline_parser():
     """
     creates an argparse instance
@@ -81,14 +145,15 @@ def cmdline_parser():
                         required=True,
                         help="Positions are on this chromosome/sequence")
     
-    parser.add_argument("-p", "--positions", 
-                        dest="positions",
+    parser.add_argument("-p", "--snv-positions", 
+                        dest="snv_positions",
                         metavar='NN',
-                        type=int,
                         required=True,
+                        action=ParseSnvPos,
                         nargs='+',
-                        help='List of positions')
-
+                        help='List of positions in the form of'
+                        ' pos:alt-ref where alt and ref can be'
+                        ' empty or N if not of interest')
     parser.add_argument("-f", "--fasta",
                         dest="ref_fa",
                         help="Will print bases at given positions in"
@@ -110,34 +175,36 @@ def cmdline_parser():
                         help="Ignore any base with BQ smaller than this value"
                         " (default=%d)" % default)
 
-    #default = 20
-    #parser.add_argument("-A", "--min-altbq",
-    #                    dest="min_altbq",
-    #                    type=int,
-    #                    default=default,
-    #                    help="Ignore any alternate base with BQ smaller"
-    #                    " than this value. Works only if ref-alt"
-    #                    " information was given")# (default=%d)" % default)
-    # NOTE: make sure off or >min_bq
+    default = 20
+    parser.add_argument("-A", "--min-altbq",
+                        dest="min_altbq",
+                        type=int,
+                        default=default,
+                        help="Ignore any alternate base with BQ smaller"
+                        " than this value. Works only if ref-alt"
+                        " information was given")# (default=%d)" % default)
     
     return parser
 
 
 
-def joined_counts(sam, chrom, positions, min_mq=2, min_bq=3):
+def joined_counts(sam, chrom, snv_positions, min_mq=2, min_bq=3, min_altbq=20):
     """
     - sam: samfile object (pysam)
     - chrom: chromsome/sequence of interest
-    - positions: list of (zero-offset) positions to analyze (note, use long if necessary)
+    - positions: list of SnvPos. Use with alt == 'N' if no altbq specific behaviour is needed
     - min_mq: filter reads with mapping qualiy below this value
     - min_bq: filter bases with call quality below this value
     
     Note, will only report counts that overlap *all* positions.
     """
 
-    assert len(positions)>=2 and min(positions)>=0
+    min_pos =  min([sp.pos for sp in snv_positions])
+    max_pos =  max([sp.pos for sp in snv_positions])
+
+    assert len(snv_positions)>=2 and min(snv_positions)>=0
     assert chrom in sam.references
-    assert max(positions) < sam.lengths[sam.references.index(chrom)]
+    assert max_pos < sam.lengths[sam.references.index(chrom)]
     
     num_dups = 0
     num_anomalous = 0
@@ -152,8 +219,8 @@ def joined_counts(sam, chrom, positions, min_mq=2, min_bq=3):
     # max should be enough. but what if circular? best to be on the
     # safe side. For full control over BQ, BAQ etc we would have to
     # use mpileup() instead of fetch().
-
-    for alnread in sam.fetch(chrom, min(positions), max(positions)+1):
+    
+    for alnread in sam.fetch(chrom, min_pos, max_pos+1):
         # FIXME +1 necessary?
         assert not alnread.is_unmapped # paranoia
 
@@ -192,16 +259,54 @@ def joined_counts(sam, chrom, positions, min_mq=2, min_bq=3):
                      if qpos!=None and rpos!=None]
                      # can't just use if qpos and rpos since
                      # they might be 0
-        pos_nt_map = dict([(rpos, alnread.query[qpos])
-                           for (qpos, rpos) in aln_pairs
-                           if ord(alnread.qqual[qpos])-33 >= min_bq])
-                           # MQs come as ints in pysam, but BQs are
-                           # ASCII-encoded?
-        # NOTE altbq filtering would have to be done here
-                           
-        # create read-id which is identical for PE reads. NOTE: is
-        # there another way to identify pairs? Using the name only is
-        # a weakness and might lead to silent errors
+        #pos_nt_map = dict([(rpos, alnread.query[qpos])
+        #                   for (qpos, rpos) in aln_pairs
+        #                   if ord(alnread.qqual[qpos])-33 >= min_bq])
+        #                   # MQs come as ints in pysam, but BQs are
+        #                   # ASCII-encoded?
+
+        # create a dictionary with ref pos as key and read base and
+        # it's phred qual as value (tuple)
+        pos_nt_map = dict([(rpos, 
+                            (alnread.query[qpos], ord(alnread.qqual[qpos])-33))
+                            for (qpos, rpos) in aln_pairs])
+
+        #import pdb; pdb.set_trace()
+
+        # remove positions where bq is below min_bq
+        rem_below_bq = [k for (k, v) in pos_nt_map.items() 
+                        if v[1] < min_bq]
+        for k in rem_below_bq:
+            del pos_nt_map[k]
+
+        # remove positions where bq of an alt base is below min_altbq
+        for snv_pos in snv_positions:
+            if snv_pos.alt == 'N':
+                continue
+            if pos_nt_map.has_key(snv_pos.pos):
+                base = pos_nt_map[snv_pos.pos][0]
+                qual = pos_nt_map[snv_pos.pos][1]
+                if base == snv_pos.alt and qual < min_altbq:
+                    #LOG.critical("Removing %d because %c is alt with q %d" % (snv_pos.pos, base, qual))
+                    #import pdb; pdb.set_trace()
+                    del pos_nt_map[snv_pos.pos]
+                    
+        # also remove positions where base is neither alt nor ref base
+        for snv_pos in snv_positions:
+            if snv_pos.ref == 'N' and snv_pos.alt == 'N':
+                continue
+            if pos_nt_map.has_key(snv_pos.pos):
+                base = pos_nt_map[snv_pos.pos][0]
+                if base not in [snv_pos.ref, snv_pos.alt]:
+                    del pos_nt_map[snv_pos.pos]
+                            
+        # NOTE: the above filters effectively mean that if a base is
+        # removed and overlaps a position of interest, the read and
+        # it's partner will never be counted
+        
+        # create a read-id which is identical for PE reads. NOTE: is
+        # there another effective way to identify pairs? Using the
+        # name only might lead to silent errors
         if alnread.qname[-2] in [".", "/", "#"]:
             read_id_base = alnread.qname[:-2]
         else:
@@ -209,22 +314,23 @@ def joined_counts(sam, chrom, positions, min_mq=2, min_bq=3):
 
         # record read-id (same for PE reads) and nucleotide for each
         # given position
-        for pos in positions:
+        for pos in [sv.pos for sv in snv_positions]:
             if pos_nt_map.has_key(pos):
                 if not pos_overlap.has_key(pos):
                     pos_overlap[pos] = dict()
-                pos_overlap[pos][read_id_base] = pos_nt_map[pos]
+                pos_overlap[pos][read_id_base] = pos_nt_map[pos][0]
 
+                
     # create a list of read-id's overlapping all given pos
-    overlapping_all = frozenset(pos_overlap[positions[0]].keys())
-    for pos in positions[1:]:
+    overlapping_all = frozenset(pos_overlap[snv_positions[0].pos].keys())
+    for snv_pos in snv_positions[1:]:
         overlapping_all = overlapping_all.intersection(
-            pos_overlap[pos].keys())
+            pos_overlap[snv_pos.pos].keys())
     overlapping_all = list(overlapping_all)
 
     counts = dict()
     for read_id in overlapping_all:
-        key = ''.join([pos_overlap[p][read_id] for p in positions])
+        key = ''.join([pos_overlap[sp.pos][read_id] for sp in snv_positions])
         counts[key] = counts.get(key, 0) + 1
     
     LOG.info("Ignored %d paired-end reads flagged as not in proper"
@@ -236,7 +342,7 @@ def joined_counts(sam, chrom, positions, min_mq=2, min_bq=3):
 
     counts_sum = sum(counts.values())
     LOG.info("%d reads overlapped with given positions %s"  % (
-        counts_sum, ''.join([str(x+1) for x in positions])))
+        counts_sum, ''.join([str(sp.pos+1) for sp in snv_positions])))
 
     return counts
 
@@ -263,19 +369,14 @@ def main():
         LOG.fatal("file '%s' does not exist.\n" % args.ref_fa)
         sys.exit(1)
 
-    positions = [x-1 for x in args.positions]
-    if len(positions) < 2:
+    if len(args.snv_positions) < 2:
         LOG.fatal("Need at least two positions of interest")
-        parser.print_usage(sys.stderr)
-        sys.exit(1)
-    if any([pos < 0 for pos in positions]):
-        LOG.fatal("Positions need to be >=1")
         parser.print_usage(sys.stderr)
         sys.exit(1)
 
     if args.ref_fa:
         fastafile = pysam.Fastafile(args.ref_fa)
-        for pos in positions:
+        for pos in [sp.pos for sp in arg.snv_positions]:
             # region = "%s:%d-%d" % (args.chrom, pos+1, pos+1)
             # region needs +1 again which is not intuitive
             # refbase = fastafile.fetch(region=region)
@@ -290,7 +391,7 @@ def main():
     if args.chrom not in sam.references:
         LOG.fatal("Chromosome/Sequence %s not found in %s" % (
             args.chrom, args.bam))
-    counts = joined_counts(sam, args.chrom, positions, 
+    counts = joined_counts(sam, args.chrom, args.snv_positions, 
                            args.min_mq, args.min_bq)
     counts_sum = sum(counts.values())
     for k in sorted(counts.keys()):
@@ -299,7 +400,6 @@ def main():
 
     
 if __name__ == "__main__":
-    LOG.critical("TEST: counts, MQ filter, BQ filter, position overlap")
-    LOG.critical("IMPLEMENT: vcf input (opt: only report cons/var counts) and (sliding: +1 var) window arg and lofreq style ref/alt filtering")
     main()
+    LOG.critical("TESTS TESTS TEST: counts, MQ filter, BQ filter, position overlap")
     LOG.info("Successful exit")
