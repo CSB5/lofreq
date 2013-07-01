@@ -65,6 +65,7 @@ def cmdline_parser():
                       dest="verbose",
                       action="store_true",
                       help="Enable verbose output")
+    
     parser.add_argument("--debug",
                       dest="debug",
                       action="store_true", 
@@ -74,10 +75,12 @@ def cmdline_parser():
                       dest="bam",
                       required=True,
                       help="Mapping input file (BAM)")
+    
     parser.add_argument("-c", "--chrom",
                         dest="chrom",
                         required=True,
                         help="Positions are on this chromosome/sequence")
+    
     parser.add_argument("-p", "--positions", 
                         dest="positions",
                         metavar='NN',
@@ -90,6 +93,7 @@ def cmdline_parser():
                         dest="ref_fa",
                         help="Will print bases at given positions in"
                         " reference fasta file")
+    
     default = 1
     parser.add_argument("-M", "--min-mq",
                         dest="min_mq",
@@ -97,6 +101,7 @@ def cmdline_parser():
                         default=default,
                         help="Ignore reads with MQ smaller than this value"
                         " (default=%d)" % default)
+    
     default = 3
     parser.add_argument("-B", "--min-bq",
                         dest="min_bq",

@@ -6,9 +6,6 @@ __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
 __copyright__ = "2013 Genome Institute of Singapore"
 __license__ = "Free for non-commercial use"
-#
-# FIXME:update-copyright
-#
 
 
 #--- standard library imports
@@ -30,7 +27,7 @@ import datetime
 # stuff can be run without installing it
 try:
     import lofreq2_local
-except:
+except ImportError:
     pass    
 
     
