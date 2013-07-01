@@ -6,9 +6,14 @@ previously PASSED ones!
 """
 
 
+__author__ = "Andreas Wilm"
+__email__ = "wilma@gis.a-star.edu.sg"
+__copyright__ = "2013 Genome Institute of Singapore"
+__license__ = "Free for non-commercial use"
+
+
 #--- standard library imports
 #
-from __future__ import division
 import sys
 import logging
 import os
@@ -25,12 +30,12 @@ import gzip
 #
 try:
     import lofreq2_local
-except:
+except ImportError:
     pass    
 
 try:
     from lofreq_star import vcf
-except:
+except ImportError:
     sys.stderr.write("FATAL(%s): Couldn't find LoFreq's vcf module."
                      " Are you sure your PYTHONPATH is set correctly (= %s)?\n" % (
                          (sys.argv[0], os.environ['PYTHONPATH'])))
@@ -44,13 +49,6 @@ from lofreq_star.utils import prob_to_phredqual, phredqual_to_prob
 #from IPython.core import ultratb
 #sys.excepthook = ultratb.FormattedTB(mode='Verbose',
 #                                     color_scheme='Linux', call_pdb=1)
-
-
-
-__author__ = "Andreas Wilm"
-__email__ = "wilma@gis.a-star.edu.sg"
-__copyright__ = "2013 Genome Institute of Singapore"
-__license__ = "Free for non-commercial use"
 
 
 
