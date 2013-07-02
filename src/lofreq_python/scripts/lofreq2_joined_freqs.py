@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-"""Report joined nucleotide frequencies for given positions. Positions
- have to be on the same read or in a read pair, for them to be counted.
- Positions can also be annotated with SNV info in the form of ref-alt
- bases, in which case different base-call quality filtering mechanisms
- can be used and any bases not in the ref-alt combo will be ignored.
- """
-
+"""Report joined nucleotide frequencies for given positions. Only
+positions on the same read or read pair will be counted. Given
+positions can be annotated with SNV info in the form of ref-alt bases,
+in which case different base-call quality filtering mechanisms can be
+used and any bases not in the ref-alt combo will be ignored.
+"""
+ 
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
@@ -35,19 +35,20 @@ except ImportError:
 
 #--- project specific imports
 #
-try:
-    import lofreq2_local
-except ImportError:
-    pass    
-
-try:
-    from lofreq_star import vcf
-except ImportError:
-    sys.stderr.write("FATAL(%s): Couldn't find LoFreq's vcf module."
-                     " Are you sure your PYTHONPATH is set correctly (= %s)?\n" % (
-                         (sys.argv[0], os.environ['PYTHONPATH'])))
-    sys.exit(1)
-
+#try:
+#    import lofreq2_local
+#except ImportError:
+#    pass    
+#
+#try:
+#    from lofreq_star import vcf
+#except ImportError:
+#    sys.stderr.write(
+#        "FATAL(%s): Couldn't find LoFreq's vcf module."
+#        " Are you sure your PYTHONPATH is set correctly (= %s)?\n" % (
+#            (sys.argv[0], os.environ['PYTHONPATH'])))
+#    sys.exit(1)
+#
 
 # global logger
 # http://docs.python.org/library/logging.html
@@ -83,22 +84,15 @@ class ParseSnvPos(argparse.Action):
                                  metavar=metavar,
                                  )
         #print 'Initializing CustomAction'
-        for name,value in sorted(locals().items()):
+        for (name, value) in sorted(locals().items()):
             if name == 'self' or value is None:
                 continue
             #print '  %s = %r' % (name, value)
         return
 
     def __call__(self, parser, namespace, values, option_string=None):
-        #print
-        #print 'Processing CustomAction for "%s"' % self.dest
-        #print '  parser = %s' % id(parser)
-        #print '  values = %r' % values
-        #print '  option_string = %r' % option_string
-        
-        # Do some arbitrary processing of the input values
+        #print 'Processing CustomAction for "%s"' % self.dest        
         assert isinstance(values, list)
-
         snv_pos = []
         for v in values:
             if not ':' in v:
@@ -152,8 +146,9 @@ def cmdline_parser():
                         action=ParseSnvPos,
                         nargs='+',
                         help='List of positions in the form of'
-                        ' pos:alt-ref where alt and ref can be'
-                        ' empty or N if not of interest')
+                        ' pos:alt-ref or simply pos (which is the'
+                        ' same as pos:N-N')
+    
     parser.add_argument("-f", "--fasta",
                         dest="ref_fa",
                         help="Will print bases at given positions in"
@@ -202,16 +197,13 @@ def joined_counts(sam, chrom, snv_positions, min_mq=2, min_bq=3, min_altbq=20):
     min_pos =  min([sp.pos for sp in snv_positions])
     max_pos =  max([sp.pos for sp in snv_positions])
 
+    skip_stats = dict()
+    for x in ['dups', 'anomalous', 'qcfail', 'secondary', 'below_mq_min']:
+        skip_stats[x] = 0
+    
     assert len(snv_positions)>=2 and min(snv_positions)>=0
     assert chrom in sam.references
     assert max_pos < sam.lengths[sam.references.index(chrom)]
-    
-    num_dups = 0
-    num_anomalous = 0
-    num_qcfail = 0
-    num_secondary = 0
-    num_below_mq_min = 0
-    # FIXME put the above into one namedtuple
     
     pos_overlap = dict()
 
@@ -225,25 +217,25 @@ def joined_counts(sam, chrom, snv_positions, min_mq=2, min_bq=3, min_altbq=20):
         assert not alnread.is_unmapped # paranoia
 
         if alnread.is_duplicate:
-            num_dups += 1
+            skip_stats['dups'] += 1
             continue
         
         if alnread.is_paired and not alnread.is_proper_pair:
             # check both as is_proper_pair might contain nonsense
             # value if not paired
-            num_anomalous += 1
+            skip_stats['anomalous'] += 1
             continue
 
         if alnread.is_qcfail:
-            num_qcfail += 1
+            skip_stats['qcfail'] += 1
             continue
 
         if alnread.is_secondary:
-            num_secondary += 1
+            skip_stats['secondary'] += 1
             continue
 
         if alnread.mapq < min_mq:
-            num_below_mq_min += 1
+            skip_stats['below_mq_min'] += 1
             continue
             
 
@@ -287,7 +279,9 @@ def joined_counts(sam, chrom, snv_positions, min_mq=2, min_bq=3, min_altbq=20):
                 base = pos_nt_map[snv_pos.pos][0]
                 qual = pos_nt_map[snv_pos.pos][1]
                 if base == snv_pos.alt and qual < min_altbq:
-                    #LOG.critical("Removing %d because %c is alt with q %d" % (snv_pos.pos, base, qual))
+                    #LOG.critical("Removing %d because %c is"
+                    #             " alt with q %d" % (
+                    #                 snv_pos.pos, base, qual))
                     #import pdb; pdb.set_trace()
                     del pos_nt_map[snv_pos.pos]
                     
@@ -333,16 +327,12 @@ def joined_counts(sam, chrom, snv_positions, min_mq=2, min_bq=3, min_altbq=20):
         key = ''.join([pos_overlap[sp.pos][read_id] for sp in snv_positions])
         counts[key] = counts.get(key, 0) + 1
     
-    LOG.info("Ignored %d paired-end reads flagged as not in proper"
-             "  pair" % (num_anomalous))
-    LOG.info("Ignored %d reads flagged as duplicates" % (num_dups))
-    LOG.info("Ignored %d reads flagged as qc fail" % (num_qcfail))
-    LOG.info("Ignored %d reads flagged as secondary" % (num_secondary))
-    LOG.info("Ignored %d reads below MQ threshold (%d)" % (num_below_mq_min, min_mq))
+    print "# ignored reads: %s" % (
+        ', '.join(["%s: %d" % (k ,v) for (k, v) in skip_stats.items()]))
 
     counts_sum = sum(counts.values())
-    LOG.info("%d reads overlapped with given positions %s"  % (
-        counts_sum, ''.join([str(sp.pos+1) for sp in snv_positions])))
+    print "# %d reads overlapped with given positions %s"  % (
+        counts_sum, ', '.join([str(sp.pos+1) for sp in snv_positions]))
 
     return counts
 
@@ -375,17 +365,20 @@ def main():
         sys.exit(1)
 
     if args.ref_fa:
+        ref_bases = ""
         fastafile = pysam.Fastafile(args.ref_fa)
-        for pos in [sp.pos for sp in arg.snv_positions]:
+        for pos in [sp.pos for sp in args.snv_positions]:
             # region = "%s:%d-%d" % (args.chrom, pos+1, pos+1)
             # region needs +1 again which is not intuitive
             # refbase = fastafile.fetch(region=region)
-            refbase = fastafile.fetch(args.chrom, pos, pos+1)
-            if not refbase:
+            b = fastafile.fetch(args.chrom, pos, pos+1)
+            if not b:
                 LOG.fatal("Couldn't fetch region from fastafile %s."
                           " Possible chromsome/sequence name"
                           " mismatch" % (args.ref_fa))
-            print "Reference at pos %d: %s" % (pos+1, refbase)
+                ref_bases += '-'
+            ref_bases += b
+        print "# ref %s" % (ref_bases)
             
     sam = pysam.Samfile(args.bam, "rb")
     if args.chrom not in sam.references:
@@ -394,12 +387,15 @@ def main():
     counts = joined_counts(sam, args.chrom, args.snv_positions, 
                            args.min_mq, args.min_bq)
     counts_sum = sum(counts.values())
-    for k in sorted(counts.keys()):
+    print "# bases counts freq"
+    #for k in sorted(counts, key=counts.get):
+    for k in sorted(counts, key=lambda x: counts[x]):
         if counts[k]:
             print "%s %d %.4f" % (k, counts[k], counts[k]/float(counts_sum))
 
     
 if __name__ == "__main__":
     main()
-    LOG.critical("TESTS TESTS TEST: counts, MQ filter, BQ filter, position overlap")
+    LOG.critical("TESTS TESTS TEST:"
+                 " counts, MQ filter, BQ filter, position overlap")
     LOG.info("Successful exit")
