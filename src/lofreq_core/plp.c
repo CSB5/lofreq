@@ -188,7 +188,7 @@ dump_mplp_conf(const mplp_conf_t *c, FILE *stream)
 
 
 
-/* FIXME get rid in the future */
+/* FIXME get rid of function in future */
 static inline int
 printw(int c, FILE *fp)
 {
@@ -367,7 +367,7 @@ void compile_plp_col(plp_col_t *plp_col,
                 */
                if (bq < conf->min_bq) {
                     base_skip = 1;
-                    goto check_indel; /* FIXME: argh! */
+                    goto check_indel; /* goto was easiest */
                }
 
                /* the following will correct base-pairs down if they
@@ -518,7 +518,9 @@ void compile_plp_col(plp_col_t *plp_col,
      for (i = 0; i < NUM_NT4; ++i) {
           assert(plp_col->fw_counts[i] + plp_col->rv_counts[i] == plp_col->base_quals[i].n);
           assert(plp_col->base_quals[i].n == plp_col->map_quals[i].n);
-          /* FIXME assert(plp_col->map_quals[i].n == plp_col->source_quals[i].n); */
+#ifdef USE_SOURCEQUAL
+           assert(plp_col->map_quals[i].n == plp_col->source_quals[i].n);
+#endif
      }
 }
 /* compile_plp_col() */
