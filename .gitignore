@@ -17,6 +17,7 @@ tmp/
 schmock*
 clang_output*
 nohup.out
+gmon.*
 
 # automake stuff which gets rebuild after autoreconf
 Makefile
