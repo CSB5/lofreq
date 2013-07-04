@@ -815,6 +815,11 @@ main_call(int argc, char *argv[])
      void (*plp_proc_func)(const plp_col_t*, void*);
      int rc = 0;
 
+     LOG_FIXME("**************************************************************************\n");
+     LOG_FIXME("Call works without complaints when feed with ANY reference (simply uses N)!\n");
+     LOG_FIXME("**************************************************************************\n");
+
+
 #ifdef SCALE_MQ
      LOG_WARN("%s\n", "MQ scaling switched on!");
 #endif
