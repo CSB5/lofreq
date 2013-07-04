@@ -509,7 +509,7 @@ void compile_plp_col(plp_col_t *plp_col,
           argmax_d(base_counts, NUM_NT4)];
 
      if (debug) {
-          plp_col_debug_print(plp_col, stdout);
+          plp_col_debug_print(plp_col, stderr);
      }
 #if 0
      plp_col_mpileup_print(plp_col, conf, stdout);
