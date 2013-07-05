@@ -112,9 +112,10 @@ static void usage(const char *myname)
      fprintf(stderr, "  call        : call variants\n");
      fprintf(stderr, "  somatic     : call somatic variants\n");
      fprintf(stderr, "  filter      : filter variants\n");
-     fprintf(stderr, "  uniq        : test whether SNVs predicted in one sample were missing in the other due to coverage fluctuations\n");
+     fprintf(stderr, "  check       : check properties of your BAM file\n");
+     fprintf(stderr, "  uniq        : test whether SNVs predicted in one sample were missing in the other simply due to coverage fluctuations\n");
      fprintf(stderr, "  plp_summary : prints a pileup summary per position\n");
-     fprintf(stderr, "  vcfset      : vcf set operations\n");
+     fprintf(stderr, "  vcfset      : VCF set operations\n");
      fprintf(stderr, "  version     : prints version\n");
      fprintf(stderr, "\n");
 }
@@ -140,6 +141,14 @@ int main(int argc, char *argv[])
 
      } else if (strcmp(argv[1], "uniq") == 0)  {
           return main_uniq(argc, argv);
+
+     } else if (strcmp(argv[1], "check") == 0 ||
+                strcmp(argv[1], "inspect") == 0 ||
+                strcmp(argv[1], "doctor") == 0 ||
+                strcmp(argv[1], "run-me-first") == 0)  {
+          LOG_FIXME("%s\n", "NOT IMPLEMENT YET: sq_list, has_delqs, has_insqs, paired_reads...\n");
+          return -1;
+
 
      } else if (strcmp(argv[1], "filter") == 0 || 
                 strcmp(argv[1], "somatic") == 0 ||
