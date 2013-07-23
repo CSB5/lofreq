@@ -147,7 +147,7 @@ def cmdline_parser():
                         nargs='+',
                         help='List of positions in the form of'
                         ' pos:alt-ref or simply pos (which is the'
-                        ' same as pos:N-N')
+                        ' same as pos:N-N)')
     
     parser.add_argument("-f", "--fasta",
                         dest="ref_fa",
@@ -214,7 +214,14 @@ def joined_counts(sam, chrom, snv_positions, min_mq=2, min_bq=3, min_altbq=20):
     
     for alnread in sam.fetch(chrom, min_pos, max_pos+1):
         # FIXME +1 necessary?
-        assert not alnread.is_unmapped # paranoia
+
+        # assert not alnread.is_unmapped # paranoia
+        #
+        # seen unmapped reads here, which doesn't make sense to me
+        # since fetch() shouldn't return any. quick fix is to ignore
+        # them
+        if alnread.is_unmapped:
+            continue
 
         if alnread.is_duplicate:
             skip_stats['dups'] += 1
