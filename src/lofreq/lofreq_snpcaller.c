@@ -768,7 +768,7 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "- Base-call quality\n");                      
      fprintf(stderr, "       -q | --min-bq INT            skip any base with baseQ smaller than INT [%d]\n", mplp_conf->min_bq);
      fprintf(stderr, "       -Q | --min-altbq INT         skip nonref-bases with baseQ smaller than INT [%d]. Not active if ref is N\n", snvcall_conf->min_altbq);
-     fprintf(stderr, "       -a | --def-altbq INT         nonref base qualities will be replace with this value [%d]\n", snvcall_conf->def_altbq);
+     fprintf(stderr, "       -a | --def-altbq INT         nonref base qualities will be replaced with this value [%d]\n", snvcall_conf->def_altbq);
      /*fprintf(stderr, "       -B | --no-baq                disable BAQ computation\n");*/
      fprintf(stderr, "       -E | --baq                   enable (extended) per-base alignment quality (BAQ) computation\n");
      fprintf(stderr, "- Mapping quality\n");                                
