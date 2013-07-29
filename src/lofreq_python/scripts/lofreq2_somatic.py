@@ -124,7 +124,7 @@ def cmdline_parser():
 
 
 def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
-            sig_n=0.001, sig_t=10, mq_filter_n=20,
+            sig_n=0.001, sig_t=10, mq_filter_t=20,
             reuse_normal=None, baq_on=False, num_threads=0):
     """Core of the somatic SNV callers, which calls all the necessary
     parts and glues them together
@@ -179,7 +179,7 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
     if bed:
         cmd.extend(['-l', bed])
     cmd.extend(['-b', 'dynamic', '-s', "%f" % sig_t, 
-                '-m', "%d" % mq_filter_n, '-o', vcf_t, bam_t])
+                '-m', "%d" % mq_filter_t, '-o', vcf_t, bam_t])
     somatic_commands.append(cmd)
 
     # FIXME both of the above can run in theory be simultaneously
