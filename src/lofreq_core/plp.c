@@ -632,8 +632,13 @@ mpileup(const mplp_conf_t *mplp_conf,
              continue;
         if (tid != ref_tid) {
             free(ref); ref = 0;
-            if (mplp_conf->fai) 
+            if (mplp_conf->fai) {
                  ref = faidx_fetch_seq(mplp_conf->fai, h->target_name[tid], 0, 0x7fffffff, &ref_len);
+                 if (NULL == ref) {
+                      LOG_FATAL("%s\n", "Given reference fasta file doesn't seem to contain the right sequence(s).");
+                      return -1;
+                 }
+            }
             for (i = 0; i < n; ++i) 
                  data[i]->ref = ref, data[i]->ref_id = tid;
             ref_tid = tid;
