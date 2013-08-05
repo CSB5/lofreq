@@ -27,9 +27,9 @@ from collections import namedtuple
 try:
     import pysam
 except ImportError:
-    sys.stderr.write("FATAL(%s): This lofreq utility script relies"
+    sys.stderr.write("FATAL: This lofreq utility script relies"
                      " on Pysam (http://code.google.com/p/pysam/)"
-                     " which seems to be missing.")
+                     " which seems to be missing on your system.")
     sys.exit(1)    
 
 
@@ -146,14 +146,23 @@ def cmdline_parser():
                         action=ParseSnvPos,
                         nargs='+',
                         help='List of positions in the form of'
-                        ' pos:alt-ref or simply pos (which is the'
-                        ' same as pos:N-N)')
-    
+                        ' simply "pos" (which is the same as pos:N-N)'
+                        ' or "pos:ref-alt". In the latter case,'
+                        ' alt-filtering is enabled and only counts for'
+                        ' the listed alt-bases are reported (everything'
+                        ' else is treated as sequencing error)')
     parser.add_argument("-f", "--fasta",
                         dest="ref_fa",
                         help="Will print bases at given positions in"
                         " reference fasta file")
-    
+
+    parser.add_argument("-t", "--report-type",
+                        dest="use_type_as_key",
+                        action="store_true", 
+                        default=False,
+                        help="Report counts as type (e.g r1a2 for ref at"
+                        " pos 1 var at pos 2) instead of using the bases")
+
     default = 1
     parser.add_argument("-M", "--min-mq",
                         dest="min_mq",
@@ -183,13 +192,20 @@ def cmdline_parser():
 
 
 
-def joined_counts(sam, chrom, snv_positions, min_mq=2, min_bq=3, min_altbq=20):
+def joined_counts(sam, chrom, snv_positions,
+                  use_type_as_key=False, min_mq=2, min_bq=3, min_altbq=20):
     """
+    Args:
     - sam: samfile object (pysam)
     - chrom: chromsome/sequence of interest
     - positions: list of SnvPos. Use with alt == 'N' if no altbq specific behaviour is needed
     - min_mq: filter reads with mapping qualiy below this value
     - min_bq: filter bases with call quality below this value
+
+    Out:
+    - A dictionary with bases as keys and counts as values. If
+    use_type_as_key is true, bases are not used as key, but instead the
+    type is used i.e. RV for ref at pos 1, variant/alternate at pos 2
     
     Note, will only report counts that overlap *all* positions.
     """
@@ -198,7 +214,8 @@ def joined_counts(sam, chrom, snv_positions, min_mq=2, min_bq=3, min_altbq=20):
     max_pos =  max([sp.pos for sp in snv_positions])
 
     skip_stats = dict()
-    for x in ['dups', 'anomalous', 'qcfail', 'secondary', 'below_mq_min']:
+    for x in ['dups', 'anomalous', 'qcfail', 'secondary',
+              'below_mq_min', 'unmapped']:
         skip_stats[x] = 0
     
     assert len(snv_positions)>=2 and min(snv_positions)>=0
@@ -217,10 +234,10 @@ def joined_counts(sam, chrom, snv_positions, min_mq=2, min_bq=3, min_altbq=20):
 
         # assert not alnread.is_unmapped # paranoia
         #
-        # seen unmapped reads here, which doesn't make sense to me
-        # since fetch() shouldn't return any. quick fix is to ignore
-        # them
+        # how can fetch() return unmapped reads? it doesn't make sense
+        # to me, but i've seen unmapped reads here.
         if alnread.is_unmapped:
+            skip_stats['unmapped'] += 1
             continue
 
         if alnread.is_duplicate:
@@ -329,19 +346,39 @@ def joined_counts(sam, chrom, snv_positions, min_mq=2, min_bq=3, min_altbq=20):
             pos_overlap[snv_pos.pos].keys())
     overlapping_all = list(overlapping_all)
 
+    # would be nice to initialize counts with all possible keys
+    # that's not straightforward if types are used
     counts = dict()
+    import itertools
+    if use_type_as_key:
+        for k in [''.join(x) for x in itertools.product(
+                'RV', repeat=len(snv_positions))]:
+            counts[k] = 0
+    else:
+        VALID_NUCS = 'ACGT'
+        for k in [''.join(x) for x in itertools.product(
+                VALID_NUCS, repeat=len(snv_positions))]:
+            counts[k] = 0
+            
     for read_id in overlapping_all:
         key = ''.join([pos_overlap[sp.pos][read_id] for sp in snv_positions])
+        if use_type_as_key:
+            # what type of count we are looking at, i.e.
+            # ref at pos 1, var at pos 2 etc
+            type_key = ""
+            for (i, sp) in enumerate(snv_positions):
+                if key[i] == sp.ref:
+                    type_key += "R"
+                elif key[i] == sp.alt:
+                    type_key += "V"
+                else:
+                    # i.e. the base
+                    type_key += key[i]
+            # import pdb; pdb.set_trace()
+            key = type_key
         counts[key] = counts.get(key, 0) + 1
     
-    print "# ignored reads: %s" % (
-        ', '.join(["%s: %d" % (k ,v) for (k, v) in skip_stats.items()]))
-
-    counts_sum = sum(counts.values())
-    print "# %d reads overlapped with given positions %s"  % (
-        counts_sum, ', '.join([str(sp.pos+1) for sp in snv_positions]))
-
-    return counts
+    return (counts, skip_stats)
 
 
     
@@ -385,24 +422,37 @@ def main():
                           " mismatch" % (args.ref_fa))
                 ref_bases += '-'
             ref_bases += b
-        print "# ref %s" % (ref_bases)
+        print "ref=%s;" % (ref_bases),
             
     sam = pysam.Samfile(args.bam, "rb")
     if args.chrom not in sam.references:
         LOG.fatal("Chromosome/Sequence %s not found in %s" % (
             args.chrom, args.bam))
-    counts = joined_counts(sam, args.chrom, args.snv_positions, 
-                           args.min_mq, args.min_bq)
-    counts_sum = sum(counts.values())
-    print "# bases counts freq"
-    #for k in sorted(counts, key=counts.get):
-    for k in sorted(counts, key=lambda x: counts[x]):
-        if counts[k]:
-            print "%s %d %.4f" % (k, counts[k], counts[k]/float(counts_sum))
+    (counts, skip_stats) = joined_counts(sam, args.chrom, args.snv_positions, 
+                                         args.use_type_as_key, args.min_mq, args.min_bq)
 
+    counts_sum = sum(counts.values())
+    #print "# %d reads overlapped with given positions %s"  % (
+    #    counts_sum, ', '.join([str(sp.pos+1) for sp in snv_positions]))
+    print "#overlap=%d;" % (counts_sum),
+
+    #print "# bases counts freq"
+    #for k in sorted(counts, key=counts.get):
+    #import pdb; pdb.set_trace()
+    #for k in sorted(counts, key=lambda x: counts[x]):
+    for k in sorted(counts):
+        #if counts[k]:
+        print "%s=%.4f;" % (k, counts[k]/float(counts_sum)),
+        
+
+    print "%s;" % ('; '.join(
+        ["#%s=%d" % (k ,v) for (k, v) in skip_stats.items()])),
+
+
+    print "cmd=%s" % (' '.join(sys.argv))
     
 if __name__ == "__main__":
     main()
-    LOG.critical("TESTS TESTS TEST:"
-                 " counts, MQ filter, BQ filter, position overlap")
+    # FIXME LOG.critical("TESTS TESTS TEST:"
+    #    " counts, MQ filter, BQ filter, position overlap")
     LOG.info("Successful exit")
