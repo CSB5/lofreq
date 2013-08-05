@@ -105,19 +105,20 @@ add_local_dir_to_path(char *argv0) {
 
 static void usage(const char *myname)
 {
-     fprintf(stderr, "%s: Fast and sensitive inference of single-nucleotide variants\n", PACKAGE_NAME);
+     fprintf(stderr, "\n%s: Fast and sensitive inference of single-nucleotide variants\n", PACKAGE_NAME);
      /*fprintf(stderr, "Version %s\n", PACKAGE_VERSION);*/
      fprintf(stderr, "\n");
-     fprintf(stderr, "Usage: %s <command> [options], where command is one of the following:\n\n", myname);
-     fprintf(stderr, "  call        : call variants\n");
-     fprintf(stderr, "  somatic     : call somatic variants\n\n");
-     fprintf(stderr, "  other sub-commands:\n");
+     fprintf(stderr, "Usage: %s <command> [options]\n\n", myname);
+     fprintf(stderr, "  main commands:\n");
+     fprintf(stderr, "    call        : call variants\n");
+     fprintf(stderr, "    somatic     : call somatic variants\n\n");
+     fprintf(stderr, "  other commands:\n");
      fprintf(stderr, "    filter      : filter variants\n");
-     fprintf(stderr, "    peek        : check properties of your BAM file\n");
+     fprintf(stderr, "    peek        : check properties of BAM file\n");
      fprintf(stderr, "    uniq        : test whether SNVs predicted in one sample couldn't be predicted in other\n");
-     fprintf(stderr, "    plp_summary : prints a pileup summary per position\n");
+     fprintf(stderr, "    plp_summary : print pileup summary per position\n");
      fprintf(stderr, "    vcfset      : VCF set operations\n");
-     fprintf(stderr, "    version     : prints version string\n");
+     fprintf(stderr, "    version     : print version string\n");
      fprintf(stderr, "\n");
 }
 
