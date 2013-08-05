@@ -103,7 +103,7 @@ def cmdline_parser():
                         help="Significance threshold / evalue for"
                         " SNV prediction on tumor sample"
                         " (default: %f)" % default)
-    default = 20
+    default = 13
     parser.add_argument("-m,", "--mq-filter", 
                         type=int,
                         default=default,
@@ -124,7 +124,7 @@ def cmdline_parser():
 
 
 def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
-            sig_n=0.001, sig_t=10, mq_filter_t=20,
+            sig_n=0.001, sig_t=10, mq_filter_t=13,
             reuse_normal=None, baq_on=False, num_threads=0):
     """Core of the somatic SNV callers, which calls all the necessary
     parts and glues them together
