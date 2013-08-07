@@ -17,6 +17,7 @@ log=$outdir/log.txt
 KEEP_TMP=0
 
 cmd="$LOFREQ call -f $reffa -E -o $outvcf $bam"
+echodebug "cmd=$cmd"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
@@ -33,19 +34,9 @@ else
 fi
 
 
-
 if [ $KEEP_TMP -eq 1 ]; then
     echowarn "Not deleting tmp dir $outdir"
 else 
-    rm  $outdir/*
+    rm $outdir/*
     rmdir $outdir
 fi
-
-
-if [ $KEEP_TMP -eq 1 ]; then
-    echowarn "Not deleting tmp dir $outdir"
-else 
-    rm  $outdir/*
-    rmdir $outdir
-fi
-
