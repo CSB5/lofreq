@@ -159,6 +159,13 @@ def main():
     vcf1_reader = get_vcfreader(args.vcf1)
     vcf2_reader = get_vcfreader(args.vcf2)
 
+    num_vars_stats = dict()
+    num_vars_stats['vcf1 total'] = 0
+    num_vars_stats['vcf1 pass'] = 0
+    num_vars_stats['vcf2 total'] = 0
+    num_vars_stats['vcf2 pass'] = 0
+    num_vars_stats['vcfout total'] = 0
+    
     if args.vcfout == '-':
         fh_vcfout = sys.stdout
     else:
@@ -171,13 +178,15 @@ def main():
     vcf_writer.write_header()
 
     #
-    # recipe:read B into memory and parse from A one by one
+    # recipe: read B into memory and parse from A one by one
     #
     
     snvs2 = dict()
     for var in vcf2_reader:
+        num_vars_stats['vcf2 total'] += 1
         if args.ign_filtered and var.FILTER not in ['.', 'PASS']:
             continue
+        num_vars_stats['vcf2 pass'] += 1
             
         assert len(var.ALT) == 1, (
             "Can't handle more then one alt base" 
@@ -195,27 +204,32 @@ def main():
         snvs2[k] = var        
 
     for var in vcf1_reader:
+        num_vars_stats['vcf1 total'] += 1
         if args.ign_filtered and var.FILTER not in ['.', 'PASS']:
             continue
+        num_vars_stats['vcf1 pass'] += 1
         k = key_for_var(var)
 
         if args.action == 'complement':
             # relative complement : elements in A but not B
             if not snvs2.has_key(k):
                 vcf_writer.write_rec(var)
+                num_vars_stats['vcfout total'] += 1
             else:
                 del snvs2[k]
         elif args.action == 'intersect':
             if snvs2.has_key(k):
                 vcf_writer.write_rec(var)
+                num_vars_stats['vcfout total'] += 1
         else:
             raise ValueError
             
-
     if fh_vcfout != sys.stdout:
         fh_vcfout.close()
 
-    
+    for (k, v) in sorted(num_vars_stats.items()):
+        LOG.info("%s: %d" % (k, v))
+        
 if __name__ == "__main__":
     main()
     #LOG.info("Successful program exit")
