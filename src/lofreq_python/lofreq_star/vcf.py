@@ -322,6 +322,11 @@ class VCFReader(object):
 
             line = self.reader.next()
 
+        # AW check for vcf files without header. could assume default
+        # header but can't easily unget already read variant line
+        assert line.startswith('#CHROM'), (
+            "Can't find VCF header: Doesn't look like VCF format (line was %s)" % line)
+            
         fields = line.split()
         # AW this used to be 8: which included FORMAT as well
         self._samples = fields[9:]
