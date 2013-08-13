@@ -55,7 +55,7 @@ vcf_var_has_info_key(char **value, const var_t *var, const char *key) {
 
      if (! var->info) {
           return 0;
-     } 
+     }
 
      info = strdup(var->info); /* strsep modifies string */
      info_ptr = info;
@@ -85,7 +85,7 @@ void vcf_new_var(var_t **var)
      (*var)->id = NULL;
      (*var)->ref = MISSING_VAL_CHAR;
      (*var)->alt = MISSING_VAL_CHAR;
-     (*var)->qual = -1;
+     (*var)->qual = -1; /* -1 == missing */
      (*var)->filter = NULL;
      (*var)->info = NULL;
 
@@ -131,7 +131,7 @@ void vcf_write_var(FILE *stream, const var_t *var)
 
      fprintf(stream, "\t%s\t%s\n",
              var->filter ? var->filter : MISSING_VAL_STR,
-             var->info ? var->info : MISSING_VAL_STR);    
+             var->info ? var->info : MISSING_VAL_STR);
 
      /* FIXME format and samples not supported */
 }
@@ -143,7 +143,7 @@ void vcf_var_sprintf_info(var_t *var,
                          const dp4_counts_t *dp4,
                          const int indel, const int consvar)
 {
-     char buf[LINE_BUF_SIZE];          
+     char buf[LINE_BUF_SIZE];
      snprintf(buf, sizeof(buf)-32, /* leave some for INDEL and other flags below */
               "DP=%d;AF=%f;SB=%d;DP4=%d,%d,%d,%d",
               *dp, *af, *sb, dp4->ref_fw, dp4->ref_rv, dp4->alt_fw, dp4->alt_rv);
@@ -153,7 +153,7 @@ void vcf_var_sprintf_info(var_t *var,
      if (consvar) {
           sprintf(buf, "%s;CONSVAR", buf);
      }
-     
+
      var->info = strdup(buf);
 
      /* FIXME format and samples not supported */
@@ -172,7 +172,7 @@ void vcf_write_header(FILE *stream, const char *src, const char *reffa)
      t = time(0);
      localtime_r(&t, &tm);
      strftime(tbuf, 9, "%Y%m%d", &tm);
-     
+
      fprintf(stream, "##fileformat=VCFv4.0\n");
      fprintf(stream, "##fileDate=%s\n", tbuf);
      if (src) {
@@ -182,8 +182,8 @@ void vcf_write_header(FILE *stream, const char *src, const char *reffa)
           fprintf(stream, "##reference=%s\n", reffa);
      }
      fprintf(stream, "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Raw Depth\">\n");
-     fprintf(stream, "##INFO=<ID=AF,Number=1,Type=Float,Description=\"Allele Frequency\">\n");    
-     fprintf(stream, "##INFO=<ID=SB,Number=1,Type=Integer,Description=\"Phred-scaled strand bias at this position\">\n");    
+     fprintf(stream, "##INFO=<ID=AF,Number=1,Type=Float,Description=\"Allele Frequency\">\n");
+     fprintf(stream, "##INFO=<ID=SB,Number=1,Type=Integer,Description=\"Phred-scaled strand bias at this position\">\n");
 
      fprintf(stream, "##INFO=<ID=DP4,Number=4,Type=Integer,Description=\"Counts for ref-forward bases, ref-reverse, alt-forward and alt-reverse bases\">\n");
 
@@ -205,7 +205,7 @@ int vcf_parse_header(char **header, FILE *stream)
      char line[LINE_BUF_SIZE];
 
      /* make sure strlen below will work on header */
-     (*header) = malloc(sizeof(char)); 
+     (*header) = malloc(sizeof(char));
      (*header)[0] = '\0';
 
      while (NULL != fgets(line, sizeof(line), stream)) {
@@ -231,9 +231,9 @@ int parse_var(FILE *stream, var_t *var)
      char line[LINE_BUF_SIZE];
      char *line_ptr;
      int field_no = 0;
-     
+
      if (NULL == fgets(line, sizeof(line), stream)) {
-          return 1;          
+          return 1;
      }
      chomp(line);
      line_ptr = line;
@@ -247,38 +247,42 @@ int parse_var(FILE *stream, var_t *var)
                var->chrom = strdup(token);
 
           } else if (2 == field_no) {
-               var->pos = atol(token)-1;               
+               var->pos = atol(token)-1;
           } else if (3 == field_no) {
-               var->id = strdup(token);                      
-               
+               var->id = strdup(token);
+
           } else if (4 == field_no) {
                if (strlen(token)>1) {
                     LOG_FATAL("%s\n", "Only supporting one reference base in vcf");
                }
                var->ref = token[0];
-               
+
           } else if (5 == field_no) {
                if (strlen(token)>1) {
                     LOG_FATAL("%s\n", "Only supporting one alt base in vcf");
                }
-               var->alt = token[0];               
-               
+               var->alt = token[0];
+
           } else if (6 == field_no) {
-               var->qual = atoi(token);               
+               if (token[0]==MISSING_VAL_CHAR) {
+                    var->qual = -1;
+               } else {
+                    var->qual = atoi(token);
+               }
 
           } else if (7 == field_no) {
-               var->filter = strdup(token);               
-               
+               var->filter = strdup(token);
+
           } else if (8 == field_no) {
-               var->info = strdup(token);               
+               var->info = strdup(token);
 
 #if 0
           } else if (9 == field_no) {
-               var->format = strdup(token);               
+               var->format = strdup(token);
 
           } else if (9 < field_no) {
                /* allocate mem for samples first */
-               var->samples[field_no-10] = strdup(token);               
+               var->samples[field_no-10] = strdup(token);
 #else
           } else {
                LOG_WARN("%s\n", "Genotyping info in vcf not supported");
@@ -312,7 +316,7 @@ int vcf_parse_vars(FILE *stream, var_t ***vars)
           rc = parse_var(stream, var);
           if (-1 == rc) {
                int i;
-               LOG_FATAL("%s\n", "Parsing error");               
+               LOG_FATAL("%s\n", "Parsing error");
                for (i=0; i<num_vars; i++) {
                     vcf_free_var(&(*vars)[i]);
                }
@@ -340,8 +344,8 @@ int vcf_parse_vars(FILE *stream, var_t ***vars)
 #ifdef VCF_MAIN
 
 
-/* 
-gcc -pedantic -Wall -g -std=gnu99 -O2 -DVCF_MAIN -o vcf_main vcf.c utils.c log.c 
+/*
+gcc -pedantic -Wall -g -std=gnu99 -O2 -DVCF_MAIN -o vcf_main vcf.c utils.c log.c
 valgrind --tool=memcheck --leak-check=full --show-reachable=yes --track-origins=yes ./vcf_main example.vcf
 */
 int main(int argc, char *argv[]) {
@@ -368,13 +372,13 @@ int main(int argc, char *argv[]) {
           LOG_FATAL("%s\n", "vcf_parse_header() failed");
           free(header);
           return 1;
-     } 
+     }
      fprintf(stdout, "HEADER start:\n");
      vcf_write_header(stdout, NULL, NULL);
      fprintf(stdout, "HEADER END\n");
 
      free(header);
-     
+
 
 
      if (-1 == (num_vars = vcf_parse_vars(fh, &vars))) {
