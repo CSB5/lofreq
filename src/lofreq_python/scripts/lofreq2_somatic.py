@@ -94,14 +94,14 @@ def cmdline_parser():
                         type=float,
                         default=default,
                         help="Significance threshold / evalue for"
-                        " SNV prediction on normal sample"
+                        " SNV prediction on normal sample (non Bonferroni corrected pvalues)"
                         " (default: %f)" % default)
     default = 10
     parser.add_argument("-S", "--tumor-sig", 
                         type=float,
                         default=default,
                         help="Significance threshold / evalue for"
-                        " SNV prediction on tumor sample"
+                        " SNV prediction on tumor sample (Bonferroni corrected pvalues)"
                         " (default: %f)" % default)
     default = 13
     parser.add_argument("-m,", "--mq-filter", 
@@ -164,6 +164,8 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
         cmd.extend(['-f', ref])
         if baq_on:
             cmd.append('-E')
+        #cmd.append('--verbose')
+        
         if bed:
             cmd.extend(['-l', bed])
         cmd.extend(['--no-default-filter', '-b', "%d" % 1, '-s', "%f" % sig_n, '-o', vcf_n, bam_n])
@@ -176,6 +178,9 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
     cmd.extend(['-f', ref])
     if baq_on:
         cmd.append('-E')    
+    #cmd.append('--verbose')
+    
+    
     if bed:
         cmd.extend(['-l', bed])
     cmd.extend(['-b', 'dynamic', '-s', "%f" % sig_t, 
@@ -214,12 +219,17 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
         try:
             subprocess.check_call(cmd)
         except subprocess.CalledProcessError as e:
-            LOG.fatal("The following command failed: %s (%s)" % (
-                ' '.join(cmd), str(e)))
-            raise
+            LOG.fatal("The following command failed: %s" % (
+                ' '.join(cmd)))
+            LOG.fatal("An error message indicating the source of this error should have bee printed above")
+            #print str(e)
+            #raise
+            sys.exit(1)
         except OSError as e:
             LOG.fatal("The following command failed: %s (%s)" % (
-                ' '.join(cmd), str(e)))
+                ' '.join(cmd)))
+            LOG.fatal("An error message indicating the source of this error should have bee printed above")
+            #print str(e)
             LOG.fatal("Looks like the lofreq binary is not in your PATH (which is: %s)" % (os.environ["PATH"]))
             sys.exit(1)
 
