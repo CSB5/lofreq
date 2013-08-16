@@ -166,7 +166,7 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
             cmd.append('-E')
         if bed:
             cmd.extend(['-l', bed])
-        cmd.extend(['-b', "%d" % 1, '-s', "%f" % sig_n, '-o', vcf_n, bam_n])
+        cmd.extend(['--no-default-filter', '-b', "%d" % 1, '-s', "%f" % sig_n, '-o', vcf_n, bam_n])
         somatic_commands.append(cmd)
         
     if num_threads>1:
