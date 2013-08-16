@@ -4,8 +4,7 @@
 
 source lib.sh || exit 1
 
-
-# tst vs self prediction should give zero results
+# test vs self prediction should give zero results
 
 bam=data/denv2-simulation/denv2-10haplo.bam
 vcf_in=data/denv2-simulation/denv2-10haplo_true-snp.vcf
@@ -46,6 +45,8 @@ if [ "$num_snvs" -ne 2 ]; then
 else
     echook "Got expected number of SNVs from somatic check"
 fi
+
 rm $vcf_out
+#echo $vcf_out
 
 
