@@ -14,6 +14,8 @@
 #include <limits.h>
 #include <dirent.h>
 #include <errno.h>
+#include <sys/stat.h>
+#include <libgen.h>
 
 #include "log.h"
 #include "utils.h"
@@ -293,4 +295,99 @@ void chomp(char *s)
      if (end >= 0 && s[end]=='\n') {
           s[end]='\0';
      }
+}
+
+
+/* taken from
+ * http://www.delorie.com/gnu/docs/glibc/libc_279.html
+ * needed because if readlink's 'return value equals size, you cannot
+ * tell whether or not there was room to return the entire name'.
+ */
+char *
+readlink_malloc(const char *filename)
+{
+     int size = 100;
+     char *buffer = NULL;
+     
+     while (1) {
+          buffer = (char *)realloc(buffer, size);
+          int nchars = readlink(filename, buffer, size);
+          if (nchars < 0) {
+               free(buffer);
+               return NULL;
+          }
+          if (nchars < size) {
+               return buffer;
+          }
+          size *= 2;
+     }
+}
+
+
+/* follows symlinks until resolved and returns realtpath. returns NULL
+ * on error, otherwise true path. caller has to free
+ */
+char *
+resolved_path(const char *path)
+{
+     char *resolved_path, *tmp_path;
+     char orig_wd[PATH_MAX];
+
+     if (NULL == getcwd(orig_wd, PATH_MAX)) {
+          return NULL;
+     }
+
+     resolved_path = strdup(path);
+     while (1) {
+          char realpath_buf[PATH_MAX];
+          struct stat stat_buf;
+
+          if (lstat(resolved_path, &stat_buf)) {
+               LOG_ERROR("%s\n", "lstat() failed");               
+               free(resolved_path);
+               resolved_path = NULL;
+               goto chdir_and_return;
+          }
+
+          /* done if not a link */
+          if (! S_ISLNK(stat_buf.st_mode)) {
+               /*LOG_FIXME("no more link: %s\n", resolved_path);*/
+               break;
+          }
+
+          /* read link and change to dirname of link */
+          if (NULL == (tmp_path = readlink_malloc(resolved_path))) {
+               LOG_ERROR("%s\n", "readlink() failed.");
+               free(resolved_path);
+               resolved_path = NULL;
+               goto chdir_and_return;
+          }
+          if (-1 == chdir(dirname(resolved_path))) {
+               LOG_ERROR("%s\n", "chdir() failed.");
+               free(resolved_path);
+               return NULL;
+          }
+          /*LOG_FIXME("Now in %s\n", dirname(resolved_path));*/
+
+          if (NULL == realpath(tmp_path, realpath_buf)) {
+               LOG_ERROR("realpath failed on %s\n", tmp_path);
+               free(tmp_path);
+               free(resolved_path);
+               resolved_path = NULL;
+               goto chdir_and_return;
+          }
+                    
+          free(tmp_path);
+          free(resolved_path);
+          resolved_path = strdup(realpath_buf);
+     }
+
+chdir_and_return:
+
+     if (-1 == chdir(orig_wd)) {
+          LOG_ERROR("%s\n", "chdir() failed. Trying to continue...");
+     }
+     /*LOG_FIXME("resolved_path is now %s\n", resolved_path);*/
+
+     return resolved_path;
 }
