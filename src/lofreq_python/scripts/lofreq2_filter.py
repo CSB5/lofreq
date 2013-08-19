@@ -126,9 +126,9 @@ def cmdline_parser():
                       help="Optional: Filter variant if its phred-score"
                       " is below this value (int)")
     parser.add_option("", "--snv-fdr", 
-                      dest="snv_fdr_q",
+                      dest="snv_fdr",
                       type='float',
-                      help="Optional: Set SNV FDR to this value")
+                      help="Optional: Set alpha for FDR (Benjamini-Hochberg) of SNV pvalues")
     #parser.add_option("", "--window-size",
     #                  dest="window_size",
     #                  type='int',
@@ -301,7 +301,6 @@ def main():
             vcf_filter.id
             ))
 
-        
     if opts.min_snv_phred != None:  
         vcf_filter = vcf._Filter(
             id="minqual%d" % opts.min_snv_phred, 
@@ -313,9 +312,9 @@ def main():
             vcf_filter.id
             ))
 
-    if opts.snv_fdr_q:
+    if opts.snv_fdr:
         vcf_filter = vcf._Filter(
-            id=("fdr%f" % opts.snv_fdr_q).rstrip('0'),
+            id=("fdr%f" % opts.snv_fdr).rstrip('0'),
             desc="SNV Phred FDR")
         vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
 
@@ -333,11 +332,12 @@ def main():
             if s.QUAL != '.':
                 pvals.append(phredqual_to_prob(s.QUAL))
                 pidx.append(i)
+                s.INFO[vcf_info_id] = 0
             else:
                 s.INFO[vcf_info_id] = '.'
-        
-        for (i, r) in zip(pidx, fdr.fdr(pvals, opts.snv_fdr_q)):
-            snvs[i].INFO[vcf_info_id] = 1 if r else 0
+
+        for i in fdr.fdr(pvals, opts.snv_fdr):
+            snvs[pidx[i]].INFO[vcf_info_id] = 1
                 
         filters.append((
             lambda s, f_id: f_id if s.INFO["FDRPASS"] != '.' and s.INFO["FDRPASS"] == 0 else None,
