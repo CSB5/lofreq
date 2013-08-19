@@ -169,6 +169,11 @@ faidx_t *fai_read(FILE *fp)
 #else
 		sscanf(p, "%d%lld%d%d", &len, &offset, &line_blen, &line_len);
 #endif
+        /* AW (LoFreq): check for incompatible index e.g. gatk shipped hg19 */
+        if (len==0 && line_blen==0) {
+          fai_destroy(fai);
+          return NULL;
+        }
 		fai_insert_index(fai, buf, len, line_len, line_blen, offset);
 	}
 	free(buf);
@@ -282,7 +287,7 @@ faidx_t *fai_load(const char *fn)
 		fai_build(fn);
 		fp = fopen(str, "rb");
 		if (fp == 0) {
-			fprintf(stderr, "[fai_load] fail to open FASTA index.\n");
+            fprintf(stderr, "[fai_load] fail to open FASTA index %s\n", str);
 			free(str);
 			return 0;
 		}
@@ -290,6 +295,11 @@ faidx_t *fai_load(const char *fn)
 
 	fai = fai_read(fp);
 	fclose(fp);
+    /* AW (LoFreq) */
+	if (NULL == fai) {
+      fprintf(stderr, "[fai_load] fail to open FASTA index file %s\n", str);
+      return 0;
+	}
 
 	fai->rz = razf_open(fn, "rb");
 	free(str);
