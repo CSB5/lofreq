@@ -33,7 +33,7 @@ add_local_dir_to_path(char *argv0) {
      char lofreq_script_rel[] = "../lofreq_python/scripts/lofreq2_filter.py";
      char *lofreq_script_abs = NULL;
 
-     argv0_cp = strdup(argv0); /* dirname might change contents */
+     argv0_cp = resolved_path(argv0);
      if (NULL == (dirname_argv0 = strdup(dirname(argv0_cp)))) {
           free(argv0_cp);
           return;
@@ -83,19 +83,6 @@ add_local_dir_to_path(char *argv0) {
      }
 
 
-#ifdef FIXME_NO_NEED
-     free(path_var);
-     old_path = getenv(PATH_NAME);
-     path_var = strdup(dirname(argv0));
-     LOG_VERBOSE("Adding argv0 directory %s to PATH\n", path_var);
-     path_var = realloc(
-          path_var, (strlen(path_var) + 1 + strlen(old_path) + 1) * sizeof(char));
-     (void) strcat(path_var, ":");
-     (void) strcat(path_var, old_path);
-     setenv(PATH_NAME, path_var, 1);
-     LOG_DEBUG("New PATH = %s\n", path_var);
-#endif
-
      free(path_var);
      free(lofreq_script_abs);
      free(dirname_argv0);
@@ -125,13 +112,6 @@ static void usage(const char *myname)
 
 int main(int argc, char *argv[])
 {
-    /* FIXME warn if link
-     * #include <sys/stat.h>
-     * int x = lstat("junklink", &buf);
-     * if if (S_ISLNK(buf.st_mode))
-     * warning things might not work as expected
-     * else 
-     */
      add_local_dir_to_path(argv[0]);
 
      if (argc < 2) {
