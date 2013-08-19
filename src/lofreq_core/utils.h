@@ -42,4 +42,10 @@ join_paths(char **p1, const char *p2);
 void
 chomp(char *s);
 
+char *
+readlink_malloc(const char *filename);
+
+char *
+resolved_path(const char *path);
+
 #endif
