@@ -105,6 +105,7 @@ static void usage(const char *myname)
      fprintf(stderr, "    uniq        : test whether SNVs predicted in one sample couldn't be predicted in other\n");
      fprintf(stderr, "    plp_summary : print pileup summary per position\n");
      fprintf(stderr, "    vcfset      : VCF set operations\n");
+     fprintf(stderr, "    cluster     : Cluster variants in VCF file (supports legacy SNP format)\n");
      fprintf(stderr, "    version     : print version string\n");
      fprintf(stderr, "\n");
 }
@@ -135,13 +136,15 @@ int main(int argc, char *argv[])
 
      } else if (strcmp(argv[1], "filter") == 0 || 
                 strcmp(argv[1], "somatic") == 0 ||
-                strcmp(argv[1], "vcfset") == 0) {
+                strcmp(argv[1], "vcfset") == 0 ||
+                strcmp(argv[1], "cluster") == 0) {
           char **argv_execvp = calloc(argc, sizeof(char*));
           int i;
           char *filter_script = "lofreq2_filter.py";
           char *somatic_script = "lofreq2_somatic.py";
           char *vcfset_script = "lofreq2_vcfset.py";
-          char *script_to_call;;
+          char *cluster_script = "lofreq2_cluster.py";
+          char *script_to_call;
 
           if (strcmp(argv[1], "filter") == 0) {
                script_to_call = filter_script;
@@ -149,6 +152,8 @@ int main(int argc, char *argv[])
                script_to_call = somatic_script;
           } else if (strcmp(argv[1], "vcfset") == 0) {
                script_to_call = vcfset_script;
+          } else if (strcmp(argv[1], "cluster") == 0) {
+               script_to_call = cluster_script;
           } else {
                LOG_FATAL("%s\n", "Internal error: unknown option");
                return -1;

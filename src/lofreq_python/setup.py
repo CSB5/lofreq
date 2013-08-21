@@ -37,6 +37,7 @@ setup(name = setup_conf.PACKAGE_NAME,
       long_description = """LoFreq-Star is a fast and sensitive variant-caller for inferring single-nucleotide variants (SNVs) from high-throughput sequencing data""",
       #url='https://sourceforge.net/p/lofreq/',
       scripts = [
+          'scripts/lofreq2_cluster.py',
           'scripts/lofreq2_filter.py',
           'scripts/lofreq2_somatic.py', 
           'scripts/lofreq2_vcfset.py'
