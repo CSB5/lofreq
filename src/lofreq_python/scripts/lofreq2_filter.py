@@ -132,9 +132,10 @@ def cmdline_parser():
     #parser.add_option("", "--window-size",
     #                  dest="window_size",
     #                  type='int',
-    #                  help="Optional: Filter variants if at least"
-    #                  " one or more were called within this window size")
-
+    #                  help="Optional: Filter variants if more than one"
+    #                  " are present within this window size")
+    # FIXME implement as in old version
+    
     parser.add_option("--force", help=SUPPRESS_HELP,
                       dest="force_overwrite", action="store_true") 
 
@@ -209,8 +210,13 @@ def main():
             id="SBBC", num=1, type='Integer',
             desc="Strand-bias Bonferroni corrected")        
         vcf_reader.infos[vcf_info.id] = vcf_info
-        
-        pvals = [phredqual_to_prob(s.INFO['SB']) for s in snvs]
+        try:
+            pvals = [phredqual_to_prob(s.INFO['SB']) for s in snvs]
+        except KeyError:
+            LOG.error("At least one SNV was not annotated with strandbias info (SB)"
+                      " (was this file produced with LoFreq?)"
+                      " You will need to switch strandbias filtering off")
+            sys.exit(1)
         corr_pvals = multiple_testing.Bonferroni(pvals).corrected_pvals
         for (cp, s) in zip(corr_pvals, snvs):
             s.INFO[vcf_info.id] = prob_to_phredqual(cp)
@@ -233,8 +239,15 @@ def main():
             id="SBHC", num=1, type='Integer',
             desc="Strand-bias Holm-Bonferroni corrected")        
         vcf_reader.infos[vcf_info.id] = vcf_info
-        
-        pvals = [phredqual_to_prob(s.INFO['SB']) for s in snvs]
+
+        try:
+            pvals = [phredqual_to_prob(s.INFO['SB']) for s in snvs]
+        except KeyError:
+            LOG.error("At least one SNV was not annotated with strandbias info (SB)"
+                      " (was this file produced with LoFreq?)."
+                      " You will need to switch strandbias filtering off")
+            sys.exit(1)
+
         corr_pvals = multiple_testing.HolmBonferroni(pvals).corrected_pvals
         #import pdb; pdb.set_trace()
         for (cp, s) in zip(corr_pvals, snvs):
@@ -279,6 +292,11 @@ def main():
 
         
     if opts.max_cov != None:  
+        if not all([s.INFO.has_key('DP') for s in snvs]):
+            LOG.error("At least one SNV was not annotated with depth info (DP)"
+                      " (was this file produced with LoFreq?).")
+            sys.exit(1)
+
         vcf_filter = vcf._Filter(
             id="maxcov%d" % opts.max_cov, 
             desc="Maximum coverage")
@@ -291,6 +309,11 @@ def main():
 
         
     if opts.min_cov != None:  
+        if not all([s.INFO.has_key('DP') for s in snvs]):
+            LOG.error("At least one SNV was not annotated with depth info (DP)"
+                      " (was this file produced with LoFreq?).")
+            sys.exit(1)
+            
         vcf_filter = vcf._Filter(
             id="mincov%d" % opts.min_cov, 
             desc="Minimum coverage")
@@ -363,8 +386,8 @@ def main():
                 else:
                     snvs[i] = s._replace(FILTER="%s,%s" % (s.FILTER, f))
 
-    #if opts.window_size != None:  
-    #    raise NotImplementedError # FIXME
+    if opts.window_size != None:  
+        raise NotImplementedError # FIXME
 
 
     # should all also work if we get already PASSed input  
