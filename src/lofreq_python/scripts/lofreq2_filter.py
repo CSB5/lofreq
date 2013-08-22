@@ -129,15 +129,17 @@ def cmdline_parser():
                       dest="snv_fdr",
                       type='float',
                       help="Optional: Set alpha for FDR (Benjamini-Hochberg) of SNV pvalues")
-    #parser.add_option("", "--window-size",
-    #                  dest="window_size",
-    #                  type='int',
-    #                  help="Optional: Filter variants if more than one"
+    parser.add_option("", "--window-size",
+                      dest="window_size",
+                      type='int',
+                      help=SUPPRESS_HELP)
+    #"Optional: Filter variants if more than one"
     #                  " are present within this window size")
     # FIXME implement as in old version
     
-    parser.add_option("--force", help=SUPPRESS_HELP,
-                      dest="force_overwrite", action="store_true") 
+    #parser.add_option("--force",
+    #                  #help=SUPPRESS_HELP,
+    #                  dest="force_overwrite", action="store_true") 
 
     return parser
 
