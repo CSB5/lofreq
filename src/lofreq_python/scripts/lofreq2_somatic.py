@@ -15,7 +15,6 @@ import logging
 import os
 import argparse
 import subprocess
-import datetime
 
 #--- third-party imports
 #
@@ -44,19 +43,14 @@ LOG = logging.getLogger("")
 logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
+
 VCF_NORMAL_EXT = "normal.vcf"
+VCF_TUMOR_PRE_FDR_EXT = "tumor-pre-fdr.vcf"
 VCF_TUMOR_EXT = "tumor.vcf"
 VCF_RAW_EXT = "lofreq_somatic_raw.vcf"
 VCF_FILTERED_EXT = "lofreq_somatic_filtered.vcf"
 VCF_FINAL_EXT = "lofreq_somatic_final.vcf"
 
-
-
-def timestamp():
-    """Generate a timestamp string
-    """
-
-    return datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
 def cmdline_parser():
@@ -89,47 +83,67 @@ def cmdline_parser():
     parser.add_argument("-l", "--bed", 
                         help="BED file listing regions to restrict analysis to")
 
+    #default = 10
+    parser.add_argument("-S", "--tumor-bonfsig", 
+                        type=float,
+                        #default=default,
+                        help="Significance threshold (alpha) for tumor SNV"
+                        " pvalues (Bonferroni corrected) in tumor sample"
+                        " (Clashes with -F)")
+                        #" pvalues; default: %f). Collides with -F" % default)
+    # FIXME presence of both options makes things awkward
+    #default = 0.01
+    parser.add_argument("-F", "--tumor-fdr", 
+                        type=float,
+                        #default=default,
+                        help="Tumor SNV false discovery rate (Bonferroni corrected"
+                        " pvalues). Clashes with -S")
+                        #" pvalues; default: %f). Clashes with -S" % default)
+                        
     default = 0.001
     parser.add_argument("-s", "--normal-sig", 
                         type=float,
                         default=default,
-                        help="Significance threshold / evalue for"
-                        " SNV prediction on normal sample (non Bonferroni corrected pvalues)"
+                        help="Significance threshold (alpha) for SNV"
+                        " pvalues (non-Bonferroni corrected) in normal sample"
                         " (default: %f)" % default)
-    default = 10
-    parser.add_argument("-S", "--tumor-sig", 
-                        type=float,
-                        default=default,
-                        help="Significance threshold / evalue for"
-                        " SNV prediction on tumor sample (Bonferroni corrected pvalues)"
-                        " (default: %f)" % default)
+
     default = 13
     parser.add_argument("-m,", "--mq-filter", 
                         type=int,
                         default=default,
                         help="mapping quality filter for"
                         " tumor sample (default=%d)" % default)
+    
+    parser.add_argument("-E", "--baq", 
+                        action="store_true",
+                        help="Enable BAQ computation (makes more conservative calls).")
+                        
+    # disabled/suppressed because not working
     parser.add_argument("--reuse-normal-vcf", 
                         help="Expert only: reuse already compute normal"
                         " prediction (PREFIX+%s)" % VCF_NORMAL_EXT)
-    parser.add_argument("-E", "--baq", 
-                        action="store_true",
-                        help="Enable (extended) BAQ computation")
-    # disabled because not working
     parser.add_argument("-p", "--num-threads", 
                         type=int, help=argparse.SUPPRESS)
     #help="Enable parallel computation with this many threads")
+
     return parser
 
 
 
-def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
-            sig_n=0.001, sig_t=10, mq_filter_t=13,
+def somatic(bam_n, bam_t, ref, out_prefix, 
+            bed=None, sig_n=0.001, sig_t=None, fdr_t=0.05, mq_filter_t=13,
             reuse_normal=None, baq_on=False, num_threads=0):
     """Core of the somatic SNV callers, which calls all the necessary
     parts and glues them together
     """
+    # FIXME cleanup argument mess
 
+    for (k, v) in locals().items():
+        LOG.critical("%s = %s" % (k, v))
+    
+    assert sig_t==None or fdr_t==None
+    
     infiles = [bam_n, bam_t, ref]
     if bed:
         infiles.append(bed)
@@ -142,6 +156,7 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
             "%s does not exist" % reuse_normal)
         vcf_n = reuse_normal
         
+    vcf_t_pre_fdr = out_prefix + VCF_TUMOR_PRE_FDR_EXT
     vcf_t = out_prefix + VCF_TUMOR_EXT
     vcf_som_raw = out_prefix + VCF_RAW_EXT
     vcf_som_filtered = out_prefix + VCF_FILTERED_EXT
@@ -157,7 +172,7 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
     somatic_commands = []
 
     if not reuse_normal:
-        if num_threads>1:
+        if num_threads > 1:
             cmd = ['lofreq2_call_parallel.py', '-n', '%s' % num_threads]    
         else:
             cmd = ['lofreq', 'call']
@@ -171,7 +186,7 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
         cmd.extend(['--no-default-filter', '-b', "%d" % 1, '-s', "%f" % sig_n, '-o', vcf_n, bam_n])
         somatic_commands.append(cmd)
         
-    if num_threads>1:
+    if num_threads > 1:
         cmd = ['lofreq2_call_parallel.py', '-n', '%s' % num_threads]    
     else:
         cmd = ['lofreq', 'call']
@@ -183,11 +198,24 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
     
     if bed:
         cmd.extend(['-l', bed])
-    cmd.extend(['-b', 'dynamic', '-s', "%f" % sig_t, 
-                '-m', "%d" % mq_filter_t, '-o', vcf_t, bam_t])
-    somatic_commands.append(cmd)
+        
+    if fdr_t != None:
+        cmd.extend(['-b', "%d" % 1, '-s', "%f" % 0.001, '-o', vcf_t_pre_fdr]) # should roughly match sig_n)
+        cmd.extend(['-m', "%d" % mq_filter_t, bam_t])
+        somatic_commands.append(cmd)
+        
+        cmd = ['lofreq', 'filter', '-i', vcf_t_pre_fdr, 
+               '--snv-fdr', "%f" % fdr_t, '-o', vcf_t]
+        somatic_commands.append(cmd)
+        
+    elif sig_t != None:
+        cmd.extend(['-b', 'dynamic', '-s', "%f" % sig_t, '-o', vcf_t])
+        cmd.extend(['-m', "%d" % mq_filter_t, bam_t])
+        somatic_commands.append(cmd)
 
-    # FIXME both of the above can run in theory be simultaneously
+    else:
+        raise ValueError
+
     
     cmd = ['lofreq', 'vcfset', '-1', vcf_t, '-2', vcf_n, 
            '-a', 'complement', '-o', vcf_som_raw]
@@ -214,7 +242,7 @@ def somatic(bam_n, bam_t, ref, out_prefix, bed=None,
     for (i, cmd) in enumerate(somatic_commands):
         LOG.info("Running cmd %d out of %d: %s" % (
             i+1, len(somatic_commands), ' '.join(cmd)))
-        #LOG.critical("DEBUG continue before executing %s" % ' '.join(cmd)); continue
+        #LOG.critical("DEBUG continue before executing:\n  %s" % ' '.join(cmd)); continue
 
         try:
             subprocess.check_call(cmd)
@@ -270,10 +298,24 @@ def main():
             sys.exit(1)
 
     LOG.debug("args = %s" % args)
+    
+    if args.tumor_bonfsig!=None and args.tumor_fdr!=None:
+        LOG.error("Can only do one: Bonferroni or FDR")
+        sys.exit(1)
+    if args.tumor_bonfsig==None and args.tumor_fdr==None:
+        LOG.error("You need to specify Bonferroni or FDR treshold for tumor sample")
+        sys.exit(1)
+        
 
-    somatic(args.normal, args.tumor, args.ref, outprefix, args.bed,
-            args.normal_sig, args.tumor_sig, args.mq_filter, 
-            args.reuse_normal_vcf, args.baq, args.num_threads)
+    somatic(args.normal, args.tumor, args.ref, outprefix, 
+            bed=args.bed, 
+            sig_n=args.normal_sig, 
+            sig_t=args.tumor_bonfsig, 
+            fdr_t=args.tumor_fdr,
+            mq_filter_t=args.mq_filter, 
+            reuse_normal=args.reuse_normal_vcf, 
+            baq_on=args.baq,
+            num_threads=args.num_threads)
 
 
     
