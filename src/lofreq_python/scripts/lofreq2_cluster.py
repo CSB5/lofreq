@@ -74,7 +74,7 @@ logging.basicConfig(level=logging.WARN,
 #                                     color_scheme='Linux', call_pdb=1)
 
 class MetaVar(object):
-    """Wrapper for SNV and VCF format variants
+    """Wrapper for SNV and VCF format variants to look the same
     """
     
     def __init__(self, vcf_var=None, snp_var=None):
@@ -148,56 +148,6 @@ class MetaVar(object):
     
 
         
-#def base_counts_for_plp_pos(samfile, ref, pos,
-#                            min_mq=1, min_bq=3):
-#    """
-#    """
-#
-#    base_counts = dict()
-#    # use fetch instead of pileup and use own pileup routine, because
-#    # if you use pileup you get alignedreads, but do they respect
-#    # CIGAR?
-#    for alnread in samfile.fetch(ref, pos, pos+1):
-#
-#        # paranoia: shouldn't happen, but seen it before
-#        if alnread.is_unmapped:
-#            continue
-#        if alnread.is_duplicate:
-#             continue
-#        if alnread.is_paired and not alnread.is_proper_pair:
-#            continue
-#        if alnread.is_qcfail:
-#            continue
-#        if alnread.is_secondary:
-#            continue
-#
-#        if alnread.mapq < min_mq:
-#            continue
-#
-#        #
-#        # borrow fake pileup trick from joined_freqs.py
-#        #
-#        
-#        # get aligned pairs where read and ref base are present (i.e.
-#        # substitutions only)
-#        aln_pairs = [(qpos, rpos) for (qpos, rpos) in alnread.aligned_pairs
-#                     if qpos!=None and rpos!=None]
-#        # create a dictionary with ref pos as key and read base and
-#        # it's phred qual as value (tuple) if value is above min_bq
-#        pos_nt_map = dict([
-#            (rpos, (alnread.query[qpos], ord(alnread.qqual[qpos])-33))
-#            for (qpos, rpos) in aln_pairs 
-#            if ord(alnread.qqual[qpos])-33 >= min_bq])
-#
-#        # now extract info for this position only
-#        if pos_nt_map.has_key(pos):
-#            base = pos_nt_map[pos][0]
-#            base_counts[base] = base_counts.get(base, 0) + 1
-#     
-#    return base_counts
-
-    
-        
 
 def cmdline_parser():
     """
@@ -215,9 +165,6 @@ def cmdline_parser():
                       action="store_true", 
                       dest="debug",
                       help="enable debugging")
-    # parser.add_argument("-b", "--bam",
-    #                  dest="bam_file",
-    #                  help="BAM input file")
     parser.add_argument("-i", "--variants",
                       dest="var_file",
                       help="variant input file (supported formats: %s)" % (
@@ -226,19 +173,6 @@ def cmdline_parser():
                       dest="cluster_file",
                       default="-",
                       help="Cluster output file (- for stdout = default)")
-
-    #default = 13
-    #parser.add_argument("-B", "--min-bq",
-    #                    dest="min_bq",
-    #                    type=int,
-    #                    default=default,
-    #                    help="Minimum base quality (default %d)" % default)
-    #default = 13
-    #parser.add_argument("-M", "--min-mq",
-    #                  dest="min_mq",
-    #                  type=int,
-    #                  default=default,
-    #                  help="Minimm read mapping quality (default %d)" % default)
 
     return parser
 
@@ -260,7 +194,6 @@ def main():
 
 
     for (in_file, descr) in [(args.var_file, "variant file")]:
-        #(args.bam_file, "BAM file")]:
         if not in_file:
             parser.error("%s input file argument missing." % descr)
             sys.exit(1)
@@ -317,8 +250,6 @@ def main():
         sys.exit(1)
 
     
-    # else
-    # read vcf
     LOG.info("Parsed %d SNPs from %s" % (len(var_list), args.var_file))
 
     
