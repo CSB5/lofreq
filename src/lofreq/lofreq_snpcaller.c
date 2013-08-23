@@ -137,6 +137,11 @@ const int MQ_TRANS_TABLE[61] = {
 #endif
 
 
+/* number of tests performed (CONSVAR doesn't count). for downstream multiple testing
+ * correction. corresponds to bonf if bonf_dynamic is true. */
+long long int num_tests = 0;
+
+
 typedef struct {
      int min_altbq;
      int def_altbq;
@@ -325,6 +330,7 @@ call_snvs(const plp_col_t *p, void *confp)
      if (conf->bonf_dynamic) {
           conf->bonf += 3; /* will do one test per non-cons nuc */
      }
+     num_tests += 3;
 
      if (! conf->dont_skip_n && p->ref_base == 'N') {
           return;
@@ -1318,6 +1324,10 @@ for cov in coverage_range:
          } else {
               (void) unlink(vcf_tmp_out);
          }
+    }
+
+    if (! plp_summary_only) {
+         LOG_VERBOSE("%lld number of tests performed\n", num_tests);
     }
 
     free(vcf_tmp_out);
