@@ -5,7 +5,9 @@ Original source: multiple_testing.py from goatools (see below).
 https://github.com/tanghaibao/goatools
 f75455067a7f7aad66f5b229ab514977b70c34d9
 
-Modified to get rid of numpy dependence.
+AW:
+- Modified to get rid of numpy dependence.
+- Added n argument (for input of clipped pvalues)
 
 Original Authors:
 - Haibao Tang (tanghaibao),
@@ -21,10 +23,17 @@ from itertools import groupby
 
 class AbstractCorrection(object):
     
-    def __init__(self, pvals, a=.05):
+    def __init__(self, pvals, a=.05, n=None):
         self.pvals = self.corrected_pvals = list(pvals)
-        self.n = len(self.pvals)    # number of multiple tests
-        self.a = a                  # type-1 error cutoff for each test
+
+        # number of multiple tests
+        if n:
+            assert n>len(pvals)
+            self.n = n 
+        else:
+            self.n = len(self.pvals)
+        # type-1 error cutoff for each test   
+        self.a = a                  
 
         self.set_correction()
 
@@ -81,7 +90,8 @@ class HolmBonferroni(AbstractCorrection):
         pvals_idxs = zip(pvals, xrange(len(pvals)))
         pvals_idxs.sort()
 
-        lp = len(self.pvals)
+        #lp = len(self.pvals)
+        lp = self.n
 
         for pval, idxs in groupby(pvals_idxs, lambda x: x[0]):
             idxs = list(idxs)
