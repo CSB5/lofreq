@@ -17,7 +17,8 @@ __license__ = "Free for non-commercial use"
 import sys
 import logging
 import os
-# optparse deprecated from Python 2.7 on
+# optparse deprecated from Python 2.7 on. need optparse here to mess
+# with the default options if needed.
 from optparse import OptionParser, SUPPRESS_HELP
 import gzip
 
@@ -94,15 +95,23 @@ def cmdline_parser():
 
     default = "holm-bonf"
     parser.add_option("", "--strandbias",
-                      default="holm-bonf",
-                      help="Filter variant with strandbias."
+                      default=default,
+                      help="Filter variants with strandbias."
                       " Valid values are 'bonf' (Bonferroni),"
-                      " 'holm-bonf' (Holm-Bonferroni), an integer or off."  
+                      " 'holm-bonf' (Holm-Bonferroni), an integer value or 'off'."  
                       " If 'bonf' or 'holm-bonf', variants with accordingly"
-                      " corrected strand-bias pvalue <0.05 will be filtered."
-                      " Otherwise, a variant will be filtered if the strand-bias"
-                      " phred-score is larger than the given int."
+                      " corrected strand-bias pvalue < strandbias-alpha will be filtered."
+                      " If an int was given, variants with strand-bias phred-scores"
+                      " larger than this value will be filtered."
                       " (default: %s)" % default)
+    default = 0.05
+    parser.add_option("", "--strandbias-alpha",
+                      default=default,
+                      type="float",
+                      help="Alpha/significance-level for strandbias testing."
+                      " (applies only to 'bonf' and 'holm-bonf'; "
+                      " default: %s)" % default)
+
     default = 10
     parser.add_option("", "--min-cov",
                       dest="min_cov", 
@@ -113,22 +122,22 @@ def cmdline_parser():
     parser.add_option("", "--max-cov",
                       dest="max_cov", 
                       type='int',
-                      help="Optional: Filter variant if coverage is"
+                      help="Filter variant if coverage is"
                       " above this cap (int)")
     parser.add_option("", "--min-af",
                       dest="min_af", 
                       type="float",
-                      help="Optional: Filter if (allele) freq is"
+                      help="Filter if (allele) freq is"
                       " below this threshold (float)")
     parser.add_option("", "--snv-phred", 
                       dest="min_snv_phred",
                       type='int',
-                      help="Optional: Filter variant if its phred-score"
+                      help="Filter variant if its phred-score"
                       " is below this value (int)")
     parser.add_option("", "--snv-fdr", 
                       dest="snv_fdr",
                       type='float',
-                      help="Optional: Set alpha for FDR (Benjamini-Hochberg) of SNV pvalues")
+                      help="Set alpha for FDR (Benjamini-Hochberg) of SNV pvalues")
     parser.add_option("", "--window-size",
                       dest="window_size",
                       type='int',
@@ -187,6 +196,7 @@ def main():
                 "Cowardly refusing to overwrite existing output file '%s'.\n" % out_file)
             sys.exit(1)
 
+            
     if opts.vcf_in == '-':
         vcf_reader = vcf.VCFReader(sys.stdin)
     else:
@@ -196,91 +206,95 @@ def main():
             vcf_reader = vcf.VCFReader(open(opts.vcf_in,'r'))
     snvs = [r for r in vcf_reader]
     LOG.info("Parsed %d SNVs from %s" % (len(snvs), opts.vcf_in))
+
     
     # list of tuples: first element is a filter func, which takes a
     # snv and a filter-id as input. second is the filter id. variant
     # will be marked as filtered if func returns True
     filters = []
 
-    if opts.strandbias and opts.strandbias == 'bonf':            
-        vcf_filter = vcf._Filter(
-            id="sbb", 
-            desc="Strand-bias filter on Bonferroni corrected p-values")
-        vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
+    if opts.strandbias:
         
-        vcf_info = vcf._Info(
-            id="SBBC", num=1, type='Integer',
-            desc="Strand-bias Bonferroni corrected")        
-        vcf_reader.infos[vcf_info.id] = vcf_info
-        try:
-            pvals = [phredqual_to_prob(s.INFO['SB']) for s in snvs]
-        except KeyError:
-            LOG.error("At least one SNV was not annotated with strandbias info (SB)"
-                      " (was this file produced with LoFreq?)"
-                      " You will need to switch strandbias filtering off")
-            sys.exit(1)
-        corr_pvals = multiple_testing.Bonferroni(pvals).corrected_pvals
-        for (cp, s) in zip(corr_pvals, snvs):
-            s.INFO[vcf_info.id] = prob_to_phredqual(cp)
-            if s.INFO[vcf_info.id] > sys.maxint:
-                s.INFO[vcf_info.id] = sys.maxint
+        if opts.strandbias == 'bonf':            
+            vcf_filter = vcf._Filter(
+                id="sbb", 
+                desc="Strand-bias filter on Bonferroni corrected p-values")
+            vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
+            
+            vcf_info = vcf._Info(
+                id="SBBC", num=1, type='Integer',
+                desc="Strand-bias Bonferroni corrected")        
+            vcf_reader.infos[vcf_info.id] = vcf_info
+            try:
+                pvals = [phredqual_to_prob(s.INFO['SB']) for s in snvs]
+            except KeyError:
+                LOG.error("At least one SNV was not annotated with strandbias info (SB)"
+                          " (was this file produced with LoFreq?)"
+                          " You will need to switch strandbias filtering off")
+                sys.exit(1)
+            corr_pvals = multiple_testing.Bonferroni(pvals).corrected_pvals
+            for (cp, s) in zip(corr_pvals, snvs):
+                s.INFO[vcf_info.id] = prob_to_phredqual(cp)
+                if s.INFO[vcf_info.id] > sys.maxint:
+                    s.INFO[vcf_info.id] = sys.maxint
+                    
+            filters.append((
+                lambda s, f_id: f_id if s.INFO["SBBC"] > prob_to_phredqual(opts.strandbias_alpha) else None,
+                vcf_filter.id
+                ))
+            
+        elif opts.strandbias == 'holm-bonf':
+            vcf_filter = vcf._Filter(
+                id="sbh", 
+                desc="Strand-bias filter on Holm-Bonferroni corrected p-values")
+            vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
+            
+            vcf_info = vcf._Info(
+                id="SBHC", num=1, type='Integer',
+                desc="Strand-bias Holm-Bonferroni corrected")        
+            vcf_reader.infos[vcf_info.id] = vcf_info
+    
+            try:
+                pvals = [phredqual_to_prob(s.INFO['SB']) for s in snvs]
+            except KeyError:
+                LOG.error("At least one SNV was not annotated with strandbias info (SB)"
+                          " (was this file produced with LoFreq?)."
+                          " You will need to switch strandbias filtering off")
+                sys.exit(1)
+    
+            corr_pvals = multiple_testing.HolmBonferroni(pvals).corrected_pvals
+            #import pdb; pdb.set_trace()
+            for (cp, s) in zip(corr_pvals, snvs):
+                s.INFO[vcf_info.id] = prob_to_phredqual(cp)
+                if s.INFO[vcf_info.id] > sys.maxint:
+                    s.INFO[vcf_info.id] = sys.maxint
                 
-        filters.append((
-            lambda s, f_id: f_id if s.INFO["SBBC"] > 13 else None,
-            vcf_filter.id
-            ))
+            filters.append((
+                lambda s, f_id: f_id if s.INFO["SBHC"] > prob_to_phredqual(opts.strandbias_alpha) else None,
+                vcf_filter.id
+                ))                
 
-        
-    elif opts.strandbias and opts.strandbias == 'holm-bonf':
-        vcf_filter = vcf._Filter(
-            id="sbh", 
-            desc="Strand-bias filter on Holm-Bonferroni corrected p-values")
-        vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
-        
-        vcf_info = vcf._Info(
-            id="SBHC", num=1, type='Integer',
-            desc="Strand-bias Holm-Bonferroni corrected")        
-        vcf_reader.infos[vcf_info.id] = vcf_info
+        # int
+        elif opts.strandbias != 'off':
+            try:
+                max_strandbias_phred = int(opts.strandbias)
+                assert max_strandbias_phred >= 0
+            except (ValueError, AssertionError) as e:
+                LOG.fatal("Invalid strandbias argument: %s" % (opts.strandbias))
+                sys.exit(1)
+                
+            vcf_filter = vcf._Filter(
+                max_strandbias_phred = int(
+                id="sbp%d" % opts.max_strandbias_phred, 
+                desc="Phred-based strand-bias filter (max)"))
+            vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
+    
+            filters.append((
+                lambda s, f_id: f_id if float(s.INFO['SB']) > opts.max_strandbias_phred else None,
+                vcf_filter.id
+                ))
 
-        try:
-            pvals = [phredqual_to_prob(s.INFO['SB']) for s in snvs]
-        except KeyError:
-            LOG.error("At least one SNV was not annotated with strandbias info (SB)"
-                      " (was this file produced with LoFreq?)."
-                      " You will need to switch strandbias filtering off")
-            sys.exit(1)
-
-        corr_pvals = multiple_testing.HolmBonferroni(pvals).corrected_pvals
-        #import pdb; pdb.set_trace()
-        for (cp, s) in zip(corr_pvals, snvs):
-            s.INFO[vcf_info.id] = prob_to_phredqual(cp)
-            if s.INFO[vcf_info.id] > sys.maxint:
-                s.INFO[vcf_info.id] = sys.maxint
             
-        filters.append((
-            lambda s, f_id: f_id if s.INFO["SBHC"] > 13 else None,
-            vcf_filter.id
-            ))                
-
-    elif opts.strandbias and opts.strandbias != 'off':
-        try:
-            max_strandbias_phred = int(opts.strandbias)
-            assert max_strandbias_phred >= 0
-        except (ValueError, AssertionError) as e:
-            LOG.fatal("Invalid strandbias argument: %s" % (opts.strandbias))
-            sys.exit(1)
-            
-        vcf_filter = vcf._Filter(
-            max_strandbias_phred = int(
-            id="sbp%d" % opts.max_strandbias_phred, 
-            desc="Phred-based strand-bias filter (max)"))
-        vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
-
-        filters.append((
-            lambda s, f_id: f_id if float(s.INFO['SB']) > opts.max_strandbias_phred else None,
-            vcf_filter.id
-            ))
-
     if opts.min_af != None:  
         vcf_filter = vcf._Filter(
             id=("minaf%f" % opts.min_af).rstrip('0'),
