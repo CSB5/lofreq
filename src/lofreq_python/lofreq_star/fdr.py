@@ -22,7 +22,7 @@ from itertools import izip
 # /
 
 
-def fdr(pvals, alpha=0.05):
+def fdr(pvals, a=0.05, n=None):
     """ 
     Implementation of the Benjamini-Hochberg procedure.
     Takes a list of p-values and returns a list of the indices of those p-values that pass. 
@@ -34,18 +34,23 @@ def fdr(pvals, alpha=0.05):
     >>> import random
     >>> pvals = [0.6, 0.07, 0.49, 0.2, 0.48, 0.74, 0.68, 0.01, 0.97, 0.38, 0.032, 0.07]
     >>> random.shuffle(pvals)
-    >>> sorted([pvals[i] for i in fdr(pvals, alpha=0.20)])
+    >>> sorted([pvals[i] for i in fdr(pvals, a=0.20)])
     [0.01, 0.032]
     >>> fdr([])
     []
     >>> fdr([1])
     []
-
     """
+
+    if n != None:
+        assert n>len(pvals)
+    else:
+        n=len(pvals)
+        
     sorted_pvals_indices = sorted(xrange(len(pvals)), key=lambda k:pvals[k])
     t = next((rank for rank, spi in izip(xrange(len(pvals), 0, -1), 
                                           reversed(sorted_pvals_indices)) 
-              if pvals[spi] < rank*alpha/len(pvals)), None)
+              if pvals[spi] < rank*a/n), None)
     if t:
         return sorted_pvals_indices[:t]
     return []
