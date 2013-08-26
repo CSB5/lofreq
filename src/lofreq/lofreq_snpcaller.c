@@ -1302,12 +1302,12 @@ for cov in coverage_range:
 
          if (no_default_filter && snvcall_conf.bonf_dynamic) {
               snprintf(full_cmd, BUF_SIZE, 
-                      "%s --no-defaults --snv-phred %d", 
+                      "%s --no-defaults --snv-qual %d", 
                       base_cmd, PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf));
 
          } else if (! no_default_filter && snvcall_conf.bonf_dynamic) {
               snprintf(full_cmd, BUF_SIZE, 
-                      "%s --snv-phred %d", 
+                      "%s --snv-qual %d", 
                       base_cmd, PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf));
 
          } else if (! no_default_filter && ! snvcall_conf.bonf_dynamic) {
@@ -1321,6 +1321,8 @@ for cov in coverage_range:
          LOG_VERBOSE("Executing %s\n", full_cmd);
          if (0 != (rc = system(full_cmd))) {
               LOG_ERROR("The following command failed: %s\n", full_cmd);
+              rc = 1;
+              
          } else {
               (void) unlink(vcf_tmp_out);
          }
