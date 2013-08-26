@@ -15,6 +15,9 @@ __license__ = "Free for non-commercial use"
 from math import log10
 import sys
 
+MAX_INT = 2147483647
+# instead of sys.maxint
+
 #--- third-party imports
 #
 # /
@@ -65,8 +68,8 @@ def prob_to_phredqual(prob):
         return int(round(-10.0 * log10(prob)))
     except ValueError:
         # prob is zero
-        return sys.maxint
-
+        #return sys.maxint
+        return MAX_INT
 
 def phredqual_to_prob(phredqual):
     """
@@ -77,6 +80,7 @@ def phredqual_to_prob(phredqual):
 
     """
 
+    assert isinstance(phredqual, int)
     #assert phredqual >= 0, ("Phred-quality must be >= 0, but is %s" % phredqual)
     # also works for phredqual=0
     return 10**(-phredqual/10.0)
