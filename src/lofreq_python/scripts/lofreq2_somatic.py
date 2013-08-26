@@ -123,8 +123,8 @@ def cmdline_parser():
     parser.add_argument("--reuse-normal-vcf", 
                         help="Expert only: reuse already compute normal"
                         " prediction (PREFIX+%s)" % VCF_NORMAL_EXT)
-    parser.add_argument("-p", "--num-threads", 
-                        type=int, help=argparse.SUPPRESS)
+    #parser.add_argument("-p", "--num-threads", 
+    #                    type=int, help=argparse.SUPPRESS)
     #help="Enable parallel computation with this many threads")
 
     return parser
@@ -133,7 +133,7 @@ def cmdline_parser():
 
 def somatic(bam_n, bam_t, ref, out_prefix, 
             bed=None, sig_n=0.001, sig_t=None, fdr_t=0.05, mq_filter_t=13,
-            reuse_normal=None, baq_on=False, num_threads=0):
+            reuse_normal=None, baq_on=False):
     """Core of the somatic SNV callers, which calls all the necessary
     parts and glues them together
     """
@@ -143,25 +143,30 @@ def somatic(bam_n, bam_t, ref, out_prefix,
         LOG.critical("%s = %s" % (k, v))
     
     assert sig_t==None or fdr_t==None
-    
+
+    # make sure infiles exist
+    #
     infiles = [bam_n, bam_t, ref]
     if bed:
         infiles.append(bed)
     for inf in infiles:
         assert os.path.exists(inf), ("File %s does not exist" % inf)
 
+    # generate output file names
+    #
     vcf_n = out_prefix + VCF_NORMAL_EXT
     if reuse_normal:
         assert os.path.exists(reuse_normal), (
             "%s does not exist" % reuse_normal)
-        vcf_n = reuse_normal
-        
+        vcf_n = reuse_normal        
     vcf_t_pre_fdr = out_prefix + VCF_TUMOR_PRE_FDR_EXT
     vcf_t = out_prefix + VCF_TUMOR_EXT
     vcf_som_raw = out_prefix + VCF_RAW_EXT
     vcf_som_filtered = out_prefix + VCF_FILTERED_EXT
     vcf_som_final = out_prefix + VCF_FINAL_EXT
-    
+
+    # make sure outfiles don't exist
+    #
     outfiles = [vcf_t, vcf_som_raw, vcf_som_filtered, vcf_som_final]
     if not reuse_normal:
         outfiles.append(vcf_n)
@@ -169,32 +174,29 @@ def somatic(bam_n, bam_t, ref, out_prefix,
         assert not os.path.exists(outf), (
             "Cowardly refusing to overwrite already existing file %s" % outf)
             
-    somatic_commands = []
 
+
+    # compute 'normal'
+    #
     if not reuse_normal:
-        if num_threads > 1:
-            cmd = ['lofreq2_call_parallel.py', '-n', '%s' % num_threads]    
-        else:
-            cmd = ['lofreq', 'call']
+        cmd = ['lofreq', 'call']
         cmd.extend(['-f', ref])
         if baq_on:
             cmd.append('-E')
         #cmd.append('--verbose')
-        
         if bed:
             cmd.extend(['-l', bed])
         cmd.extend(['--no-default-filter', '-b', "%d" % 1, '-s', "%f" % sig_n, '-o', vcf_n, bam_n])
         somatic_commands.append(cmd)
-        
-    if num_threads > 1:
-        cmd = ['lofreq2_call_parallel.py', '-n', '%s' % num_threads]    
-    else:
-        cmd = ['lofreq', 'call']
+
+
+    # compute 'tumor'
+    #
+    cmd = ['lofreq', 'call']
     cmd.extend(['-f', ref])
     if baq_on:
         cmd.append('-E')    
     #cmd.append('--verbose')
-    
     
     if bed:
         cmd.extend(['-l', bed])
@@ -217,23 +219,32 @@ def somatic(bam_n, bam_t, ref, out_prefix,
         raise ValueError
 
     
+    # complement them
+    #
     cmd = ['lofreq', 'vcfset', '-1', vcf_t, '-2', vcf_n, 
            '-a', 'complement', '-o', vcf_som_raw]
     somatic_commands.append(cmd)
+
     
+    # aply default filter to complement
+    #
     cmd = ['lofreq', 'filter', '-i', vcf_som_raw, 
            '--min-cov', "%d" % 10, '--strandbias', 'holm-bonf', 
            '-p', '-o', vcf_som_filtered]
     somatic_commands.append(cmd)
 
-    # filter and uniq could be combined into one
     
+    # run uniq
+    #
     cmd = ['lofreq', 'uniq', '--uni-freq', "0.5",
            '-v', vcf_som_filtered,
            '-o', vcf_som_final, bam_n]
     somatic_commands.append(cmd)
-    
-    # FIXME gzip in and output should be supported internally 
+
+    # gzip tmp files
+    #
+    # FIXME gzip in and output should be supported internally
+    # (lofreq_filter supports gzip in and out)
     cmd = ['gzip', vcf_n, vcf_t, vcf_som_raw, vcf_som_filtered]
     somatic_commands.append(cmd)
 
@@ -314,8 +325,7 @@ def main():
             fdr_t=args.tumor_fdr,
             mq_filter_t=args.mq_filter, 
             reuse_normal=args.reuse_normal_vcf, 
-            baq_on=args.baq,
-            num_threads=args.num_threads)
+            baq_on=args.baq)
 
 
     
