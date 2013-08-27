@@ -137,10 +137,11 @@ const int MQ_TRANS_TABLE[61] = {
 #endif
 
 
-/* number of tests performed (CONSVAR doesn't count). for downstream multiple testing
- * correction. corresponds to bonf if bonf_dynamic is true. */
+/* number of tests performed (CONSVAR doesn't count). for downstream
+ * multiple testing correction. corresponds to bonf if bonf_dynamic is
+ * true. */
 long long int num_tests = 0;
-
+/* FIXME extend to keep some more stats, e.g. num_pos_with_cov etc */
 
 typedef struct {
      int min_altbq;
@@ -327,11 +328,6 @@ call_snvs(const plp_col_t *p, void *confp)
           return;
      }
 
-     if (conf->bonf_dynamic) {
-          conf->bonf += 3; /* will do one test per non-cons nuc */
-     }
-     num_tests += 3;
-
      if (! conf->dont_skip_n && p->ref_base == 'N') {
           return;
      }
@@ -492,12 +488,16 @@ call_snvs(const plp_col_t *p, void *confp)
           for (i=0; i<num_err_probs; i++) {
                LOG_FATAL("after sorting i=%d err_prob=%g\n", i, err_probs[i]);
           }
-
      }
 #endif
      LOG_DEBUG("%s %d: passing down %d quals with noncons_counts"
                " (%d, %d, %d) to snpcaller()\n", p->target, p->pos+1,
                num_err_probs, alt_counts[0], alt_counts[1], alt_counts[2]);
+ 
+     if (conf->bonf_dynamic) {
+          conf->bonf += 3; /* will do one test per non-cons nuc */
+     }
+     num_tests += 3;
 
      if (snpcaller(pvalues, err_probs, num_err_probs, 
                   alt_counts, conf->bonf, conf->sig)) {
@@ -1329,7 +1329,14 @@ for cov in coverage_range:
     }
 
     if (! plp_summary_only) {
-         LOG_VERBOSE("%lld number of tests performed\n", num_tests);
+         /* output some stats. number of tests performed need for
+          * multiple testing correction. line will be parse by
+          * downstream script e.g. lofreq_somatic, so be careful when
+          * changing the format */
+         int org_verbose = verbose;
+         verbose = 1;
+         LOG_VERBOSE("Number of tests performed: %lld\n", num_tests);
+         verbose = org_verbose;
     }
 
     free(vcf_tmp_out);
