@@ -15,6 +15,7 @@ import logging
 import os
 import argparse
 import subprocess
+import tempfile
 
 #--- third-party imports
 #
@@ -27,14 +28,8 @@ import subprocess
 try:
     import lofreq2_local
 except ImportError:
-    pass    
+    pass
 
-    
-# invocation of ipython on exceptions
-#import sys, pdb
-#from IPython.core import ultratb
-#sys.excepthook = ultratb.FormattedTB(mode='Verbose',
-#                                     color_scheme='Linux', call_pdb=1)
 
 
 #global logger
@@ -44,12 +39,281 @@ logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
 
-VCF_NORMAL_EXT = "normal.vcf"
-VCF_TUMOR_PRE_FDR_EXT = "tumor-pre-fdr.vcf"
-VCF_TUMOR_EXT = "tumor.vcf"
-VCF_RAW_EXT = "lofreq_somatic_raw.vcf"
-VCF_FILTERED_EXT = "lofreq_somatic_filtered.vcf"
-VCF_FINAL_EXT = "lofreq_somatic_final.vcf"
+
+class SomaticSNVCaller(object):
+    """Somatic SNV caller using LoFreq
+
+    FIXME add gzip support
+    """
+
+    VCF_NORMAL_EXT = "normal.vcf"
+    VCF_TUMOR_PREFILTER_EXT = "tumor-prefilter.vcf"
+    VCF_TUMOR_EXT = "tumor.vcf"
+    VCF_RAW_EXT = "somatic_raw.vcf"
+    VCF_FILTERED_EXT = "somatic_filtered.vcf"
+    VCF_FINAL_EXT = "somatic_final.vcf"
+
+    LOFREQ = 'lofreq'
+
+    DEFAULT_ALPHA_N = 0.001
+    DEFAULT_ALPHA_T = 0.000001
+    DEFAULT_CORR_T = 'fdr'
+    DEFAULT_MQ_FILTER_T = 13
+    DEFAULT_BAQ_ON = False
+
+    MIN_COV = 10
+
+    def __init__(self, bam_n=None, bam_t=None,
+                 ref=None, outprefix=None,
+                 bed=None, reuse_normal_vcf=None):
+        """init function
+        """
+
+        assert all([bam_n, bam_t, ref, outprefix]), (
+            "Missing mandatory arguments")
+
+        # make sure infiles exist and save them
+        #
+        infiles = [bam_n, bam_t, ref]
+        if bed:
+            infiles.append(bed)
+        for f in infiles:
+            assert os.path.exists(f), (
+                "File %s does not exist" % f)
+
+        self.bam_n = bam_n
+        self.bam_t = bam_t
+        self.ref = ref
+        self.bed = bed
+        self.outprefix = outprefix
+
+        self.outfiles = []
+        
+        self.vcf_n = None
+        self.vcf_t_prefilter = None
+        self.vcf_t = None
+        self.vcf_som_raw = None
+        self.vcf_som_filtered = None
+        self.vcf_som_final = None
+
+        self.set_output(reuse_normal_vcf)
+
+        
+        self.alpha_n = None
+        self.alpha_t = None
+        self.corr_t = None
+        self.mq_filter_t = None
+        self.baq_on = None
+
+        self.set_default_params()
+
+
+    def set_output(self, reuse_normal_vcf):
+        """setup output file names and make sure they don't exist
+        """
+
+        assert self.outprefix
+
+        if reuse_normal_vcf:
+            assert os.path.exists(reuse_normal_vcf)
+            self.vcf_n = reuse_normal_vcf
+        else:
+            self.vcf_n = self.outprefix + self.VCF_NORMAL_EXT# + ".gz"
+            assert not os.path.exists(self.vcf_n), (
+                "Cowardly refusing to overwrite already existing file %s" % (
+                    self.vcf_n))
+
+        self.vcf_t_prefilter = self.outprefix + self.VCF_TUMOR_PREFILTER_EXT# + ".gz"
+        self.vcf_t = self.outprefix + self.VCF_TUMOR_EXT# + ".gz"
+        self.vcf_som_raw = self.outprefix + self.VCF_RAW_EXT# + ".gz"
+        self.vcf_som_filtered = self.outprefix + self.VCF_FILTERED_EXT
+        self.vcf_som_final = self.outprefix + self.VCF_FINAL_EXT
+
+        self.outfiles = [self.vcf_t_prefilter, self.vcf_t, self.vcf_som_raw,
+                         self.vcf_som_filtered, self.vcf_som_final]
+        # vcf_n already checked
+        for f in self.outfiles:
+            assert not os.path.exists(f), (
+                "Cowardly refusing to overwrite already existing file %s" % f)
+
+
+    def set_default_params(self):
+        """Set up default parameters
+        """
+
+        self.alpha_n = self.DEFAULT_ALPHA_N
+        self.alpha_t = self.DEFAULT_ALPHA_T
+        self.corr_t = self.DEFAULT_CORR_T
+        self.mq_filter_t = self.DEFAULT_MQ_FILTER_T
+        self.baq_on = self.DEFAULT_BAQ_ON
+
+
+    @staticmethod
+    def subprocess_wrapper(cmd, close_tmp=True):
+        """Wrapper for subprocess.check_call
+
+        Returns (rewound) fh for cmd stdout and stderr if close_tmp is
+        False. Caller will then have to closer upon which the files
+        will be deleted automaitcally.
+
+        """
+
+        assert isinstance(cmd, list)
+        fh_stdout = tempfile.TemporaryFile()
+        fh_stderr = tempfile.TemporaryFile()
+
+        try:
+            LOG.info("Executing %s", ' '.join(cmd))
+            subprocess.check_call(cmd, stdout=fh_stdout, stderr=fh_stderr)
+        except subprocess.CalledProcessError as e:
+            LOG.fatal("The following command failed: %s (%s)" % (
+                ' '.join(cmd), str(e)))
+            LOG.fatal("An error message indicating the source of"
+                      " this error should have bee printed above")
+            raise
+        except OSError as e:
+            LOG.fatal("The following command failed: %s (%s)" % (
+                ' '.join(cmd), str(e)))
+            LOG.fatal("An error message indicating the source of"
+                      " this error should have bee printed above")
+            LOG.fatal("Looks like the lofreq binary is not in your PATH")
+            raise
+
+        if close_tmp:
+            fh_stdout.close()
+            fh_stderr.close()
+            return (None, None)
+        else:
+            # will be destroyed upon closing, i.e. caller has to close!
+            fh_stdout.seek(0)
+            fh_stderr.seek(0)
+            return (fh_stdout, fh_stderr)
+
+
+    def call_normal(self):
+        """Relaxed call of variants on normal sample
+        """
+
+        if os.path.exists(self.vcf_n):
+            LOG.info('Reusing %s' % self.vcf_n)
+            return
+
+        cmd = [self.LOFREQ, 'call']
+        cmd.extend(['-f', self.ref])
+        if self.baq_on:
+            cmd.append('-E')
+        cmd.append('--verbose')
+        if self.bed:
+            cmd.extend(['-l', self.bed])
+        cmd.append('--no-default-filter')# no filtering needed
+        cmd.extend(['-b', "%d" % 1, '-s', "%f" % self.alpha_n])
+        cmd.extend(['-m', "%d" % self.mq_filter_t])
+        cmd.extend(['-o', self.vcf_n])
+        cmd.append(self.bam_n)
+
+        self.subprocess_wrapper(cmd)
+
+
+    def call_tumor(self):
+        """Variant call on tumor sample
+        """
+
+        cmd = [self.LOFREQ, 'call']
+        cmd.extend(['-f', self.ref])
+        if self.baq_on:
+            cmd.append('-E')
+        cmd.append('--verbose')
+        if self.bed:
+            cmd.extend(['-l', self.bed])
+        cmd.append('--no-default-filter')# filtering explicitely
+        cmd.extend(['-b', "%d" % 1, '-s', "%f" % 0.001]) # should probably roughly match alpha_n
+        cmd.extend(['-m', "%d" % self.mq_filter_t])
+        cmd.extend(['-o', self.vcf_t_prefilter])
+        cmd.append(self.bam_t)
+
+        (o, e) = self.subprocess_wrapper(cmd, close_tmp=False)
+
+        olines = o.readlines()
+        elines = e.readlines()
+        o.close()
+        e.close()
+        num_tests = -1
+        for l in elines:
+            if l.startswith('Number of tests performed'):
+                num_tests = int(l.split(':')[1])
+                break
+        if num_tests == -1:
+            LOG.error("Couldn't parse number of tests from lofreq call output"
+                      " (which was: %s)" % (elines))
+            raise ValueError
+
+        cmd = [self.LOFREQ, 'filter', '-i', self.vcf_t_prefilter,
+               '--snv-qual', "%s" % self.corr_t,
+               '--snv-qual-alpha', '%f' % self.alpha_t,
+               '--snv-qual-numtests', '%d' % num_tests,
+               '-o', self.vcf_t]
+
+        self.subprocess_wrapper(cmd)
+
+
+    def complement(self):
+        """Produce complement of tumor and normal variants and filter
+        them
+        """
+
+        cmd = [self.LOFREQ, 'vcfset', '-1', self.vcf_t,
+               '-2', self.vcf_n,
+               '-a', 'complement',
+               '-o', self.vcf_som_raw]
+        self.subprocess_wrapper(cmd)
+
+        # apply filter to complement
+        #
+        cmd = [self.LOFREQ, 'filter', '-i', self.vcf_som_raw,
+               '--min-cov', "%d" % self.MIN_COV,
+               '--strandbias', 'holm-bonf',
+               '-p', '-o', self.vcf_som_filtered]
+        self.subprocess_wrapper(cmd)
+
+
+    def uniq(self):
+        """Run LoFreq uniq as final check on somatic variants
+        """
+
+        cmd = [self.LOFREQ, 'uniq',
+               '--uni-freq', "0.5",
+               '-v', self.vcf_som_filtered,
+               '-o', self.vcf_som_final,
+               self.bam_n]
+        self.subprocess_wrapper(cmd)
+
+
+    def run(self):
+        """Run the whole somatic SNV calling pipeline
+        """
+
+        for (k, v) in [(x, self.__getattribute__(x)) for x in dir(self)
+                       if not x.startswith('_')]:
+            if callable(v):
+                continue
+            LOG.debug("%s %s" % (k, v))            
+        #import pdb; pdb.set_trace()
+        
+        self.call_normal()
+        self.call_tumor()
+        self.complement()
+        self.uniq()
+        
+        # FIXME replace source line in final output with sys.argv?
+
+        cmd = ['gzip']
+        gzip_files = list(self.outfiles)
+        gzip_files.append(self.vcf_n) # not part of outfiles by default
+        gzip_files.remove(self.vcf_som_final)
+        for f in set(gzip_files):
+            cmd.append(f)
+        self.subprocess_wrapper(cmd)
+   
 
 
 
@@ -60,231 +324,88 @@ def cmdline_parser():
     # http://docs.python.org/dev/howto/argparse.html
     parser = argparse.ArgumentParser(description=__doc__)
 
-    parser.add_argument("-v", "--verbose", 
+    parser.add_argument("-v", "--verbose",
                         action="store_true",
-                        help="be verbose")
-    parser.add_argument("--debug", 
+                        help="Be verbose")
+    parser.add_argument("--debug",
                         action="store_true",
-                        help="enable debugging")
-    parser.add_argument("-n", "--normal", 
+                        help="Enable debugging")
+    parser.add_argument("-n", "--normal",
                         required=True,
                         help="Normal BAM file")
-    parser.add_argument("-t", "--tumor", 
+    parser.add_argument("-t", "--tumor",
                         required=True,
                         help="Tumor BAM file")
-    parser.add_argument("-o", "--outprefix", 
+    parser.add_argument("-o", "--outprefix",
                         help="Prefix for output files."
                         " Final somatic SNV calls will be stored in"
-                        " PREFIX+%s. If empty"
-                        " will be set to tumor BAM file." % VCF_FINAL_EXT)
-    parser.add_argument("-f", "--ref", 
+                        " PREFIX+%s." % (SomaticSNVCaller.VCF_FINAL_EXT))
+    parser.add_argument("-f", "--ref",
                         required=True,
                         help="Reference fasta file")
-    parser.add_argument("-l", "--bed", 
+    parser.add_argument("-l", "--bed",
                         help="BED file listing regions to restrict analysis to")
 
-    #default = 10
-    parser.add_argument("-S", "--tumor-bonfsig", 
-                        type=float,
-                        #default=default,
-                        help="Significance threshold (alpha) for tumor SNV"
-                        " pvalues (Bonferroni corrected) in tumor sample"
-                        " (Clashes with -F)")
-                        #" pvalues; default: %f). Collides with -F" % default)
-    # FIXME presence of both options makes things awkward
-    #default = 0.01
-    parser.add_argument("-F", "--tumor-fdr", 
-                        type=float,
-                        #default=default,
-                        help="Tumor SNV false discovery rate (Bonferroni corrected"
-                        " pvalues). Clashes with -S")
-                        #" pvalues; default: %f). Clashes with -S" % default)
-                        
-    default = 0.001
-    parser.add_argument("-s", "--normal-sig", 
-                        type=float,
+    default = 'fdr'
+    choices = ['bonf', 'holm-bonf', 'fdr']
+    parser.add_argument("--tumor-mtc",
+                        #required=True,
                         default=default,
-                        help="Significance threshold (alpha) for SNV"
-                        " pvalues (non-Bonferroni corrected) in normal sample"
+                        choices = choices,
+                        help="Type of multiple testing correction on tumor"
+                        " (default: %s)" % default)
+
+    default = 0.01
+    parser.add_argument("--tumor-alpha",
+                        #required=True,
+                        default=default,
+                        type=float,
+                        help="Significance threshold (alpha) for SNV pvalues"
+                        " in tumor sample (default: %f)" % default)
+
+    default = 0.001
+    parser.add_argument("--normal-alpha",
+                        #required=True,
+                        default=default,
+                        type=float,
+                        help="Significance threshold (alpha) for SNV pvalues"
+                        "  in normal sample (non-Bonferroni corrected)"
                         " (default: %f)" % default)
 
     default = 13
-    parser.add_argument("-m,", "--mq-filter", 
+    parser.add_argument("-m,", "--mq-filter",
                         type=int,
                         default=default,
-                        help="mapping quality filter for"
-                        " tumor sample (default=%d)" % default)
-    
-    parser.add_argument("-E", "--baq", 
+                        help="Mapping quality filter (default=%d)" % default)
+
+    parser.add_argument("-E", "--baq",
                         action="store_true",
-                        help="Enable BAQ computation (makes more conservative calls).")
-                        
-    # disabled/suppressed because not working
-    parser.add_argument("--reuse-normal-vcf", 
-                        help="Expert only: reuse already compute normal"
-                        " prediction (PREFIX+%s)" % VCF_NORMAL_EXT)
-    #parser.add_argument("-p", "--num-threads", 
-    #                    type=int, help=argparse.SUPPRESS)
-    #help="Enable parallel computation with this many threads")
+                        help="Enable BAQ computation"
+                        " (more conservative calls).")
+
+    parser.add_argument("--reuse-normal-vcf",
+                        help="Expert only: reuse already computed"
+                        " normal prediction")
 
     return parser
-
-
-
-def somatic(bam_n, bam_t, ref, out_prefix, 
-            bed=None, sig_n=0.001, sig_t=None, fdr_t=0.05, mq_filter_t=13,
-            reuse_normal=None, baq_on=False):
-    """Core of the somatic SNV callers, which calls all the necessary
-    parts and glues them together
-    """
-    # FIXME cleanup argument mess
-
-    for (k, v) in locals().items():
-        LOG.critical("%s = %s" % (k, v))
-    
-    assert sig_t==None or fdr_t==None
-
-    # make sure infiles exist
-    #
-    infiles = [bam_n, bam_t, ref]
-    if bed:
-        infiles.append(bed)
-    for inf in infiles:
-        assert os.path.exists(inf), ("File %s does not exist" % inf)
-
-    # generate output file names
-    #
-    vcf_n = out_prefix + VCF_NORMAL_EXT
-    if reuse_normal:
-        assert os.path.exists(reuse_normal), (
-            "%s does not exist" % reuse_normal)
-        vcf_n = reuse_normal        
-    vcf_t_pre_fdr = out_prefix + VCF_TUMOR_PRE_FDR_EXT
-    vcf_t = out_prefix + VCF_TUMOR_EXT
-    vcf_som_raw = out_prefix + VCF_RAW_EXT
-    vcf_som_filtered = out_prefix + VCF_FILTERED_EXT
-    vcf_som_final = out_prefix + VCF_FINAL_EXT
-
-    # make sure outfiles don't exist
-    #
-    outfiles = [vcf_t, vcf_som_raw, vcf_som_filtered, vcf_som_final]
-    if not reuse_normal:
-        outfiles.append(vcf_n)
-    for outf in outfiles:
-        assert not os.path.exists(outf), (
-            "Cowardly refusing to overwrite already existing file %s" % outf)
-            
-
-
-    # compute 'normal'
-    #
-    if not reuse_normal:
-        cmd = ['lofreq', 'call']
-        cmd.extend(['-f', ref])
-        if baq_on:
-            cmd.append('-E')
-        #cmd.append('--verbose')
-        if bed:
-            cmd.extend(['-l', bed])
-        cmd.extend(['--no-default-filter', '-b', "%d" % 1, '-s', "%f" % sig_n, '-o', vcf_n, bam_n])
-        somatic_commands.append(cmd)
-
-
-    # compute 'tumor'
-    #
-    cmd = ['lofreq', 'call']
-    cmd.extend(['-f', ref])
-    if baq_on:
-        cmd.append('-E')    
-    #cmd.append('--verbose')
-    
-    if bed:
-        cmd.extend(['-l', bed])
-        
-    if fdr_t != None:
-        cmd.extend(['-b', "%d" % 1, '-s', "%f" % 0.001, '-o', vcf_t_pre_fdr]) # should roughly match sig_n)
-        cmd.extend(['-m', "%d" % mq_filter_t, bam_t])
-        somatic_commands.append(cmd)
-        
-        cmd = ['lofreq', 'filter', '-i', vcf_t_pre_fdr, 
-               '--snv-fdr', "%f" % fdr_t, '-o', vcf_t]
-        somatic_commands.append(cmd)
-        
-    elif sig_t != None:
-        cmd.extend(['-b', 'dynamic', '-s', "%f" % sig_t, '-o', vcf_t])
-        cmd.extend(['-m', "%d" % mq_filter_t, bam_t])
-        somatic_commands.append(cmd)
-
-    else:
-        raise ValueError
-
-    
-    # complement them
-    #
-    cmd = ['lofreq', 'vcfset', '-1', vcf_t, '-2', vcf_n, 
-           '-a', 'complement', '-o', vcf_som_raw]
-    somatic_commands.append(cmd)
-
-    
-    # aply default filter to complement
-    #
-    cmd = ['lofreq', 'filter', '-i', vcf_som_raw, 
-           '--min-cov', "%d" % 10, '--strandbias', 'holm-bonf', 
-           '-p', '-o', vcf_som_filtered]
-    somatic_commands.append(cmd)
-
-    
-    # run uniq
-    #
-    cmd = ['lofreq', 'uniq', '--uni-freq', "0.5",
-           '-v', vcf_som_filtered,
-           '-o', vcf_som_final, bam_n]
-    somatic_commands.append(cmd)
-
-    # gzip tmp files
-    #
-    # FIXME gzip in and output should be supported internally
-    # (lofreq_filter supports gzip in and out)
-    cmd = ['gzip', vcf_n, vcf_t, vcf_som_raw, vcf_som_filtered]
-    somatic_commands.append(cmd)
-
-    #import pdb; pdb.set_trace()
-    
-    for (i, cmd) in enumerate(somatic_commands):
-        LOG.info("Running cmd %d out of %d: %s" % (
-            i+1, len(somatic_commands), ' '.join(cmd)))
-        #LOG.critical("DEBUG continue before executing:\n  %s" % ' '.join(cmd)); continue
-
-        try:
-            subprocess.check_call(cmd)
-        except subprocess.CalledProcessError as e:
-            LOG.fatal("The following command failed: %s" % (
-                ' '.join(cmd)))
-            LOG.fatal("An error message indicating the source of this error should have bee printed above")
-            #print str(e)
-            #raise
-            sys.exit(1)
-        except OSError as e:
-            LOG.fatal("The following command failed: %s (%s)" % (
-                ' '.join(cmd)))
-            LOG.fatal("An error message indicating the source of this error should have bee printed above")
-            #print str(e)
-            LOG.fatal("Looks like the lofreq binary is not in your PATH (which is: %s)" % (os.environ["PATH"]))
-            sys.exit(1)
 
 
 
 def main():
     """The main function
     """
-    
+
     parser = cmdline_parser()
     args = parser.parse_args()
-    
+
     if args.verbose:
         LOG.setLevel(logging.INFO)
     if args.debug:
         LOG.setLevel(logging.DEBUG)
+        import sys, pdb
+        from IPython.core import ultratb
+        sys.excepthook = ultratb.FormattedTB(mode='Verbose',
+                                             color_scheme='Linux', call_pdb=1)
 
 
     for (in_file, descr) in [(args.normal, "BAM file for normal tissue"),
@@ -297,38 +418,34 @@ def main():
             LOG.error("file '%s' does not exist.\n" % in_file)
             #parser.print_help()
             sys.exit(1)
-            
-    if args.outprefix:
-        outprefix = args.outprefix
-    else:
-        outprefix = args.tumor.replace(".bam", "")
 
     if args.reuse_normal_vcf:
         if not os.path.exists(args.reuse_normal_vcf):
-            LOG.error("file '%s' does not exist.\n" % (args.reuse_normal_vcf))
+            LOG.error("file '%s' does not exist.\n" % (
+                args.reuse_normal_vcf))
             sys.exit(1)
 
     LOG.debug("args = %s" % args)
-    
-    if args.tumor_bonfsig!=None and args.tumor_fdr!=None:
-        LOG.error("Can only do one: Bonferroni or FDR")
-        sys.exit(1)
-    if args.tumor_bonfsig==None and args.tumor_fdr==None:
-        LOG.error("You need to specify Bonferroni or FDR treshold for tumor sample")
-        sys.exit(1)
-        
 
-    somatic(args.normal, args.tumor, args.ref, outprefix, 
-            bed=args.bed, 
-            sig_n=args.normal_sig, 
-            sig_t=args.tumor_bonfsig, 
-            fdr_t=args.tumor_fdr,
-            mq_filter_t=args.mq_filter, 
-            reuse_normal=args.reuse_normal_vcf, 
-            baq_on=args.baq)
+    somatic_snv_caller = SomaticSNVCaller(
+        bam_n = args.normal,
+        bam_t = args.tumor,
+        ref = args.ref,
+        outprefix = args.outprefix,
+        bed = args.bed,
+        reuse_normal_vcf = args.reuse_normal_vcf)
+
+    somatic_snv_caller.alpha_n = args.normal_alpha
+    somatic_snv_caller.alpha_t = args.tumor_alpha
+    somatic_snv_caller.corr_t = args.tumor_mtc
+    if args.mq_filter:
+        somatic_snv_caller.mq_filter_t = args.mq_filter
+    if args.baq:
+        somatic_snv_caller.baq_on = True
+
+    somatic_snv_caller.run()
 
 
-    
 if __name__ == "__main__":
     main()
     LOG.info("Successful program exit")
