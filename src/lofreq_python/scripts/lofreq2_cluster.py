@@ -1,13 +1,12 @@
 #!/usr/bin/env python
-"""Cluster SNVs based on SNV freqs incl. confidence interval
+"""Cluster SNVs based on SNV freqs confidence interval
 """
 
 
-__author__ = "Andreas Wilm"
+__author__ = "Andreas Wilm, Niranjan Nagarajan"
 __email__ = "wilma@gis.a-star.edu.sg"
 __copyright__ = "2013 Genome Institute of Singapore"
-__license__ = "Free for non-commercial use"
-# based on Niranjan's parse_snps.pl
+__license__ = "GPL2"
 
 
 

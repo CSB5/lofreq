@@ -1,0 +1,21 @@
+Incorporation of LoFreq into commercial software is possible by
+obtaining a specially licensed version. Please contact Dr. Michael
+ROSSBACH <rossbachm@gis.a-star.edu.sg> for more info.
+
+LoFreq-Star consists of two parts:
+
+1. a compiled core program ('lofreq'), which is free for
+non-commerical use. External libraries used in the core are
+libbam/samtools and cdflib90 (see libbam/COPYING, libbam/AUTHORS and
+cdflib90.README for info on licenses and authors).
+
+2. a set of Python scripts and modules, which are released under the
+GPL2, which the exception of the two third party modules. See
+lofreq_python/lofreq_star/vcf.py.README and
+lofreq_python/lofreq_star/multiple_testing.py.README for info on
+licenses and authors.
+
+
+
+
+

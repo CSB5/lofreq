@@ -2,54 +2,89 @@ LoFreq-Star: A sequence-quality aware, ultra-sensitive variant caller
 for high-throughput sequencing data
 
 
+
 INSTALLATION
-------------
+============
 
-You will very likely have downloaded an already compiled version of
-LoFreq-Star. Simply add the directory in which the LoFreq binary
-('lofreq') resides to your PATH environment variable. Do not simply
-copy it to your bin-directory, since this binary relies on a couple of
-scripts in the package.
+We assume you have downloaded the (precompiled) package of LoFreq-Star
+and have a working Python 2.7. interpreter installed on your system.
 
+Unpack the tarball and copy it where you like (preserving the
+directory structure).
 
-COMPILATION
------------
+To call LoFreq you can either use the full path to the directory in
+which the lofreq binary resides (./lofreq/lofreq). Or add that
+directory to your PATH environment variable so that you only have to
+type 'lofreq' to execute it.
 
-You will need a C compiler and a Python 2.7 installation to compile
-and use
+If you for example, have the package copied to
+/home/id/src/lofreq-version/ then you can either use the full path
+/home/id/src/lofreq-version/lofreq/lofreq to call LoFreq or use the
+following command under bash to add it to your PATH:
 
-See INSTALL for generic installation instructions.
+    $ export PATH=$PATH:/home/id/src/lofreq-version/lofreq/
 
-The following will build and install LoFreq:
-$ ./configure
-$ make install
+NOTE: keep the directory structure as it is and do not copy the binary
+alone somewhere else. You can however simply create a link to the
+lofreq binary if you like.
 
-You will likely need to use sudo for the last step. If you however
-don't have admin rights or want to install LoFreq into a non-standard
-directory use the --prefix flag for configure. You will then very
-likely have to adjust your PATH environment variable
-as well. An example:
-
-$ ./configure --prefix $HOME/local/
-$ make install
-$ export PATH=$HOME/local/bin:$PATH
 
 
 USAGE
------
+=====
 
-The main command is simply lofreq, which has several subcommands.
+The main command is called 'lofreq', which has several sub-commands.
+
 Simply typing
-$ lofreq
-will display a list of sub-commands, the most importantly of which are
-'call' (to call variants), 'filter' (to filter predicted variants) and
-'somatic' (to call somatic variants). If you simply call lofreq with
-one of the sub-commands usage information will be displayed.
+
+    $ lofreq
+
+will display a list of available commands:
+
+    Usage: lofreq <command> [options]
+
+      Main Commands:
+        call        : Call variants
+        somatic     : Call somatic variants
+
+      Other Commands:
+        filter      : Filter variants
+        uniq        : Test whether variants predicted in only one sample really are unique
+        plp_summary : Print pileup summary per position
+        vcfset      : VCF set operations
+        cluster     : Cluster variants in VCF file (supports legacy SNP format)
+        version     : Print version info
+
+
+You can simply call lofreq with one of the commands and its usage
+information will be displayed.
+
+The two most important commands are
+
+- 'call' (to call variants)
+
+and
+
+- 'somatic' (to call somatic variants)
+
+Note that predicted variants are already filtered using default
+parameters (which include coverage, strandbias, snv-call quality etc)
+
+
+
+LICENSE
+=======
+
+See the file called LICENSE
+
 
 
 VERSION HISTORY
----------------
+===============
+
+LoFreq-Star 2.0.0-beta was released on 2013-09-03.
 
 LoFreq-Star is partially based on LoFreq (see
 https://sourceforge.net/p/lofreq/ and
 www.ncbi.nlm.nih.gov/pubmed/23066108)
+
