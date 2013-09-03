@@ -18,7 +18,9 @@
 #include "lofreq_uniq.h"
 
 
-
+#ifndef __DATE__
+__DATE__ = "NA";
+#endif
 
 /* prepend dirname(argv0) and python source dir to PATH making sure
  * that package works even without properly installing it
@@ -96,17 +98,19 @@ static void usage(const char *myname)
      /*fprintf(stderr, "Version %s\n", PACKAGE_VERSION);*/
      fprintf(stderr, "\n");
      fprintf(stderr, "Usage: %s <command> [options]\n\n", myname);
-     fprintf(stderr, "  main commands:\n");
-     fprintf(stderr, "    call        : call variants\n");
-     fprintf(stderr, "    somatic     : call somatic variants\n\n");
-     fprintf(stderr, "  other commands:\n");
-     fprintf(stderr, "    filter      : filter variants\n");
-     fprintf(stderr, "    peek        : check properties of BAM file\n");
-     fprintf(stderr, "    uniq        : test whether SNVs predicted in one sample couldn't be predicted in other\n");
-     fprintf(stderr, "    plp_summary : print pileup summary per position\n");
+     fprintf(stderr, "  Main Commands:\n");
+     fprintf(stderr, "    call        : Call variants\n");
+     fprintf(stderr, "    somatic     : Call somatic variants\n\n");
+     fprintf(stderr, "  Other Commands:\n");
+     fprintf(stderr, "    filter      : Filter variants\n");
+     fprintf(stderr, "    uniq        : Test whether variants predicted in only one sample really are unique\n");
+     fprintf(stderr, "    plp_summary : Print pileup summary per position\n");
      fprintf(stderr, "    vcfset      : VCF set operations\n");
      fprintf(stderr, "    cluster     : Cluster variants in VCF file (supports legacy SNP format)\n");
-     fprintf(stderr, "    version     : print version string\n");
+#ifdef FIXME_NOT_IMPLEMENTED
+     fprintf(stderr, "    peek        : Check properties of BAM file\n");
+#endif
+     fprintf(stderr, "    version     : Print version info\n");
      fprintf(stderr, "\n");
 }
 
@@ -195,7 +199,8 @@ int main(int argc, char *argv[])
           return rc;
 
      } else if (strcmp(argv[1], "version") == 0) {
-          fprintf(stdout, "version: %s\ncommit: %s\n", PACKAGE_VERSION, GIT_VERSION);
+          fprintf(stdout, "version: %s\ncommit: %s\nbuild-date: %s\n",
+                  PACKAGE_VERSION, GIT_VERSION, __DATE__);
           return 0;
 
      } else {
