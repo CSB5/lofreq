@@ -5,8 +5,8 @@
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
-__copyright__ = "2013 Genome Institute of Singapore"
-__license__ = "Free for non-commercial use"
+__copyright__ = "2011 Genome Institute of Singapore"
+__license__ = "GPL2"
 
 
 
@@ -71,6 +71,8 @@ def prob_to_phredqual(prob):
         #return sys.maxint
         return MAX_INT
 
+
+    
 def phredqual_to_prob(phredqual):
     """
     Turns a phred quality into an error probability

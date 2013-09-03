@@ -9,7 +9,7 @@ PASSED ones!
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
 __copyright__ = "2013 Genome Institute of Singapore"
-__license__ = "Free for non-commercial use"
+__license__ = "GPL2"
 
 
 #--- standard library imports

@@ -17,6 +17,10 @@ Email: tanghaibao@gmail.com
 License: BSD
 """
 
+__author__ = "Haibao Tang, Brent Pedersen, Aurelien Naldi"
+__email__ = "tanghaibao@gmail.com"
+#__copyright__ = ""
+__license__ = "BSD"
 
 from itertools import groupby
 

@@ -6,7 +6,7 @@ AC_PREREQ(2.63)
 # 2.68 seems to have updated ax_pthread
 
 # NOTE set version here and replace in setup.py
-AC_INIT([LoFreq_Star], [2.0.0a], [wilma@gis.a-star.edu.sg])
+AC_INIT([LoFreq_Star], [2.0.0-beta], [wilma@gis.a-star.edu.sg])
 
 # The AC_INIT macro can take any source file as an argument. It just
 # checks that the file is there, which should, in turn, mean that the

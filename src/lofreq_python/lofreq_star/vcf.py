@@ -90,6 +90,16 @@ For example::
     'Ancestral Allele'
 
 '''
+
+
+__author__ = "James Casbon"
+# some modifications by Andreas Wilm
+#__email__ = ""
+__copyright__ = "2011 John Dougherty"
+#__license__ = ""
+
+
+
 import collections
 import re
 import sys

@@ -5,7 +5,7 @@
 __author__ = "Grace Hui Ting Yeo"
 __email__ = "yeohtg@gis.a-star.edu.sg"
 __copyright__ = "2013 Genome Institute of Singapore"
-__license__ = "Free for non-commercial use"
+__license__ = "GPL2"
 
 
 

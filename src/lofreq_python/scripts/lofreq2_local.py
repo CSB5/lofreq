@@ -1,4 +1,4 @@
-# Add local dir to path to make source dir, i.e. not installed scripts
+# add local dir to path to make source dir, i.e. not installed scripts
 # work straight-away
 
 import sys
