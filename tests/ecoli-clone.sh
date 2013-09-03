@@ -17,7 +17,7 @@ log=$outdir/log.txt
 KEEP_TMP=0
 
 cmd="$LOFREQ call -f $reffa -E -o $outvcf $bam"
-echodebug "cmd=$cmd"
+#echodebug "cmd=$cmd"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
