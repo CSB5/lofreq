@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """Apply number of filters to given list of SNVs.
 
-Note, that each filter is applied to all SNVs, i.e. not just the
-previously PASSED ones!
+Each filter is applied to all SNVs, i.e. not just the previously
+PASSED ones!
 """
 
 
@@ -19,7 +19,7 @@ import logging
 import os
 # optparse deprecated from Python 2.7 on. need optparse here to mess
 # with the default options if needed.
-from optparse import OptionParser, SUPPRESS_HELP
+from optparse import OptionParser#, SUPPRESS_HELP
 import gzip
 
 
@@ -60,6 +60,55 @@ logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
 
+
+def win_filter(snvs_on_cur_chrom, win_size, vcf_info_id):
+    """Makes snv INFO[vcf_info_id] with 0 if there is a neigbouring
+    snv within win_size, otherwise 1
+    """
+
+    # make sure snvs are sorted
+    # snvs_on_cur_chrom = sorted(snvs_on_cur_chrom, 
+    #                            key = lambda x: x.POS)
+    # disabled because possible overkill: lofreq produces ordered
+    # lists by default since BAM file is sorted
+
+    for (ci, cur_snv) in enumerate(snvs_on_cur_chrom):
+        
+        # prev_snv: snv at < pos on same chrom
+        prev_snv = None
+        for pi in reversed(xrange(ci)):
+            tmp = snvs_on_cur_chrom[pi]
+            assert tmp.POS <= cur_snv.POS
+            assert tmp.CHROM == cur_snv.CHROM
+            if tmp.POS != cur_snv.POS:
+                prev_snv = tmp
+                break
+            
+        # next_snv: snv at > pos on same chrom
+        next_snv = None
+        for ni in xrange(ci+1, len(snvs_on_cur_chrom)):
+            tmp = snvs_on_cur_chrom[ni]
+            assert tmp.POS >= cur_snv.POS
+            assert tmp.CHROM == cur_snv.CHROM
+            if tmp.POS != cur_snv.POS:
+                next_snv = tmp
+                break
+            
+        LOG.debug("prev_snv=%d cur_snv=%d next_snv=%d" % (
+            prev_snv.POS if prev_snv else -1,
+            cur_snv.POS,
+            next_snv.POS if next_snv else -1))
+
+        cur_snv.INFO[vcf_info_id] = 1 # pass by default
+        if prev_snv != None:
+            if cur_snv.POS-prev_snv.POS <= win_size:
+                cur_snv.INFO[vcf_info_id] = 0
+        if next_snv != None:
+            if next_snv.POS-cur_snv.POS <= win_size:
+                cur_snv.INFO[vcf_info_id] = 0
+            
+                
+    
 def cmdline_parser():
     """
     creates an OptionParser instance
@@ -98,10 +147,11 @@ def cmdline_parser():
                       default=default,
                       help="Filter variants with strandbias."
                       " Valid values are 'bonf' (Bonferroni),"
-                      " 'holm-bonf' (Holm-Bonferroni), an integer value or 'off'."
-                      " If 'bonf' or 'holm-bonf', variants with accordingly"
-                      " corrected strand-bias pvalue < strandbias-alpha will be filtered."
-                      " If an int was given, variants with strand-bias phred-scores"
+                      " 'holm-bonf' (Holm-Bonferroni), an integer value"
+                      " or 'off'. If 'bonf' or 'holm-bonf', variants with"
+                      " accordingly corrected strand-bias pvalue"
+                      " < strandbias-alpha will be filtered. If an int"
+                      " was given, variants with strand-bias phred-scores"
                       " larger than this value will be filtered."
                       " (default: %s)" % default)
     default = 0.05
@@ -134,9 +184,10 @@ def cmdline_parser():
                       help="Filter variants based on quality. Valid values"
                       " are 'fdr', 'bonf', 'holmbonf' or an integer value."
                       " If FDR Benjamini-Hochberg correction will be used."
-                      " If 'bonf' Bonferroni- and if 'holm-bonf' Holm-Bonferroni-"
-                      "correction will be used. If an int was given, variants with"
-                      " a phred-score below this value will be filtered")
+                      " If 'bonf' Bonferroni- and if 'holm-bonf'"
+                      " Holm-Bonferroni-correction will be used."
+                      " If an int was given, variants with a phred-score"
+                      " below this value will be filtered")
     parser.add_option("", "--snv-qual-alpha",
                       type="float",
                       help="Alpha/significance threshold for multiple testing"
@@ -144,17 +195,17 @@ def cmdline_parser():
                       " Only applies to 'bonf', 'holm-bonf' and 'fdr'")
     parser.add_option("", "--snv-qual-numtests",
                       type="int",
-                      help="Set number of tests for multiple testing correction routines"
-                      " during SNV quality filtering. Only applies to"
-                      " 'fdr', 'bonf' and 'holm-bonf'. Defaults to number of pvalues.")
+                      help="Set number of tests for multiple testing"
+                      " correction routines during SNV quality filtering."
+                      " Only applies to 'fdr', 'bonf' and 'holm-bonf'."
+                      " Defaults to number of pvalues.")
 
     parser.add_option("", "--window-size",
                       dest="window_size",
                       type='int',
-                      help=SUPPRESS_HELP)
-    #"Optional: Filter variants if more than one"
-    #                  " are present within this window size")
-    # FIXME implement as in old version
+                      help='Ignore variants, if another'
+                      ' variant is present within a window of this size'
+                      ' (ignoring multi-allelic vars at same pos).')
 
     #parser.add_option("--force",
     #                  #help=SUPPRESS_HELP,
@@ -206,8 +257,8 @@ def main():
             parser.error("%s output file argument missing." % descr)
             sys.exit(1)
         if os.path.exists(out_file) and out_file!="-":
-            sys.stderr.write(
-                "Cowardly refusing to overwrite existing output file '%s'.\n" % out_file)
+            sys.stderr.write("Cowardly refusing to overwrite existing"
+                             " output file '%s'.\n" % out_file)
             sys.exit(1)
 
 
@@ -311,9 +362,11 @@ def main():
                 sys.exit(1)
 
             if opts.strandbias == 'bonf':
-                corr_pvals = multiple_testing.Bonferroni(pvals).corrected_pvals
+                corr_pvals = multiple_testing.Bonferroni(
+                    pvals).corrected_pvals
             elif opts.strandbias == 'holm-bonf':
-                corr_pvals = multiple_testing.HolmBonferroni(pvals).corrected_pvals
+                corr_pvals = multiple_testing.HolmBonferroni(
+                    pvals).corrected_pvals
             else:
                 raise ValueError
             for (cp, s) in zip(corr_pvals, snvs):
@@ -393,7 +446,8 @@ def main():
                         snvs[pidx[i]].INFO[vcf_info_id] = 1
  
             elif opts.snv_qual == 'fdr':
-                for i in fdr.fdr(pvals, a=opts.snv_qual_alpha, n=opts.snv_qual_numtests):
+                for i in fdr.fdr(pvals, a=opts.snv_qual_alpha, 
+                                 n=opts.snv_qual_numtests):
                     snvs[pidx[i]].INFO[vcf_info_id] = 1
 
             else:
@@ -422,17 +476,55 @@ def main():
                 vcf_filter.id
                 ))
 
+
+    if opts.window_size != None:
+        vcf_filter = vcf._Filter(
+            id="snvwin%d" % opts.window_size,
+            desc="SNV window filter (SNVs within %d bp distance)" % (
+                opts.window_size))
+        vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
+
+        vcf_info_id = "SNVWINPASS" # tmp markup
+        tmp_vcf_markup.append(vcf_info_id)
+
+        snvs_on_cur_chrom = []
+        last_chrom = None
+        seen_chroms = []
+        for (i, cur_snv) in enumerate(snvs): # assumes snvs are sorted by chrom
+            if i == 0:
+                last_chrom = cur_snv.CHROM
+                
+            if cur_snv.CHROM != last_chrom:
+                assert cur_snv.CHROM not in seen_chroms, (
+                    "SNV input not ordered by chromosome."
+                    " Sure this file was procuced by LoFreq?")
+                win_filter(snvs_on_cur_chrom, opts.window_size, vcf_info_id)
+                seen_chroms.append(last_chrom)
+                last_chrom = cur_snv.CHROM
+                snvs_on_cur_chrom = [cur_snv]
+                
+            else:
+                snvs_on_cur_chrom.append(cur_snv)
+
+        # don't forget last chrom
+        win_filter(snvs_on_cur_chrom, opts.window_size, vcf_info_id)
+
+        
+        filters.append((
+            lambda s, f_id: f_id if s.INFO[vcf_info_id] != '.' and s.INFO[vcf_info_id] == 0 else None,
+            vcf_filter.id
+            ))
+            
+
+    # The actual filtering: if filter function returns 1 the
+    # corresponding snv has to be filtered
+    #
+    # FIXME can't this be done easier with map()?
+    #
     if len(filters) == 0:
         LOG.error("No filters activated.")
         sys.exit(1)
 
-    # The actual filtering:
-    #
-    # FIXME can't this be done easier with map()?
-    #
-    # if filter function returns 1 the corresponding snv has to be
-    # filtered
-    #
     #import pdb; pdb.set_trace()
     for (filter_func, filter_id) in filters:
         for (i, s) in enumerate(snvs):
@@ -444,10 +536,7 @@ def main():
                 else:
                     snvs[i] = s._replace(FILTER="%s,%s" % (s.FILTER, f))
 
-                    
-    if opts.window_size != None: # FIXME
-        raise NotImplementedError
-
+                        
     
     # should all also work if we get already PASSed input
 
