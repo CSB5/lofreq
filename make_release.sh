@@ -28,7 +28,7 @@ test -d $reldir && exit 1
 mkdir $reldir
 # use tar to preserve directory structure as if untouched src tree
 # but removing unwanted stuff
-tar c src/libbam/AUTHORS src/libbam/COPYING src/cdflib90.README src/lofreq/lofreq $(find src/lofreq_python/ -name \*py -or -name \*py.README | grep -v '/build/' | grep -v setup) | tar x --strip-components 1 -C $reldir || exit 1
+tar c src/zlib.LICENSE src/libbam/AUTHORS src/libbam/COPYING src/cdflib90.README src/lofreq/lofreq $(find src/lofreq_python/ -name \*py -or -name \*py.README | grep -v '/build/' | grep -v setup) | tar x --strip-components 1 -C $reldir || exit 1
 cp README LICENSE $reldir
 tar cvzf $(basename $reldir).tgz $reldir && rm -rf $reldir/* && rmdir $reldir
 
