@@ -14,6 +14,7 @@ ALPHA_LIST='0.01 0.0001 0.000001 0.00000001'
 NUMTEST_LIST='100 10000 1000000'
 
 
+
 # snv quality with varying alpha
 #
 for cor in "bonf" "holm-bonf" "fdr"; do
@@ -29,6 +30,8 @@ for cor in "bonf" "holm-bonf" "fdr"; do
         last_no=$new_no
     done
 done
+
+
 
 # snv quality with varying num_tests
 #
@@ -49,6 +52,7 @@ for cor in "bonf" "holm-bonf" "fdr"; do
 done
 
 
+
 # strandbias quality with varying alpha
 #
 for cor in "bonf" "holm-bonf"; do
@@ -64,3 +68,24 @@ for cor in "bonf" "holm-bonf"; do
         last_no=$new_no
     done
 done
+
+
+
+# window filter
+#
+vcf=data/vcf/CTTGTA_2_remap_razers-i92_peakrem_corr_nodeff.vcf
+base_cmd="$LOFREQ filter -i $vcf --no-defaults -o -"
+cmd="$base_cmd --window 10"
+num_reg=$(eval $cmd | grep '[^0-9,]85' | grep -c snvwin) || exit 1
+num_exp=4
+if [ $num_reg -ne $num_exp ]; then
+    echoerror "window: Got $num_reg but expected $num_exp SNVs (cmd = $cmd)"
+fi
+#
+cmd="$base_cmd --window 1"
+num_reg=$(eval $cmd | grep '[^0-9,]85' | grep -c snvwin) || exit 1
+num_exp=2
+if [ $num_reg -ne $num_exp ]; then
+    echoerror "window: Got $num_reg but expected $num_exp SNVs (cmd = $cmd)"
+fi
+
