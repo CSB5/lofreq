@@ -29,6 +29,11 @@
 #include "plp.h"
 
 
+#if 1
+#define MYNAME "lofreq uniq"
+#else
+#define MYNAME PACKAGE
+#endif
 
 #define DEFAULT_SIG 0.05
 
@@ -131,14 +136,13 @@ uniq_snv(const plp_col_t *p, void *confp)
 static void
 usage(const uniq_conf_t* uniq_conf)
 {
-     fprintf(stderr, "Usage: %s uniq [options] in.bam\n\n", PACKAGE);
-     fprintf(stderr, "Checks whether variants predicted in one sample (listed in vcf input)\n");
+     fprintf(stderr, "%s: Checks whether variants predicted in one sample (listed in vcf input)\n", MYNAME);
      fprintf(stderr, "are truly 'unique', i.e. coverage in other sample (bam input) is high\n");
      fprintf(stderr, "enough and alt counts are significantly low (1-sided Binomial test).\n");
      fprintf(stderr, "Will ignore filtered input variants as well as indels and will only\n");
      fprintf(stderr, "output variants considered unique (Bonferroni corrected p-value<sig).\n\n");
 
-     fprintf(stderr,"Usage: %s uniq [options] in.bam\n\n", PACKAGE);
+     fprintf(stderr,"Usage: %s [options] in.bam\n\n", MYNAME);
      fprintf(stderr,"Options:\n");
      fprintf(stderr, "       --verbose           Be verbose\n");
      fprintf(stderr, "       --debug             Enable debugging\n");
@@ -307,7 +311,7 @@ main_uniq(int argc, char *argv[])
                              " after header parsing failed");
                    return -1;
               }
-              vcf_write_header(uniq_conf.vcf_in, NULL, NULL);
+              /* nonsense, right?: vcf_write_header(uniq_conf.vcf_in, NULL, NULL); */
          }
     } else {
          fprintf(uniq_conf.vcf_out, "%s", vcf_header);
