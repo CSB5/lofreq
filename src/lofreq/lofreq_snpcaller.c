@@ -46,6 +46,13 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #include "bed.h"
 
 
+#if 1
+#define MYNAME "lofreq call"
+#else
+#define MYNAME PACKAGE
+#endif
+
+
 #define SNVCALL_USE_MQ      0x10
 #define SNVCALL_USE_SQ      0x20
 #define SNVCALL_CONS_AS_REF 0x40
@@ -811,7 +818,7 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
 static void
 usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
 {
-     fprintf(stderr, "Usage: %s call [options] in.bam\n\n", PACKAGE);
+     fprintf(stderr, "Usage: %s [options] in.bam\n\n", MYNAME);
      fprintf(stderr, "Options:\n");
      fprintf(stderr, "- Regions\n");                                        
      fprintf(stderr, "       -r | --region STR            region in which pileup should be generated [null]\n");
