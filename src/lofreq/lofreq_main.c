@@ -16,6 +16,7 @@
 #include "utils.h"
 #include "lofreq_snpcaller.h"
 #include "lofreq_uniq.h"
+#include "lofreq_vcfset.h"
 
 
 #ifndef __DATE__
@@ -129,6 +130,9 @@ int main(int argc, char *argv[])
      } else if (strcmp(argv[1], "uniq") == 0)  {
           return main_uniq(argc, argv);
 
+     } else if (strcmp(argv[1], "vcfset") == 0)  {
+          return main_vcfset(argc, argv);
+
      } else if (strcmp(argv[1], "peek") == 0 ||
                 strcmp(argv[1], "check") == 0 ||
                 strcmp(argv[1], "inspect") == 0 ||
@@ -140,7 +144,6 @@ int main(int argc, char *argv[])
 
      } else if (strcmp(argv[1], "filter") == 0 || 
                 strcmp(argv[1], "somatic") == 0 ||
-                strcmp(argv[1], "vcfset") == 0 ||
                 strcmp(argv[1], "cluster") == 0) {
           char **argv_execvp = calloc(argc, sizeof(char*));
           int i;
