@@ -7,6 +7,7 @@
 #ifndef VCF_H
 #define VCF_H
 
+
 typedef struct {
      char *chrom;
      long int pos; /* zero offset */
@@ -31,11 +32,13 @@ typedef struct {
 } dp4_counts_t;
 
 
+
 void vcf_new_var(var_t **var);
 void vcf_free_var(var_t **var);
 
 int vcf_parse_header(char **header, FILE *stream);
-int vcf_parse_vars(FILE *stream, var_t ***vars);
+int vcf_skip_header(FILE *stream);
+int vcf_parse_vars(FILE *strebam, var_t ***vars);
 
 int vcf_var_has_info_key(char **value, const var_t *var, const char *key);
 int vcf_var_filtered(const var_t *var);
