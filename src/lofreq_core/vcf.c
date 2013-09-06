@@ -129,11 +129,19 @@ void vcf_write_var(FILE *stream, const var_t *var)
           fprintf(stream, "%c", MISSING_VAL_CHAR);
      }
 
-     fprintf(stream, "\t%s\t%s\n",
+     fprintf(stream, "\t%s\t%s",
              var->filter ? var->filter : MISSING_VAL_STR,
              var->info ? var->info : MISSING_VAL_STR);
 
-     /* FIXME format and samples not supported */
+     if (var->format) {
+          int i=0;
+          fprintf(stream, "\t%s", var->format);
+          for (i=0; i<var->num_samples; i++) {
+               fprintf(stream, "\t%s", var->samples[i]);
+          }
+     }
+     fprintf(stream, "\n");
+
 }
 
 
@@ -184,12 +192,9 @@ void vcf_write_header(FILE *stream, const char *src, const char *reffa)
      fprintf(stream, "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Raw Depth\">\n");
      fprintf(stream, "##INFO=<ID=AF,Number=1,Type=Float,Description=\"Allele Frequency\">\n");
      fprintf(stream, "##INFO=<ID=SB,Number=1,Type=Integer,Description=\"Phred-scaled strand bias at this position\">\n");
-
      fprintf(stream, "##INFO=<ID=DP4,Number=4,Type=Integer,Description=\"Counts for ref-forward bases, ref-reverse, alt-forward and alt-reverse bases\">\n");
-
      fprintf(stream, "##INFO=<ID=INDEL,Number=0,Type=Flag,Description=\"Indicates that the variant is an INDEL.\">\n");
      fprintf(stream, "##INFO=<ID=CONSVAR,Number=0,Type=Flag,Description=\"Indicates that the variant is a consensus variant (as opposed to a low frequency variant).\">\n");
-
      fprintf(stream, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n");
 }
 
@@ -220,6 +225,23 @@ int vcf_parse_header(char **header, FILE *stream)
      LOG_WARN("%s\n", "Missing header line in vcf file.");
      return -1;
 }
+
+
+int vcf_skip_header(FILE *stream)
+{
+     char *vcf_header;
+     if (0 !=  vcf_parse_header(&vcf_header, stream)) {
+          if (fseek(stream, 0, SEEK_SET)) {
+               LOG_FATAL("%s\n", "Couldn't rewind file to parse variants"
+                        " after header parsing failed");
+              return -1;
+         }
+     } else {
+          free(vcf_header);
+     }
+     return 0;
+}
+
 
 
 /* parse one variant from stream. returns +1 on EOF and -1 on error
@@ -276,18 +298,15 @@ int parse_var(FILE *stream, var_t *var)
           } else if (8 == field_no) {
                var->info = strdup(token);
 
-#if 0
           } else if (9 == field_no) {
                var->format = strdup(token);
 
-          } else if (9 < field_no) {
-               /* allocate mem for samples first */
-               var->samples[field_no-10] = strdup(token);
-#else
-          } else {
-               LOG_WARN("%s\n", "Genotyping info in vcf not supported");
+          } else if (field_no > 9) {
+               assert(field_no-10 == var->num_samples);
+               var->num_samples += 1;
+               var->samples = realloc(var->samples, var->num_samples * sizeof(char*));
+               var->samples[var->num_samples-1] = strdup(token);
           }
-#endif
      }
 
      if (field_no<8) {
@@ -310,7 +329,7 @@ int vcf_parse_vars(FILE *stream, var_t ***vars)
 
      (*vars) = malloc(1 * sizeof(var_t*));
 
-     while (! feof(stream)) {
+     while (! feof(stream)) { 
           var_t *var;
           vcf_new_var(&var);
           rc = parse_var(stream, var);
@@ -331,6 +350,9 @@ int vcf_parse_vars(FILE *stream, var_t ***vars)
           num_vars += 1;
           (*vars) = realloc((*vars), num_vars * sizeof(var_t*));
           (*vars)[num_vars-1] = var;
+          if (verbose && num_vars && num_vars%1000000==0) {
+               LOG_VERBOSE("Still alive and happily parsing var %d\n", num_vars);
+          }
 #if 0
           LOG_DEBUG("(*vars)[num_vars-1 = %d] = \n", num_vars-1);
           vcf_write_var(stderr, (*vars)[num_vars-1]);
