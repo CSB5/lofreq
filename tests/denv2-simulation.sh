@@ -19,7 +19,10 @@ outraw_nomq=$outdir/raw_nomq.vcf
 outfinal_nomq=$outdir/final_nomq.vcf
 log=$outdir/log.txt
 
-KEEP_TMP=0
+KEEP_TMP=1
+if [ $KEEP_TMP -eq 1 ]; then
+    echowarn "Keeping tmp dir $outdir"
+fi
 
 cmd="$LOFREQ call -b $bonf -f $reffa -o $outraw_def $bam"
 if ! eval $cmd >> $log 2>&1; then
@@ -51,12 +54,12 @@ fi
 #echodebug "nexp=$nexp nfinal_def=$nfinal_def $nfinal_nomq=$nfinal_nomq"
 
 
-ndiff=$($LOFREQ vcfset -a complement --ign-filtered -1 $outfinal_def -2 $truesnv  | grep -c '^[^#]')
+ndiff=$($LOFREQ vcfset -a complement --only-passed -1 $outfinal_def -2 $truesnv  | grep -c '^[^#]')
 if [ $ndiff -ne 0 ]; then
     echoerror "Found extra SNVs in default predictions, which are not part of the list of true SNVs"
     exit 1
 fi
-ndiff=$($LOFREQ vcfset -a complement --ign-filtered -2 $outfinal_def -1 $truesnv  | grep -c '^[^#]')
+ndiff=$($LOFREQ vcfset -a complement --only-passed -2 $outfinal_def -1 $truesnv  | grep -c '^[^#]')
 nexp=15
 # BAQ on: 19
 # BAQ off: 15
@@ -67,12 +70,12 @@ fi
 
 
 
-ndiff=$($LOFREQ vcfset -a complement --ign-filtered -1 $outfinal_nomq -2 $truesnv  | grep -c '^[^#]')
+ndiff=$($LOFREQ vcfset -a complement --only-passed -1 $outfinal_nomq -2 $truesnv  | grep -c '^[^#]')
 if [ $ndiff -ne 0 ]; then
     echoerror "Found extra SNVs in no-mq predictions, which are not part of the list of true SNVs"
     exit 1
 fi
-ndiff=$($LOFREQ vcfset -a complement --ign-filtered -2 $outfinal_nomq -1 $truesnv  | grep -c '^[^#]')
+ndiff=$($LOFREQ vcfset -a complement --only-passed -2 $outfinal_nomq -1 $truesnv  | grep -c '^[^#]')
 nexp=11
 # BAQ on: 14
 # BAQ off: 11
@@ -87,9 +90,7 @@ fi
 
 echook "Tests passed"
 
-if [ $KEEP_TMP -eq 1 ]; then
-    echowarn "Not deleting tmp dir $outdir"
-else 
+if [ $KEEP_TMP -ne 1 ]; then
     rm  $outdir/*
     rmdir $outdir
 fi
