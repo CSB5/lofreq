@@ -160,13 +160,13 @@ typedef struct {
      int dont_skip_n;
      long long int bonf; /* warning: changed dynamically ! */
      float sig;
-     FILE *out;
+     vcf_file_t vcf_out;
      int flag;
 } snvcall_conf_t;
 
 
 void
-report_var(FILE *stream, const plp_col_t *p, const char ref, 
+report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char ref, 
            const char alt, const float af, const int qual,
            const int is_indel, const int is_consvar)
 {
@@ -198,7 +198,7 @@ report_var(FILE *stream, const plp_col_t *p, const char ref,
 
      vcf_var_sprintf_info(var, &p->coverage, &af, &sb_qual,
                           &dp4, is_indel, is_consvar);
-     vcf_write_var(stream, var);
+     vcf_write_var(vcf_file, var);
      vcf_free_var(&var);
 }
 /* report_var() */
@@ -392,7 +392,7 @@ call_snvs(const plp_col_t *p, void *confp)
           const int qual = -1;
           float af = base_count(p, p->cons_base) / (float)p->coverage;
 
-          report_var(conf->out, p, p->ref_base, p->cons_base,
+          report_var(& conf->vcf_out, p, p->ref_base, p->cons_base,
                      af, qual, is_indel, is_consvar);
           LOG_DEBUG("cons var snp: %s %d %c>%c\n",
                     p->target, p->pos+1, p->ref_base, p->cons_base);          
@@ -542,7 +542,7 @@ call_snvs(const plp_col_t *p, void *confp)
                const int is_consvar = 0;
                float af = alt_raw_count/(float)p->coverage;
 
-               report_var(conf->out, p, reported_snv_ref, alt_base, 
+               report_var(& conf->vcf_out, p, reported_snv_ref, alt_base, 
                           af, PROB_TO_PHREDQUAL(pvalue), 
                           is_indel, is_consvar);
                LOG_DEBUG("low freq snp: %s %d %c>%c pv-prob:%g;pv-qual:%d"
@@ -806,7 +806,7 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
      fprintf(stream, "  bonf           = %lld  (might get recalculated)\n", c->bonf);
      fprintf(stream, "  bonf_dynamic   = %d\n", c->bonf_dynamic);
      fprintf(stream, "  sig            = %f\n", c->sig);
-     fprintf(stream, "  out            = %p\n", (void*)c->out);
+/*     fprintf(stream, "  out            = %p\n", (void*)c->out);*/
      fprintf(stream, "  flag & SNVCALL_USE_MQ      = %d\n", c->flag&SNVCALL_USE_MQ?1:0);
 #ifdef USE_SOURCEQUAL
      fprintf(stream, "  flag & SNVCALL_USE_SQ      = %d\n", c->flag&SNVCALL_USE_SQ?1:0);
@@ -908,7 +908,7 @@ main_call(int argc, char *argv[])
      snvcall_conf.bonf_dynamic = 1;
      snvcall_conf.bonf = 1;
      snvcall_conf.sig = 0.05;
-     snvcall_conf.out = stdout;
+     /* snvcall_conf.out = ; */
      snvcall_conf.flag = SNVCALL_USE_MQ;/* | MPLP_USE_SQ; FIXME */
 
     
@@ -1194,10 +1194,15 @@ for cov in coverage_range:
      */
     if (no_default_filter && ! snvcall_conf.bonf_dynamic) {
          if (NULL == vcf_out || 0 == strcmp(vcf_out, "-")) {
-              snvcall_conf.out = stdout;
+              if (vcf_file_open(& snvcall_conf.vcf_out, "-", 
+                                0, 'w')) {
+                   LOG_ERROR("Couldn't open stdout\n", vcf_out);
+                   return 1;
+              }
          } else {
-              if (NULL == (snvcall_conf.out = fopen(vcf_out, "w"))) {
-                   LOG_FATAL("Couldn't open file '%s'. Exiting...\n", vcf_out);
+              if (vcf_file_open(& snvcall_conf.vcf_out, vcf_out,
+                                HAS_GZIP_EXT(vcf_out), 'w')) {
+                   LOG_ERROR("Couldn't open %s\n", vcf_out);
                    return 1;
               }
          }
@@ -1207,8 +1212,9 @@ for cov in coverage_range:
               LOG_FATAL("%s\n", "Couldn't create temporary vcf file");
               return 1;
          }
-         if (NULL == (snvcall_conf.out = fopen(vcf_tmp_out, "w"))) {
-              LOG_FATAL("Couldn't open file '%s'. Exiting...\n", vcf_tmp_out);
+         if (vcf_file_open(& snvcall_conf.vcf_out, vcf_tmp_out,
+                           HAS_GZIP_EXT(vcf_tmp_out), 'w')) {
+              LOG_ERROR("Couldn't open %s\n", vcf_tmp_out);
               return 1;
          }
     }
@@ -1265,7 +1271,8 @@ for cov in coverage_range:
 
     if (! plp_summary_only) {
          /* or use PACKAGE_STRING */
-         vcf_write_header(snvcall_conf.out, mplp_conf.cmdline, mplp_conf.fa);
+         vcf_write_new_header(& snvcall_conf.vcf_out,
+                              mplp_conf.cmdline, mplp_conf.fa);
          plp_proc_func = &call_snvs;
     } else {
          plp_proc_func = &plp_summary;
@@ -1278,9 +1285,7 @@ for cov in coverage_range:
          return rc;
     }
 
-    if (snvcall_conf.out != stdout) {
-         fclose(snvcall_conf.out);
-    }
+    vcf_file_close(& snvcall_conf.vcf_out);
 
     /* snv calling completed. now filter according to the following schema:
      *  1. no_default_filter and ! dyn

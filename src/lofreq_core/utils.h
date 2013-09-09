@@ -5,6 +5,8 @@
 #include <float.h>
 #include <math.h>
 
+#define HAS_GZIP_EXT(f)  (strlen(f)>3 && 0==strncmp(& f[strlen(f)-3], ".gz", 3))
+
 
 #define PHREDQUAL_TO_PROB(phred) (phred==INT_MAX ? DBL_MIN : pow(10.0, -1.0*(phred)/10.0))
 #define PROB_TO_PHREDQUAL(prob) (prob<0.0+DBL_EPSILON ? INT_MAX : (int)(-10.0 * log10(prob)))
