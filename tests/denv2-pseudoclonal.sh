@@ -30,13 +30,13 @@ if ! eval $cmd >> $log 2>&1; then
 fi
 
 
-ndiff=$($LOFREQ vcfset -a complement --ign-filtered -1 $outfinal_def -2 $truesnv  | grep -c '^[^#]')
+ndiff=$($LOFREQ vcfset -a complement --only-passed -1 $outfinal_def -2 $truesnv  | grep -c '^[^#]')
 if [ $ndiff -ne 0 ]; then
     echoerror "Found FP SNVs (not part of the list of true SNVs)"
     exit 1
 fi
 
-ndiff=$($LOFREQ vcfset -a intersect --ign-filtered -1 $outfinal_def -2 $truesnv  | grep -c '^[^#]')
+ndiff=$($LOFREQ vcfset -a intersect --only-passed -1 $outfinal_def -2 $truesnv  | grep -c '^[^#]')
 nexp=229
 if [ $ndiff -lt $nexp ]; then
     echoerror "Expected $nexp TP SNVs but got $ndiff"

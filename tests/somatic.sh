@@ -5,7 +5,10 @@
 source lib.sh || exit 1
 
 
-KEEP=0
+KEEP_TMP=0
+if [ $KEEP_TMP -eq 1 ]; then
+    echowarn "Keeping tmp dir $outdir"
+fi
 
 bam_n=./data/somatic/CHH966-normal-100x-100pur-hg19.chr22-bed-only.bam
 bam_t=./data/somatic/CHH966-tumor-100x-10pur-hg19.chr22-bed-only.bam
@@ -14,15 +17,18 @@ reffa=./data/somatic/hg19_chr22.fa.gz
 truesnv=./data/somatic/hg19_chr22_true_snv.vcf
 outprefix=$(mktemp -t $(basename $0) 2>/dev/null || mktemp -t $(basename $0).XXXXXX);#XXXXXX needed on linux?
 finalout=${outprefix}somatic_final.vcf
-$LOFREQ somatic -n $bam_n -t $bam_t -f $reffa -l $bed -o $outprefix || exit 1
+cmd="$LOFREQ somatic -n $bam_n -t $bam_t -f $reffa -l $bed -o $outprefix"
+if ! eval $cmd; then
+    echoerror "The following command failed: $cmd"
+    exit 1
+fi
+echodebug "cmd = $cmd"
 n_intersect=$($LOFREQ vcfset -1 $truesnv -2 $finalout -a intersect | grep -vc '^#')
 if [ "$n_intersect" -lt 2 ]; then
 	echoerror "Expected at least two true predictions but got $n_intersect (compare $finalout and $truesnv)"
 else
 	echook "Got $n_intersect true predictions"
-    if [ $KEEP -eq 1 ]; then
-        echodebug "Not deleting ${outprefix}*vcf*"
-    else
+    if [ $KEEP_TMP -ne 1 ]; then
 	    rm ${outprefix}*vcf*
     fi
 fi
