@@ -20,8 +20,6 @@
 #include "utils.h"
 #include "vcf.h"
 
-#define MISSING_VAL_STR "."
-#define MISSING_VAL_CHAR '.'
 
 #define LINE_BUF_SIZE 1<<12
 
@@ -83,8 +81,8 @@ void vcf_new_var(var_t **var)
      (*var)->chrom = NULL;
      (*var)->pos = -1;
      (*var)->id = NULL;
-     (*var)->ref = MISSING_VAL_CHAR;
-     (*var)->alt = MISSING_VAL_CHAR;
+     (*var)->ref = VCF_MISSING_VAL_CHAR;
+     (*var)->alt = VCF_MISSING_VAL_CHAR;
      (*var)->qual = -1; /* -1 == missing */
      (*var)->filter = NULL;
      (*var)->info = NULL;
@@ -118,20 +116,20 @@ void vcf_write_var(FILE *stream, const var_t *var)
      /* in theory all values are optional */
 
      fprintf(stream, "%s\t%ld\t%s\t%c\t%c\t",
-             NULL == var->chrom ? MISSING_VAL_STR : var->chrom,
+             NULL == var->chrom ? VCF_MISSING_VAL_STR : var->chrom,
              var->pos + 1,
-             NULL == var->id ? MISSING_VAL_STR : var->id,
+             NULL == var->id ? VCF_MISSING_VAL_STR : var->id,
              var->ref,
              var->alt);
      if (var->qual>-1) {
           fprintf(stream, "%d", var->qual);
      } else {
-          fprintf(stream, "%c", MISSING_VAL_CHAR);
+          fprintf(stream, "%c", VCF_MISSING_VAL_CHAR);
      }
 
      fprintf(stream, "\t%s\t%s",
-             var->filter ? var->filter : MISSING_VAL_STR,
-             var->info ? var->info : MISSING_VAL_STR);
+             var->filter ? var->filter : VCF_MISSING_VAL_STR,
+             var->info ? var->info : VCF_MISSING_VAL_STR);
 
      if (var->format) {
           int i=0;
@@ -246,7 +244,7 @@ int vcf_skip_header(FILE *stream)
 
 /* parse one variant from stream. returns +1 on EOF and -1 on error
  */
-int parse_var(FILE *stream, var_t *var)
+int vcf_parse_var(FILE *stream, var_t *var)
 {
      const char delimiter[] = "\t";
      char *token;
@@ -286,7 +284,7 @@ int parse_var(FILE *stream, var_t *var)
                var->alt = token[0];
 
           } else if (6 == field_no) {
-               if (token[0]==MISSING_VAL_CHAR) {
+               if (token[0]==VCF_MISSING_VAL_CHAR) {
                     var->qual = -1;
                } else {
                     var->qual = atoi(token);
@@ -332,7 +330,7 @@ int vcf_parse_vars(FILE *stream, var_t ***vars)
      while (! feof(stream)) { 
           var_t *var;
           vcf_new_var(&var);
-          rc = parse_var(stream, var);
+          rc = vcf_parse_var(stream, var);
           if (-1 == rc) {
                int i;
                LOG_FATAL("%s\n", "Parsing error");

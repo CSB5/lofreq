@@ -22,6 +22,7 @@
 #include "vcf.h"
 #include "log.h"
 #include "utils.h"
+#include "uthash.h"
 
 
 
@@ -44,7 +45,34 @@ typedef struct {
      FILE *vcf_in2;
      FILE *vcf_out;
      vcfset_op_t vcf_setop;
+     int only_passed; /* if 1, ignore any filtered variant */
 } vcfset_conf_t;
+
+
+
+typedef struct {
+     char *key; /* according to uthash doc this should be const but then we can't free it */
+     var_t *var;
+     UT_hash_handle hh;
+} var_hash_t;
+
+
+void
+var_hash_free_elem(var_hash_t *hash_elem_ptr) {
+     vcf_free_var(& hash_elem_ptr->var);
+     free(hash_elem_ptr->key);
+     free(hash_elem_ptr);
+}
+
+/* key and var will not be copied ! */
+void var_hash_add(var_hash_t **var_hash, char *key, var_t *var) {
+    var_hash_t *vh_elem = NULL;
+    vh_elem = (var_hash_t *) malloc(sizeof(var_hash_t));
+    vh_elem->key = key;
+    vh_elem->var = var;
+
+    HASH_ADD_KEYPTR(hh, (*var_hash), vh_elem->key, strlen(vh_elem->key), vh_elem);
+}
 
 
 
@@ -58,18 +86,30 @@ usage(const vcfset_conf_t* vcfset_conf)
      fprintf(stderr,"Options:\n");
      fprintf(stderr, "       --verbose        Be verbose\n");
      fprintf(stderr, "       --debug          Enable debugging\n");
-     fprintf(stderr, "  -1 | --vcf1 FILE      1st VCF input file (gzip supported)\n");
-     fprintf(stderr, "  -2 | --vcf2 FILE      2nd VCF input file (gzip supported)\n");
+     fprintf(stderr, "       --only-passed    Ignore variants marked as filtered\n");
+     fprintf(stderr, "  -1 | --vcf1 FILE      1st VCF input file\n");
+     fprintf(stderr, "  -2 | --vcf2 FILE      2nd VCF input file\n");
      fprintf(stderr, "  -o | --vcfout         VCF output file (- for stdout, which is default. gzip supported).\n"
              "                        Meta-data will be copied from vcf1\n");
      fprintf(stderr, "  -a | --action         Set operation to perform:\n"
-             "                        intersect, complement or union.\n"
+             "                        intersect or complement.\n"
              "                        intersect = vcf1 AND vcf2.\n"
-             "                        union = vcf1 OR vcf2.\n"
+/*             "                        union = vcf1 OR vcf2.\n"*/
              "                        complement = vcf1 \\ vcf2.\n");
 }
 /* usage() */
 
+
+
+/* key is allocated here and has to be freed by called */
+void
+key_for_var(char **key, var_t *var)
+{
+     int bufsize = strlen(var->chrom)+16;
+     (*key) = malloc(bufsize *sizeof(char));
+     snprintf(*key, bufsize, "%s %ld %c %c", var->chrom, var->pos, 
+              var->ref, var->alt);
+}
 
 
 int 
@@ -78,12 +118,13 @@ main_vcfset(int argc, char *argv[])
      vcfset_conf_t vcfset_conf;
      char *vcf_header = NULL;
      int rc = 0;
-     int c, i;
-     var_t **vars_vcf2 = NULL;
+     int c;
      long int num_vars_vcf1, num_vars_vcf2;
-
+     long int num_vars_vcf1_ign, num_vars_vcf2_ign, num_vars_out;;
+     var_hash_t *var_hash_vcf2 = NULL; /* must be declarsed NULL ! */
+     static int only_passed = 0;
      num_vars_vcf1 = num_vars_vcf2 = 0;
-
+     num_vars_vcf1_ign = num_vars_vcf2_ign = num_vars_out = 0;
 
      /* default uniq options */
      memset(&vcfset_conf, 0, sizeof(vcfset_conf_t));
@@ -104,6 +145,7 @@ main_vcfset(int argc, char *argv[])
               {"help", no_argument, NULL, 'h'},
               {"verbose", no_argument, &verbose, 1},
               {"debug", no_argument, &debug, 1},
+              {"only-passed", no_argument, &only_passed, 1},
 
               {"vcf1", required_argument, NULL, '1'},
               {"vcf2", required_argument, NULL, '2'},
@@ -114,7 +156,7 @@ main_vcfset(int argc, char *argv[])
          };
 
          /* keep in sync with long_opts and usage */
-         static const char *long_opts_str = "h1:2:o:a:"; 
+         static const char *long_opts_str = "h1:2:o:a:p"; 
 
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
@@ -162,10 +204,13 @@ main_vcfset(int argc, char *argv[])
          case 'a': 
               if (0 == strcmp(optarg, "intersect")) {
                    vcfset_conf.vcf_setop = SETOP_INTERSECT;
+
               } else if (0 == strcmp(optarg, "complement")) {
                    vcfset_conf.vcf_setop = SETOP_COMPLEMENT;
-              } else if (0 == strcmp(optarg, "union")) {
-                   vcfset_conf.vcf_setop = SETOP_UNION;
+
+/*              } else if (0 == strcmp(optarg, "union")) {
+                vcfset_conf.vcf_setop = SETOP_UNION; */
+
               } else {
                    LOG_FATAL("Unknown action '%s'. Exiting...\n", optarg);
                    return 1;
@@ -179,6 +224,7 @@ main_vcfset(int argc, char *argv[])
               break;
          }
     }
+    vcfset_conf.only_passed = only_passed;
 
     if (argc == 2) {
         fprintf(stderr, "\n");
@@ -195,9 +241,6 @@ main_vcfset(int argc, char *argv[])
          usage(& vcfset_conf);
          return 1;
     }
-
-
-
 
 
 
@@ -228,56 +271,132 @@ main_vcfset(int argc, char *argv[])
          return -1;
     }
 
-    
-    LOG_ERROR("parse from vcf2 one by one and save as hash\n"); /*  */
 
-/*  
-  see lofreq_uniq.c for vcf parsing examples
-  
-    hash = "%s %d %s %s" % (var.CHROM, var.POS, 
-                            var.REF, ''.join(var.ALT))
-
-    if (-1 == (num_vars_vcf2 = vcf_parse_vars(vcfset_conf.vcf_in2, &vars_vcf2))) {
-         LOG_FATAL("%s\n", "Couldn't parse vars from 2nd vcf file");
-         return -1;
-    }
-#if FIXME_TESTING
-    for (i=0 ; i<10; i++) {
-         vcf_write_var(vcfset_conf.vcf_out, vars_vcf2[i]);
-    }
-#endif
-
-   vcf_parse_vars() vs parse_var()
-   
-   
-
-         if (vcf_var_has_info_key(NULL, vcfset_conf.var, "INDEL")) {
-         } else if (vcf_var_filtered(vcfset_conf.var)) {
-    }
-*/
-
-
-    /* cleanup
+    /* read vcf2 and save as hash
      */
+    while (1) {
+         var_t *var;
+         char *key;
+         int rc;
+         vcf_new_var(&var);
+         rc = vcf_parse_var(vcfset_conf.vcf_in2, var);
+         if (-1 == rc) {
+              LOG_FATAL("%s\n", "Parsing error while parsing 2nd vcf-file");
+              exit(1);
+         }
+         if (1 == rc) {/* EOF */
+              free(var);
+              break;
+         }
 
-    for (i=0; i<num_vars_vcf2; i++) {
-         vcf_free_var(& vars_vcf2[i]);
+         if (! vcfset_conf.only_passed || VCF_VAR_PASSES(var)) {
+              key_for_var(&key, var);
+              var_hash_add(& var_hash_vcf2, key, var);
+#ifdef TRACE
+              fprintf(stderr, "var_2 pass: "); vcf_write_var(stderr, var);
+#endif
+         } else {
+              num_vars_vcf2_ign += 1;
+              vcf_free_var(& var);
+         }
+#ifdef TRACE
+         LOG_DEBUG("Adding %s\n", key);
+#endif
     }
-    free(vars_vcf2);
-
-    fclose(vcfset_conf.vcf_in1);
     fclose(vcfset_conf.vcf_in2);
+
+    num_vars_vcf2 = HASH_COUNT(var_hash_vcf2);
+    LOG_VERBOSE("Parsed %d variants from 2nd vcf file (ignoring %d non-passed of those)\n", 
+                num_vars_vcf2 + num_vars_vcf2_ign, num_vars_vcf2_ign);
+
+
+    /* now parse first vcf file and decide what to do
+     */
+    while (1) {
+         var_t *var_1;
+         char *key;
+         var_hash_t *var_2;
+         int rc;
+
+         vcf_new_var(&var_1);
+         rc = vcf_parse_var(vcfset_conf.vcf_in1, var_1);
+         if (-1 == rc) {
+              LOG_FATAL("%s\n", "Parsing error while parsing 1st vcf-file");
+              exit(1);
+         }
+         if (1 == rc) {/* EOF */
+              free(var_1);
+              break;
+         }
+
+         if (vcfset_conf.only_passed && ! VCF_VAR_PASSES(var_1)) {
+              num_vars_vcf1_ign += 1;
+              vcf_free_var(& var_1);
+              continue;
+         }
+#ifdef TRACE
+         fprintf(stderr, "var_1 pass: "); vcf_write_var(stderr, var_1);
+#endif
+         num_vars_vcf1 += 1;
+         key_for_var(&key, var_1);
+         HASH_FIND_STR(var_hash_vcf2, key, var_2);
+#ifdef TRACE
+         LOG_DEBUG("var with key %s in 2: %s\n", key, var_2? "found" : "not found");
+#endif
+         free(key);
+
+         if (vcfset_conf.vcf_setop == SETOP_COMPLEMENT) {
+              /* relative complement : elements in A but not B */
+              if (NULL == var_2) {
+                   num_vars_out += 1;
+                   vcf_write_var(vcfset_conf.vcf_out, var_1);
+
+              } else {
+                   /* save some mem */
+                   HASH_DEL(var_hash_vcf2, var_2);
+                   var_hash_free_elem(var_2);
+              }
+
+         } else if (vcfset_conf.vcf_setop == SETOP_INTERSECT) {
+              if (NULL != var_2) {
+                   num_vars_out += 1;
+                   vcf_write_var(vcfset_conf.vcf_out, var_1);
+              }
+
+         } else {
+              LOG_FATAL("Internal error: unsupported vcf_setop %d\n", vcfset_conf.vcf_setop);
+              return 1;
+         }
+
+         vcf_free_var(& var_1);
+    }
+    fclose(vcfset_conf.vcf_in1);
+
+
+    LOG_VERBOSE("Parsed %d variants from 1st vcf file (ignoring %d non-passed of those)\n", 
+                num_vars_vcf1 + num_vars_vcf1_ign, num_vars_vcf1_ign);
+    LOG_VERBOSE("Wrote %d variants to output\n", 
+                num_vars_out);
     if (stdout != vcfset_conf.vcf_out) {
          fclose(vcfset_conf.vcf_out);
+    }
+
+
+    /* free hash table */
+    {
+         var_hash_t *cur, *tmp;
+         HASH_ITER(hh, var_hash_vcf2, cur, tmp) {
+#ifdef TRACE
+              LOG_ERROR("Freeing %s\n", cur->key);
+#endif
+              HASH_DEL(var_hash_vcf2, cur);
+              var_hash_free_elem(cur);
+         }
     }
 
     if (0==rc) {
          LOG_VERBOSE("%s\n", "Successful exit.");
     }
-
-    LOG_ERROR("Unfinished\n");
-    LOG_FIXME("1. Test me against lofreq_vcfset.py\n");
-    LOG_FIXME("2. run valgrind\n");
 
     return rc;
 }
