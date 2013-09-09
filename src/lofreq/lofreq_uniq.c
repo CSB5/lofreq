@@ -45,8 +45,8 @@ typedef struct {
      /* fix values once established */
      float sig;
      float uni_freq;
-     FILE *vcf_out;
-     FILE *vcf_in;
+     vcf_file_t vcf_out;
+     vcf_file_t vcf_in;
      long long int bonf;
 
      /* changing per pos: the var to test */
@@ -94,15 +94,23 @@ uniq_snv(const plp_col_t *p, void *confp)
      if (conf->uni_freq <= 0.0) {
           vcf_var_has_info_key(&af_char, conf->var, "AF");
           if (NULL == af_char) {
+#if 0
                LOG_ERROR("%s\n", "Couldn't parse AF (key not found) from the following variant:");
                vcf_write_var(stderr, conf->var);
+#else
+               LOG_ERROR("%s\n", "Couldn't parse AF (key not found) from variant");
+#endif
                return;
           }
           af = strtof(af_char, (char **)NULL); /* atof */
           free(af_char);
           if (af < 0.0 || af > 1.0) {
+#if 0
                LOG_ERROR("%s\n", "Couldn't parse AF (value out of bound) from the following variant:");
                vcf_write_var(stderr, conf->var);
+#else
+               LOG_ERROR("%s\n", "Couldn't parse AF (value out of bound) from variant");
+#endif
                return;
           }
      } else {
@@ -128,7 +136,7 @@ uniq_snv(const plp_col_t *p, void *confp)
                  is_sig ? "unique" : "not necessarily unique", pvalue, conf->sig/(float)conf->bonf,
                  alt_count, p->coverage, alt_count/(float)p->coverage);
      if (is_sig) {
-          vcf_write_var(conf->vcf_out, conf->var);
+          vcf_write_var(& conf->vcf_out, conf->var);
      }
 }
 
@@ -146,8 +154,8 @@ usage(const uniq_conf_t* uniq_conf)
      fprintf(stderr,"Options:\n");
      fprintf(stderr, "       --verbose           Be verbose\n");
      fprintf(stderr, "       --debug             Enable debugging\n");
-     fprintf(stderr, "  -v | --vcf-in FILE       Input vcf file listing variants [- = stdin]\n");
-     fprintf(stderr, "  -o | --vcf-out FILE      Output vcf file [- = stdout]\n");
+     fprintf(stderr, "  -v | --vcf-in FILE       Input vcf file listing variants [- = stdin; gzip supported]\n");
+     fprintf(stderr, "  -o | --vcf-out FILE      Output vcf file [- = stdout; gzip supported]\n");
      fprintf(stderr, "  -s | --sig               Significance threshold [%f]\n", uniq_conf->sig);
      fprintf(stderr, "  -f | --uni-freq          Assume variants have uniform test frequency of this value (unused if <=0) [%f]\n", uniq_conf->uni_freq);
 }
@@ -177,8 +185,6 @@ main_uniq(int argc, char *argv[])
 
      /* default uniq options */
      memset(&uniq_conf, 0, sizeof(uniq_conf_t));
-     uniq_conf.vcf_in = stdin;
-     uniq_conf.vcf_out = stdout;
      uniq_conf.sig = DEFAULT_SIG;
      uniq_conf.uni_freq = DEFAULT_UNI_FREQ;
      uniq_conf.bonf = 1;
@@ -293,32 +299,43 @@ main_uniq(int argc, char *argv[])
          return -1;
     }
 
-    if (NULL != vcf_out && 0 != strcmp(vcf_out, "-")) {
-         uniq_conf.vcf_out = fopen(vcf_out, "w");
+
+
+    if (! vcf_in) {
+         vcf_in = malloc(2 * sizeof(char));
+         strcpy(vcf_in, "-");
+    }
+    if (! vcf_out) {
+         vcf_out = malloc(2 * sizeof(char));
+         strcpy(vcf_out, "-");
     }
 
-    if (NULL != vcf_in && 0 != strcmp(vcf_in, "-")) {
-         uniq_conf.vcf_in = fopen(vcf_in, "r");
+    if (vcf_file_open(& uniq_conf.vcf_in, vcf_in, 
+                      HAS_GZIP_EXT(vcf_in), 'r')) {
+         LOG_ERROR("Couldn't open %s\n", vcf_in);
+         return 1;
     }
-    if (0 !=  vcf_parse_header(&vcf_header, uniq_conf.vcf_in)) {
+
+    if (vcf_file_open(& uniq_conf.vcf_out, vcf_out,
+                      HAS_GZIP_EXT(vcf_out), 'w')) {
+         LOG_ERROR("Couldn't open %s\n", vcf_out);
+         return 1;
+    }
+
+
+    if (0 !=  vcf_parse_header(&vcf_header, & uniq_conf.vcf_in)) {
          LOG_WARN("%s\n", "vcf_parse_header() failed");
-         if (stdin == uniq_conf.vcf_in) {
-              LOG_FATAL("%s\n", "Won't be able to parse variants");
+         if (vcf_file_seek(& uniq_conf.vcf_in, 0, SEEK_SET)) {
+              LOG_FATAL("%s\n", "Couldn't rewind file to parse variants"
+                        " after header parsing failed");
               return -1;
-         } else {
-              if (fseek(uniq_conf.vcf_in, 0, SEEK_SET)) {
-                   LOG_FATAL("%s\n", "Couldn't rewind file to parse variants"
-                             " after header parsing failed");
-                   return -1;
-              }
-              /* nonsense, right?: vcf_write_header(uniq_conf.vcf_in, NULL, NULL); */
          }
     } else {
-         fprintf(uniq_conf.vcf_out, "%s", vcf_header);
+         vcf_write_header(& uniq_conf.vcf_out, vcf_header);
     }
     free(vcf_header);
 
-    if (-1 == (num_vars = vcf_parse_vars(uniq_conf.vcf_in, &vars))) {
+    if (-1 == (num_vars = vcf_parse_vars(& uniq_conf.vcf_in, &vars))) {
          LOG_FATAL("%s\n", "vcf_parse_vars() failed");
          return -1;
     }
@@ -361,12 +378,8 @@ main_uniq(int argc, char *argv[])
          mplp_conf.reg = NULL;
     }
 
-    if (stdin != uniq_conf.vcf_in) {
-         fclose(uniq_conf.vcf_in);
-    }
-    if (stdout != uniq_conf.vcf_out) {
-         fclose(uniq_conf.vcf_out);
-    }
+    vcf_file_close(& uniq_conf.vcf_in);
+    vcf_file_close(& uniq_conf.vcf_out);
 
     for (i=0; i<num_vars; i++) {
          vcf_free_var(& vars[i]);

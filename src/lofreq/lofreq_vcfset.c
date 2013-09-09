@@ -41,9 +41,9 @@ typedef enum {
 } vcfset_op_t;
 
 typedef struct {
-     FILE *vcf_in1;
-     FILE *vcf_in2;
-     FILE *vcf_out;
+     vcf_file_t vcf_in1;
+     vcf_file_t vcf_in2;
+     vcf_file_t vcf_out;
      vcfset_op_t vcf_setop;
      int only_passed; /* if 1, ignore any filtered variant */
 } vcfset_conf_t;
@@ -87,9 +87,9 @@ usage(const vcfset_conf_t* vcfset_conf)
      fprintf(stderr, "       --verbose        Be verbose\n");
      fprintf(stderr, "       --debug          Enable debugging\n");
      fprintf(stderr, "       --only-passed    Ignore variants marked as filtered\n");
-     fprintf(stderr, "  -1 | --vcf1 FILE      1st VCF input file\n");
-     fprintf(stderr, "  -2 | --vcf2 FILE      2nd VCF input file\n");
-     fprintf(stderr, "  -o | --vcfout         VCF output file (- for stdout, which is default. gzip supported).\n"
+     fprintf(stderr, "  -1 | --vcf1 FILE      1st VCF input file (gzip supported)\n");
+     fprintf(stderr, "  -2 | --vcf2 FILE      2nd VCF input file (gzip supported)\n");
+     fprintf(stderr, "  -o | --vcfout         VCF output file (default: - for stdout; gzip supported).\n"
              "                        Meta-data will be copied from vcf1\n");
      fprintf(stderr, "  -a | --action         Set operation to perform:\n"
              "                        intersect or complement.\n"
@@ -119,10 +119,13 @@ main_vcfset(int argc, char *argv[])
      char *vcf_header = NULL;
      int rc = 0;
      int c;
+     char *vcf_in1, *vcf_in2, *vcf_out;
      long int num_vars_vcf1, num_vars_vcf2;
-     long int num_vars_vcf1_ign, num_vars_vcf2_ign, num_vars_out;;
+     long int num_vars_vcf1_ign, num_vars_vcf2_ign, num_vars_out;
      var_hash_t *var_hash_vcf2 = NULL; /* must be declarsed NULL ! */
      static int only_passed = 0;
+
+     vcf_in1 = vcf_in2 = vcf_out = NULL;
      num_vars_vcf1 = num_vars_vcf2 = 0;
      num_vars_vcf1_ign = num_vars_vcf2_ign = num_vars_out = 0;
 
@@ -130,7 +133,7 @@ main_vcfset(int argc, char *argv[])
      memset(&vcfset_conf, 0, sizeof(vcfset_conf_t));
      /* vcfset_conf.vcf_in1 = NULL; */
      /* vcfset_conf.vcf_in2 = NULL; */
-     vcfset_conf.vcf_out = stdout;
+     /* vcfset_conf.vcf_out = stdout;*/
 
 
     /* keep in sync with long_opts_str and usage 
@@ -173,19 +176,11 @@ main_vcfset(int argc, char *argv[])
               return 0;
 
          case '1': 
-              if (! file_exists(optarg)) {
-                   LOG_FATAL("Input file '%s' does not exist. Exiting...\n", optarg);
-                   return 1;
-              }
-              vcfset_conf.vcf_in1 = fopen(optarg, "r");
+              vcf_in1 = strdup(optarg);
               break;
 
          case '2': 
-              if (! file_exists(optarg)) {
-                   LOG_FATAL("Input file '%s' does not exist. Exiting...\n", optarg);
-                   return 1;
-              }
-              vcfset_conf.vcf_in2 = fopen(optarg, "r");
+              vcf_in2 = strdup(optarg);
               break;
 
          case 'o':
@@ -194,11 +189,8 @@ main_vcfset(int argc, char *argv[])
                         LOG_FATAL("Cowardly refusing to overwrite file '%s'. Exiting...\n", optarg);
                         return 1;
                    }
-                   vcfset_conf.vcf_out = fopen(optarg, "w");
-              } else {
-                   vcfset_conf.vcf_out = stdout;
-                   
               }
+              vcf_out = strdup(optarg);
               break;
 
          case 'a': 
@@ -226,47 +218,78 @@ main_vcfset(int argc, char *argv[])
     }
     vcfset_conf.only_passed = only_passed;
 
+
     if (argc == 2) {
         fprintf(stderr, "\n");
         usage(& vcfset_conf);
         return 1;
     }
 
-
-    if  (vcfset_conf.vcf_in1 == 0 ||
-         vcfset_conf.vcf_in2 == 0 ||
-         vcfset_conf.vcf_out == 0 ||
-         vcfset_conf.vcf_setop == SETOP_UNKNOWN) {
-         LOG_FATAL("Missing argument\n\n");
+    /* all input files must be specified */
+    if  (vcf_in1 == NULL || vcf_in2 == NULL) {
+         LOG_FATAL("At least one needed the vcf input file not specified\n\n");
          usage(& vcfset_conf);
+         return 1;
+         
+    }
+
+    /* set up all input files */
+    if (vcf_file_open(& vcfset_conf.vcf_in1, vcf_in1, 
+                      HAS_GZIP_EXT(vcf_in1), 'r')) {
+         LOG_ERROR("Couldn't open %s\n", vcf_in1);
+         return 1;
+    }
+    if (vcf_file_open(& vcfset_conf.vcf_in2, vcf_in2, 
+                      HAS_GZIP_EXT(vcf_in2), 'r')) {
+         LOG_ERROR("Couldn't open %s\n", vcf_in2);
          return 1;
     }
 
 
+    /* vcf_out default if not set: stdout==- */
+    if (! vcf_out) {
+         vcf_out = malloc(2 * sizeof(char));
+         strcpy(vcf_out, "-");
+    }
+
+    if (vcf_file_open(& vcfset_conf.vcf_out, vcf_out, 
+                      HAS_GZIP_EXT(vcf_out), 'w')) {
+         LOG_ERROR("Couldn't open %s\n", vcf_out);
+         return 1;
+    }
+
+    free(vcf_in1);
+    free(vcf_in2);
+    free(vcf_out);
+
 
     /* recipe: read B into memory and parse from A one by one
      * ======================================================
+     *
+     * things can be done a lot more efficient if both input files are
+     * sorted, but let's assume they are not.
+     *
      */
 
     /* use meta-data/header of vcf_in1 for output
      */
-    if (0 !=  vcf_parse_header(&vcf_header, vcfset_conf.vcf_in1)) {
+    if (0 !=  vcf_parse_header(&vcf_header, & vcfset_conf.vcf_in1)) {
          LOG_WARN("%s\n", "vcf_parse_header() failed");
-         if (fseek(vcfset_conf.vcf_in1, 0, SEEK_SET)) {
+         if (vcf_file_seek(& vcfset_conf.vcf_in1, 0, SEEK_SET)) {
               LOG_FATAL("%s\n", "Couldn't rewind file to parse variants"
                         " after header parsing failed");
               return -1;
          }
     } else {
          /* vcf_write_header would write *default* header */
-         fprintf(vcfset_conf.vcf_out, "%s", vcf_header);
+         vcf_write_header(& vcfset_conf.vcf_out, vcf_header);
          free(vcf_header);
     }
 
 
     /* skip meta-data/header in vcf_in2
      */
-    if (0 != vcf_skip_header(vcfset_conf.vcf_in2)) {
+    if (0 != vcf_skip_header(& vcfset_conf.vcf_in2)) {
          LOG_FATAL("%s\n", "Failed to skip header in 2nd vcf files");
          return -1;
     }
@@ -279,7 +302,7 @@ main_vcfset(int argc, char *argv[])
          char *key;
          int rc;
          vcf_new_var(&var);
-         rc = vcf_parse_var(vcfset_conf.vcf_in2, var);
+         rc = vcf_parse_var(& vcfset_conf.vcf_in2, var);
          if (-1 == rc) {
               LOG_FATAL("%s\n", "Parsing error while parsing 2nd vcf-file");
               exit(1);
@@ -303,7 +326,7 @@ main_vcfset(int argc, char *argv[])
          LOG_DEBUG("Adding %s\n", key);
 #endif
     }
-    fclose(vcfset_conf.vcf_in2);
+    vcf_file_close(& vcfset_conf.vcf_in2);
 
     num_vars_vcf2 = HASH_COUNT(var_hash_vcf2);
     LOG_VERBOSE("Parsed %d variants from 2nd vcf file (ignoring %d non-passed of those)\n", 
@@ -319,7 +342,7 @@ main_vcfset(int argc, char *argv[])
          int rc;
 
          vcf_new_var(&var_1);
-         rc = vcf_parse_var(vcfset_conf.vcf_in1, var_1);
+         rc = vcf_parse_var(& vcfset_conf.vcf_in1, var_1);
          if (-1 == rc) {
               LOG_FATAL("%s\n", "Parsing error while parsing 1st vcf-file");
               exit(1);
@@ -349,7 +372,7 @@ main_vcfset(int argc, char *argv[])
               /* relative complement : elements in A but not B */
               if (NULL == var_2) {
                    num_vars_out += 1;
-                   vcf_write_var(vcfset_conf.vcf_out, var_1);
+                   vcf_write_var(& vcfset_conf.vcf_out, var_1);
 
               } else {
                    /* save some mem */
@@ -360,7 +383,7 @@ main_vcfset(int argc, char *argv[])
          } else if (vcfset_conf.vcf_setop == SETOP_INTERSECT) {
               if (NULL != var_2) {
                    num_vars_out += 1;
-                   vcf_write_var(vcfset_conf.vcf_out, var_1);
+                   vcf_write_var(& vcfset_conf.vcf_out, var_1);
               }
 
          } else {
@@ -370,16 +393,14 @@ main_vcfset(int argc, char *argv[])
 
          vcf_free_var(& var_1);
     }
-    fclose(vcfset_conf.vcf_in1);
+    vcf_file_close(& vcfset_conf.vcf_in1);
 
 
     LOG_VERBOSE("Parsed %d variants from 1st vcf file (ignoring %d non-passed of those)\n", 
                 num_vars_vcf1 + num_vars_vcf1_ign, num_vars_vcf1_ign);
     LOG_VERBOSE("Wrote %d variants to output\n", 
                 num_vars_out);
-    if (stdout != vcfset_conf.vcf_out) {
-         fclose(vcfset_conf.vcf_out);
-    }
+    vcf_file_close(& vcfset_conf.vcf_out);
 
 
     /* free hash table */
