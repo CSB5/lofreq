@@ -19,7 +19,6 @@ EXTRA_DIST = setup.py \
 	scripts/lofreq2_filter.py \
 	scripts/lofreq2_local.py \
 	scripts/lofreq2_somatic.py \
-	scripts/lofreq2_vcfset.py \
 	setup_conf.py.in
 
 all:
