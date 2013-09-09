@@ -32,12 +32,18 @@ typedef struct {
 } dp4_counts_t;
 
 
+#define VCF_MISSING_VAL_STR "."
+#define VCF_MISSING_VAL_CHAR VCF_MISSING_VAL_STR[0]
+
+
+#define VCF_VAR_PASSES(v) ((v)->filter[0]==VCF_MISSING_VAL_CHAR || 0==strncmp((v)->filter, "PASS", 4))
 
 void vcf_new_var(var_t **var);
 void vcf_free_var(var_t **var);
 
 int vcf_parse_header(char **header, FILE *stream);
 int vcf_skip_header(FILE *stream);
+int vcf_parse_var(FILE *stream, var_t *var);
 int vcf_parse_vars(FILE *strebam, var_t ***vars);
 
 int vcf_var_has_info_key(char **value, const var_t *var, const char *key);
