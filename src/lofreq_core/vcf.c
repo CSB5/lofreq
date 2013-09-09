@@ -424,7 +424,7 @@ int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
 /* parse all variants from stream and return number of parsed vars or
  * -1 on error. memory for vars will be allocated here.
  */
-int vcf_parse_vars(vcf_file_t *vcf_file, var_t ***vars)
+int vcf_parse_vars(var_t ***vars, vcf_file_t *vcf_file, int only_passed)
 {
      int rc;
      int num_vars = 0;
@@ -448,6 +448,13 @@ int vcf_parse_vars(vcf_file_t *vcf_file, var_t ***vars)
           if (1 == rc) {/* EOF */
                free(var);
                break;
+          }
+
+          if (only_passed==1) {
+               if (vcf_var_filtered(var)) {
+                    vcf_free_var(&var);
+                    continue;
+               }
           }
           num_vars += 1;
           (*vars) = realloc((*vars), num_vars * sizeof(var_t*));

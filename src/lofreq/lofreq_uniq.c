@@ -48,6 +48,7 @@ typedef struct {
      vcf_file_t vcf_out;
      vcf_file_t vcf_in;
      long long int bonf;
+     int read_only_passed;
 
      /* changing per pos: the var to test */
      var_t *var;
@@ -154,6 +155,7 @@ usage(const uniq_conf_t* uniq_conf)
      fprintf(stderr,"Options:\n");
      fprintf(stderr, "       --verbose           Be verbose\n");
      fprintf(stderr, "       --debug             Enable debugging\n");
+     fprintf(stderr, "       --read-only-passed  Read only passed variants\n");
      fprintf(stderr, "  -v | --vcf-in FILE       Input vcf file listing variants [- = stdin; gzip supported]\n");
      fprintf(stderr, "  -o | --vcf-out FILE      Output vcf file [- = stdout; gzip supported]\n");
      fprintf(stderr, "  -s | --sig               Significance threshold [%f]\n", uniq_conf->sig);
@@ -177,6 +179,7 @@ main_uniq(int argc, char *argv[])
      var_t **vars = NULL;
      int num_vars = 0;
      char *vcf_header = NULL;
+     static int read_only_passed = 0;
 
      for (i=0; i<argc; i++) {
           LOG_DEBUG("arg %d: %s\n", i, argv[i]);
@@ -188,6 +191,7 @@ main_uniq(int argc, char *argv[])
      uniq_conf.sig = DEFAULT_SIG;
      uniq_conf.uni_freq = DEFAULT_UNI_FREQ;
      uniq_conf.bonf = 1;
+     uniq_conf.read_only_passed = 0;
 
      /* default pileup options */
      memset(&mplp_conf, 0, sizeof(mplp_conf_t));
@@ -210,6 +214,7 @@ main_uniq(int argc, char *argv[])
               {"help", no_argument, NULL, 'h'},
               {"verbose", no_argument, &verbose, 1},
               {"debug", no_argument, &debug, 1},
+              {"only-passed", no_argument, &read_only_passed, 1},
 
               {"vcf-in", required_argument, NULL, 'v'},
               {"vcf-out", required_argument, NULL, 'o'},
@@ -282,6 +287,7 @@ main_uniq(int argc, char *argv[])
               break;
          }
     }
+    uniq_conf.read_only_passed = read_only_passed;
 
     if (argc == 2) {
         fprintf(stderr, "\n");
@@ -298,7 +304,6 @@ main_uniq(int argc, char *argv[])
          LOG_FATAL("BAM file %s does not exist. Exiting...\n", bam_file);
          return -1;
     }
-
 
 
     if (! vcf_in) {
@@ -335,7 +340,7 @@ main_uniq(int argc, char *argv[])
     }
     free(vcf_header);
 
-    if (-1 == (num_vars = vcf_parse_vars(& uniq_conf.vcf_in, &vars))) {
+    if (-1 == (num_vars = vcf_parse_vars(&vars, & uniq_conf.vcf_in, uniq_conf.read_only_passed))) {
          LOG_FATAL("%s\n", "vcf_parse_vars() failed");
          return -1;
     }
