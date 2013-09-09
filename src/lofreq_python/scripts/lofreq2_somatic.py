@@ -118,15 +118,15 @@ class SomaticSNVCaller(object):
             assert os.path.exists(reuse_normal_vcf)
             self.vcf_n = reuse_normal_vcf
         else:
-            self.vcf_n = self.outprefix + self.VCF_NORMAL_EXT# + ".gz"
+            self.vcf_n = self.outprefix + self.VCF_NORMAL_EXT + ".gz"
             assert not os.path.exists(self.vcf_n), (
                 "Cowardly refusing to overwrite already existing file %s" % (
                     self.vcf_n))
 
-        self.vcf_t_prefilter = self.outprefix + self.VCF_TUMOR_PREFILTER_EXT# + ".gz"
-        self.vcf_t = self.outprefix + self.VCF_TUMOR_EXT# + ".gz"
-        self.vcf_som_raw = self.outprefix + self.VCF_RAW_EXT# + ".gz"
-        self.vcf_som_filtered = self.outprefix + self.VCF_FILTERED_EXT
+        self.vcf_t = self.outprefix + self.VCF_TUMOR_EXT + ".gz"
+        self.vcf_t_prefilter = self.outprefix + self.VCF_TUMOR_PREFILTER_EXT + ".gz"
+        self.vcf_som_raw = self.outprefix + self.VCF_RAW_EXT + ".gz"
+        self.vcf_som_filtered = self.outprefix + self.VCF_FILTERED_EXT + ".gz"
         self.vcf_som_final = self.outprefix + self.VCF_FINAL_EXT
 
         self.outfiles = [self.vcf_t_prefilter, self.vcf_t, self.vcf_som_raw,
@@ -306,13 +306,13 @@ class SomaticSNVCaller(object):
         
         # FIXME replace source line in final output with sys.argv?
 
-        cmd = ['gzip']
-        gzip_files = list(self.outfiles)
-        gzip_files.append(self.vcf_n) # not part of outfiles by default
-        gzip_files.remove(self.vcf_som_final)
-        for f in set(gzip_files):
-            cmd.append(f)
-        self.subprocess_wrapper(cmd)
+        #cmd = ['gzip']
+        #gzip_files = list(self.outfiles)
+        #gzip_files.append(self.vcf_n) # not part of outfiles by default
+        #gzip_files.remove(self.vcf_som_final)
+        #for f in set(gzip_files):
+        #    cmd.append(f)
+        #self.subprocess_wrapper(cmd)
    
 
 
