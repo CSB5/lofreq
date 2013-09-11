@@ -17,6 +17,7 @@
 #include "lofreq_snpcaller.h"
 #include "lofreq_uniq.h"
 #include "lofreq_vcfset.h"
+#include "lofreq_filter.h"
 
 
 #ifndef __DATE__
@@ -141,6 +142,8 @@ int main(int argc, char *argv[])
           LOG_FIXME("%s\n", "NOT IMPLEMENT YET: sq_list, has_delqs, has_insqs, paired_reads...\n");
           return -1;
 
+     } else if (strcmp(argv[1], "filter-FIXME") == 0) {
+          return main_filter(argc, argv);
 
      } else if (strcmp(argv[1], "filter") == 0 || 
                 strcmp(argv[1], "somatic") == 0 ||
