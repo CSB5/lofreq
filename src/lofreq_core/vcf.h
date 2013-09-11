@@ -72,6 +72,7 @@ vcf_file_gets(vcf_file_t *f, int len, char *line);
 void vcf_new_var(var_t **var);
 void vcf_free_var(var_t **var);
 
+void vcf_var_key(char **key, var_t *var);
 int vcf_parse_header(char **header, vcf_file_t *vcf_file);
 int vcf_skip_header(vcf_file_t *vcf_file);
 int vcf_parse_var(vcf_file_t *vcf_file, var_t *var);
