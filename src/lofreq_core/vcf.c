@@ -25,6 +25,17 @@
 #define LINE_BUF_SIZE 1<<12
 
 
+/* key is allocated here and has to be freed by called */
+void
+vcf_var_key(char **key, var_t *var)
+{
+     int bufsize = strlen(var->chrom)+16;
+     (*key) = malloc(bufsize *sizeof(char));
+     snprintf(*key, bufsize, "%s %ld %c %c", var->chrom, var->pos, 
+              var->ref, var->alt);
+}
+
+
 
 int
 vcf_file_seek(vcf_file_t *f, long int offset, int whence) 

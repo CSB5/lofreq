@@ -101,16 +101,6 @@ usage(const vcfset_conf_t* vcfset_conf)
 
 
 
-/* key is allocated here and has to be freed by called */
-void
-key_for_var(char **key, var_t *var)
-{
-     int bufsize = strlen(var->chrom)+16;
-     (*key) = malloc(bufsize *sizeof(char));
-     snprintf(*key, bufsize, "%s %ld %c %c", var->chrom, var->pos, 
-              var->ref, var->alt);
-}
-
 
 int 
 main_vcfset(int argc, char *argv[])
@@ -118,7 +108,6 @@ main_vcfset(int argc, char *argv[])
      vcfset_conf_t vcfset_conf;
      char *vcf_header = NULL;
      int rc = 0;
-     int c;
      char *vcf_in1, *vcf_in2, *vcf_out;
      long int num_vars_vcf1, num_vars_vcf2;
      long int num_vars_vcf1_ign, num_vars_vcf2_ign, num_vars_out;
@@ -129,7 +118,7 @@ main_vcfset(int argc, char *argv[])
      num_vars_vcf1 = num_vars_vcf2 = 0;
      num_vars_vcf1_ign = num_vars_vcf2_ign = num_vars_out = 0;
 
-     /* default uniq options */
+     /* default vcfset options */
      memset(&vcfset_conf, 0, sizeof(vcfset_conf_t));
      /* vcfset_conf.vcf_in1 = NULL; */
      /* vcfset_conf.vcf_in2 = NULL; */
@@ -143,6 +132,7 @@ main_vcfset(int argc, char *argv[])
      * functions etc)
      */
     while (1) {
+         int c;
          static struct option long_opts[] = {
               /* see usage sync */
               {"help", no_argument, NULL, 'h'},
@@ -313,7 +303,7 @@ main_vcfset(int argc, char *argv[])
          }
 
          if (! vcfset_conf.only_passed || VCF_VAR_PASSES(var)) {
-              key_for_var(&key, var);
+              vcf_var_key(&key, var);
               var_hash_add(& var_hash_vcf2, key, var);
 #ifdef TRACE
               fprintf(stderr, "var_2 pass: "); vcf_write_var(stderr, var);
@@ -361,7 +351,7 @@ main_vcfset(int argc, char *argv[])
          fprintf(stderr, "var_1 pass: "); vcf_write_var(stderr, var_1);
 #endif
          num_vars_vcf1 += 1;
-         key_for_var(&key, var_1);
+         vcf_var_key(&key, var_1);
          HASH_FIND_STR(var_hash_vcf2, key, var_2);
 #ifdef TRACE
          LOG_DEBUG("var with key %s in 2: %s\n", key, var_2? "found" : "not found");
