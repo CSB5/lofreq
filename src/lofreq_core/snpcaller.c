@@ -223,6 +223,7 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
     if (NULL == (probvec_prev = malloc((K+1) * sizeof(double)))) {
         fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
                 __FILE__, __FUNCTION__, __LINE__);
+        free(probvec);
         return NULL;
     }
 
@@ -245,7 +246,6 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
         double pn = err_probs[n-1];
         double log_pn, log_1_pn;
 
-        assert(! isinf(probvec[0])); /* used to happen when first q=0 */
 
         /* if pn=0 log(on) will fail. likewise if pn=1 (Q0) then
          * log1p(-pn) = log(1-1) = log(0) will fail. therefore test */
@@ -266,10 +266,6 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
 #endif
 
         if(n < K) {
-#ifdef TRACE
-		fprintf(stderr, "DEBUG(%s:%s:%d): setting probvec_prev[n=%d] to LOGZERO\n", 
-                __FILE__, __FUNCTION__, __LINE__, n);
-#endif
             probvec_prev[n] = LOGZERO;
         }
 
@@ -282,9 +278,8 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
         assert(probvec_prev[k]<=0.0);
         probvec[k] = probvec_prev[k] + log_1_pn;
 
-
 #ifdef TRACE
-        for (k=0; k<=MIN(n,K-1); k++) {
+        for (k=0; k<=MIN(n, K-1); k++) {
             fprintf(stderr, "DEBUG(%s:%s:%d): probvec[k=%d] = %g\n", 
                     __FILE__, __FUNCTION__, __LINE__, k, probvec[k]);
         }
@@ -302,10 +297,6 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
             assert(probvec_prev[K]<=0.0 && probvec_prev[K-1]<=0.0);
             probvec[K] = log_sum(probvec_prev[K], probvec_prev[K-1]+log_pn);
             pvalue = exp(probvec[K]);
-#ifdef TRACE
-            fprintf(stderr, "DEBUG(%s:%s:%d): pvalue=%g (probvec[K=%d]=%g) at n=%d\n", 
-                    __FILE__, __FUNCTION__, __LINE__, pvalue, K, probvec[K], n);
-#endif
 
             if (pvalue * (double)bonf_factor >= sig_level) {
 #ifdef DEBUG
@@ -316,6 +307,8 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
             }
         }
 
+        assert(! isinf(probvec[0])); /* used to happen when first q=0 */
+
         /* swap */
         probvec_swp = probvec;
         probvec = probvec_prev;
@@ -324,25 +317,26 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
 
  free_and_exit:
     free(probvec_prev);    
+
     return probvec;
 }
 /* pruned_calc_prob_dist */
 
 
-#ifdef RETURNS_WRONG_PVALUES_FOR_HIGH_PROBS
-/* binomial test using poissbin. inefficient but allows us to reuse
- * existing code. returns -1 on error */
+#ifdef PSEUDO_BINOMIAL
+/* binomial test using poissbin. only good for high n and small prob.
+ * returns -1 on error */
 int
 pseudo_binomial(double *pvalue, 
                 int num_success, int num_trials, double succ_prob)
 {
      const long long int bonf = 1.0;
      const double sig = 1.0;
-     /* returned pvalues > sig/bonf are not computed properly */
      double *probvec = NULL;
      double *probs;
      int i;
 
+     fprintf(stderr, "WARNING(%s): this function only approximates the binomial for high n and small p\n", __FUNCTION__);
      if (NULL == (probs = malloc((num_trials) * sizeof(double)))) {
           fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
                   __FILE__, __FUNCTION__, __LINE__);
@@ -351,8 +345,7 @@ pseudo_binomial(double *pvalue,
 
      for (i=0; i<num_trials; i++) {
           probs[i] = succ_prob;
-     }
-     
+     }     
 
      probvec = poissbin(pvalue, probs,
                         num_trials, num_success,
@@ -399,7 +392,7 @@ poissbin(double *pvalue, const double *err_probs,
     fprintf(stderr, "calc_prob_dist() took %d s %d ms\n", msec/1000, msec%1000);
 #endif
 
-    *pvalue = exp(probvec[num_failures]);
+    *pvalue = exp(probvec[num_failures]); /* no need for tailsum here */
     assert(! isnan(*pvalue));
     return probvec;
 }
@@ -464,26 +457,29 @@ snpcaller(double *snp_pvalues,
 
     /* report p-value for each non-consensus base
      */
-#ifdef TRACE
+#if 1
+    for (i=1; i<max_noncons_count+1; i++) {        
+        fprintf(stderr, "DEBUG(%s:%s():%d): prob for count %d=%g\n", 
+                __FILE__, __FUNCTION__, __LINE__, 
+                i, exp(probvec[i]));
+    }
+#endif
+#if 0
     for (i=1; i<max_noncons_count+1; i++) {        
         fprintf(stderr, "DEBUG(%s:%s():%d): pvalue=%g for noncons_counts %d\n", 
                 __FILE__, __FUNCTION__, __LINE__, 
                 exp(probvec_tailsum(probvec, i, max_noncons_count+1)), i);
     }
 #endif
+
     for (i=0; i<NUM_NONCONS_BASES; i++) { 
         if (0 != noncons_counts[i]) {
-#ifdef DEBUG
-                  fprintf(stderr, "DEBUG(%s:%s():%d): i=%d noncons_counts=%d max_noncons_count=%d probvec_tailsum=%g\n", 
-                          __FILE__, __FUNCTION__, __LINE__, 
-                          i, noncons_counts[i], max_noncons_count, probvec_tailsum(probvec, noncons_counts[i], max_noncons_count+1));                  
-#endif
             pvalue = exp(probvec_tailsum(probvec, noncons_counts[i], max_noncons_count+1));
             snp_pvalues[i] = pvalue;
 #ifdef DEBUG
-            fprintf(stderr, "DEBUG(%s:%s():%d): pvalue=%g for noncons_counts[i]=%d bonf_factor=%lld\n", 
+            fprintf(stderr, "DEBUG(%s:%s():%d): i=%d noncons_counts=%d max_noncons_count=%d pvalue=%g\n", 
                     __FILE__, __FUNCTION__, __LINE__, 
-                    pvalue, noncons_counts[i], bonf_factor);
+                    i, noncons_counts[i], max_noncons_count, pvalue);                  
 #endif
         }
     }
@@ -497,36 +493,87 @@ snpcaller(double *snp_pvalues,
 }
 /* snpcaller() */
 
+
 #ifdef SNPCALLER_MAIN
 
 
 /* 
-gcc -pedantic -Wall -g -std=gnu99 -O2 -DSNPCALLER_MAIN -o snpcaller snpcaller.c utils.c log.c
-*/
+ * gcc -pedantic -Wall -g -std=gnu99 -O2 -DSNPCALLER_MAIN -o snpcaller snpcaller.c utils.c log.c
+ * 
+ * to test the pvalues (remember: large n and small p when comparing to binomial)
+ *
+ * >>> [scipy.stats.binom_test(x, 10000, 0.0001) for x in [2, 3, 4]]
+ * [0.26424111735042727, 0.080292199242652212, 0.018982025450177534]
+ * 
+ * ./snpcaller 4 10000 0.0001
+ * prob from snpcaller(): (.. 0.264204 .. 0.0802738 ..) 0.0189759
+ *
+ * 
+ * to test probs:
 
+ * >>> print(zip(range(1,11), scipy.stats.binom.pmf(range(1,11), 10000, 0.0001)))
+ * [(1, 0.36789783621841865), (2, 0.18394891810853542), (3, 0.061310173792593993), (4, 0.015324477633007457), (5, 0.0030639759659701437), (6, 0.00051045837549934915), (7, 7.2886160113568433e-05), (8, 9.1053030054241777e-06), (9, 1.0109920728573426e-06), (10, 1.0101831983287595e-07)]
+ *
+ * ./snpcaller 10 10000 0.0001
+ * prob for count 1=...
+ *
+ */
 int main(int argc, char *argv[]) {
      int num_success;
      int num_trials;
      double succ_prob;
-     double pvalue;
      verbose = 1;
+
      if (argc<4) {
           LOG_ERROR("%s\n", "need num_success num_trials and succ_prob as args");
           return -1;
      }
-
      num_success = atoi(argv[1]);
      num_trials = atoi(argv[2]);
      succ_prob = atof(argv[3]);
 
-
      LOG_VERBOSE("num_success=%d num_trials=%d succ_prob=%f\n", num_success, num_trials, succ_prob);
-     if (-1 == pseudo_binomial(&pvalue, 
-                               num_success, num_trials, succ_prob)) {
-          LOG_ERROR("%s\n", "pseudo_binomial() failed");
-          return -1;
-     }
 
-     printf("%g\n", pvalue);
+
+
+#ifdef PSEUDO_BINOMIAL
+     {
+          double pvalue;
+          if (-1 == pseudo_binomial(&pvalue, 
+                                    num_success, num_trials, succ_prob)) {
+               LOG_ERROR("%s\n", "pseudo_binomial() failed");
+               return -1;
+          }
+          printf("pseudo_binomial: %g\n", pvalue);
+     }
+#endif
+
+
+#if 1
+     {
+          double snp_pvalues[NUM_NONCONS_BASES];
+          int noncons_counts[NUM_NONCONS_BASES];
+          double *err_probs;
+          int i;
+
+          if (NULL == (err_probs = malloc((num_trials) * sizeof(double)))) {
+               fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
+                       __FILE__, __FUNCTION__, __LINE__);
+               return -1;
+          }
+          for (i=0; i<num_trials; i++) {
+               err_probs[i] = succ_prob;
+          }
+
+          noncons_counts[0] = num_success;
+          noncons_counts[1] = num_success-1;
+          noncons_counts[2] = num_success-2;
+
+          snpcaller(snp_pvalues, err_probs, num_trials, noncons_counts, 1, 1);
+
+          printf("prob from snpcaller(): (.. -2:%g .. -1:%g ..) %g\n", snp_pvalues[2], snp_pvalues[1], snp_pvalues[0]);
+          free(err_probs);
+     }
+#endif
 }
 #endif
