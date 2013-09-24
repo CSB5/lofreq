@@ -364,6 +364,7 @@ resolved_path(const char *path)
           }
           if (-1 == chdir(dirname(resolved_path))) {
                LOG_ERROR("%s\n", "chdir() failed.");
+               free(tmp_path);
                free(resolved_path);
                return NULL;
           }
