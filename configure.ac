@@ -87,14 +87,30 @@ AC_PROG_INSTALL
 # Note, optimization level can be overriden by user with env var
 # CFLAGS
 AC_PROG_CC
+# Set output variable CPP to a command that runs the C preprocessor. 
+AC_PROG_CPP
+
 # If the C compiler cannot compile ISO Standard C (currently C99),
 # try to add an option to output variable `CC' to make it work.  If
 # the compiler does not support C99, fall back to supporting ANSI
 # C89 (ISO C90).
-AC_PROG_CC_STDC
+# LoFreq: In theory we need for variadic macro support 
+# AC_PROG_CC_STDC
+#
+#If the C compiler is not in C99 mode by default, try to add an
+#option to output variable `CC' to make it so.  This macro tries
+#various options that select C99 on some system or another,
+#preferring extended functionality modes over strict conformance
+#modes.  It considers the compiler to be in C99 mode if it handles
+#`_Bool', `//' comments, flexible array members, `inline', signed
+#and unsigned `long long int', mixed code and declarations, named
+#initialization of structs, `restrict', `va_copy', varargs macros,
+#variable declarations in `for' loops, and variable length arrays.
+#After calling this macro you can check whether the C compiler has
+#been set to accept C99; if not, the shell variable
+#`ac_cv_prog_cc_c99' is set to `no'.
+AC_PROG_CC_C99
 
-# Set output variable CPP to a command that runs the C preprocessor. 
-AC_PROG_CPP
 
 
 # safety check: AC_CONFIG_SRCDIR([src/clustal.h])
