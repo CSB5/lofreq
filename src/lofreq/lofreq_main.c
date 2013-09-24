@@ -12,12 +12,14 @@
 #include <unistd.h>
 #include <libgen.h>
 
+/* lofreq includes */
 #include "log.h"
 #include "utils.h"
+#include "lofreq_bamstats.h"
+#include "lofreq_filter.h"
 #include "lofreq_snpcaller.h"
 #include "lofreq_uniq.h"
 #include "lofreq_vcfset.h"
-#include "lofreq_filter.h"
 
 
 #ifndef __DATE__
@@ -106,7 +108,8 @@ static void usage(const char *myname)
      fprintf(stderr, "  Other Commands:\n");
      fprintf(stderr, "    filter      : Filter variants\n");
      fprintf(stderr, "    uniq        : Test whether variants predicted in only one sample really are unique\n");
-     fprintf(stderr, "    plp_summary : Print pileup summary per position\n");
+     fprintf(stderr, "    plpsummary : Print pileup summary per position\n");
+     fprintf(stderr, "    bamstats   : Collect BAM statistics\n");
      fprintf(stderr, "    vcfset      : VCF set operations\n");
      fprintf(stderr, "    cluster     : Cluster variants in VCF file (supports legacy SNP format)\n");
 #ifdef FIXME_NOT_IMPLEMENTED
@@ -139,8 +142,8 @@ int main(int argc, char *argv[])
                 strcmp(argv[1], "inspect") == 0 ||
                 strcmp(argv[1], "doctor") == 0 ||
                 strcmp(argv[1], "run-me-first") == 0)  {
-          LOG_FIXME("%s\n", "NOT IMPLEMENT YET: sq_list, has_delqs, has_insqs, paired_reads...\n");
-          return -1;
+          LOG_FIXME("%s\n", "NOT IMPLEMENT YET: has BI, has BD, readlen, has extra BAQ. is_paired. all based on first, say, 10k read\n");
+          return 1;
 
      } else if (strcmp(argv[1], "filter-FIXME") == 0) {
           return main_filter(argc, argv);
@@ -166,7 +169,7 @@ int main(int argc, char *argv[])
                script_to_call = cluster_script;
           } else {
                LOG_FATAL("%s\n", "Internal error: unknown option");
-               return -1;
+               return 1;
           }
 
           argv_execvp[0] = argv[0];
@@ -177,30 +180,47 @@ int main(int argc, char *argv[])
           if (execvp(script_to_call, argv_execvp)) {
                perror("Calling external LoFreq script via execvp failed");
                free(argv_execvp);
-               return -1;
+               return 1;
           } else {
                free(argv_execvp);
                return 0;
           }
+     } else if (strcmp(argv[1], "bamstats") == 0) {
+          return main_bamstats(argc, argv);
 
-     } else if (strcmp(argv[1], "plp_summary") == 0) {
-          /* use main_call() but add --plp_summary */
+     } else if (strcmp(argv[1], "plpsummary") == 0) {
+          /* modify args to  main_call() */
           char **argv_tmp = calloc(argc+1, sizeof(char*));
           int i, rc;
-          LOG_VERBOSE("'plp_summary' is just an alias for %s call --plp-summary-only"
-                      "  (ignoring all the snv-call specific options)\n", BASENAME(argv[0]));
+          char plp_summary_arg[] = "--plp-summary-only";
+          /*char bam_stats_arg[] = "--bam-stats";*/
+          char *call_arg = NULL;
+     
+          if (strcmp(argv[1], "plpsummary") == 0) {
+               call_arg = plp_summary_arg;
+          } else {
+               LOG_FATAL("%s\n", "Internal error: unknown option");
+               return 1;
+          }
+
+          LOG_VERBOSE("'%s' is just an alias for %s call %s"
+                      "  (ignoring all the snv-call specific options)\n", 
+                      argv[1], BASENAME(argv[0]), call_arg);
           argv_tmp[0] = argv[0];
           argv_tmp[1] = "call";
-          argv_tmp[2] = "--plp-summary-only";
+          argv_tmp[2] = call_arg;
           for (i=2; i<argc; i++) {
                argv_tmp[i+1] = argv[i];
           }
-#if 0
+#ifdef TRACE
           for (i=0; i<argc+1; i++) {
-               LOG_FIXME("New arg %d: %s\n", i, argv_tmp[i]);
+               LOG_FIXME("argv[%d] = %s\n", i, argv_tmp[i]);
           }
+          exit(1);
 #endif
+
           rc = main_call(argc+1, argv_tmp);
+
           free(argv_tmp);
           return rc;
 
