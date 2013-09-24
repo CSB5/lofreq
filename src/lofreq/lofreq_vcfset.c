@@ -128,8 +128,7 @@ main_vcfset(int argc, char *argv[])
     /* keep in sync with long_opts_str and usage 
      *
      * getopt is a pain in the whole when it comes to syncing of long
-     * and short args and usage. check out libcfu (also has hash
-     * functions etc)
+     * and short args and usage. check out gopt, libcfu...
      */
     while (1) {
          int c;
@@ -163,6 +162,7 @@ main_vcfset(int argc, char *argv[])
          /* keep in sync with long_opts etc */
          case 'h': 
               usage(& vcfset_conf); 
+              free(vcf_in1); free(vcf_in2); free(vcf_out);
               return 0;
 
          case '1': 
@@ -177,6 +177,7 @@ main_vcfset(int argc, char *argv[])
               if (0 != strcmp(optarg, "-")) {
                    if (file_exists(optarg)) {
                         LOG_FATAL("Cowardly refusing to overwrite file '%s'. Exiting...\n", optarg);
+                        free(vcf_in1); free(vcf_in2);
                         return 1;
                    }
               }
@@ -195,13 +196,16 @@ main_vcfset(int argc, char *argv[])
 
               } else {
                    LOG_FATAL("Unknown action '%s'. Exiting...\n", optarg);
+                   free(vcf_in1); free(vcf_in2); free(vcf_out);
                    return 1;
               }
               break;
 
          case '?': 
               LOG_FATAL("%s\n", "unrecognized arguments found. Exiting...\n"); 
+              free(vcf_in1); free(vcf_in2); free(vcf_out);
               return 1;
+
          default:
               break;
          }
@@ -212,13 +216,15 @@ main_vcfset(int argc, char *argv[])
     if (argc == 2) {
         fprintf(stderr, "\n");
         usage(& vcfset_conf);
+        free(vcf_in1); free(vcf_in2); free(vcf_out);
         return 1;
     }
 
     /* all input files must be specified */
     if  (vcf_in1 == NULL || vcf_in2 == NULL) {
-         LOG_FATAL("At least one needed the vcf input file not specified\n\n");
+         LOG_FATAL("%s\n\n", "At least one needed the vcf input file not specified");
          usage(& vcfset_conf);
+         free(vcf_in1); free(vcf_in2); free(vcf_out);
          return 1;
          
     }
@@ -227,11 +233,13 @@ main_vcfset(int argc, char *argv[])
     if (vcf_file_open(& vcfset_conf.vcf_in1, vcf_in1, 
                       HAS_GZIP_EXT(vcf_in1), 'r')) {
          LOG_ERROR("Couldn't open %s\n", vcf_in1);
+         free(vcf_in1); free(vcf_in2); free(vcf_out);
          return 1;
     }
     if (vcf_file_open(& vcfset_conf.vcf_in2, vcf_in2, 
                       HAS_GZIP_EXT(vcf_in2), 'r')) {
          LOG_ERROR("Couldn't open %s\n", vcf_in2);
+         free(vcf_in1); free(vcf_in2); free(vcf_out);
          return 1;
     }
 
@@ -245,6 +253,7 @@ main_vcfset(int argc, char *argv[])
     if (vcf_file_open(& vcfset_conf.vcf_out, vcf_out, 
                       HAS_GZIP_EXT(vcf_out), 'w')) {
          LOG_ERROR("Couldn't open %s\n", vcf_out);
+         free(vcf_in1); free(vcf_in2); free(vcf_out);
          return 1;
     }
 
