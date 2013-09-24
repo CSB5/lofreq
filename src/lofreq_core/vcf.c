@@ -335,6 +335,8 @@ int vcf_parse_header(char **header, vcf_file_t *vcf_file)
                }
           }
      }
+
+     free(*header);
      LOG_WARN("%s\n", "Missing header line in vcf file.");
      return -1;
 }
