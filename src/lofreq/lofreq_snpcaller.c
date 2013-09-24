@@ -172,7 +172,7 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char ref,
 {
      var_t *var;
      dp4_counts_t dp4;
-     double sb_prob, sb_left_pv, sb_right_pv, sb_two_pv;
+     double sb_left_pv, sb_right_pv, sb_two_pv;
      int sb_qual;
      
      vcf_new_var(&var);
@@ -191,7 +191,8 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char ref,
      dp4.alt_fw = p->fw_counts[bam_nt4_table[(int)alt]];
      dp4.alt_rv = p->rv_counts[bam_nt4_table[(int)alt]];
 
-     sb_prob = kt_fisher_exact(dp4.ref_fw, dp4.ref_rv, 
+     /* double sb_prob = kt... Assignment removed to shut up clang static analyzer */
+     (void) kt_fisher_exact(dp4.ref_fw, dp4.ref_rv, 
                                dp4.alt_fw, dp4.alt_rv,
                                &sb_left_pv, &sb_right_pv, &sb_two_pv);
      sb_qual = PROB_TO_PHREDQUAL(sb_two_pv);
@@ -563,20 +564,9 @@ call_snvs(const plp_col_t *p, void *confp)
 /* call_snvs() */
 
 
-char *
-cigar_from_bam(const bam1_t *b) {
-     /* from char *bam_format1_core(const bam_header_t *header, const bam1_t *b, int of) */
-     const bam1_core_t *c = &b->core;
-     kstring_t str;
-     int i;
-     str.l = str.m = 0; str.s = 0;
-     for (i = 0; i < c->n_cigar; ++i) {
-          kputw(bam1_cigar(b)[i]>>BAM_CIGAR_SHIFT, &str);
-          kputc("MIDNSHP=X"[bam1_cigar(b)[i]&BAM_CIGAR_MASK], &str);
-     }
-     return str.s;
-}
-/* cigar_from_bam() */
+
+#ifdef USE_SOURCEQUAL
+
 
 
 
@@ -590,7 +580,7 @@ count_matches(int *n_matches, int *n_mismatches,
               const bam1_t *b, const char *ref)
 {
      /* modelled after bam.c:bam_calend(), bam_format1_core() and
-      * pysam's aligned_pairs 
+      * pysam's aligned_pairs (./pysam/csamtools.pyx)
       */
      uint32_t *cigar = bam1_cigar(b);
      const bam1_core_t *c = &b->core;
@@ -651,7 +641,7 @@ count_matches(int *n_matches, int *n_mismatches,
                     qpos += 1;
                }
                pos += l;
-               
+
           } else if (op == BAM_CINS) {
                for (i=pos; i<pos+l; i++) {
 #if 0
@@ -659,7 +649,6 @@ count_matches(int *n_matches, int *n_mismatches,
 #endif
                     qpos += 1;
                }
-               qpos += l;
                
           } else if (op == BAM_CDEL || op == BAM_CREF_SKIP) {
                for (i=pos; i<pos+l; i++) {
@@ -683,7 +672,6 @@ count_matches(int *n_matches, int *n_mismatches,
 
 
 
-#ifdef USE_SOURCEQUAL
 /* Estimate as to how likely it is that this read, given the mapping,
  * comes from this reference genome. P(r not from g|mapping) = 1 - P(r
  * from g). Use qualities of all bases for and poisson-binomial dist,
@@ -821,35 +809,35 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "Usage: %s [options] in.bam\n\n", MYNAME);
      fprintf(stderr, "Options:\n");
      fprintf(stderr, "- Regions\n");                                        
-     fprintf(stderr, "       -r | --region STR            region in which pileup should be generated [null]\n");
-     fprintf(stderr, "       -l | --bed FILE              list of positions (chr pos) or regions (BED) [null]\n");
+     fprintf(stderr, "       -r | --region STR            Region in which pileup should be generated [null]\n");
+     fprintf(stderr, "       -l | --bed FILE              List of positions (chr pos) or regions (BED) [null]\n");
      fprintf(stderr, "- Reference\n");                                               
-     fprintf(stderr, "       -f | --reffa FILE            faidx indexed reference fasta file (gzip supported) [null]\n");
+     fprintf(stderr, "       -f | --reffa FILE            Indexed reference fasta file (gzip supported) [null]\n");
      fprintf(stderr, "       -c | --cons-as-ref           Use consensus base as ref, i.e. ignore base given in reffa (reffa still used for BAQ, if enabled)\n");
      fprintf(stderr, "- Output\n");                                                
-     fprintf(stderr, "       -o | --out FILE              vcf output file [- = stdout]\n");
+     fprintf(stderr, "       -o | --out FILE              Vcf output file [- = stdout]\n");
      fprintf(stderr, "- Base-call quality\n");                      
-     fprintf(stderr, "       -q | --min-bq INT            skip any base with baseQ smaller than INT [%d]\n", mplp_conf->min_bq);
-     fprintf(stderr, "       -Q | --min-altbq INT         skip nonref-bases with baseQ smaller than INT [%d]. Not active if ref is N\n", snvcall_conf->min_altbq);
-     fprintf(stderr, "       -a | --def-altbq INT         nonref base qualities will be replaced with this value (use mean if -1) [%d]\n", snvcall_conf->def_altbq);
+     fprintf(stderr, "       -q | --min-bq INT            Skip any base with baseQ smaller than INT [%d]\n", mplp_conf->min_bq);
+     fprintf(stderr, "       -Q | --min-altbq INT         Skip nonref-bases with baseQ smaller than INT [%d]. Not active if ref is N\n", snvcall_conf->min_altbq);
+     fprintf(stderr, "       -a | --def-altbq INT         Nonref base qualities will be replaced with this value (use mean if -1) [%d]\n", snvcall_conf->def_altbq);
      /*fprintf(stderr, "       -B | --no-baq                disable BAQ computation\n");*/
-     fprintf(stderr, "       -E | --baq                   enable (extended) per-base alignment quality (BAQ) computation\n");
+     fprintf(stderr, "       -E | --baq                   Enable (extended) per-base alignment quality (BAQ) computation\n");
      fprintf(stderr, "- Mapping quality\n");                                
-     fprintf(stderr, "       -m | --min-mq INT            skip alignments with mapQ smaller than INT [%d]\n", mplp_conf->min_mq);
-     fprintf(stderr, "       -M | --max-mq INT            cap mapping quality at INT [%d]\n", mplp_conf->max_mq);
-     fprintf(stderr, "       -J | --no-mq                 don't merge mapQ into baseQ: P_e = P_mq + (1-P_mq) P_bq\n");
+     fprintf(stderr, "       -m | --min-mq INT            Skip alignments with mapQ smaller than INT [%d]\n", mplp_conf->min_mq);
+     fprintf(stderr, "       -M | --max-mq INT            Cap mapping quality at INT [%d]\n", mplp_conf->max_mq);
+     fprintf(stderr, "       -J | --no-mq                 Don't merge mapQ into baseQ: P_e = P_mq + (1-P_mq) P_bq\n");
 #ifdef USE_SOURCEQUAL                                     
-     fprintf(stderr, "       -S | --no-sq                 don't merge sourceQ into baseQ\n");
+     fprintf(stderr, "       -S | --no-sq                 Don't merge sourceQ into baseQ\n");
 #endif                                                    
      fprintf(stderr, "- P-Values\n");                                          
      fprintf(stderr, "       -s | --sig                   P-Value cutoff / significance level [%f]\n", snvcall_conf->sig);
      fprintf(stderr, "       -b | --bonf                  Bonferroni factor. 'dynamic' (increase per actually performed test), 'auto' (infer from bed-file) or INT ['dynamic']\n");
      fprintf(stderr, "- Misc.\n");                                           
      fprintf(stderr, "       -C | --min-cov INT           Test only positions having at least this coverage [%d]\n", snvcall_conf->min_cov);
-     fprintf(stderr, "       -N | --dont-skip-n           don't skip positions where refbase is N (will try to predict CONSVARs (only) at those positions)\n");
-     fprintf(stderr, "       -I | --illumina-1.3          assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
-     fprintf(stderr, "            --use-orphan            count anomalous read pairs\n");
-     fprintf(stderr, "            --plp-summary-only      no snv-calling. just output pileup summary per column\n");
+     fprintf(stderr, "       -N | --dont-skip-n           Don't skip positions where refbase is N (will try to predict CONSVARs (only) at those positions)\n");
+     fprintf(stderr, "       -I | --illumina-1.3          Assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
+     fprintf(stderr, "            --use-orphan            Count anomalous read pairs\n");
+     fprintf(stderr, "            --plp-summary-only      No snv-calling: just output pileup summary per column\n");
      fprintf(stderr, "            --no-default-filter     Don't apply default filter command after calling variants\n");
      fprintf(stderr, "            --verbose               be verbose\n");
      fprintf(stderr, "            --debug                 enable debugging\n");
@@ -915,8 +903,7 @@ main_call(int argc, char *argv[])
     /* keep in sync with long_opts_str and usage 
      *
      * getopt is a pain in the whole when it comes to syncing of long
-     * and short args and usage. check out libcfu (also has hash
-     * functions etc)
+     * and short args and usage. check out gopt, libcfu...
      */
     while (1) {
          static struct option long_opts[] = {
@@ -1116,6 +1103,8 @@ for cov in coverage_range:
 
          case '?': 
               LOG_FATAL("%s\n", "unrecognized arguments found. Exiting...\n"); 
+              free(bed_file);
+              free(vcf_out);
               return 1;
 #if 0
          case 0:
@@ -1196,7 +1185,7 @@ for cov in coverage_range:
          if (NULL == vcf_out || 0 == strcmp(vcf_out, "-")) {
               if (vcf_file_open(& snvcall_conf.vcf_out, "-", 
                                 0, 'w')) {
-                   LOG_ERROR("Couldn't open stdout\n", vcf_out);
+                   LOG_ERROR("%s\n", "Couldn't open stdout");
                    return 1;
               }
          } else {
@@ -1237,6 +1226,7 @@ for cov in coverage_range:
     if (bonf_auto && ! plp_summary_only) {
          if (! bed_file) {
               LOG_FATAL("%s\n", "Need bed-file for auto bonferroni correction.");
+              free(vcf_tmp_out);
               return 1;
          }
 
@@ -1269,14 +1259,14 @@ for cov in coverage_range:
          dump_snvcall_conf(& snvcall_conf, stderr);
     }
 
-    if (! plp_summary_only) {
+    if (plp_summary_only) {
+         plp_proc_func = &plp_summary;
+
+    } else {
          /* or use PACKAGE_STRING */
          vcf_write_new_header(& snvcall_conf.vcf_out,
                               mplp_conf.cmdline, mplp_conf.fa);
          plp_proc_func = &call_snvs;
-    } else {
-         plp_proc_func = &plp_summary;
-
     }
 
     rc = mpileup(&mplp_conf, plp_proc_func, (void*)&snvcall_conf,
@@ -1303,7 +1293,7 @@ for cov in coverage_range:
          LOG_VERBOSE("%s\n", "No filtering needed or requested: variants already written to final destination");
 
     } else if (plp_summary_only) {
-         LOG_VERBOSE("%s\n", "No filtering needed: pileup summary only");
+         LOG_VERBOSE("%s\n", "No filtering needed: didn't run in SNV calling mode");
 
     } else {
          char base_cmd[BUF_SIZE];
