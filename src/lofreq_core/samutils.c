@@ -8,6 +8,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include <assert.h>
 
 /* samtools includes */
@@ -20,7 +21,7 @@
 
 
 char *
-cigar_from_bam(const bam1_t *b)
+cigar_str_from_bam(const bam1_t *b)
 {
      /* from char *bam_format1_core(const bam_header_t *header, const bam1_t *b, int of) */
      const bam1_core_t *c = &b->core;
@@ -33,14 +34,18 @@ cigar_from_bam(const bam1_t *b)
      }
      return str.s;
 }
-/* cigar_from_bam() */
+/* cigar_str_from_bam() */
 
 
-/* Count matches (MATCH_COUNT_IDX), mismatches (MISMATCH_COUNT_IDX),
- * insertions (INS_COUNT_IDX) and deletions (DEL_COUNT_IDX) for an
+/* Count matches (OP_MATCH), mismatches (OP_MISMATCH),
+ * insertions (OP_INS) and deletions (OP_DEL) for an
  * aligned read. Written to (preallocated, size 4) counts at indices
  * given above. Returns non-0 on error. will ignore all non-del bases
  * if thei bq is below min_bq.
+ *
+ * A slightly more flexible version of this would return an int array
+ * of qlen length where each position is set to the corresponding BAM
+ * op
  */
 int
 count_matches(int *counts, const bam1_t *b, const char *ref, int min_bq)
@@ -53,14 +58,16 @@ count_matches(int *counts, const bam1_t *b, const char *ref, int min_bq)
      uint32_t pos = c->pos; /* pos on genome */
      uint32_t qpos = 0; /* pos on read/query */
      uint32_t k, i;
+#ifndef NDEBUG
      int32_t qlen = (int32_t) bam_cigar2qlen(c, bam1_cigar(b)); /* read length */
-
+#endif
      if (NULL==ref) {
           return 1;
      }
 
      assert(NULL != counts);
-     counts[MATCH_COUNT_IDX] = counts[MISMATCH_COUNT_IDX] = counts[INS_COUNT_IDX] = counts[DEL_COUNT_IDX] = 0;
+
+     memset(counts, 0, NUM_OP_CATS*sizeof(int));
      
      /* loop over cigar to get aligned bases
       *
@@ -77,7 +84,8 @@ count_matches(int *counts, const bam1_t *b, const char *ref, int min_bq)
           if (op == BAM_CMATCH || op == BAM_CDIFF) {
                for (i=pos; i<pos+l; i++) {                             
                     assert(qpos < qlen);
-                    char ref_nt = ref[i];
+                    /* case agnostic */
+                    char ref_nt = toupper(ref[i]);
                     char read_nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(b), qpos)];
                     int bq = bam1_qual(b)[qpos];
                     if (bq<min_bq) {
@@ -89,9 +97,9 @@ count_matches(int *counts, const bam1_t *b, const char *ref, int min_bq)
                     printf("[M]MATCH qpos,i,ref,read = %d,%d,%c,%c\n", qpos, i, ref_nt, read_nt);
 #endif                    
                     if (ref_nt != read_nt || op == BAM_CDIFF) {
-                         counts[MISMATCH_COUNT_IDX] += 1;
+                         counts[OP_MISMATCH] += 1;
                     } else {
-                         counts[MATCH_COUNT_IDX] += 1;
+                         counts[OP_MATCH] += 1;
                     }
                     qpos += 1;
                }
@@ -109,7 +117,7 @@ count_matches(int *counts, const bam1_t *b, const char *ref, int min_bq)
 #if 0
                     printf("INS qpos,i = %d,None\n", qpos);
 #endif
-                    counts[INS_COUNT_IDX] += 1;
+                    counts[OP_INS] += 1;
                     qpos += 1;
                }
                
@@ -119,16 +127,20 @@ count_matches(int *counts, const bam1_t *b, const char *ref, int min_bq)
                     printf("DEL qpos,i = None,%d\n", i);
 #endif
                     if (op == BAM_CDEL) {
-                        counts[DEL_COUNT_IDX] += 1;
+                        counts[OP_DEL] += 1;
                     }
                }
                pos += l;
 
-          } else {
-               LOG_WARN("Unknow op %d in cigar %s\n", op, cigar_from_bam(b));
+          } else if (op == BAM_CSOFT_CLIP) {
+               qpos += 1;
+
+          } else if (op != BAM_CHARD_CLIP) {
+               LOG_WARN("Unknow op %d in cigar %s\n", op, cigar_str_from_bam(b));
           }
      } /* for k */
-     assert(pos == bam_calend(&b->core, bam1_cigar(b))); /* FIXME correct assert? what if clipped? */
+     assert(pos == bam_calend(&b->core, bam1_cigar(b))); /* FIXME correct assert? what if hard clipped? */
+     assert(qpos == qlen); /* FIXME correct assert? What if hard clipped? */
 
      return 0;
 }
