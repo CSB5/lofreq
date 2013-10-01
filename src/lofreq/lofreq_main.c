@@ -106,10 +106,10 @@ static void usage(const char *myname)
      fprintf(stderr, "    call        : Call variants\n");
      fprintf(stderr, "    somatic     : Call somatic variants\n\n");
      fprintf(stderr, "  Other Commands:\n");
-     fprintf(stderr, "    filter      : Filter variants\n");
+     fprintf(stderr, "    filter      : Filter variants in VCF file\n");
      fprintf(stderr, "    uniq        : Test whether variants predicted in only one sample really are unique\n");
-     fprintf(stderr, "    plpsummary : Print pileup summary per position\n");
-     fprintf(stderr, "    bamstats   : Collect BAM statistics\n");
+     fprintf(stderr, "    plpsummary  : Print pileup summary per position\n");
+     fprintf(stderr, "    bamstats    : Collect BAM statistics\n");
      fprintf(stderr, "    vcfset      : VCF set operations\n");
      fprintf(stderr, "    cluster     : Cluster variants in VCF file (supports legacy SNP format)\n");
 #ifdef FIXME_NOT_IMPLEMENTED
