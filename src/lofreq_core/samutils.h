@@ -1,6 +1,9 @@
 #ifndef SAMUTILS_H
 #define SAMUTILS_H
 
+/* FIXME should become shared const MAX_READ_LEN. values <10k might not be enough for pacbio */
+#define MAX_READ_LEN 8192
+
 
 typedef enum {
         OP_MATCH,
@@ -25,7 +28,7 @@ char *
 cigar_str_from_bam(const bam1_t *b);
 
 int
-count_matches(int *counts, const bam1_t *b, const char *ref, int min_bq);
-
+count_cigar_ops(int *counts, int **quals,
+                const bam1_t *b, const char *ref, int min_bq);
 
 #endif
