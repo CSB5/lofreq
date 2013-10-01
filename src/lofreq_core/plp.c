@@ -170,14 +170,15 @@ dump_mplp_conf(const mplp_conf_t *c, FILE *stream)
      fprintf(stream, "  min_mq       = %d\n", c->min_mq);
      fprintf(stream, "  flag         = %d\n", c->flag);
 
-     fprintf(stream, "  flag & MPLP_NO_ORPHAN  = %d\n", c->flag&MPLP_NO_ORPHAN?1:0);
-     fprintf(stream, "  flag & MPLP_REALN      = %d\n", c->flag&MPLP_REALN?1:0);
-     fprintf(stream, "  flag & MPLP_REDO_BAQ    = %d\n", c->flag&MPLP_REDO_BAQ?1:0);
-     fprintf(stream, "  flag & MPLP_ILLUMINA13 = %d\n", c->flag&MPLP_ILLUMINA13?1:0);
+     fprintf(stream, "  flag & MPLP_NO_ORPHAN  = %d\n", c->flag&MPLP_NO_ORPHAN ? 1:0);
+     fprintf(stream, "  flag & MPLP_REALN      = %d\n", c->flag&MPLP_REALN ? 1:0);
+     fprintf(stream, "  flag & MPLP_USE_SQ     = %d\n", c->flag&MPLP_USE_SQ ? 1:0);
+     fprintf(stream, "  flag & MPLP_REDO_BA    = %d\n", c->flag&MPLP_REDO_BAQ ? 1:0);
+     fprintf(stream, "  flag & MPLP_ILLUMINA13 = %d\n", c->flag&MPLP_ILLUMINA13 ? 1:0);
      
      fprintf(stream, "  capQ_thres   = %d\n", c->capQ_thres);
      fprintf(stream, "  max_depth    = %d\n", c->max_depth);
-     fprintf(stream, "  min_bq    = %d\n", c->min_bq);
+     fprintf(stream, "  min_bq       = %d\n", c->min_bq);
      fprintf(stream, "  reg          = %s\n", c->reg);
      fprintf(stream, "  fa           = %p\n", c->fa);
      /*fprintf(stream, "  fai          = %p\n", c->fai);*/
@@ -261,9 +262,9 @@ mplp_func(void *data, bam1_t *b)
 
 #ifdef USE_SOURCEQUAL
     /* compute source qual if requested and have ref */
-    if (ma->ref && ma->ref_id == b->core.tid && ma->conf->flag & MPLP_USE_SQ:FIXME:now-in-snvcall_conf) {
+    if (ma->ref && ma->ref_id == b->core.tid && ma->conf->flag & MPLP_USE_SQ) {
          int sq = source_qual(b, ma->ref);
-         LOG_FIXME("%s\n", "Got sq %d. What now?", sq);
+         LOG_FIXME("Got sq %d. Need to save to b as extra flag or so. Would otherwise have to recompute during pileup for base in read\n", sq);
     }
 #endif
     return ret;
@@ -322,7 +323,7 @@ void compile_plp_col(plp_col_t *plp_col,
            */
           const bam_pileup1_t *p = plp + i;
           int nt4;
-          int mq, bq; /* phred scores */
+          int mq, bq, sq; /* phred scores */
           int base_skip = 0; /* boolean */
 
           /* GATKs BI & BD: "are per-base quantities which estimate
@@ -391,8 +392,13 @@ void compile_plp_col(plp_col_t *plp_col,
                 * if (mq > 126) mq = 126;
                 */
 
+               sq = 0; /*FIXME*/
+
                PLP_COL_ADD_QUAL(& plp_col->base_quals[nt4], bq);
                PLP_COL_ADD_QUAL(& plp_col->map_quals[nt4], mq);
+#ifdef USE_SOURCEQUAL
+               PLP_COL_ADD_QUAL(& plp_col->source_quals[nt4], sq);
+#endif
                if (bam1_strand(p->b)) {
                     plp_col->rv_counts[nt4] += 1;
                } else {
