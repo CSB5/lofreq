@@ -35,9 +35,6 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #define MYNAME PACKAGE
 #endif
 
-#define MAX_OP_COUNT 1024
-
-
 typedef struct {
      int min_mq;
      int min_bq;
@@ -50,18 +47,24 @@ typedef struct {
 
 
 
-/* sam_view.c:__g_skip_aln */
-static inline int skip_aln(const bam_header_t *h, const bam1_t *b,
-                           const int min_mq, const int flag_on, const int flag_off, void *bed)
+/* adopted from sam_view.c:__g_skip_aln */
+static inline int 
+skip_aln(const bam_header_t *h, const bam1_t *b,
+         const int min_mq, const int flag_on, const int flag_off, void *bed)
 {
-     if (b->core.qual < min_mq || ((b->core.flag & flag_on) != flag_on) || (b->core.flag & flag_off)) {
-          /*fprintf(stderr, "Skipping because of flag or min_mq\n");*/
-          return 1;
-     }
      if (bed && b->core.tid >= 0 && !bed_overlap(bed, h->target_name[b->core.tid], b->core.pos, bam_calend(&b->core, bam1_cigar(b)))) {
           /*fprintf(stderr, "Skipping because of bed: h->target_name[b->core.tid=%d] = %s; b->core.pos = %d\n", b->core.tid, h->target_name[b->core.tid], b->core.pos);*/
-          return 2;
+          return 1;
      }
+     if (b->core.qual < min_mq) {
+          /*fprintf(stderr, "Skipping because of flag or min_mq\n");*/
+          return 2;
+     } 
+     if (((b->core.flag & flag_on) != flag_on) || (b->core.flag & flag_off)) {
+          /*fprintf(stderr, "Skipping because of flag\n");*/
+          return 3;
+     }
+
      /*fprintf(stderr, "Not skipping\n");*/
      return 0;
 }
@@ -87,17 +90,23 @@ usage(bamstats_conf_t *bamstats_conf)
 
 
 void
-writestats(char *target_name, unsigned long int **read_cat_counts, unsigned long int num_reads, FILE *out)
+writestats(char *target_name, unsigned long int **read_cat_counts, 
+           unsigned long int num_reads, FILE *out)
 {
      int i, j;
      fprintf(out, "#chrom\top-category\top-count\tproportion of reads\n");
      fprintf(out, "#proportions are in scientific notation or missing altogether if no reads for that count were found\n");
      for (i=0; i<NUM_OP_CATS; i++) {
           unsigned long int cat_sum = 0;
-          for (j=0; j<MAX_OP_COUNT; j++) {
+          for (j=0; j<MAX_READ_LEN; j++) {
                if (read_cat_counts[i][j]) {
+#if 0
                     fprintf(out, "%s\t%s\t%d\t%g\t(%lu/%lu)\n", 
                             target_name, op_cat_str[i], j, read_cat_counts[i][j]/(double)num_reads, read_cat_counts[i][j], num_reads);
+#else
+                    fprintf(out, "%s\t%s\t%d\t%g\n", 
+                            target_name, op_cat_str[i], j, read_cat_counts[i][j]/(double)num_reads);
+#endif
                     cat_sum += read_cat_counts[i][j];
                }
           }
@@ -120,14 +129,16 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
      bam1_t *b = bam_init1();
      int r, i, rc;
 
-     /*  count_matches/read_cat_counts assume roughtly equal read length */
+     /*  count_cigar_ops/read_cat_counts assume roughtly equal read length */
      LOG_WARN("%s\n", "assuming (roughly) equal read length");
+     LOG_WARN("%s\n", "not using base qualities");/* (which could be easily implemented for matches");*/
 
      read_cat_counts = calloc(NUM_OP_CATS, sizeof(unsigned long int *));
      for (i=0; i<NUM_OP_CATS; i++) {
-          read_cat_counts[i] = calloc(MAX_OP_COUNT, sizeof(unsigned long int));
+          read_cat_counts[i] = calloc(MAX_READ_LEN, sizeof(unsigned long int));
      }
      
+
      while ((r = samread(sam, b)) >= 0) { // read one alignment from `in'
           int counts[NUM_OP_CATS];
           int ref_len = -1;
@@ -153,7 +164,7 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
 
                     /* reset everything for next chrom... */
                     for (i=0; i<NUM_OP_CATS; i++) {
-                         memset(read_cat_counts[i], 0, MAX_OP_COUNT * sizeof(unsigned long int));
+                         memset(read_cat_counts[i], 0, MAX_READ_LEN * sizeof(unsigned long int));
                     }
                     free(ref);
                } 
@@ -163,12 +174,12 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
                                      0, 0x7fffffff, &ref_len);
           }
 
-          if (count_matches(counts, b, ref, bamstats_conf->min_mq)) {
-               LOG_WARN("%s\n", "count_matches failed on read. ignoring"); /* FIXME print read */
+          if (-1 == count_cigar_ops(counts, NULL, b, ref, bamstats_conf->min_mq)) {
+               LOG_WARN("%s\n", "count_cigar_ops failed on read. ignoring"); /* FIXME print read */
                continue;
           }
           for (i=0; i<NUM_OP_CATS; i++) {
-               assert(counts[i]<MAX_OP_COUNT);               
+               assert(counts[i]<MAX_READ_LEN);               
                read_cat_counts[i][counts[i]] += 1;
           }
           if (0 == counts[OP_MATCH]) {
@@ -327,11 +338,13 @@ main_bamstats(int argc, char *argv[])
           goto free_and_exit;
      }
      bamfile = (argv + optind + 1)[0];
-     if (!file_exists(bamfile)) {
-          LOG_FATAL("BAM file %s does not exist.\n\n", bamfile);
-          rc = 1;
-          goto free_and_exit;
-     }
+     /*if (0 != strcmp(optarg, "-")) {*/
+          if (!file_exists(bamfile)) {
+               LOG_FATAL("BAM file %s does not exist.\n\n", bamfile);
+               rc = 1;
+               goto free_and_exit;
+          }
+/*     }*/
      
      if (NULL == bamstats_conf.fa) {
           LOG_FATAL("%s\n\n", "ERROR: Missing reference fasta argument");
