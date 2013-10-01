@@ -54,8 +54,7 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 
 
 #define SNVCALL_USE_MQ      0x10
-#define SNVCALL_USE_SQ      0x20
-#define SNVCALL_CONS_AS_REF 0x40
+#define SNVCALL_CONS_AS_REF 0x20
 
 #define BUF_SIZE 1<<16
 
@@ -565,223 +564,6 @@ call_snvs(const plp_col_t *p, void *confp)
 
 
 
-#ifdef USE_SOURCEQUAL
-
-
-
-
-/* Count matches and mismatches for an aligned read and also return
- * the corresponding qualities. returns NULL on error or pointer to
- * qual array for n_match and n_mismatch (sum is size). allocated
- * here. user must free
- */
-int *
-count_matches(int *n_matches, int *n_mismatches,
-              const bam1_t *b, const char *ref)
-{
-     /* modelled after bam.c:bam_calend(), bam_format1_core() and
-      * pysam's aligned_pairs (./pysam/csamtools.pyx)
-      */
-     uint32_t *cigar = bam1_cigar(b);
-     const bam1_core_t *c = &b->core;
-     uint32_t pos = c->pos; /* pos on genome */
-     uint32_t qpos = 0; /* pos on read/query */
-     uint32_t k, i;
-     int *quals = NULL;
-     int n_quals = 0;
-     /* read length */
-     int32_t qlen = (int32_t) bam_cigar2qlen(c, bam1_cigar(b));
-
-     *n_matches = 0;
-     *n_mismatches = 0;
-
-     if (NULL==ref) {
-          return NULL;
-     }
-
-     if (NULL == (quals = malloc(qlen * sizeof(int)))) {
-          LOG_FATAL("%s\n", "couldn't allocate memory");
-          return NULL;
-     }
-
-     if (0) {
-          fprintf(stderr, "SOURCEQUAL: core.pos %d - calend %d - cigar %s",
-                  b->core.pos, bam_calend(&b->core, bam1_cigar(b)), cigar_from_bam(b));
-     }
-     
-     /* loop over cigar to get aligned bases and matches/mismatches
-      * and their quals.
-      *
-      * read: bam_format1_core(NULL, b, BAM_OFDEC);
-      */
-     for (k=0; k < c->n_cigar; ++k) { /* n_cigar: number of cigar operations */
-          int op = cigar[k] & BAM_CIGAR_MASK; /* the cigar operation */
-          uint32_t l = cigar[k] >> BAM_CIGAR_SHIFT;
-          
-          /* following conditionals could be collapsed to much shorter
-           * code, but we keep them as they were in pysam's
-           * aligned_pairs to make later handling of indels easier
-           */
-          if (op == BAM_CMATCH) {
-               for (i=pos; i<pos+l; i++) {                             
-#if 0
-                    printf("qpos,i = %d,%d\n", qpos, i);
-#endif
-                    char ref_nt = ref[i];
-                    char read_nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(b), qpos)];
-                    int bq = bam1_qual(b)[qpos];
-                    
-                    if (ref_nt == read_nt) {
-                         *n_matches += 1;
-                    } else {
-                         *n_mismatches += 1;
-                    }
-                    quals[n_quals++] = bq;
-
-                    qpos += 1;
-               }
-               pos += l;
-
-          } else if (op == BAM_CINS) {
-               for (i=pos; i<pos+l; i++) {
-#if 0
-                    printf("qpos,i = %d,None\n", qpos);
-#endif
-                    qpos += 1;
-               }
-               
-          } else if (op == BAM_CDEL || op == BAM_CREF_SKIP) {
-               for (i=pos; i<pos+l; i++) {
-#if 0
-                    printf("qpos,i = None,%d\n", i);
-#endif
-               }
-               pos += l;
-          }
-     } /* for k */
-     assert(pos == bam_calend(&b->core, bam1_cigar(b))); /* FIXME correct assert? what if clipped? */
-
-     if (0) {
-          fprintf(stderr, " - matches %d - mismatches %d\n", *n_matches, *n_mismatches);                                       
-     }
-     assert(*n_matches + *n_mismatches == n_quals);
-
-     return quals;
-}
-/* count_matches() */
-
-
-
-/* Estimate as to how likely it is that this read, given the mapping,
- * comes from this reference genome. P(r not from g|mapping) = 1 - P(r
- * from g). Use qualities of all bases for and poisson-binomial dist,
- * as for core SNV calling but return prob instead of pvalue (and
- * subtract one mismatch which is the SNV we are checking). Assumed
- * independence of errors okay: if they are not independent, then the
- * assumption is conservative. Keep all qualities as they are, i.e.
- * don’t replace mismatches with lower values. Rationale: higher SNV
- * quals, means higher chance SNVs are real, therefore higher prob.
- * read does not come from genome.
- *
- * Use 
- * FIXME: should always ignore heterozygous or known SNV pos!
- *
- * Returns -1 on error. otherwise prob to see the observed number of
- * mismatches-1
- */
-int
-source_qual(const bam1_t *b, const char *ref)
-{
-     double *probvec;
-     int src_qual = 255;
-     double src_pvalue;
-     int *quals;
-     int n_matches = 0;
-     int n_mismatches = 0;
-     int n_quals = 0;
-     double *err_probs; /* error probs (qualities) passed down to snpcaller */
-     int num_err_probs; /* #elements in err_probs */
- 
-     quals = count_matches(&n_matches, &n_mismatches, b, ref);
-     if (NULL == quals) {
-          return -1;
-     }
-
-     num_err_probs = n_matches + n_mismatches;
-     if (NULL == (err_probs = malloc(num_err_probs * sizeof(double)))) {
-          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
-                  __FILE__, __FUNCTION__, __LINE__);
-          free(err_probs);
-          return -1;
-     }
-
-
-     /* sorting in theory should be numerically more stable and also
-      * make poissbin faster */
-     qsort(err_probs, num_err_probs, sizeof(double), dbl_cmp);
-     probvec = poissbin(&src_pvalue, err_probs,
-                        num_err_probs, n_mismatches, 1.0, 0.05);
-
-     FIXME neet prob not pvalue and should alos use n_mismatches-1, but what if already 0?
-
-     if (src_pvalue>1.0) {/* DBL_MAX is default return value */
-          src_pvalue = 1.0;/*-DBL_EPSILON;*/
-     }
-
-     LOG_FIXME("src_pvalue = %g. Actual prob = %g\n", 
-               src_pvalue, exp(probvec[n_mismatches]));
-
-     /* src_pvalue: what's the prob of seeing n_mismatches or more by
-      * chance, given quals? or: how likely is this read from the
-      * genome. 1-src_value = prob read is not from genome
-      */
-     if (0) {
-          LOG_FIXME("Orig src_pv = %f", src_pvalue);
-     }
-     src_pvalue = 1.0-src_pvalue;
-     free(probvec);
-
-     src_qual =  PROB_TO_PHREDQUAL(src_pvalue);
-
-     if (0) {
-          int i;
-          fprintf(stderr, "| src_pv = %f = Q%d for %d/%d mismatches. All quals: ", 
-                  src_pvalue, src_qual, n_mismatches, n_quals);
-          for (i=0; i<n_quals; i++) {
-               fprintf(stderr, " %d", quals[i]);
-          }
-          fprintf(stderr, "\n");
-     }
-
-#if 0
-"
-PJ = joined Q
-PM = map Q
-PG = genome Q
-PS = source Q
-
-
-PJ = PM  +  (1-PM) * PG  +  (1-PM) * (1-PG) * PB
-# note: niranjan used PS and meant PB I think
-# mapping error
-# OR
-# no mapping error AND genome error
-# OR
-# no mapping error AND no genome error AND base-error
-
-
-PJ = PM + (1-PM) * PB
-# mapping error OR no mapping error AND base-error
-"
-#endif
-     free(quals);
-
-     return src_qual;
-}
-/* source_qual() */
-#endif
-
-
 
 void
 dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream) 
@@ -796,9 +578,6 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
      fprintf(stream, "  sig            = %f\n", c->sig);
 /*     fprintf(stream, "  out            = %p\n", (void*)c->out);*/
      fprintf(stream, "  flag & SNVCALL_USE_MQ      = %d\n", c->flag&SNVCALL_USE_MQ?1:0);
-#ifdef USE_SOURCEQUAL
-     fprintf(stream, "  flag & SNVCALL_USE_SQ      = %d\n", c->flag&SNVCALL_USE_SQ?1:0);
-#endif
      fprintf(stream, "  flag & SNVCALL_CONS_AS_REF = %d\n", c->flag&SNVCALL_CONS_AS_REF?1:0);
 }
 
@@ -885,7 +664,7 @@ main_call(int argc, char *argv[])
      mplp_conf.min_bq = 3;
      mplp_conf.capQ_thres = 0;
      mplp_conf.max_depth = 1000000;
-     mplp_conf.flag = MPLP_NO_ORPHAN; /* | MPLP_REALN | MPLP_REDO_BAQ; */
+     mplp_conf.flag = MPLP_NO_ORPHAN | MPLP_USE_SQ; /* | MPLP_REALN | MPLP_REDO_BAQ; */
     
      /* default snvcall options */
      memset(&snvcall_conf, 0, sizeof(snvcall_conf_t));
@@ -897,7 +676,7 @@ main_call(int argc, char *argv[])
      snvcall_conf.bonf = 1;
      snvcall_conf.sig = 0.05;
      /* snvcall_conf.out = ; */
-     snvcall_conf.flag = SNVCALL_USE_MQ;/* | MPLP_USE_SQ; FIXME */
+     snvcall_conf.flag = SNVCALL_USE_MQ;
 
     
     /* keep in sync with long_opts_str and usage 
@@ -967,7 +746,7 @@ for cov in coverage_range:
 */
 
          /* keep in sync with long_opts and usage */
-         static const char *long_opts_str = "r:l:f:co:q:Q:a:Em:M:Js:b:C:NIh"; 
+         static const char *long_opts_str = "r:l:f:co:q:Q:a:Em:M:JSb:s:C:NIh"; 
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
          c = getopt_long(argc-1, argv+1, /* skipping 'lofreq', just leaving 'command', i.e. call */
@@ -1046,7 +825,7 @@ for cov in coverage_range:
 
 #ifdef USE_SOURCEQUAL
          case 'S': 
-              snvcall_conf.flag &= ~SNVCALL_USE_SQ;
+              mplp_conf.flag &= ~MPLP_USE_SQ;
               break;
 #endif
 
