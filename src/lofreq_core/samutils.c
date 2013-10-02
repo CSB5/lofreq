@@ -67,12 +67,10 @@ count_cigar_ops(int *counts, int **quals,
      uint32_t pos = c->pos; /* pos on genome */
      uint32_t qpos = 0; /* pos on read/query */
      uint32_t k, i;
-#ifndef NDEBUG
 #if 1
      int32_t qlen = (int32_t) bam_cigar2qlen(c, cigar); /* read length */
 #else
      int qlen = b->core.l_qseq; /* read length */
-#endif
 #endif
      if (NULL==ref) {
           return -1;
