@@ -14,12 +14,19 @@
 #include "sam.h"
 #include "log.h"
 #include "plp.h"
+#include "samutils.h"
+#include "snpcaller.h"
+
 
 /* from bedidx.c */
 void *bed_read(const char *fn);
 void bed_destroy(void *_h);
 int bed_overlap(const void *_h, const char *chr, int beg, int end);
 
+/* Using XS, XG and ZS already used by others. So use ZG for
+ * source qual. Not modyfying BAM anyway, so it wouldn't
+ * matter if we overwrite an existing tag. */
+#define SRC_QUAL_TAG "ZG"
 
 const char *bam_nt4_rev_table = "ACGTN";
 
@@ -78,7 +85,7 @@ plp_col_init(plp_col_t *p) {
     for (i=0; i<NUM_NT4; i++) {
          int_varray_init(& p->base_quals[i], 0);
          int_varray_init(& p->map_quals[i], 0);
-         int_varray_init(& p->source_quals[i], 0); /* FIXME unused */
+         int_varray_init(& p->source_quals[i], 0);
          p->fw_counts[i] = 0;
          p->rv_counts[i] = 0;
     }
@@ -90,6 +97,7 @@ plp_col_init(plp_col_t *p) {
     p->num_dels = p->sum_dels = 0;
     int_varray_init(& p->del_quals, 0);
 }
+
 
 void
 plp_col_free(plp_col_t *p) {
@@ -104,6 +112,7 @@ plp_col_free(plp_col_t *p) {
     int_varray_free(& p->ins_quals);
     int_varray_free(& p->del_quals);
 }
+
 
 void plp_col_debug_print(const plp_col_t *p, FILE *stream)
 {
@@ -179,6 +188,7 @@ dump_mplp_conf(const mplp_conf_t *c, FILE *stream)
      fprintf(stream, "  capQ_thres   = %d\n", c->capQ_thres);
      fprintf(stream, "  max_depth    = %d\n", c->max_depth);
      fprintf(stream, "  min_bq       = %d\n", c->min_bq);
+     fprintf(stream, "  def_nm_q     = %d\n", c->def_nm_q);
      fprintf(stream, "  reg          = %s\n", c->reg);
      fprintf(stream, "  fa           = %p\n", c->fa);
      /*fprintf(stream, "  fai          = %p\n", c->fai);*/
@@ -209,6 +219,159 @@ printw(int c, FILE *fp)
 
 
 
+/* Estimate as to how likely it is that this read, given the mapping,
+ * comes from this reference genome. P(r not from g|mapping) = 1 - P(r
+ * from g). 
+ * 
+ * The overall idea was to use something as follows:
+ * PJ = PM  +  (1-PM) * PS  +  (1-PM) * (1-PS) * PB, where
+ * PJ = joined error probability
+ * PM = mapping err.prob.
+ * PS = source/genome err.prob.
+ * PB = base err.prob.
+ * 
+ * In theory PS should go first but the rest is hard to compute then.
+ * Using PM things get tractable and it intrinsically takes care of
+ * PS.
+ * 
+ * Use base-qualities and poisson-binomial dist, similar to core SNV
+ * calling, but return prob instead of pvalue (and subtract one
+ * mismatch which is the SNV we are checking for the benefit of doubt;
+ * affectively also means that prob MM=1 eg prob MM=0). If
+ * nonmatch_qual is < 0, then keep all qualities as they are, i.e.
+ * don't replace mismatches with lower values. Rationale: higher SNV
+ * quals, means higher chance SNVs are real, therefore higher prob.
+ * read does not come from genome. Otherwise use this phredscore as
+ * default.
+ *
+ * Assuming independence of errors is okay, because if they are not
+ * independent, then the prediction made is conservative.
+ *
+ * FIXME: should always ignore dbSNP or first round SNVs (all or just
+ * cons?)
+ *
+ * Returns -1 on error. otherwise prob to see the observed number of
+ * mismatches-1
+ *
+ */
+int
+source_qual(const bam1_t *b, const char *ref, const int nonmatch_qual)
+{
+     int op_counts[NUM_OP_CATS];
+     int **op_quals = NULL;
+
+     double *probvec = NULL;
+     int num_non_matches; /* incl indels */
+     int orig_num_non_matches = -1;
+     double *err_probs = NULL; /* error probs (qualities) passed down to snpcaller */
+     int num_err_probs; /* #elements in err_probs */
+
+     double unused_pval;
+     int src_qual = 255;
+     double src_prob = -1; /* prob of this read coming from genome */
+     int err_prob_idx;
+     int i, j;
+
+
+     /* alloc op_quals
+      */
+     if (NULL == (op_quals = malloc(NUM_OP_CATS * sizeof(int *)))) {
+          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
+                  __FILE__, __FUNCTION__, __LINE__);
+          exit(1);
+     }
+     for (i=0; i<NUM_OP_CATS; i++) {
+          if (NULL == (op_quals[i] = malloc(MAX_READ_LEN * sizeof(int)))) {
+               fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
+                       __FILE__, __FUNCTION__, __LINE__);
+               free(op_quals);
+               exit(1);
+          }
+     }
+          
+     /* count match operations and get qualities for them
+      */
+     num_err_probs = count_cigar_ops(op_counts, op_quals, b, ref, -1);
+     if (-1 == num_err_probs) {
+          LOG_WARN("%s\n", "count_cigar_ops failed on read"); /* FIXME print read */
+          src_qual = -1;
+          goto free_and_exit;
+     }
+     
+     /* alloc and fill err_probs with quals returned per op-cat from
+      * count_cigar_ops 
+      */
+     if (NULL == (err_probs = malloc(num_err_probs * sizeof(double)))) {
+          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
+                  __FILE__, __FUNCTION__, __LINE__);
+          exit(1);
+     }
+     num_non_matches = 0;
+     err_prob_idx = 0;
+     for (i=0; i<NUM_OP_CATS; i++) {
+         if (i != OP_MATCH) {
+             num_non_matches += op_counts[i];
+         }
+         for (j=0; j<op_counts[i]; j++) {
+              int qual;
+              if (nonmatch_qual >= 0) {
+                   qual = nonmatch_qual;
+              } else {
+                   qual = op_quals[i][j];
+              }
+              err_probs[err_prob_idx] = PHREDQUAL_TO_PROB(qual);
+              /*LOG_FIXME("err_probs[%d] = %f (nonmatch_qual=%d op_quals[i=%d][j=%d]=%d)\n", err_prob_idx, err_probs[err_prob_idx], nonmatch_qual, i, j, op_quals[i][j]);*/
+              err_prob_idx += 1;
+         }
+     }
+     assert(err_prob_idx == num_err_probs);
+
+     /*  need num_non_matches-1 */
+     orig_num_non_matches = num_non_matches;
+     if (num_non_matches>0) {
+          num_non_matches -= 1;
+     }
+     if (0 == num_non_matches) {
+          src_qual = PROB_TO_PHREDQUAL(0.0);
+          goto free_and_exit;
+     }
+
+     /* src_prob: what's the prob of seeing n_mismatches-1 by chance,
+      * given quals? or: how likely is this read from the genome.
+      * 1-src_value = prob read is not from genome
+      */
+
+     /* sorting in theory should be numerically more stable and also
+      * make poissbin faster */
+     qsort(err_probs, num_err_probs, sizeof(double), dbl_cmp);
+     probvec = poissbin(&unused_pval, err_probs,
+                        num_err_probs, num_non_matches, 1.0, 0.05);
+     /* need prob not pv */
+     src_prob = exp(probvec[num_non_matches-1]);
+     free(probvec);
+     src_qual =  PROB_TO_PHREDQUAL(1.0 - src_prob);
+
+
+free_and_exit:
+     for (i=0; i<NUM_OP_CATS; i++) {
+          free(op_quals[i]);
+     } 
+     free(op_quals);
+
+     free(err_probs);
+
+     /* if we wanted to use softening from precomputed stats then add all non-matches up instead of using the matches */
+#ifdef TRACE
+     LOG_DEBUG("returning src_qual=%d (orig prob = %g) for cigar=%s num_err_probs=%d num_non_matches=%d(%d) @%d\n", 
+               src_qual, src_prob, cigar_str_from_bam(b), num_err_probs, num_non_matches, orig_num_non_matches, b->core.pos);
+#endif
+     return src_qual;
+}
+/* source_qual() */
+
+
+
+/* modelled after samtools FIXME.c */
 static int
 mplp_func(void *data, bam1_t *b)
 {
@@ -261,10 +424,16 @@ mplp_func(void *data, bam1_t *b)
     } while (skip);
 
 #ifdef USE_SOURCEQUAL
-    /* compute source qual if requested and have ref */
+    /* compute source qual if requested and have ref and attach as aux to bam */
     if (ma->ref && ma->ref_id == b->core.tid && ma->conf->flag & MPLP_USE_SQ) {
-         int sq = source_qual(b, ma->ref);
-         LOG_FIXME("Got sq %d. Need to save to b as extra flag or so. Would otherwise have to recompute during pileup for base in read\n", sq);
+         int sq = source_qual(b, ma->ref, ma->conf->def_nm_q);
+          /* see bam_md.c for examples of bam_aux_append()
+          * FIXME only allows us to store values as uint8_t i.e. a byte, i.e. 255 is max (that's also why len 4)
+          */
+         if (sq>255) {
+              sq=255;
+         }
+         bam_aux_append(b, SRC_QUAL_TAG, 'i', 4, (uint8_t*) &sq);     
     }
 #endif
     return ret;
@@ -323,7 +492,7 @@ void compile_plp_col(plp_col_t *plp_col,
            */
           const bam_pileup1_t *p = plp + i;
           int nt4;
-          int mq, bq, sq; /* phred scores */
+          int mq, bq; /* phred scores */
           int base_skip = 0; /* boolean */
 
           /* GATKs BI & BD: "are per-base quantities which estimate
@@ -336,6 +505,9 @@ void compile_plp_col(plp_col_t *plp_col,
            */
           uint8_t *bi = bam_aux_get(p->b, "BI"); /* GATK indels */
           uint8_t *bd = bam_aux_get(p->b, "BD"); /* GATK deletions */
+#ifdef USE_SOURCEQUAL
+          int sq = bam_aux2i(bam_aux_get(p->b, SRC_QUAL_TAG)); /* lofreq internally computed on the fly */
+#endif
 
 #if 0
           LOG_FIXME("At %s:%d %c: p->is_del=%d p->is_refskip=%d p->indel=%d p->is_head=%d p->is_tail=%d\n", 
@@ -392,8 +564,6 @@ void compile_plp_col(plp_col_t *plp_col,
                 * if (mq > 126) mq = 126;
                 */
 
-               sq = 0; /*FIXME*/
-
                PLP_COL_ADD_QUAL(& plp_col->base_quals[nt4], bq);
                PLP_COL_ADD_QUAL(& plp_col->map_quals[nt4], mq);
 #ifdef USE_SOURCEQUAL
@@ -406,9 +576,9 @@ void compile_plp_col(plp_col_t *plp_col,
                }
                 
                if (bi) {
-                    int j;
                     char *t = (char*)(bi+1); /* 1 is type */
 #if 0
+                    int j;
                     printf("At %d qpos %d: BI=%s", plp_col->pos+1, p->qpos+1, t);
                     for (j = 0; j < p->indel; ++j) {
                          printf(" %c:%d-%d-%d", t[p->qpos+j], t[p->qpos+j-1]-33, t[p->qpos+j]-33, t[p->qpos+j+1]-33);
@@ -420,9 +590,9 @@ void compile_plp_col(plp_col_t *plp_col,
                }
 
                if (bd) {
-                    int j;
                     char *t = (char*)(bd+1);  /* 1 is type */
 #if 0
+                    int j;
                     printf("At %d qpos %d: BD=%sx", plp_col->pos+1, p->qpos+1, t);
                     for (j = 0; j < p->indel; ++j) {
                          printf(" %c:%d-%d-%d", t[p->qpos+j], t[p->qpos+j-1]-33, t[p->qpos+j]-33, t[p->qpos+j+1]-33);
@@ -468,7 +638,6 @@ void compile_plp_col(plp_col_t *plp_col,
            */
 
           if (p->indel != 0) { /* seems to rule out is_del */
-               int j;
                /* insertion (+)
                 */
                if (p->indel > 0) {
@@ -480,6 +649,7 @@ void compile_plp_col(plp_col_t *plp_col,
 #ifdef PRINT_INDEL
                     putchar('+'); printw(p->indel, stdout);
                     putchar(' ');
+                    int j;
                     for (j = 1; j <= p->indel; ++j) {
                          int c = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos + j)];
                          putchar(bam1_strand(p->b)? tolower(c) : toupper(c));
