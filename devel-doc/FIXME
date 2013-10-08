@@ -1,5 +1,11 @@
+- ignore known vars in source qual 
+- pseudo parallel: iterating over regions given in bed (if given) or over chroms (if (len(chroms)>1))
+- put external licenses into sep folder (incl zlib)
+- add zlib to src?
+
+
+
 Important:
-- gzip support to lofreq uniq and vcf.[ch] output
 - uniq should add uniq filter and set columns accordingly (and also add dp4n for normal sample values)
 - Predict indels
 - enable pthreads in libbam:
@@ -9,9 +15,10 @@ Important:
 - add internal sens test as in original version
 
 Some time:
-- Replace Python scripts with C-version
 - split lofreq_snpcaller cmd parsing: plp, snv, others (do they change argv?) 
 - Implement test against old SNV caller
 - Test actual SNV and SB values for both types of SNVs
 - check for diffs between -l bed, -r region and none, all with and without BAQ
 - Check what happens if fai or bai don't exist
+- merge lofreq_core and core into one lib?
+- get rid of PATH etc once python dep is killed
