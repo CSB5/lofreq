@@ -27,7 +27,7 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #include "log.h"
 #include "utils.h"
 #include "samutils.h"
-
+#include "defaults.h"
 
 #if 1
 #define MYNAME "lofreq bam-stats"
@@ -230,8 +230,8 @@ main_bamstats(int argc, char *argv[])
      bamstats_conf_t bamstats_conf;
 
      memset(&bamstats_conf, 0, sizeof(bamstats_conf_t));
-     bamstats_conf.min_mq = 13;
-     bamstats_conf.min_bq = 3;
+     bamstats_conf.min_mq = DEFAULT_MIN_MQ;
+     bamstats_conf.min_bq = DEFAULT_MIN_BQ;
      /* will skip read if any of the following is set */
      bamstats_conf.samflags_off = 0;
      bamstats_conf.samflags_off |= 0x4; /* segment unmapped */
