@@ -20,6 +20,7 @@ import os
 import logging
 import argparse
 from collections import namedtuple
+import itertools
 
 #--- third-party imports
 #
@@ -310,6 +311,7 @@ def joined_counts(sam, chrom, snv_positions,
                     del pos_nt_map[snv_pos.pos]
                     
         # also remove positions where base is neither alt nor ref base
+        # FIXME then we'll never be able to bunch alts together
         for snv_pos in snv_positions:
             if snv_pos.ref == 'N' and snv_pos.alt == 'N':
                 continue
@@ -349,7 +351,6 @@ def joined_counts(sam, chrom, snv_positions,
     # would be nice to initialize counts with all possible keys
     # that's not straightforward if types are used
     counts = dict()
-    import itertools
     if use_type_as_key:
         for k in [''.join(x) for x in itertools.product(
                 'RV', repeat=len(snv_positions))]:
@@ -359,7 +360,8 @@ def joined_counts(sam, chrom, snv_positions,
         for k in [''.join(x) for x in itertools.product(
                 VALID_NUCS, repeat=len(snv_positions))]:
             counts[k] = 0
-            
+
+    
     for read_id in overlapping_all:
         key = ''.join([pos_overlap[sp.pos][read_id] for sp in snv_positions])
         if use_type_as_key:
@@ -369,11 +371,13 @@ def joined_counts(sam, chrom, snv_positions,
             for (i, sp) in enumerate(snv_positions):
                 if key[i] == sp.ref:
                     type_key += "R"
-                elif key[i] == sp.alt:
+                elif key[i] == sp.alt or sp.alt == 'N': # FIXME bunching alt together if alt is N
                     type_key += "V"
                 else:
-                    # i.e. the base
-                    type_key += key[i]
+                    # can only get here if ref and alt are not given
+                    # and should use type
+                    raise ValueError, (
+                        "Can't use type as key when ref/alt are unknown")
             # import pdb; pdb.set_trace()
             key = type_key
         counts[key] = counts.get(key, 0) + 1
@@ -408,6 +412,16 @@ def main():
         parser.print_usage(sys.stderr)
         sys.exit(1)
 
+    if args.use_type_as_key:
+        #all_snp_pos_bases = list(itertools.chain(* [(sp.ref, sp.alt) 
+        #                                            for sp in args.snv_positions]))
+        #if 'N' in all_snp_pos_bases:
+        if 'N' in [sp.ref for sp in args.snv_positions]:
+            LOG.fatal("Need at least ref bases for all positions when"
+                      " using type as key (if alt s not given, all are"
+                      " treated as alt")
+            sys.exit(1)
+    
     if args.ref_fa:
         ref_bases = ""
         fastafile = pysam.Fastafile(args.ref_fa)
@@ -423,7 +437,10 @@ def main():
                 ref_bases += '-'
             ref_bases += b
         print "ref=%s;" % (ref_bases),
-            
+
+    for (i, sp) in enumerate(args.snv_positions):
+        print "snvpos-%d=%d:%c-%c;" % (i+1, sp.pos+1, sp.ref, sp.alt),
+    
     sam = pysam.Samfile(args.bam, "rb")
     if args.chrom not in sam.references:
         LOG.fatal("Chromosome/Sequence %s not found in %s" % (
@@ -442,7 +459,7 @@ def main():
     #for k in sorted(counts, key=lambda x: counts[x]):
     for k in sorted(counts):
         #if counts[k]:
-        print "%s=%.4f;" % (k, counts[k]/float(counts_sum)),
+        print "%s=%.4f;" % (k, counts[k]/float(counts_sum) if counts_sum else 0),
         
 
     print "%s;" % ('; '.join(
