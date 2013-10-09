@@ -30,6 +30,7 @@ typedef struct {
      int capQ_thres;
      int max_depth;
      int min_bq;
+     int def_nm_q;
      char *reg;
      char *fa;
      faidx_t *fai;

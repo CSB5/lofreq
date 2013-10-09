@@ -18,6 +18,7 @@ schmock*
 clang_output*
 nohup.out
 gmon.*
+_*
 
 # automake stuff which gets rebuild after autoreconf
 Makefile
@@ -34,3 +35,4 @@ depcomp
 INSTALL
 
 m4/*m4
+*.plist
