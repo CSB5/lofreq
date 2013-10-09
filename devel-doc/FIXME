@@ -1,17 +1,30 @@
-Important:
+Todos:
+
+High Prio:
+- predict indels
+
+Med Prio:
 - gzip support to lofreq uniq and vcf.[ch] output
+- vcfset in c (gzip support as well)
+- filtering script:
+  
+  as stand-alone (don't suck all vars into memory, for e.g. WGS)
+  within
+
+Prio 3
 - uniq should add uniq filter and set columns accordingly (and also add dp4n for normal sample values)
-- Predict indels
+- formats and samples support in vcf.py:VCFWriter (VCFReader already reads them)
+- filter: use generator where possible (some filters might have to be applied standalone)
 - enable pthreads in libbam:
     --- enable at compile time (http://stackoverflow.com/questions/1699113/autoconf-with-pthread)
     --- how to set num_threads (only exposed to command line in view?)
     --- test!
 - add internal sens test as in original version
-
-Some time:
-- Replace Python scripts with C-version
 - split lofreq_snpcaller cmd parsing: plp, snv, others (do they change argv?) 
 - Implement test against old SNV caller
 - Test actual SNV and SB values for both types of SNVs
 - check for diffs between -l bed, -r region and none, all with and without BAQ
 - Check what happens if fai or bai don't exist
+
+In general:
+- Replace scripts with C
