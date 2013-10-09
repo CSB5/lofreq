@@ -112,7 +112,7 @@ class MetaVar(object):
     def add_snp_var(self, snp_var):
         """Add variant in legacy SNP format
         """
-        self.repr = "%s %d %c>%c %f" % (snp_var.chrom, snp_var.pos,
+        self.repr = "%s %d %c>%c %f" % (snp_var.chrom, snp_var.pos+1,
                                         snp_var.wildtype, snp_var.variant,
                                         snp_var.freq)
         self.coverage = int(snp_var.info['coverage'])
@@ -253,11 +253,26 @@ def main():
 
     
     var_list =  sorted(var_list, key=lambda x: x.freq, reverse=True)
-    
+
+    if args.cluster_file == '-':
+        fh_out = sys.stdout
+    else:
+        fh_out = open(args.cluster_file, 'w')
+
+        
+    if len(var_list)==0:
+        fh_out.write("No SNPs <-> no clusters!\n")
+        if fh_out != sys.stdout:
+            print "No SNPs <-> no clusters!"
+            fh_out.close()
+        sys.exit(1)
+
+        
     cluster = dict()
     clu_no = 0
     seed = var_list[0]
-    cluster[clu_no,'members'] = ["%s %f" % (seed.repr, seed.freq)]
+    #cluster[clu_no,'members'] = ["%s %f" % (seed.repr, seed.freq)]
+    cluster[clu_no,'members'] = ["%s" % (seed.repr)]
     cluster[clu_no,'min'] = seed.min_ci
     cluster[clu_no,'max'] = seed.max_ci
 
@@ -265,20 +280,17 @@ def main():
         LOG.debug("checking %s %f: max_ci %f vvar. clu_min %f" % (
             var.repr, var.freq, var.max_ci, cluster[clu_no,'min']))
         if var.max_ci > cluster[clu_no,'min']:
-            cluster[clu_no,'members'].append("%s %f" % (var.repr, var.freq))
+            #cluster[clu_no,'members'].append("%s %f" % (var.repr, var.freq))
+            cluster[clu_no,'members'].append("%s" % (var.repr))
         else:
             clu_no += 1
             seed = var
-            cluster[clu_no,'members'] = ["%s %f" % (seed.repr, seed.freq)]
+            #cluster[clu_no,'members'] = ["%s %f" % (seed.repr, seed.freq)]
+            cluster[clu_no,'members'] = ["%s" % (seed.repr)]
             cluster[clu_no,'min'] = seed.min_ci
             cluster[clu_no,'max'] = seed.max_ci
 
         
-    if args.cluster_file == '-':
-        fh_out = sys.stdout
-    else:
-        fh_out = open(args.cluster_file, 'w')
-
     for i in range(clu_no+1):
         fh_out.write("cluster %d (freq. range: %f - %f): %s\n" % (
             i+1, cluster[i,'min'], cluster[i,'max'], 
