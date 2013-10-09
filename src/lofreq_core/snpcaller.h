@@ -27,7 +27,5 @@ snpcaller(double *snp_pvalues, const double *err_probs,
           const long long int bonf_factor,
           const double sig_level);
 
-extern int
-source_qual(const bam1_t *b, const char *ref);
 
 #endif

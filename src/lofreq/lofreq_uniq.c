@@ -27,6 +27,7 @@
 #include "log.h"
 #include "binom.h"
 #include "plp.h"
+#include "defaults.h"
 
 
 #if 1
@@ -195,18 +196,17 @@ main_uniq(int argc, char *argv[])
 
      /* default pileup options */
      memset(&mplp_conf, 0, sizeof(mplp_conf_t));
-     mplp_conf.max_mq = 255;
-     mplp_conf.min_bq = 3;
+     mplp_conf.max_mq = DEFAULT_MAX_MQ;
+     mplp_conf.min_bq = DEFAULT_MIN_BQ;
      mplp_conf.capQ_thres = 0;
-     mplp_conf.max_depth = 1000000;
+     mplp_conf.max_depth = DEFAULT_MAX_PLP_DEPTH;
      mplp_conf.flag = MPLP_NO_ORPHAN;
     
 
     /* keep in sync with long_opts_str and usage 
      *
      * getopt is a pain in the whole when it comes to syncing of long
-     * and short args and usage. check out libcfu (also has hash
-     * functions etc)
+     * and short args and usage. check out gopt, libcfu...
      */
     while (1) {
          static struct option long_opts[] = {

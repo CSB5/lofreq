@@ -1,0 +1,14 @@
+#ifndef DEFAULTS_H
+#define DEFAULTS_H
+
+#define DEFAULT_MIN_MQ 13
+#define DEFAULT_MAX_MQ 255
+#define DEFAULT_MIN_BQ 3
+#define DEFAULT_MIN_ALT_BQ 13
+#define DEFAULT_DEF_ALT_BQ -1
+#define DEFAULT_MIN_COV 1
+#define DEFAULT_DEF_NM_QUAL 13
+#define DEFAULT_MAX_PLP_DEPTH 1000000
+
+
+#endif

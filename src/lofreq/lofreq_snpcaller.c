@@ -44,7 +44,7 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #include "log.h"
 #include "plp.h"
 #include "bed.h"
-
+#include "defaults.h"
 
 #if 1
 #define MYNAME "lofreq call"
@@ -54,7 +54,8 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 
 
 #define SNVCALL_USE_MQ      0x10
-#define SNVCALL_CONS_AS_REF 0x20
+#define SNVCALL_USE_SQ      0x20
+#define SNVCALL_CONS_AS_REF 0x40
 
 #define BUF_SIZE 1<<16
 
@@ -203,6 +204,46 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char ref,
 }
 /* report_var() */
 
+
+/* J = PM  +  (1-PM) * PS  +  (1-PM) * (1-PS) * PB, where
+   PJ = joined error probability
+   PM = mapping err.prob.
+   PS = source/genome err.prob.
+   PB = base err.prob.
+   
+   Or in simple English:
+   either this is a mapping error
+   or
+   not a mapping error, but a genome/source error
+   or
+   not mapping error and no genome/source error AND base-error
+*/
+double
+merge_srcq_baseq_and_mapq(const int sq, const int bq, const int mq)
+{
+     double sp, mp, bp, jp; /* corresponding probs */
+     
+     if (255 == sq) {
+          sp = 0.0;
+     } else {
+          sp = PHREDQUAL_TO_PROB(sq);
+     }
+
+     bp = PHREDQUAL_TO_PROB(bq);
+
+     if (255 == mq) {
+          mp = 0.0;
+     } else {
+          mp = PHREDQUAL_TO_PROB(mq);
+     }
+
+     jp = mp + (1.0 - mp) * sp + (1-mp) * (1-sp) * bp;
+#ifdef DEBUG
+     LOG_DEBUG("bq=%d mq=%d sq=%d -> jq=%d\n", bq, mq, sq, PROB_TO_PHREDQUAL(jp));
+#endif
+
+     return jp;
+}
 
 
 /* "Merge" MQ and BQ if requested using the following equation:
@@ -432,17 +473,15 @@ call_snvs(const plp_col_t *p, void *confp)
           }
 
           for (j=0; j<p->base_quals[i].n; j++) {
-               int bq, mq;
+               int bq = p->base_quals[i].data[j]; 
+               int mq = p->map_quals[i].data[j];
                double final_err_prob; /* == final quality used for snv calling */
 #ifdef USE_SOURCEQUAL
-               int sq;
+               int sq = p->source_quals[i].data[j];
+#else
+               int sq = 255;
 #endif
-               bq = p->base_quals[i].data[j];
-               mq = p->map_quals[i].data[j];
-#ifdef USE_SOURCEQUAL
-               sq = p->source_quals[i].data[j];
-#endif
-               
+
                if (is_alt_base) {
                     alt_raw_counts[alt_idx] += 1;
                     if (bq < conf->min_altbq) {
@@ -459,14 +498,17 @@ call_snvs(const plp_col_t *p, void *confp)
 
                     alt_counts[alt_idx] += 1;
                }
-
+#if 0
                if ((conf->flag & SNVCALL_USE_MQ)) {
                     final_err_prob = merge_baseq_and_mapq(bq, mq);
-
-               } else {
-                    final_err_prob = PHREDQUAL_TO_PROB(bq);
+#endif
+               if (! (conf->flag & SNVCALL_USE_MQ)) {
+                    mq = 255; /* i.e. NA */
                }
-
+               if (! (conf->flag & SNVCALL_USE_SQ)) {
+                    sq = 255; /* i.e. NA */
+               }
+               final_err_prob = merge_srcq_baseq_and_mapq(sq, bq, mq);
                err_probs[num_err_probs++] = final_err_prob;
           }
      }
@@ -578,6 +620,7 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
      fprintf(stream, "  sig            = %f\n", c->sig);
 /*     fprintf(stream, "  out            = %p\n", (void*)c->out);*/
      fprintf(stream, "  flag & SNVCALL_USE_MQ      = %d\n", c->flag&SNVCALL_USE_MQ?1:0);
+     fprintf(stream, "  flag & SNVCALL_USE_SQ      = %d\n", c->flag&SNVCALL_USE_SQ?1:0);
      fprintf(stream, "  flag & SNVCALL_CONS_AS_REF = %d\n", c->flag&SNVCALL_CONS_AS_REF?1:0);
 }
 
@@ -604,9 +647,11 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "- Mapping quality\n");                                
      fprintf(stderr, "       -m | --min-mq INT            Skip alignments with mapQ smaller than INT [%d]\n", mplp_conf->min_mq);
      fprintf(stderr, "       -M | --max-mq INT            Cap mapping quality at INT [%d]\n", mplp_conf->max_mq);
-     fprintf(stderr, "       -J | --no-mq                 Don't merge mapQ into baseQ: P_e = P_mq + (1-P_mq) P_bq\n");
+     fprintf(stderr, "       -J | --no-mq                 Don't use mapQ\n");
 #ifdef USE_SOURCEQUAL                                     
-     fprintf(stderr, "       -S | --no-sq                 Don't merge sourceQ into baseQ\n");
+     fprintf(stderr, "- Source quality\n");                                
+     fprintf(stderr, "       -S | --no-sq                 Don't compute or use sourceQ\n");
+     fprintf(stderr, "       -n | --def-nm-q INT          Non-match base qualities will be replaced with this value if >= 0 [%d]\n", mplp_conf->def_nm_q);
 #endif                                                    
      fprintf(stderr, "- P-Values\n");                                          
      fprintf(stderr, "       -s | --sig                   P-Value cutoff / significance level [%f]\n", snvcall_conf->sig);
@@ -657,26 +702,31 @@ main_call(int argc, char *argv[])
      }
 
 
-     /* default pileup options */
+     /* default pileup options
+      * FIXME make function
+      */
      memset(&mplp_conf, 0, sizeof(mplp_conf_t));
-     mplp_conf.max_mq = 255;
-     mplp_conf.min_mq = 13; /* 1 */
-     mplp_conf.min_bq = 3;
+     mplp_conf.max_mq = DEFAULT_MAX_MQ;
+     mplp_conf.min_mq = DEFAULT_MIN_MQ;
+     mplp_conf.def_nm_q = DEFAULT_DEF_NM_QUAL;
+     mplp_conf.min_bq = DEFAULT_MIN_BQ;
      mplp_conf.capQ_thres = 0;
-     mplp_conf.max_depth = 1000000;
+     mplp_conf.max_depth = DEFAULT_MAX_PLP_DEPTH;
      mplp_conf.flag = MPLP_NO_ORPHAN | MPLP_USE_SQ; /* | MPLP_REALN | MPLP_REDO_BAQ; */
     
-     /* default snvcall options */
+     /* default snvcall options
+      * FIXME make function
+      */
      memset(&snvcall_conf, 0, sizeof(snvcall_conf_t));
-     snvcall_conf.min_altbq = 13; /* 20 */
-     snvcall_conf.def_altbq = -1; /* snvcall_conf.min_altbq; */
-     snvcall_conf.min_cov = 1;
+     snvcall_conf.min_altbq = DEFAULT_MIN_ALT_BQ;
+     snvcall_conf.def_altbq = DEFAULT_DEF_ALT_BQ; /* snvcall_conf.min_altbq; */
+     snvcall_conf.min_cov = DEFAULT_MIN_COV;
      snvcall_conf.dont_skip_n = 0;
      snvcall_conf.bonf_dynamic = 1;
      snvcall_conf.bonf = 1;
      snvcall_conf.sig = 0.05;
      /* snvcall_conf.out = ; */
-     snvcall_conf.flag = SNVCALL_USE_MQ;
+     snvcall_conf.flag = SNVCALL_USE_MQ | SNVCALL_USE_SQ;
 
     
     /* keep in sync with long_opts_str and usage 
@@ -746,7 +796,7 @@ for cov in coverage_range:
 */
 
          /* keep in sync with long_opts and usage */
-         static const char *long_opts_str = "r:l:f:co:q:Q:a:Em:M:JSb:s:C:NIh"; 
+         static const char *long_opts_str = "r:l:f:co:q:Q:a:Em:M:JSn:b:s:C:NIh"; 
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
          c = getopt_long(argc-1, argv+1, /* skipping 'lofreq', just leaving 'command', i.e. call */
@@ -826,6 +876,11 @@ for cov in coverage_range:
 #ifdef USE_SOURCEQUAL
          case 'S': 
               mplp_conf.flag &= ~MPLP_USE_SQ;
+              snvcall_conf.flag &= ~SNVCALL_USE_SQ; 
+              break;
+
+         case 'n': 
+              mplp_conf.def_nm_q = atoi(optarg);
               break;
 #endif
 
@@ -1138,6 +1193,9 @@ for cov in coverage_range:
          LOG_VERBOSE("%s\n", "Successful exit.");
     }
 
+#ifdef USE_SOURCEQUAL
+    LOG_FIXME("%s\n", "source_qual() should ignore 'known' SNVs");
+#endif
 
     return rc;
 }

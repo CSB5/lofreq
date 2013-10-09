@@ -6,7 +6,8 @@ $ make CFLAGS='-c99 -Wall -pedantic'
 every now and then. Ignore the following warnings:
 "ISO C does not permit named variadic macros"
 
-
+Enable debuggin every now and then and run
+$ ./configure --enable-debug; make clean; make
 
 
 Memory checks
@@ -26,7 +27,7 @@ make clean; make CFLAGS='-pg' LDFLAGS='-pg'
 and then for example
 ./src/lofreq/lofreq call \
   -f tests/data/denv2-pseudoclonal/denv2-pseudoclonal_cons.fa \
-  -l tests/data/denv2-pseudoclonal/denv2-pseudoclonal_incl.bed \
+	  -l tests/data/denv2-pseudoclonal/denv2-pseudoclonal_incl.bed \
    tests/data/denv2-pseudoclonal/denv2-pseudoclonal.bam
 gprof ./src/lofreq/lofreq gmon.out > gmon.txt
 
@@ -35,10 +36,7 @@ static code checker
 -------------------
 
 To use clang's static code checker:
-[scan-build ./configure]
-or
-[/Users/wilma/Downloads/checker-272/scan-build ./configure CFLAGS='-I/opt/local/include'  LDFLAGS='-L/opt/local/lib'  --prefix=$HOME/local CFLAGS='-Wall']
-and then
-scan-build make
+$ scan-build ./configure
+$ scan-build make
 
-although it's tough to get libbam compiled without error
+note, there are a lot of warnings produced for libbam
