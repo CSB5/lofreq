@@ -8,18 +8,21 @@ valgrind_log=$(mktemp -t $(basename $0).XXXXXX.valgrind)
 vcf_out=$(mktemp -t $(basename $0).XXXXXX.vcf)
 rm $vcf_out $valgrind_log
 
-reffa=data/denv2-pseudoclonal/denv2-pseudoclonal_cons.fa
-bam=data/denv2-pseudoclonal/denv2-pseudoclonal.bam
+#reffa=data/denv2-pseudoclonal/denv2-pseudoclonal_cons.fa
+#bam=data/denv2-pseudoclonal/denv2-pseudoclonal.bam
+reffa=./data/somatic/hg19_chr22.fa.gz
+bam=./data/somatic/CHH966-tumor-100x-10pur-hg19.chr22-bed-only.bam
 # use region, otherwise execution will take ages
-region=consensus:100-300 # FIXME
+#region_arg=consensus:100-300 # FIXME
+
 # use hard-coded bonf because:
 # 1. can't use auto since we don't have a bed-file
 # 2. can't use dynamic since that would eventually call a filtering
 # script which valgrind won'tlike
-bonf=600
+bonf_arg="-b 308334"
 
 valgrind --log-file=$valgrind_log --tool=memcheck \
-    $LOFREQ call -r $region -b $bonf -f $reffa -o $vcf_out $bam || exit 1 
+    $LOFREQ call $region_arg $bonf_arg --no-default-filter -f $reffa -o $vcf_out $bam || exit 1
 
 num_snvs=$(grep -cv '^#' $vcf_out)
 if [ "$num_snvs" -lt 1 ]; then
