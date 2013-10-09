@@ -211,7 +211,16 @@ class SomaticSNVCaller(object):
         cmd.extend(['-o', self.vcf_n])
         cmd.append(self.bam_n)
 
-        self.subprocess_wrapper(cmd)
+        # cmd = ['valgrind', '--tool=memcheck', '--leak-check=full'] + cmd
+
+        (o, e) = self.subprocess_wrapper(cmd, close_tmp=False)
+
+        olines = o.readlines()
+        elines = e.readlines()
+        #for l in elines:
+        #    print l
+        o.close()
+        e.close()
 
 
     def call_tumor(self):
@@ -231,6 +240,8 @@ class SomaticSNVCaller(object):
         cmd.extend(['-o', self.vcf_t_prefilter])
         cmd.append(self.bam_t)
 
+        #cmd = ['valgrind', '--tool=memcheck', '--leak-check=full'] + cmd
+        
         (o, e) = self.subprocess_wrapper(cmd, close_tmp=False)
 
         olines = o.readlines()
@@ -239,6 +250,7 @@ class SomaticSNVCaller(object):
         e.close()
         num_tests = -1
         for l in elines:
+            #print l
             if l.startswith('Number of tests performed'):
                 num_tests = int(l.split(':')[1])
                 break
