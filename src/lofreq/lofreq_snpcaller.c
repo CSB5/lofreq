@@ -929,15 +929,17 @@ for cov in coverage_range:
 
     /* FIXME: implement function for checking user arg logic */
     if (mplp_conf.min_mq > mplp_conf.max_mq) {
-         LOG_FATAL("%s\n", "Minimum mapping quality larger than maximum mapping quality...\n"); 
+         LOG_FATAL("Minimum mapping quality (%d) larger than maximum mapping quality (%d)\n",
+                   mplp_conf.min_mq, mplp_conf.max_mq); 
          return 1;
     }
     if (mplp_conf.min_bq > snvcall_conf.min_altbq) {
-         LOG_FATAL("%s\n", "Minimum base-call quality larger than maximum base-call quality...\n"); 
+         LOG_FATAL("Minimum base-call quality for all bases (%d) larger than minimum base-call quality for alternate bases (%d)\n",
+                   mplp_conf.min_bq, snvcall_conf.min_altbq); 
          return 1;
     }
     if (bed_file && mplp_conf.reg) {
-         LOG_FATAL("%s\n", "Can only use either bed-file or region but not both...\n"); 
+         LOG_FATAL("%s\n", "Can only use either bed-file or region but not both.\n"); 
          return 1;
     }
 
