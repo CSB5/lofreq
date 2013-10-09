@@ -22,7 +22,7 @@ if ! eval $cmd; then
     echoerror "The following command failed: $cmd"
     exit 1
 fi
-echodebug "cmd = $cmd"
+#echodebug "cmd = $cmd"
 n_intersect=$($LOFREQ vcfset -1 $truesnv -2 $finalout -a intersect | grep -vc '^#')
 if [ "$n_intersect" -lt 2 ]; then
 	echoerror "Expected at least two true predictions but got $n_intersect (compare $finalout and $truesnv)"
