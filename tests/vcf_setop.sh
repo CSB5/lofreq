@@ -16,8 +16,7 @@ cmd="$LOFREQ vcfset -1 $vcf_t -2 $vcf_n -a complement -o -"
 #echodebug "cmd=$cmd"
 eval $cmd | cut -f 1-7 > $vcf_out
 
-#num_diffs=$(gzip -dc data/vcf/CHH966-tumor-only.f-7.vcf.gz | \
-num_diffs=$(cat data/vcf/CHH966-tumor-only.f-7.vcf | \
+num_diffs=$(gzip -dc data/vcf/CHH966-tumor-only.f-7.vcf.gz | \
     diff -u $vcf_out - | grep -v '##' | grep '^[\+\-]' | wc -l)
 exp_diffs=10
 #--- test.vcf	2013-04-03 22:12:53.000000000 +0800
