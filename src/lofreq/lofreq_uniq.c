@@ -329,7 +329,7 @@ main_uniq(int argc, char *argv[])
 
 
     if (0 !=  vcf_parse_header(&vcf_header, & uniq_conf.vcf_in)) {
-         LOG_WARN("%s\n", "vcf_parse_header() failed");
+         LOG_WARN("%s\n", "vcf_parse_header() failed. trying to rewind to start...");
          if (vcf_file_seek(& uniq_conf.vcf_in, 0, SEEK_SET)) {
               LOG_FATAL("%s\n", "Couldn't rewind file to parse variants"
                         " after header parsing failed");
@@ -337,8 +337,9 @@ main_uniq(int argc, char *argv[])
          }
     } else {
          vcf_write_header(& uniq_conf.vcf_out, vcf_header);
+         free(vcf_header);         
     }
-    free(vcf_header);
+
 
     if (-1 == (num_vars = vcf_parse_vars(&vars, & uniq_conf.vcf_in, uniq_conf.read_only_passed))) {
          LOG_FATAL("%s\n", "vcf_parse_vars() failed");
