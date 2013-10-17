@@ -84,4 +84,7 @@ mpileup(const mplp_conf_t *mplp_conf,
         void *plp_proc_conf, 
         const int n, const char **fn);
 
+int
+source_qual_load_ign_vcf(const char *vcf_path);
+
 #endif
