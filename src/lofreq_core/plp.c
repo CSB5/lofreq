@@ -14,6 +14,7 @@
 #include "sam.h"
 #include "log.h"
 #include "plp.h"
+#include "vcf.h"
 #include "samutils.h"
 #include "snpcaller.h"
 
@@ -65,6 +66,7 @@ typedef struct {
 } mplp_pileup_t;
 
 
+
 /* convenience function */
 int
 base_count(const plp_col_t *p, char base)
@@ -72,6 +74,8 @@ base_count(const plp_col_t *p, char base)
      int b = bam_nt4_table[(int)base];
      return p->fw_counts[b] + p->rv_counts[b];
 }
+
+
 
 void
 plp_col_init(plp_col_t *p) {
@@ -217,6 +221,51 @@ printw(int c, FILE *fp)
 }
 
 
+#ifdef USE_SOURCEQUAL
+
+static var_t **source_qual_ign_vars = NULL;
+static int source_qual_num_ign_vars = 0;
+
+
+int 
+var_in_ign_list(var_t *var) {
+     LOG_FIXME("%s\n", "Implement hash table lookup");
+
+}
+
+
+int
+source_qual_load_ign_vcf(const char *vcf_path)
+{
+     vcf_file_t vcf_file;
+     const int read_only_passed = 0;
+
+     if (vcf_file_open(& vcf_file, vcf_path,
+                      HAS_GZIP_EXT(vcf_path), 'r')) {
+         LOG_ERROR("Couldn't open %s\n", vcf_path);
+         return 1;
+     }
+
+     if (0 !=  vcf_skip_header(& vcf_file)) {
+         LOG_WARN("%s\n", "vcf_skip_header() failed");
+         return 1;
+     }
+     
+     LOG_FIXME("%s\n", "Turn into hash table as in lofreq_vcfset.c for easier lookup");
+
+    if (-1 == (source_qual_num_ign_vars = vcf_parse_vars(
+                    &source_qual_ign_vars, & vcf_file, read_only_passed))) {
+         LOG_FATAL("%s\n", "vcf_parse_vars() failed");
+         return 1;
+    }
+
+    vcf_file_close(& vcf_file);
+
+    return 0;
+}
+
+
+#endif
 
 
 /* Estimate as to how likely it is that this read, given the mapping,

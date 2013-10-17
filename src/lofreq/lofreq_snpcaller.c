@@ -1095,6 +1095,13 @@ for cov in coverage_range:
          dump_snvcall_conf(& snvcall_conf, stderr);
     }
 
+    LOG_FIXME("%s\n", "Loading hardcoded vcf file to ignore for source_qual()");
+    if (source_qual_load_ign_vcf("./tests/schmock.vcf")) {
+         LOG_FATAL("Loading of ignore positions from %s failed.", "FIXME");
+         return 1;
+    }
+
+
     if (plp_summary_only) {
          plp_proc_func = &plp_summary;
 
