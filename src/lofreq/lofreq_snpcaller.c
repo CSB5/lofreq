@@ -653,8 +653,8 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -J | --no-mq                 Don't use mapQ\n");
 #ifdef USE_SOURCEQUAL                                     
      fprintf(stderr, "- Source quality\n");                                
-     fprintf(stderr, "       -S | --no-sq                 Don't compute or use sourceQ\n");
-     fprintf(stderr, "       -n | --def-nm-q INT          Non-match base qualities will be replaced with this value if >= 0 [%d]\n", mplp_conf->def_nm_q);
+     fprintf(stderr, "       -S | --source-qual           Enable computation of source quality for reads\n");
+     fprintf(stderr, "       -n | --def-nm-q INT          If >= 0, then replace non-match base qualities with this default value [%d]\n", mplp_conf->def_nm_q);
      fprintf(stderr, "       -V | --ign-vcf FILE          Ignore variants in this vcf file for source quality computation\n"),
 #endif                                                    
      fprintf(stderr, "- P-Values\n");                                          
@@ -718,9 +718,9 @@ main_call(int argc, char *argv[])
      mplp_conf.capQ_thres = 0;
      mplp_conf.max_depth = DEFAULT_MAX_PLP_DEPTH;
 #if DEFAULT_BAQ_ON
-     mplp_conf.flag = MPLP_NO_ORPHAN | MPLP_USE_SQ | MPLP_REALN | MPLP_REDO_BAQ;
+     mplp_conf.flag = MPLP_NO_ORPHAN | MPLP_REALN | MPLP_REDO_BAQ;
 #else
-     mplp_conf.flag = MPLP_NO_ORPHAN | MPLP_USE_SQ;
+     mplp_conf.flag = MPLP_NO_ORPHAN;
 #endif
      /* default snvcall options
       * FIXME make function
@@ -734,7 +734,7 @@ main_call(int argc, char *argv[])
      snvcall_conf.bonf = 1;
      snvcall_conf.sig = 0.05;
      /* snvcall_conf.out = ; */
-     snvcall_conf.flag = SNVCALL_USE_MQ | SNVCALL_USE_SQ;
+     snvcall_conf.flag = SNVCALL_USE_MQ;
 
     
     /* keep in sync with long_opts_str and usage 
@@ -756,7 +756,6 @@ main_call(int argc, char *argv[])
               {"min-bq", required_argument, NULL, 'q'},
               {"min-altbq", required_argument, NULL, 'Q'},
               {"def-altbq", required_argument, NULL, 'a'},
-              {"dont-skip-n", required_argument, NULL, 'a'},
 #if DEFAULT_BAQ_ON
               {"no-baq", no_argument, NULL, 'B'},
 #else
@@ -767,13 +766,15 @@ main_call(int argc, char *argv[])
               {"max-mq", required_argument, NULL, 'M'},
               {"no-mq", no_argument, NULL, 'J'},
 #ifdef USE_SOURCEQUAL
-              {"no-sq", no_argument, NULL, 'S'},
-              {"ign-vcf", no_argument, NULL, 'V'},
+              {"source-qual", no_argument, NULL, 'S'},
+              {"def-nm-q", required_argument, NULL, 'n'},
+              {"ign-vcf", required_argument, NULL, 'V'},
 #endif
-              {"bonf", required_argument, NULL, 'b'}, /* NOTE changes here must be reflected in pseudo_parallel code as well */
               {"sig", required_argument, NULL, 's'},
+              {"bonf", required_argument, NULL, 'b'}, /* NOTE changes here must be reflected in pseudo_parallel code as well */
                    
               {"min-cov", required_argument, NULL, 'C'},
+              {"dont-skip-n", required_argument, NULL, 'N'},
               /*{"maxdepth", required_argument, NULL, 'd'},*/
               {"illumina-1.3", no_argument, NULL, 'I'},
               {"use-orphan", no_argument, &use_orphan, 1},
@@ -890,8 +891,8 @@ for cov in coverage_range:
 
 #ifdef USE_SOURCEQUAL
          case 'S': 
-              mplp_conf.flag &= ~MPLP_USE_SQ;
-              snvcall_conf.flag &= ~SNVCALL_USE_SQ; 
+              mplp_conf.flag |= MPLP_USE_SQ;
+              snvcall_conf.flag |= SNVCALL_USE_SQ; 
               break;
 
          case 'V': 
