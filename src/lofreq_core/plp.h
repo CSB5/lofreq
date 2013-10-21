@@ -4,6 +4,7 @@
 
 #include "faidx.h"
 #include "utils.h"
+#include "vcf.h"
 
 
 /* mpileup configuration flags 
@@ -86,5 +87,11 @@ mpileup(const mplp_conf_t *mplp_conf,
 
 int
 source_qual_load_ign_vcf(const char *vcf_path);
+
+void
+source_qual_free_ign_vars();
+
+int 
+var_in_ign_list(var_t *var);
 
 #endif
