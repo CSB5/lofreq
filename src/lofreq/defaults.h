@@ -9,6 +9,7 @@
 #define DEFAULT_MIN_COV 1
 #define DEFAULT_DEF_NM_QUAL 13
 #define DEFAULT_MAX_PLP_DEPTH 1000000
+#define DEFAULT_BAQ_ON 1
 
 
 #endif
