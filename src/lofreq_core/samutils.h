@@ -29,6 +29,7 @@ cigar_str_from_bam(const bam1_t *b);
 
 int
 count_cigar_ops(int *counts, int **quals,
-                const bam1_t *b, const char *ref, int min_bq);
+                const bam1_t *b, const char *ref, int min_bq,
+                char *target);
 
 #endif
