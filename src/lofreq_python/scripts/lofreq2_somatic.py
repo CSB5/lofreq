@@ -329,7 +329,7 @@ class SomaticSNVCaller(object):
         if self.src_qual_ign_vcf and not self.src_qual_on:
             LOG.fatal("ign-vcf file was provided, but src-qual is off")
             sys.exit(1)
-        #self.call_normal()
+        self.call_normal()
         self.call_tumor()
         self.complement()
         self.uniq()
