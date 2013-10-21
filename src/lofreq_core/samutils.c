@@ -114,7 +114,8 @@ count_cigar_ops(int *counts, int **quals,
                          qpos += 1;
                          continue;
                     }
-                   if (target) {
+#ifdef USE_SOURCEQUAL
+                    if (target) {
                          var_t fake_var;
                          fake_var.chrom = target;
                          fake_var.pos = i;
@@ -123,7 +124,7 @@ count_cigar_ops(int *counts, int **quals,
                               continue;
                          } 
                     }
- 
+#endif 
                     if (ref_nt != read_nt || op == BAM_CDIFF) {
                          actual_op = OP_MISMATCH;
                     } else {
@@ -149,6 +150,7 @@ count_cigar_ops(int *counts, int **quals,
                          qpos += 1;
                          continue;
                     }
+#ifdef USE_SOURCEQUAL
                     if (target) {
                          var_t fake_var;
                          fake_var.chrom = target;
@@ -158,6 +160,7 @@ count_cigar_ops(int *counts, int **quals,
                               continue;
                          }
                     }
+#endif
 
 #if 0
                     printf("INS qpos,i = %d,None\n", qpos);
@@ -175,7 +178,9 @@ count_cigar_ops(int *counts, int **quals,
 #if 0
                     printf("DEL qpos,i = None,%d\n", i);
 #endif
+
                     if (op == BAM_CDEL) {
+#ifdef USE_SOURCEQUAL
                          if (target) {
                               var_t fake_var;
                               fake_var.chrom = target;
@@ -184,6 +189,7 @@ count_cigar_ops(int *counts, int **quals,
                                    continue;
                               }
                          }
+#endif
                         counts[OP_DEL] += 1;
                         if (quals) {
                              quals[OP_DEL][counts[OP_DEL]-1] = INDEL_QUAL_DEFAULT; /* FIXME use dq */

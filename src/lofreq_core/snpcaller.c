@@ -362,6 +362,8 @@ pseudo_binomial(double *pvalue,
 }
 #endif
 
+
+
 /* main logic. return of probvec (needs to be freed by caller allows
  * to check pvalues for other numbers < (original num_failures), like
  * so: exp(probvec_tailsum(probvec, smaller_numl, orig_num+1)) but
@@ -538,7 +540,6 @@ int main(int argc, char *argv[]) {
      succ_prob = atof(argv[3]);
 
      LOG_VERBOSE("num_success=%d num_trials=%d succ_prob=%f\n", num_success, num_trials, succ_prob);
-
 
 
 #ifdef PSEUDO_BINOMIAL

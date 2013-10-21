@@ -244,6 +244,8 @@ var_in_ign_list(var_t *var) {
      }
 }
 
+
+
 void
 source_qual_free_ign_vars()
 {
