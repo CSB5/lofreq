@@ -17,7 +17,7 @@ reffa=./data/somatic/hg19_chr22.fa.gz
 truesnv=./data/somatic/hg19_chr22_true_snv.vcf
 outprefix=$(mktemp -t $(basename $0) 2>/dev/null || mktemp -t $(basename $0).XXXXXX);#XXXXXX needed on linux?
 finalout=${outprefix}somatic_final.vcf
-cmd="$LOFREQ somatic -n $bam_n -t $bam_t -f $reffa -l $bed -o $outprefix "#--debug"
+cmd="$LOFREQ somatic -n $bam_n -t $bam_t -f $reffa -l $bed -o $outprefix";# --debug"
 #echodebug "cmd = $cmd"
 if ! eval $cmd; then
     echoerror "The following command failed: $cmd"
