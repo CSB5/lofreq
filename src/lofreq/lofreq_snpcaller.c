@@ -974,6 +974,7 @@ for cov in coverage_range:
          mplp_conf.flag &= ~MPLP_NO_ORPHAN;
     }
     
+#ifdef USE_SOURCEQUAL
     if (ign_vcf) {
          if (source_qual_load_ign_vcf(ign_vcf)) {
               LOG_FATAL("Loading of ignore positions from %s failed.", optarg);
@@ -981,6 +982,7 @@ for cov in coverage_range:
          }
          free(ign_vcf);
     }
+#endif
 
     if (argc == 2) {
         fprintf(stderr, "\n");
@@ -1212,7 +1214,9 @@ for cov in coverage_range:
          verbose = org_verbose;
     }
 
+#ifdef USE_SOURCEQUAL
     source_qual_free_ign_vars();
+#endif
 
     free(vcf_tmp_out);
     free(vcf_out);
