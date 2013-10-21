@@ -18,13 +18,13 @@ log=$outdir/log.txt
 
 KEEP_TMP=0
 
-cmd="$LOFREQ call -f $reffa -o $vcfout1 $bam1"
+cmd="$LOFREQ call -B -f $reffa -o $vcfout1 $bam1"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
 fi
 
-cmd="$LOFREQ call -f $reffa -o $vcfout2 $bam2"
+cmd="$LOFREQ call -B -f $reffa -o $vcfout2 $bam2"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
