@@ -33,6 +33,7 @@ ltmain.sh
 missing
 depcomp
 INSTALL
+compile
 
 m4/*m4
 *.plist
