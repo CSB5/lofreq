@@ -17,6 +17,8 @@
 
 /* lofreq includes */
 #include "log.h"
+#include "vcf.h"
+#include "plp.h"
 #include "samutils.h"
 
 
@@ -50,12 +52,16 @@ cigar_str_from_bam(const bam1_t *b)
  * number of elements corresponds to the count entry and can be at max
  * readlen.
  *
+ * If target is non-NULL will ignore preloaded variant positions via
+ * var_in_ign_list
+ * 
  * Returns the total number of operations counted (excl clips or
  * bases<mq) or -1 on error
  */
 int
 count_cigar_ops(int *counts, int **quals,
-                const bam1_t *b, const char *ref, int min_bq)
+                const bam1_t *b, const char *ref, int min_bq,
+                char *target)
 {
      const int INDEL_QUAL_DEFAULT = 40;
      int num_ops = 0;
@@ -79,7 +85,6 @@ count_cigar_ops(int *counts, int **quals,
      assert(NULL != counts);
      memset(counts, 0, NUM_OP_CATS*sizeof(int));
 
-    
      /* loop over cigar to get aligned bases
       *
       * read: bam_format1_core(NULL, b, BAM_OFDEC);
@@ -109,12 +114,23 @@ count_cigar_ops(int *counts, int **quals,
                          qpos += 1;
                          continue;
                     }
-
+                   if (target) {
+                         var_t fake_var;
+                         fake_var.chrom = target;
+                         fake_var.pos = i;
+                         if (var_in_ign_list(&fake_var)) {
+                              qpos += 1;
+                              continue;
+                         } 
+                    }
+ 
                     if (ref_nt != read_nt || op == BAM_CDIFF) {
                          actual_op = OP_MISMATCH;
                     } else {
                          actual_op = OP_MATCH;
                     }
+
+ 
                     counts[actual_op] += 1;
                     if (quals) {
                          quals[actual_op][counts[actual_op]-1] = bq;
@@ -133,6 +149,16 @@ count_cigar_ops(int *counts, int **quals,
                          qpos += 1;
                          continue;
                     }
+                    if (target) {
+                         var_t fake_var;
+                         fake_var.chrom = target;
+                         fake_var.pos = i; /* FIXME does i make sense here, i.e. matches dbSNP entry? */
+                         if (var_in_ign_list(&fake_var)) {
+                              qpos += 1;
+                              continue;
+                         }
+                    }
+
 #if 0
                     printf("INS qpos,i = %d,None\n", qpos);
 #endif
@@ -150,6 +176,14 @@ count_cigar_ops(int *counts, int **quals,
                     printf("DEL qpos,i = None,%d\n", i);
 #endif
                     if (op == BAM_CDEL) {
+                         if (target) {
+                              var_t fake_var;
+                              fake_var.chrom = target;
+                              fake_var.pos = i; /* FIXME does i that make sense here, i.e. matches dbSNP entry? */
+                              if (var_in_ign_list(&fake_var)) {
+                                   continue;
+                              }
+                         }
                         counts[OP_DEL] += 1;
                         if (quals) {
                              quals[OP_DEL][counts[OP_DEL]-1] = INDEL_QUAL_DEFAULT; /* FIXME use dq */
