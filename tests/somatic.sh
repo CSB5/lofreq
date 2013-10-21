@@ -17,12 +17,12 @@ reffa=./data/somatic/hg19_chr22.fa.gz
 truesnv=./data/somatic/hg19_chr22_true_snv.vcf
 outprefix=$(mktemp -t $(basename $0) 2>/dev/null || mktemp -t $(basename $0).XXXXXX);#XXXXXX needed on linux?
 finalout=${outprefix}somatic_final.vcf
-cmd="$LOFREQ somatic -n $bam_n -t $bam_t -f $reffa -l $bed -o $outprefix"
+cmd="$LOFREQ somatic -n $bam_n -t $bam_t -f $reffa -l $bed -o $outprefix --debug"
+#echodebug "cmd = $cmd"
 if ! eval $cmd; then
     echoerror "The following command failed: $cmd"
     exit 1
 fi
-#echodebug "cmd = $cmd"
 n_intersect=$($LOFREQ vcfset -1 $truesnv -2 $finalout -a intersect | grep -vc '^#')
 if [ "$n_intersect" -lt 2 ]; then
 	echoerror "Expected at least two true predictions but got $n_intersect (compare $finalout and $truesnv)"
