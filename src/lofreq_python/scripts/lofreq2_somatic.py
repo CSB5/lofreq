@@ -231,7 +231,7 @@ class SomaticSNVCaller(object):
         # coverage is filtered later anyway, but ignoring it during call
         # makes things faster and avoids trouble if user forgots to give
         # bed-file etc
-        cmd.extend(['-C', self.MIN_COV])
+        cmd.extend(['-C', "%d" % self.MIN_COV])
         cmd.extend(['-f', self.ref])
         if self.baq_on:
             cmd.append('-E')
