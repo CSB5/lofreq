@@ -9,6 +9,8 @@
 
 
 #include "zlib.h"
+#include "uthash.h"
+
 
 typedef struct {
      FILE *fh;
@@ -38,6 +40,18 @@ typedef struct {
      int alt_fw;
      int alt_rv;
 } dp4_counts_t;
+
+
+typedef struct {
+     char *key; /* according to uthash doc this should be const but then we can't free it */
+     var_t *var;
+     UT_hash_handle hh;
+} var_hash_t;
+
+
+void var_hash_add(var_hash_t **var_hash, char *key, var_t *var);
+void var_hash_free_elem(var_hash_t *hash_elem_ptr);
+void  var_hash_free_table(var_hash_t *var_hash);
 
 
 #define VCF_MISSING_VAL_STR "."
@@ -73,6 +87,8 @@ void vcf_new_var(var_t **var);
 void vcf_free_var(var_t **var);
 
 void vcf_var_key(char **key, var_t *var);
+void vcf_var_key_simple(char **key, var_t *var);
+
 int vcf_parse_header(char **header, vcf_file_t *vcf_file);
 int vcf_skip_header(vcf_file_t *vcf_file);
 int vcf_parse_var(vcf_file_t *vcf_file, var_t *var);
