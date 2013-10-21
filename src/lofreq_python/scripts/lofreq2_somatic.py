@@ -59,7 +59,8 @@ class SomaticSNVCaller(object):
     DEFAULT_ALPHA_T = 0.000001
     DEFAULT_CORR_T = 'fdr'
     DEFAULT_MQ_FILTER_T = 13
-    DEFAULT_BAQ_ON = False
+    DEFAULT_BAQ_OFF = False
+    DEFAULT_SRC_QUAL_ON = False
 
     MIN_COV = 10
 
@@ -88,7 +89,7 @@ class SomaticSNVCaller(object):
         self.outprefix = outprefix
 
         self.outfiles = []
-        
+
         self.vcf_n = None
         self.vcf_t_prefilter = None
         self.vcf_t = None
@@ -98,12 +99,13 @@ class SomaticSNVCaller(object):
 
         self.set_output(reuse_normal_vcf)
 
-        
+
         self.alpha_n = None
         self.alpha_t = None
         self.corr_t = None
         self.mq_filter_t = None
-        self.baq_on = None
+        self.baq_off = None
+        self.src_qual_on = None
 
         self.set_default_params()
 
@@ -145,7 +147,8 @@ class SomaticSNVCaller(object):
         self.alpha_t = self.DEFAULT_ALPHA_T
         self.corr_t = self.DEFAULT_CORR_T
         self.mq_filter_t = self.DEFAULT_MQ_FILTER_T
-        self.baq_on = self.DEFAULT_BAQ_ON
+        self.baq_off = self.DEFAULT_BAQ_OFF
+        self.src_qual_on = self.DEFAULT_SRC_QUAL_ON
 
 
     @staticmethod
@@ -200,12 +203,12 @@ class SomaticSNVCaller(object):
 
         cmd = [self.LOFREQ, 'call']
         cmd.extend(['-f', self.ref])
-        if self.baq_on:
-            cmd.append('-E')
+        #if self.baq_off:
+        #    cmd.append('-B')
         cmd.append('--verbose')
         if self.bed:
             cmd.extend(['-l', self.bed])
-        cmd.append('--no-default-filter')# no filtering needed
+        cmd.append('--no-default-filter')# no filtering wanted
         cmd.extend(['-b', "%d" % 1, '-s', "%f" % self.alpha_n])
         cmd.extend(['-m', "%d" % self.mq_filter_t])
         cmd.extend(['-o', self.vcf_n])
@@ -233,8 +236,10 @@ class SomaticSNVCaller(object):
         # bed-file etc
         cmd.extend(['-C', "%d" % self.MIN_COV])
         cmd.extend(['-f', self.ref])
-        if self.baq_on:
-            cmd.append('-E')
+        if self.baq_off:
+            cmd.append('-B')
+        if self.src_qual_on:
+            cmd.append('-S')
         cmd.append('--verbose')
         if self.bed:
             cmd.extend(['-l', self.bed])
@@ -245,7 +250,7 @@ class SomaticSNVCaller(object):
         cmd.append(self.bam_t)
 
         #cmd = ['valgrind', '--tool=memcheck', '--leak-check=full'] + cmd
-        
+
         (o, e) = self.subprocess_wrapper(cmd, close_tmp=False)
 
         olines = o.readlines()
@@ -312,14 +317,14 @@ class SomaticSNVCaller(object):
                        if not x.startswith('_')]:
             if callable(v):
                 continue
-            LOG.debug("%s %s" % (k, v))            
+            LOG.debug("%s %s" % (k, v))
         #import pdb; pdb.set_trace()
-        
+
         self.call_normal()
         self.call_tumor()
         self.complement()
         self.uniq()
-        
+
         # FIXME replace source line in final output with sys.argv?
 
         #cmd = ['gzip']
@@ -329,7 +334,7 @@ class SomaticSNVCaller(object):
         #for f in set(gzip_files):
         #    cmd.append(f)
         #self.subprocess_wrapper(cmd)
-   
+
 
 
 
@@ -394,10 +399,13 @@ def cmdline_parser():
                         default=default,
                         help="Mapping quality filter (default=%d)" % default)
 
-    parser.add_argument("-E", "--baq",
+    parser.add_argument("-B", "--baq-off",
                         action="store_true",
-                        help="Enable BAQ computation"
-                        " (more conservative calls).")
+                        help="Disable BAQ computation")
+
+    parser.add_argument("-S", "--src-qual",
+                        action="store_true",
+                        help="Enable use of source quality")
 
     parser.add_argument("--reuse-normal-vcf",
                         help="Expert only: reuse already computed"
@@ -456,8 +464,10 @@ def main():
     somatic_snv_caller.corr_t = args.tumor_mtc
     if args.mq_filter:
         somatic_snv_caller.mq_filter_t = args.mq_filter
-    if args.baq:
-        somatic_snv_caller.baq_on = True
+    if args.baq_off:
+        somatic_snv_caller.baq_off = True
+    if args.src_qual:
+        somatic_snv_caller.src_qual_on = True
 
     somatic_snv_caller.run()
 
