@@ -642,8 +642,11 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -q | --min-bq INT            Skip any base with baseQ smaller than INT [%d]\n", mplp_conf->min_bq);
      fprintf(stderr, "       -Q | --min-altbq INT         Skip nonref-bases with baseQ smaller than INT [%d]. Not active if ref is N\n", snvcall_conf->min_altbq);
      fprintf(stderr, "       -a | --def-altbq INT         Nonref base qualities will be replaced with this value (use mean if -1) [%d]\n", snvcall_conf->def_altbq);
-     /*fprintf(stderr, "       -B | --no-baq                disable BAQ computation\n");*/
-     fprintf(stderr, "       -E | --baq                   Enable (extended) per-base alignment quality (BAQ) computation\n");
+#if DEFAULT_BAQ_ON
+     fprintf(stderr, "       -B | --no-baq                Disable BAQ computation (increases sensitivity if no indels are expected or mapper doesn't support them)\n");
+#else
+     fprintf(stderr, "       -E | --baq                   Enable (extended) per-base alignment quality (BAQ) computation (reduces false positive calls if indels are expected; recommended for WGS)\n");
+#endif
      fprintf(stderr, "- Mapping quality\n");                                
      fprintf(stderr, "       -m | --min-mq INT            Skip alignments with mapQ smaller than INT [%d]\n", mplp_conf->min_mq);
      fprintf(stderr, "       -M | --max-mq INT            Cap mapping quality at INT [%d]\n", mplp_conf->max_mq);
@@ -652,6 +655,7 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "- Source quality\n");                                
      fprintf(stderr, "       -S | --no-sq                 Don't compute or use sourceQ\n");
      fprintf(stderr, "       -n | --def-nm-q INT          Non-match base qualities will be replaced with this value if >= 0 [%d]\n", mplp_conf->def_nm_q);
+     fprintf(stderr, "       -V | --ign-vcf FILE          Ignore variants in this vcf file for source quality computation\n"),
 #endif                                                    
      fprintf(stderr, "- P-Values\n");                                          
      fprintf(stderr, "       -s | --sig                   P-Value cutoff / significance level [%f]\n", snvcall_conf->sig);
@@ -663,8 +667,8 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "            --use-orphan            Count anomalous read pairs\n");
      fprintf(stderr, "            --plp-summary-only      No snv-calling: just output pileup summary per column\n");
      fprintf(stderr, "            --no-default-filter     Don't apply default filter command after calling variants\n");
-     fprintf(stderr, "            --verbose               be verbose\n");
-     fprintf(stderr, "            --debug                 enable debugging\n");
+     fprintf(stderr, "            --verbose               Be verbose\n");
+     fprintf(stderr, "            --debug                 Enable debugging\n");
 }
 /* usage() */
 
@@ -690,6 +694,7 @@ main_call(int argc, char *argv[])
      /*void (*plp_proc_func)(const plp_col_t*, const snvcall_conf_t*);*/
      void (*plp_proc_func)(const plp_col_t*, void*);
      int rc = 0;
+     char *ign_vcf = NULL;
 
 #ifdef SCALE_MQ
      LOG_WARN("%s\n", "MQ scaling switched on!");
@@ -712,8 +717,11 @@ main_call(int argc, char *argv[])
      mplp_conf.min_bq = DEFAULT_MIN_BQ;
      mplp_conf.capQ_thres = 0;
      mplp_conf.max_depth = DEFAULT_MAX_PLP_DEPTH;
-     mplp_conf.flag = MPLP_NO_ORPHAN | MPLP_USE_SQ; /* | MPLP_REALN | MPLP_REDO_BAQ; */
-    
+#if DEFAULT_BAQ_ON
+     mplp_conf.flag = MPLP_NO_ORPHAN | MPLP_USE_SQ | MPLP_REALN | MPLP_REDO_BAQ;
+#else
+     mplp_conf.flag = MPLP_NO_ORPHAN | MPLP_USE_SQ;
+#endif
      /* default snvcall options
       * FIXME make function
       */
@@ -749,14 +757,18 @@ main_call(int argc, char *argv[])
               {"min-altbq", required_argument, NULL, 'Q'},
               {"def-altbq", required_argument, NULL, 'a'},
               {"dont-skip-n", required_argument, NULL, 'a'},
-              /*{"no-baq", no_argument, NULL, 'B'},*/
+#if DEFAULT_BAQ_ON
+              {"no-baq", no_argument, NULL, 'B'},
+#else
               {"baq", required_argument, NULL, 'E'},
+#endif
                    
               {"min-mq", required_argument, NULL, 'm'},
               {"max-mq", required_argument, NULL, 'M'},
               {"no-mq", no_argument, NULL, 'J'},
 #ifdef USE_SOURCEQUAL
               {"no-sq", no_argument, NULL, 'S'},
+              {"ign-vcf", no_argument, NULL, 'V'},
 #endif
               {"bonf", required_argument, NULL, 'b'}, /* NOTE changes here must be reflected in pseudo_parallel code as well */
               {"sig", required_argument, NULL, 's'},
@@ -796,7 +808,8 @@ for cov in coverage_range:
 */
 
          /* keep in sync with long_opts and usage */
-         static const char *long_opts_str = "r:l:f:co:q:Q:a:Em:M:JSn:b:s:C:NIh"; 
+
+         static const char *long_opts_str = "r:l:f:co:q:Q:a:BEm:M:JSn:V:b:s:C:NIh"; 
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
          c = getopt_long(argc-1, argv+1, /* skipping 'lofreq', just leaving 'command', i.e. call */
@@ -851,16 +864,18 @@ for cov in coverage_range:
          case 'a':
               snvcall_conf.def_altbq = atoi(optarg); 
               break;
-/*
+
+#if DEFAULT_BAQ_ON
          case 'B': 
               mplp_conf.flag &= ~MPLP_REALN; 
+              mplp_conf.flag &= ~MPLP_REDO_BAQ;
               break;
-*/
+#else
          case 'E': 
               mplp_conf.flag |= MPLP_REALN; /* BAQ */
               mplp_conf.flag |= MPLP_REDO_BAQ; /* ext BAQ */
               break;
-              
+#endif
          case 'm': 
               mplp_conf.min_mq = atoi(optarg); 
               break;
@@ -877,6 +892,10 @@ for cov in coverage_range:
          case 'S': 
               mplp_conf.flag &= ~MPLP_USE_SQ;
               snvcall_conf.flag &= ~SNVCALL_USE_SQ; 
+              break;
+
+         case 'V': 
+              ign_vcf = strdup(optarg);
               break;
 
          case 'n': 
@@ -955,6 +974,14 @@ for cov in coverage_range:
          mplp_conf.flag &= ~MPLP_NO_ORPHAN;
     }
     
+    if (ign_vcf) {
+         if (source_qual_load_ign_vcf(ign_vcf)) {
+              LOG_FATAL("Loading of ignore positions from %s failed.", optarg);
+              return 1;
+         }
+         free(ign_vcf);
+    }
+
     if (argc == 2) {
         fprintf(stderr, "\n");
         usage(& mplp_conf, & snvcall_conf);
@@ -1095,12 +1122,13 @@ for cov in coverage_range:
          dump_snvcall_conf(& snvcall_conf, stderr);
     }
 
+#if 0
     LOG_FIXME("%s\n", "Loading hardcoded vcf file to ignore for source_qual()");
     if (source_qual_load_ign_vcf("./tests/schmock.vcf")) {
          LOG_FATAL("Loading of ignore positions from %s failed.", "FIXME");
          return 1;
     }
-
+#endif
 
     if (plp_summary_only) {
          plp_proc_func = &plp_summary;
@@ -1184,6 +1212,8 @@ for cov in coverage_range:
          verbose = org_verbose;
     }
 
+    source_qual_free_ign_vars();
+
     free(vcf_tmp_out);
     free(vcf_out);
     free(mplp_conf.reg); 
@@ -1200,9 +1230,6 @@ for cov in coverage_range:
          LOG_VERBOSE("%s\n", "Successful exit.");
     }
 
-#ifdef USE_SOURCEQUAL
-    LOG_FIXME("%s\n", "source_qual() should ignore 'known' SNVs");
-#endif
 
     return rc;
 }
