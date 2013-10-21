@@ -61,6 +61,7 @@ class SomaticSNVCaller(object):
     DEFAULT_MQ_FILTER_T = 13
     DEFAULT_BAQ_OFF = False
     DEFAULT_SRC_QUAL_ON = False
+    DEFAULT_SRC_QUAL_IGN_VCF = None
 
     MIN_COV = 10
 
@@ -106,6 +107,7 @@ class SomaticSNVCaller(object):
         self.mq_filter_t = None
         self.baq_off = None
         self.src_qual_on = None
+        self.src_qual_ign_vcf = None
 
         self.set_default_params()
 
@@ -149,6 +151,7 @@ class SomaticSNVCaller(object):
         self.mq_filter_t = self.DEFAULT_MQ_FILTER_T
         self.baq_off = self.DEFAULT_BAQ_OFF
         self.src_qual_on = self.DEFAULT_SRC_QUAL_ON
+
 
 
     @staticmethod
@@ -240,6 +243,9 @@ class SomaticSNVCaller(object):
             cmd.append('-B')
         if self.src_qual_on:
             cmd.append('-S')
+        if self.src_qual_ign_vcf:
+            cmd.extend(['-V', self.src_qual_ign_vcf])
+            
         cmd.append('--verbose')
         if self.bed:
             cmd.extend(['-l', self.bed])
@@ -320,7 +326,10 @@ class SomaticSNVCaller(object):
             LOG.debug("%s %s" % (k, v))
         #import pdb; pdb.set_trace()
 
-        self.call_normal()
+        if self.src_qual_ign_vcf and not self.src_qual_on:
+            LOG.fatal("ign-vcf file was provided, but src-qual is off")
+            sys.exit(1)
+        #self.call_normal()
         self.call_tumor()
         self.complement()
         self.uniq()
@@ -407,6 +416,9 @@ def cmdline_parser():
                         action="store_true",
                         help="Enable use of source quality")
 
+    parser.add_argument("-V", "--ign-vcf",
+                        help="Ignore variants in this vcf file for source quality computation")
+
     parser.add_argument("--reuse-normal-vcf",
                         help="Expert only: reuse already computed"
                         " normal prediction")
@@ -468,6 +480,8 @@ def main():
         somatic_snv_caller.baq_off = True
     if args.src_qual:
         somatic_snv_caller.src_qual_on = True
+    if args.ign_vcf:
+        somatic_snv_caller.src_qual_ign_vcf = args.ign_vcf
 
     somatic_snv_caller.run()
 
