@@ -15,14 +15,55 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include "uthash.h"
 
 #include "log.h"
 #include "utils.h"
-
 #include "vcf.h"
 
 
 #define LINE_BUF_SIZE 1<<12
+
+
+
+
+void 
+var_hash_free_table(var_hash_t *var_hash)
+{
+     var_hash_t *cur, *tmp;
+     if (NULL == var_hash) {
+          return;
+     }
+     HASH_ITER(hh, var_hash, cur, tmp) {
+#ifdef TRACE
+          LOG_ERROR("Freeing %s\n", cur->key);
+#endif
+          HASH_DEL(var_hash, cur);
+          var_hash_free_elem(cur);
+     }
+}
+
+
+void
+var_hash_free_elem(var_hash_t *hash_elem_ptr) 
+{
+     vcf_free_var(& hash_elem_ptr->var);
+     free(hash_elem_ptr->key);
+     free(hash_elem_ptr);
+}
+
+/* key and var will not be copied ! */
+void
+var_hash_add(var_hash_t **var_hash, char *key, var_t *var)
+{
+    var_hash_t *vh_elem = NULL;
+    vh_elem = (var_hash_t *) malloc(sizeof(var_hash_t));
+    vh_elem->key = key;
+    vh_elem->var = var;
+
+    HASH_ADD_KEYPTR(hh, (*var_hash), vh_elem->key, strlen(vh_elem->key), vh_elem);
+}
+
 
 
 /* key is allocated here and has to be freed by called */
@@ -33,6 +74,15 @@ vcf_var_key(char **key, var_t *var)
      (*key) = malloc(bufsize *sizeof(char));
      snprintf(*key, bufsize, "%s %ld %c %c", var->chrom, var->pos, 
               var->ref, var->alt);
+}
+
+/* as above but only using chrom and pos */
+void
+vcf_var_key_simple(char **key, var_t *var)
+{
+     int bufsize = strlen(var->chrom)+16;
+     (*key) = malloc(bufsize *sizeof(char));
+     snprintf(*key, bufsize, "%s %ld", var->chrom, var->pos);
 }
 
 
