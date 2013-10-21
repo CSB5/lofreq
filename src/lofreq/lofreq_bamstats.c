@@ -174,7 +174,7 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
                                      0, 0x7fffffff, &ref_len);
           }
 
-          if (-1 == count_cigar_ops(counts, NULL, b, ref, bamstats_conf->min_mq)) {
+          if (-1 == count_cigar_ops(counts, NULL, b, ref, bamstats_conf->min_mq, sam->header->target_name[b->core.tid])) {
                LOG_WARN("%s\n", "count_cigar_ops failed on read. ignoring"); /* FIXME print read */
                continue;
           }
