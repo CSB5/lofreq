@@ -67,6 +67,7 @@ typedef struct {
 
 
 
+
 /* convenience function */
 int
 base_count(const plp_col_t *p, char base)
@@ -186,7 +187,7 @@ dump_mplp_conf(const mplp_conf_t *c, FILE *stream)
      fprintf(stream, "  flag & MPLP_NO_ORPHAN  = %d\n", c->flag&MPLP_NO_ORPHAN ? 1:0);
      fprintf(stream, "  flag & MPLP_REALN      = %d\n", c->flag&MPLP_REALN ? 1:0);
      fprintf(stream, "  flag & MPLP_USE_SQ     = %d\n", c->flag&MPLP_USE_SQ ? 1:0);
-     fprintf(stream, "  flag & MPLP_REDO_BA    = %d\n", c->flag&MPLP_REDO_BAQ ? 1:0);
+     fprintf(stream, "  flag & MPLP_REDO_BAQ    = %d\n", c->flag&MPLP_REDO_BAQ ? 1:0);
      fprintf(stream, "  flag & MPLP_ILLUMINA13 = %d\n", c->flag&MPLP_ILLUMINA13 ? 1:0);
      
      fprintf(stream, "  capQ_thres   = %d\n", c->capQ_thres);
@@ -223,15 +224,32 @@ printw(int c, FILE *fp)
 
 #ifdef USE_SOURCEQUAL
 
-static var_t **source_qual_ign_vars = NULL;
-static int source_qual_num_ign_vars = 0;
+static var_hash_t *source_qual_ign_vars_hash = NULL; /* must be declared NULL ! */
 
 
 int 
 var_in_ign_list(var_t *var) {
-     LOG_FIXME("%s\n", "Implement hash table lookup");
+     char *key = NULL;
+     var_hash_t *match = NULL;
 
+     /* using key_simple i.e. chrom and pos only */
+     vcf_var_key_simple(&key, var);
+     HASH_FIND_STR(source_qual_ign_vars_hash, key, match);
+     free(key);
+
+     if (NULL == match) {
+          return 0;
+     } else {
+          return 1;
+     }
 }
+
+void
+source_qual_free_ign_vars()
+{
+     var_hash_free_table(source_qual_ign_vars_hash);
+}
+
 
 
 int
@@ -251,13 +269,36 @@ source_qual_load_ign_vcf(const char *vcf_path)
          return 1;
      }
      
-     LOG_FIXME("%s\n", "Turn into hash table as in lofreq_vcfset.c for easier lookup");
+    /* as in lofreq_vcfset.c
+     * WARN: partial code duplication
+     */
+    while (1) {
+         var_t *var;
+         char *key;
+         int rc;
+         vcf_new_var(&var);
+         rc = vcf_parse_var(& vcf_file, var);
+         if (-1 == rc) {
+              LOG_FATAL("%s\n", "Parsing error while parsing 2nd vcf-file");
+              exit(1);
+         }
+         if (1 == rc) {/* EOF */
+              free(var);
+              break;
+         }
 
-    if (-1 == (source_qual_num_ign_vars = vcf_parse_vars(
-                    &source_qual_ign_vars, & vcf_file, read_only_passed))) {
-         LOG_FATAL("%s\n", "vcf_parse_vars() failed");
-         return 1;
+         if (! read_only_passed || VCF_VAR_PASSES(var)) {
+              /* using key_simple i.e. chrom and pos only */
+              vcf_var_key_simple(&key, var);
+              var_hash_add(& source_qual_ign_vars_hash, key, var);
+         }
+
+#ifdef TRACE
+         LOG_DEBUG("Adding %s\n", key);
+#endif
     }
+    
+    LOG_VERBOSE("Loaded %d variants to ignore from %s\n", HASH_COUNT(source_qual_ign_vars_hash), vcf_path);
 
     vcf_file_close(& vcf_file);
 
@@ -296,15 +337,14 @@ source_qual_load_ign_vcf(const char *vcf_path)
  * Assuming independence of errors is okay, because if they are not
  * independent, then the prediction made is conservative.
  *
- * FIXME: should always ignore dbSNP or first round SNVs (all or just
- * cons?)
+ * If target is non-NULL will ignore SNPs via var_in_ign_list
  *
  * Returns -1 on error. otherwise prob to see the observed number of
  * mismatches-1
  *
  */
 int
-source_qual(const bam1_t *b, const char *ref, const int nonmatch_qual)
+source_qual(const bam1_t *b, const char *ref, const int nonmatch_qual, char *target)
 {
      int op_counts[NUM_OP_CATS];
      int **op_quals = NULL;
@@ -320,7 +360,6 @@ source_qual(const bam1_t *b, const char *ref, const int nonmatch_qual)
      double src_prob = -1; /* prob of this read coming from genome */
      int err_prob_idx;
      int i, j;
-
 
      /* alloc op_quals
       */
@@ -340,7 +379,8 @@ source_qual(const bam1_t *b, const char *ref, const int nonmatch_qual)
           
      /* count match operations and get qualities for them
       */
-     num_err_probs = count_cigar_ops(op_counts, op_quals, b, ref, -1);
+/*     LOG_FIXME("%s\n", "Don't know ref name in count_cigar_ops which would be needed as hash key");*/
+     num_err_probs = count_cigar_ops(op_counts, op_quals, b, ref, -1, target);
      if (-1 == num_err_probs) {
           LOG_WARN("%s\n", "count_cigar_ops failed on read"); /* FIXME print read */
           src_qual = -1;
@@ -398,7 +438,7 @@ source_qual(const bam1_t *b, const char *ref, const int nonmatch_qual)
      /* need prob not pv */
      src_prob = exp(probvec[num_non_matches-1]);
      free(probvec);
-     src_qual =  PROB_TO_PHREDQUAL(1.0 - src_prob);
+     src_qual = PROB_TO_PHREDQUAL(1.0 - src_prob);
 
 
 free_and_exit:
@@ -475,7 +515,7 @@ mplp_func(void *data, bam1_t *b)
 #ifdef USE_SOURCEQUAL
     /* compute source qual if requested and have ref and attach as aux to bam */
     if (ma->ref && ma->ref_id == b->core.tid && ma->conf->flag & MPLP_USE_SQ) {
-         int sq = source_qual(b, ma->ref, ma->conf->def_nm_q);
+         int sq = source_qual(b, ma->ref, ma->conf->def_nm_q, ma->h->target_name[b->core.tid]);
           /* see bam_md.c for examples of bam_aux_append()
           * FIXME only allows us to store values as uint8_t i.e. a byte, i.e. 255 is max (that's also why len 4)
           */
