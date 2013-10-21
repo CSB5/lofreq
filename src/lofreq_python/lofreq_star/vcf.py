@@ -475,8 +475,8 @@ class VCFWriter(object):
     """
 
 
-    def __init__(self, handle, 
-                 metadata=None, infos=None, filters=None, formats=None, samples=None):
+    def __init__(self, handle, metadata=None, infos=None, filters=None,
+                 formats=None, samples=None):
 
         self.handle = handle
         
