@@ -5,10 +5,10 @@
 source lib.sh || exit 1
 
 
-#vcf_t=data/vcf/CHH966-tumor-100x-100pur-hg19.bwa_6431925.vcf.gz
-#vcf_n=data/vcf/CHH966-normal-100x-100pur-hg19.bwa.renamed_6431925.vcf.gz
-vcf_t=data/vcf/CHH966-tumor-100x-100pur-hg19.bwa_6431925.vcf
-vcf_n=data/vcf/CHH966-normal-100x-100pur-hg19.bwa.renamed_6431925.vcf
+vcf_t=data/vcf/CHH966-tumor-100x-100pur-hg19.bwa_6431925.vcf.gz
+vcf_n=data/vcf/CHH966-normal-100x-100pur-hg19.bwa.renamed_6431925.vcf.gz
+#vcf_t=data/vcf/CHH966-tumor-100x-100pur-hg19.bwa_6431925.vcf
+#vcf_n=data/vcf/CHH966-normal-100x-100pur-hg19.bwa.renamed_6431925.vcf
 vcf_out=$(mktemp -t $(basename $0).XXXXXX.vcf)
 
 cmd="$LOFREQ vcfset -1 $vcf_t -2 $vcf_n -a complement -o -"
