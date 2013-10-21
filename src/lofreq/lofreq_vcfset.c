@@ -22,7 +22,6 @@
 #include "vcf.h"
 #include "log.h"
 #include "utils.h"
-#include "uthash.h"
 
 
 
@@ -47,33 +46,6 @@ typedef struct {
      vcfset_op_t vcf_setop;
      int only_passed; /* if 1, ignore any filtered variant */
 } vcfset_conf_t;
-
-
-
-typedef struct {
-     char *key; /* according to uthash doc this should be const but then we can't free it */
-     var_t *var;
-     UT_hash_handle hh;
-} var_hash_t;
-
-
-void
-var_hash_free_elem(var_hash_t *hash_elem_ptr) {
-     vcf_free_var(& hash_elem_ptr->var);
-     free(hash_elem_ptr->key);
-     free(hash_elem_ptr);
-}
-
-/* key and var will not be copied ! */
-void var_hash_add(var_hash_t **var_hash, char *key, var_t *var) {
-    var_hash_t *vh_elem = NULL;
-    vh_elem = (var_hash_t *) malloc(sizeof(var_hash_t));
-    vh_elem->key = key;
-    vh_elem->var = var;
-
-    HASH_ADD_KEYPTR(hh, (*var_hash), vh_elem->key, strlen(vh_elem->key), vh_elem);
-}
-
 
 
 
@@ -111,7 +83,7 @@ main_vcfset(int argc, char *argv[])
      char *vcf_in1, *vcf_in2, *vcf_out;
      long int num_vars_vcf1, num_vars_vcf2;
      long int num_vars_vcf1_ign, num_vars_vcf2_ign, num_vars_out;
-     var_hash_t *var_hash_vcf2 = NULL; /* must be declarsed NULL ! */
+     var_hash_t *var_hash_vcf2 = NULL; /* must be declared NULL ! */
      static int only_passed = 0;
 
      vcf_in1 = vcf_in2 = vcf_out = NULL;
@@ -401,18 +373,7 @@ main_vcfset(int argc, char *argv[])
                 num_vars_out);
     vcf_file_close(& vcfset_conf.vcf_out);
 
-
-    /* free hash table */
-    {
-         var_hash_t *cur, *tmp;
-         HASH_ITER(hh, var_hash_vcf2, cur, tmp) {
-#ifdef TRACE
-              LOG_ERROR("Freeing %s\n", cur->key);
-#endif
-              HASH_DEL(var_hash_vcf2, cur);
-              var_hash_free_elem(cur);
-         }
-    }
+    var_hash_free_table(var_hash_vcf2);
 
     if (0==rc) {
          LOG_VERBOSE("%s\n", "Successful exit.");
