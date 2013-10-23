@@ -5,7 +5,7 @@
 source lib.sh || exit 1
 
 
-vcf=data/vcf/CTTGTA_2_remap_razers-i92_peakrem_corr_nodeff.vcf
+vcf=data/vcf/CTTGTA_2_remap_razers-i92_peakrem_corr_nodeff.vcf.gz
 #outvcf=$(mktemp -t $(basename $0).XXXXXX)
 
 base_cmd="$LOFREQ filter -i $vcf --no-defaults -o -"
@@ -84,7 +84,6 @@ fi
 # window filter
 #
 num_fail=0
-vcf=data/vcf/CTTGTA_2_remap_razers-i92_peakrem_corr_nodeff.vcf
 base_cmd="$LOFREQ filter -i $vcf --no-defaults -o -"
 cmd="$base_cmd --window 10"
 num_reg=$(eval $cmd | grep '[^0-9,]85' | grep -c snvwin) || exit 1
