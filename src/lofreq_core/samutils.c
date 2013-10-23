@@ -117,7 +117,7 @@ count_cigar_ops(int *counts, int **quals,
 #ifdef USE_SOURCEQUAL
                     if (target) {
                          var_t fake_var;
-                         memset(&fake_var, 0, sizeof(var_t))
+                         memset(&fake_var, 0, sizeof(var_t));
                          fake_var.chrom = target;
                          fake_var.pos = i;
                          /* FIXME evil hack. only work because var_in_ign_list only uses chrom and pos */
