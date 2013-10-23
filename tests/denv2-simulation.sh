@@ -19,7 +19,7 @@ outraw_nomq=$outdir/raw_nomq.vcf
 outfinal_nomq=$outdir/final_nomq.vcf
 log=$outdir/log.txt
 
-KEEP_TMP=1
+KEEP_TMP=0
 if [ $KEEP_TMP -eq 1 ]; then
     echowarn "Keeping tmp dir $outdir"
 fi
