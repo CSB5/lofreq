@@ -28,6 +28,10 @@
 const char *HEADER_LINE = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n";
 
 
+int warned_one_alt_base_support = 0;
+int warned_one_ref_base_support = 0;
+
+
 void 
 var_hash_free_table(var_hash_t *var_hash)
 {
@@ -450,14 +454,16 @@ int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
                var->id = strdup(token);
 
           } else if (4 == field_no) {
-               if (strlen(token)>1) {
+               if (! warned_one_ref_base_support && strlen(token)>1) {
                     LOG_WARN("%s\n", "Only supporting one reference base in vcf");
+                    warned_one_ref_base_support = 1;
                }
                var->ref = token[0];
 
           } else if (5 == field_no) {
-               if (strlen(token)>1) {
+               if (! warned_one_alt_base_support && strlen(token)>1) {
                     LOG_WARN("%s\n", "Only supporting one alt base in vcf");
+                    warned_one_alt_base_support = 1;
                }
                var->alt = token[0];
 
