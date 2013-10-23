@@ -759,7 +759,7 @@ main_call(int argc, char *argv[])
 #if DEFAULT_BAQ_ON
               {"no-baq", no_argument, NULL, 'B'},
 #else
-              {"baq", required_argument, NULL, 'E'},
+              {"baq", no_argument, NULL, 'E'},
 #endif
                    
               {"min-mq", required_argument, NULL, 'm'},
@@ -902,6 +902,16 @@ for cov in coverage_range:
          case 'n': 
               mplp_conf.def_nm_q = atoi(optarg);
               break;
+#else
+         case 'S': 
+              LOG_FATAL("%s\n", "source-qual was disabled at compile time"); 
+              return 1;
+         case 'V': 
+              LOG_FATAL("%s\n", "source-qual was disabled at compile time"); 
+              return 1;
+         case 'n': 
+              LOG_FATAL("%s\n", "source-qual was disabled at compile time"); 
+              return 1;
 #endif
 
          case 's': 
