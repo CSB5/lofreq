@@ -985,16 +985,6 @@ for cov in coverage_range:
          mplp_conf.flag &= ~MPLP_NO_ORPHAN;
     }
     
-#ifdef USE_SOURCEQUAL
-    if (ign_vcf) {
-         if (source_qual_load_ign_vcf(ign_vcf)) {
-              LOG_FATAL("Loading of ignore positions from %s failed.", optarg);
-              return 1;
-         }
-         free(ign_vcf);
-    }
-#endif
-
     if (argc == 2) {
         fprintf(stderr, "\n");
         usage(& mplp_conf, & snvcall_conf);
@@ -1098,6 +1088,16 @@ for cov in coverage_range:
          mplp_conf.bed = bed_read(bed_file);
     }
 
+
+#ifdef USE_SOURCEQUAL
+    if (ign_vcf) {
+         if (source_qual_load_ign_vcf(ign_vcf, mplp_conf.bed)) {
+              LOG_FATAL("Loading of ignore positions from %s failed.", optarg);
+              return 1;
+         }
+         free(ign_vcf);
+    }
+#endif
 
     if (bonf_auto && ! plp_summary_only) {
          if (! bed_file) {
