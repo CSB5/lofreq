@@ -138,6 +138,10 @@ uniq_snv(const plp_col_t *p, void *confp)
                  is_sig ? "unique" : "not necessarily unique", pvalue, conf->sig/(float)conf->bonf,
                  alt_count, p->coverage, alt_count/(float)p->coverage);
      if (is_sig) {
+          char info_str[128];
+          snprintf(info_str, 128, "UQ=%d", PROB_TO_PHREDQUAL(pvalue));
+          vcf_var_add_to_info(conf->var, info_str);
+
           vcf_write_var(& conf->vcf_out, conf->var);
      }
 }
@@ -214,7 +218,7 @@ main_uniq(int argc, char *argv[])
               {"help", no_argument, NULL, 'h'},
               {"verbose", no_argument, &verbose, 1},
               {"debug", no_argument, &debug, 1},
-              {"only-passed", no_argument, &read_only_passed, 1},
+              {"read-only-passed", no_argument, &read_only_passed, 1},
 
               {"vcf-in", required_argument, NULL, 'v'},
               {"vcf-out", required_argument, NULL, 'o'},
@@ -336,7 +340,10 @@ main_uniq(int argc, char *argv[])
               return -1;
          }
     } else {
+         /*LOG_FIXME("header was: %s", vcf_header);*/
+         vcf_header_add_info(&vcf_header, "##INFO=<ID=UQ,Number=1,Type=Integer,Description=\"Phred-scaled uniq score at this position\">\n");
          vcf_write_header(& uniq_conf.vcf_out, vcf_header);
+         /*LOG_FIXME("header now: %s", vcf_header);*/
          free(vcf_header);         
     }
 
