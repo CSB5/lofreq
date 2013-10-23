@@ -24,7 +24,8 @@
 
 #define LINE_BUF_SIZE 1<<12
 
-
+/* this is the actual header. all the other stuff is actually called meta-info */
+const char *HEADER_LINE = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n";
 
 
 void 
@@ -295,7 +296,18 @@ void vcf_write_var(vcf_file_t *vcf_file, const var_t *var)
           }
      }
      VCF_PRINTF(vcf_file, "\n");
+}
 
+
+void vcf_var_add_to_info(var_t *var, const char *info_str)
+{
+     var->info = realloc(var->info,
+                         (strlen(var->info) + strlen(info_str)
+                          + 1/*;*/ + 1/*\0*/) * sizeof(char));
+     if (strlen(var->info)) {
+          (void) strcat(var->info, ";");
+     }
+     (void) strcat(var->info, info_str);
 }
 
 
@@ -354,7 +366,7 @@ void vcf_write_new_header(vcf_file_t *vcf_file, const char *src, const char *ref
      VCF_PRINTF(vcf_file, "##INFO=<ID=DP4,Number=4,Type=Integer,Description=\"Counts for ref-forward bases, ref-reverse, alt-forward and alt-reverse bases\">\n");
      VCF_PRINTF(vcf_file, "##INFO=<ID=INDEL,Number=0,Type=Flag,Description=\"Indicates that the variant is an INDEL.\">\n");
      VCF_PRINTF(vcf_file, "##INFO=<ID=CONSVAR,Number=0,Type=Flag,Description=\"Indicates that the variant is a consensus variant (as opposed to a low frequency variant).\">\n");
-     VCF_PRINTF(vcf_file, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n");
+     VCF_PRINTF(vcf_file, "%s", HEADER_LINE);
 }
 
 
@@ -365,7 +377,6 @@ void vcf_write_new_header(vcf_file_t *vcf_file, const char *src, const char *ref
  */
 int vcf_parse_header(char **header, vcf_file_t *vcf_file)
 {
-     const char *HEADER_LINE = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO";
      char line[LINE_BUF_SIZE];
 
      /* make sure strlen below will work on header */
@@ -440,13 +451,13 @@ int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
 
           } else if (4 == field_no) {
                if (strlen(token)>1) {
-                    LOG_FATAL("%s\n", "Only supporting one reference base in vcf");
+                    LOG_WARN("%s\n", "Only supporting one reference base in vcf");
                }
                var->ref = token[0];
 
           } else if (5 == field_no) {
                if (strlen(token)>1) {
-                    LOG_FATAL("%s\n", "Only supporting one alt base in vcf");
+                    LOG_WARN("%s\n", "Only supporting one alt base in vcf");
                }
                var->alt = token[0];
 
@@ -533,6 +544,35 @@ int vcf_parse_vars(var_t ***vars, vcf_file_t *vcf_file, int only_passed)
 
      return num_vars;
 }
+
+
+
+/* info needs to be terminated with a newline character */
+void vcf_header_add_info(char **header, const char *info)
+{
+     char *token;
+     int pos;
+
+     token = strstr(*header, HEADER_LINE);
+     if (! token) {
+          LOG_WARN("%s\n", "Can't add info to empty header");
+          return;
+     }
+     pos = (int)(token - (*header));
+
+     *header = realloc(*header, (strlen(*header) + strlen(info) + 1) * sizeof(char));
+
+#if 0
+     LOG_FIXME("header-len=%d; info len=%d; alloc=%d; pos=%d\n",
+        strlen(*header), strlen(info), (strlen(*header) + strlen(info) + 1), pos);
+#endif
+
+     (*header)[pos] = '\0'; /* can't just: token[0] = '\0'; since that would work on a copy?! */
+     (void) strcat(*header, info);
+     (void) strcat(*header, HEADER_LINE);
+     return;
+}
+
 
 
 #ifdef VCF_MAIN
