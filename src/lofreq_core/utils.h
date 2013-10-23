@@ -9,7 +9,11 @@
 
 
 #define PHREDQUAL_TO_PROB(phred) (phred==INT_MAX ? DBL_MIN : pow(10.0, -1.0*(phred)/10.0))
+#if 0
 #define PROB_TO_PHREDQUAL(prob) (prob<0.0+DBL_EPSILON ? INT_MAX : (int)(-10.0 * log10(prob)))
+#else
+#define PROB_TO_PHREDQUAL(prob) (prob<=0.0 ? INT_MAX : (int)(-10.0 * log10(prob)))
+#endif
 #define BASECALLQUAL_VALID_RANGE(phred) ((phred)>=0 && (phred)<100)
 
 #define BASENAME(x) strrchr((x), '/') ? strrchr((x), '/')+1 : (x)
