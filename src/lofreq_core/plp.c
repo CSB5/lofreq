@@ -255,10 +255,12 @@ source_qual_free_ign_vars()
 
 
 int
-source_qual_load_ign_vcf(const char *vcf_path)
+source_qual_load_ign_vcf(const char *vcf_path, void *bed)
 {
      vcf_file_t vcf_file;
      const int read_only_passed = 0;
+     unsigned int num_total_vars = 0;
+     unsigned int num_kept_vars = 0;
 
      if (vcf_file_open(& vcf_file, vcf_path,
                       HAS_GZIP_EXT(vcf_path), 'r')) {
@@ -288,15 +290,20 @@ source_qual_load_ign_vcf(const char *vcf_path)
               free(var);
               break;
          }
+         num_total_vars += 1;
 
          if (! read_only_passed || VCF_VAR_PASSES(var)) {
               var_hash_t *match = NULL;
+
+              if (bed && ! bed_overlap(bed, var->chrom, var->pos, var->pos+1)) {
+                   continue;
+              }
               /* using key_simple i.e. chrom and pos only */
               vcf_var_key_simple(&key, var);
 
               HASH_FIND_STR(source_qual_ign_vars_hash, key, match);
               if (match) {
-                   LOG_VERBOSE("Already got a variant match for key %s. Will skip current one.", key);
+                   LOG_VERBOSE("Already got a variant match for key '%s'. Will keep the old one.\n", key);
                    free(var);
                    continue;
               }
@@ -308,9 +315,15 @@ source_qual_load_ign_vcf(const char *vcf_path)
          LOG_DEBUG("Adding %s\n", key);
 #endif
     }
-    
-    LOG_VERBOSE("Loaded %d variants to ignore from %s\n", HASH_COUNT(source_qual_ign_vars_hash), vcf_path);
 
+    num_kept_vars = HASH_COUNT(source_qual_ign_vars_hash);
+    if (num_kept_vars) {
+         LOG_VERBOSE("Kept %d variants (of a total of %d) to ignore from %s\n",
+                     num_kept_vars, num_total_vars, vcf_path);
+    } else {
+         LOG_WARN("None of the %d variants in %s were kept\n", 
+                  num_total_vars, vcf_path);
+    }
     vcf_file_close(& vcf_file);
 
     return 0;
