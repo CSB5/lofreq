@@ -290,8 +290,17 @@ source_qual_load_ign_vcf(const char *vcf_path)
          }
 
          if (! read_only_passed || VCF_VAR_PASSES(var)) {
+              var_hash_t *match = NULL;
               /* using key_simple i.e. chrom and pos only */
               vcf_var_key_simple(&key, var);
+
+              HASH_FIND_STR(source_qual_ign_vars_hash, key, match);
+              if (match) {
+                   LOG_VERBOSE("Already got a variant match for key %s. Will skip current one.", key);
+                   free(var);
+                   continue;
+              }
+
               var_hash_add(& source_qual_ign_vars_hash, key, var);
          }
 
