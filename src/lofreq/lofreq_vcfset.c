@@ -45,6 +45,7 @@ typedef struct {
      vcf_file_t vcf_out;
      vcfset_op_t vcf_setop;
      int only_passed; /* if 1, ignore any filtered variant */
+     int use_bases; /* if 0, ignore ref and alt base during comparisons */
 } vcfset_conf_t;
 
 
@@ -56,9 +57,6 @@ usage(const vcfset_conf_t* vcfset_conf)
      fprintf(stderr, "Usage: %s [options] -a op -1 1.vcf -2 2.vcf \n", MYNAME);
 
      fprintf(stderr,"Options:\n");
-     fprintf(stderr, "       --verbose        Be verbose\n");
-     fprintf(stderr, "       --debug          Enable debugging\n");
-     fprintf(stderr, "       --only-passed    Ignore variants marked as filtered\n");
      fprintf(stderr, "  -1 | --vcf1 FILE      1st VCF input file (gzip supported)\n");
      fprintf(stderr, "  -2 | --vcf2 FILE      2nd VCF input file (gzip supported)\n");
      fprintf(stderr, "  -o | --vcfout         VCF output file (default: - for stdout; gzip supported).\n"
@@ -68,6 +66,10 @@ usage(const vcfset_conf_t* vcfset_conf)
              "                        intersect = vcf1 AND vcf2.\n"
 /*             "                        union = vcf1 OR vcf2.\n"*/
              "                        complement = vcf1 \\ vcf2.\n");
+     fprintf(stderr, "       --use-bases      Use position and bases as key for storing and comparison. By default only position is used\n");
+     fprintf(stderr, "       --only-passed    Ignore variants marked as filtered\n");
+     fprintf(stderr, "       --verbose        Be verbose\n");
+     fprintf(stderr, "       --debug          Enable debugging\n");
 }
 /* usage() */
 
@@ -85,6 +87,7 @@ main_vcfset(int argc, char *argv[])
      long int num_vars_vcf1_ign, num_vars_vcf2_ign, num_vars_out;
      var_hash_t *var_hash_vcf2 = NULL; /* must be declared NULL ! */
      static int only_passed = 0;
+     static int use_bases = 0;
 
      vcf_in1 = vcf_in2 = vcf_out = NULL;
      num_vars_vcf1 = num_vars_vcf2 = 0;
@@ -110,6 +113,7 @@ main_vcfset(int argc, char *argv[])
               {"verbose", no_argument, &verbose, 1},
               {"debug", no_argument, &debug, 1},
               {"only-passed", no_argument, &only_passed, 1},
+              {"use-bases", no_argument, &use_bases, 1},
 
               {"vcf1", required_argument, NULL, '1'},
               {"vcf2", required_argument, NULL, '2'},
@@ -120,7 +124,7 @@ main_vcfset(int argc, char *argv[])
          };
 
          /* keep in sync with long_opts and usage */
-         static const char *long_opts_str = "h1:2:o:a:p"; 
+         static const char *long_opts_str = "h1:2:o:a:";
 
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
@@ -182,14 +186,28 @@ main_vcfset(int argc, char *argv[])
               break;
          }
     }
-    vcfset_conf.only_passed = only_passed;
 
+    vcfset_conf.only_passed = only_passed;
+    vcfset_conf.use_bases = use_bases;
+
+
+    if (0 != argc - optind - 1) {
+         LOG_FATAL("%s\n", "Unrecognized arguments found\n");
+         return 1;
+    }
 
     if (argc == 2) {
         fprintf(stderr, "\n");
         usage(& vcfset_conf);
         free(vcf_in1); free(vcf_in2); free(vcf_out);
         return 1;
+    }
+
+    if (vcfset_conf.vcf_setop == SETOP_UNKNOWN) {
+         LOG_FATAL("%s\n", "No set operation specified");
+         usage(& vcfset_conf);
+         free(vcf_in1); free(vcf_in2); free(vcf_out);
+         return 1;
     }
 
     /* all input files must be specified */
@@ -284,7 +302,7 @@ main_vcfset(int argc, char *argv[])
          }
 
          if (! vcfset_conf.only_passed || VCF_VAR_PASSES(var)) {
-              vcf_var_key(&key, var);
+              vcfset_conf.use_bases ? vcf_var_key(&key, var) : vcf_var_key_simple(&key, var);
               var_hash_add(& var_hash_vcf2, key, var);
 #ifdef TRACE
               fprintf(stderr, "var_2 pass: "); vcf_write_var(stderr, var);
@@ -332,7 +350,7 @@ main_vcfset(int argc, char *argv[])
          fprintf(stderr, "var_1 pass: "); vcf_write_var(stderr, var_1);
 #endif
          num_vars_vcf1 += 1;
-         vcf_var_key(&key, var_1);
+         vcfset_conf.use_bases ? vcf_var_key(&key, var_1) : vcf_var_key_simple(&key, var_1);
          HASH_FIND_STR(var_hash_vcf2, key, var_2);
 #ifdef TRACE
          LOG_DEBUG("var with key %s in 2: %s\n", key, var_2? "found" : "not found");
