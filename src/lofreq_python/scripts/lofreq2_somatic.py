@@ -52,9 +52,9 @@ class SomaticSNVCaller(object):
     VCF_RAW_EXT = "somatic_raw.vcf"
     VCF_FILTERED_EXT = "somatic_filtered.vcf"
     VCF_FINAL_EXT = "somatic_final.vcf"
-
+    
     LOFREQ = 'lofreq'
-
+    
     DEFAULT_ALPHA_N = 0.001
     DEFAULT_ALPHA_T = 0.000001
     DEFAULT_CORR_T = 'fdr'
@@ -223,8 +223,8 @@ class SomaticSNVCaller(object):
 
         olines = o.readlines()
         elines = e.readlines()
-        #for l in elines:
-        #    print l
+        for l in elines:
+            LOG.info("cmd stderr: %s" % l)
         o.close()
         e.close()
 
@@ -265,7 +265,7 @@ class SomaticSNVCaller(object):
         e.close()
         num_tests = -1
         for l in elines:
-            #print l
+            LOG.info("cmd stderr: %s" % l)
             if l.startswith('Number of tests performed'):
                 num_tests = int(l.split(':')[1])
                 break
@@ -278,7 +278,7 @@ class SomaticSNVCaller(object):
                '--snv-qual', "%s" % self.corr_t,
                '--snv-qual-alpha', '%f' % self.alpha_t,
                '--snv-qual-numtests', '%d' % num_tests,
-               '-o', self.vcf_t]
+               '--pass-only', '-o', self.vcf_t]
 
         self.subprocess_wrapper(cmd)
 
@@ -299,7 +299,7 @@ class SomaticSNVCaller(object):
         cmd = [self.LOFREQ, 'filter', '-i', self.vcf_som_raw,
                '--min-cov', "%d" % self.MIN_COV,
                '--strandbias', 'holm-bonf',
-               '-p', '-o', self.vcf_som_filtered]
+               '--pass-only', '-o', self.vcf_som_filtered]
         self.subprocess_wrapper(cmd)
 
 
