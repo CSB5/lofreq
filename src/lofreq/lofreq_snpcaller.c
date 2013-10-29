@@ -165,6 +165,25 @@ typedef struct {
 } snvcall_conf_t;
 
 
+
+#ifdef USE_TAILDIST
+/* FIXME from bcftools/call1.c. Needs kfunc.c 
+ */
+static double ttest(int n1, int n2, int a[4])
+{
+	extern double kf_betai(double a, double b, double x);
+	double t, v, u1, u2;
+	if (n1 == 0 || n2 == 0 || n1 + n2 < 3) return 1.0;
+	u1 = (double)a[0] / n1; u2 = (double)a[2] / n2;
+	if (u1 <= u2) return 1.;
+	t = (u1 - u2) / sqrt(((a[1] - n1 * u1 * u1) + (a[3] - n2 * u2 * u2)) / (n1 + n2 - 2) * (1./n1 + 1./n2));
+	v = n1 + n2 - 2;
+/*	printf("%d,%d,%d,%d,%lf,%lf,%lf\n", a[0], a[1], a[2], a[3], t, u1, u2); */
+	return t < 0.? 1. : .5 * kf_betai(.5*v, .5, v/(v+t*t));
+}
+#endif
+
+
 void
 report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char ref, 
            const char alt, const float af, const int qual,
@@ -191,6 +210,7 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char ref,
      dp4.alt_fw = p->fw_counts[bam_nt4_table[(int)alt]];
      dp4.alt_rv = p->rv_counts[bam_nt4_table[(int)alt]];
 
+
      /* double sb_prob = kt... Assignment removed to shut up clang static analyzer */
      (void) kt_fisher_exact(dp4.ref_fw, dp4.ref_rv, 
                                dp4.alt_fw, dp4.alt_rv,
@@ -199,6 +219,52 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char ref,
 
      vcf_var_sprintf_info(var, &p->coverage, &af, &sb_qual,
                           &dp4, is_indel, is_consvar);
+
+#ifdef USE_TAILDIST
+     {
+          /* PV4's tail distance is normally computed via fields 13-16 from I16 
+           * see http://samtools.sourceforge.net/mpileup.shtml
+           * test16_core() etc. Here we use  plp_col->tail_dists[nt4]
+           */
+          double taildist_pv = 0.0;
+          char taildist_info[BUF_SIZE];
+          int a[4];
+          int ref_i = bam_nt4_table[(int)ref];
+          int alt_i = bam_nt4_table[(int)alt];          
+          int i;
+          a[0] = a[1] = a[2] = a[3] = 0;
+          
+          for (i=0; i<p->tail_dists[ref_i].n; i++) {
+               int d = p->tail_dists[ref_i].data[i];
+               a[0] += d;
+               a[1] += d*d;
+          }
+          for (i=0; i<p->tail_dists[alt_i].n; i++) {
+               int d = p->tail_dists[alt_i].data[i];
+               a[2] += d;
+               a[3] += d*d;
+          }
+          
+          if (p->tail_dists[alt_i].n != dp4.alt_fw+dp4.alt_rv) {
+               LOG_FATAL("%s\n", "tail_dist and dp4 count mismatch");
+               exit(1);
+          }
+          if (p->tail_dists[ref_i].n != dp4.ref_fw+dp4.ref_rv) {
+               LOG_FATAL("%s\n", "tail_dist and dp4 count mismatch");
+               exit(1);
+          }
+
+          taildist_pv = ttest(p->tail_dists[ref_i].n, p->tail_dists[alt_i].n, a);
+#if 0
+          if (taildist_pv<0.05) {
+               LOG_FIXME("got sig taildist of %g at %s:%d\n", taildist_pv, var->chrom, var->pos+1);
+          }
+#endif
+          snprintf(taildist_info, 128, "TD=%d", PROB_TO_PHREDQUAL(taildist_pv));
+          vcf_var_add_to_info(var, taildist_info);
+     }
+#endif
+
      vcf_write_var(vcf_file, var);
      vcf_free_var(&var);
 }
