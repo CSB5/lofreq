@@ -161,6 +161,27 @@ def cmdline_parser():
                       help="Alpha/significance-level for strandbias testing."
                       " (applies only to 'bonf' and 'holm-bonf'; "
                       " default: %s)" % default)
+    
+    # FIXME tmp only and should only be active if -DUSE_TAILDIST.
+    default = "holm-bonf"
+    parser.add_option("", "--taildist",
+    #default=default,
+                      help="Filter variants with tail-distance bias."
+                      " Valid values are 'bonf' (Bonferroni),"
+                      " 'holm-bonf' (Holm-Bonferroni), an integer value"
+                      " or 'off'. If 'bonf' or 'holm-bonf', variants with"
+                      " accordingly corrected strand-bias pvalue"
+                      " < taildist-alpha will be filtered. If an int"
+                      " was given, variants with strand-bias phred-scores"
+                      " larger than this value will be filtered."
+                      " (default: %s)" % default)
+    default = 0.05
+    parser.add_option("", "--taildist-alpha",
+    #                 default=default,
+                      type="float",
+                      help="Alpha/significance-level for taildist testing."
+                      " (applies only to 'bonf' and 'holm-bonf'; "
+                      " default: %s)" % default)
 
     default = 10
     parser.add_option("", "--min-cov",
@@ -399,6 +420,83 @@ def main():
                 vcf_filter.id
                 ))
 
+
+    # FIXME tmp only and should only be active if -DUSE_TAILDIST.
+    # copied from strandbias above. replaced 'strandbias' with
+    # 'taildist' and 'SB' with 'TD' and 'strand-bias' with
+    # 'tail-distance bias'.
+    if opts.taildist != None:
+
+        if opts.taildist in ['bonf', 'holm-bonf']:
+            if not opts.taildist_alpha:
+                LOG.fatal("Need alpha/significance threshold for taildist"
+                          " multiple testing correction")
+                sys.exit(1)
+
+            vcf_filter = vcf._Filter(
+                id="taildist%s" % opts.taildist.replace("-", ""),
+                desc="Tail-distance bias filter (%s corrected < %g)" % (
+                    opts.taildist, opts.taildist_alpha))
+            vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
+
+            if opts.taildist == 'bonf':
+                vcf_info_id = "TDBC"
+            elif opts.taildist == 'holm-bonf':
+                vcf_info_id = "TDHBC"
+            else:
+                raise ValueError
+            vcf_info = vcf._Info(
+                id=vcf_info_id, num=1, type='Integer',
+                desc="Tail-distance bias %s corrected" % opts.taildist)
+            vcf_reader.infos[vcf_info.id] = vcf_info
+
+            try:
+                pvals = (phredqual_to_prob(s.INFO['TD']) for s in snvs)
+            except (KeyError, AssertionError) as e:
+                LOG.error("At least one SNV was not annotated properly with"
+                          " taildist info (TD)"
+                          " (was this file produced with LoFreq?)"
+                          " You will need to switch taildist filtering off")
+                sys.exit(1)
+
+            if opts.taildist == 'bonf':
+                corr_pvals = multiple_testing.Bonferroni(
+                    pvals).corrected_pvals
+            elif opts.taildist == 'holm-bonf':
+                corr_pvals = multiple_testing.HolmBonferroni(
+                    pvals).corrected_pvals
+            else:
+                raise ValueError
+            for (cp, s) in zip(corr_pvals, snvs):
+                s.INFO[vcf_info.id] = prob_to_phredqual(cp)
+                if s.INFO[vcf_info.id] > MAX_INT:
+                    s.INFO[vcf_info.id] = MAX_INT
+
+            filters.append((
+                lambda s, f_id: f_id if s.INFO[vcf_info.id] > prob_to_phredqual(opts.taildist_alpha) else None,
+                vcf_filter.id
+                ))
+
+        # int
+        elif opts.taildist != 'off':
+            try:
+                max_taildist_phred = int(opts.taildist)
+                assert max_taildist_phred >= 0
+            except (ValueError, AssertionError) as e:
+                LOG.fatal("Invalid taildist argument: %s" % (opts.taildist))
+                sys.exit(1)
+
+            vcf_filter = vcf._Filter(
+                max_taildist_phred = int(
+                id="sbp%d" % opts.max_taildist_phred,
+                desc="Phred-based tail-distance bias filter (max)"))
+            vcf_reader.filters[vcf_filter.id] = vcf_filter# reader serves as template for writer
+
+            filters.append((
+                lambda s, f_id: f_id if float(s.INFO['TD']) > opts.max_taildist_phred else None,
+                vcf_filter.id
+                ))
+            
 
     # structured as opts.strandbias filtering, but doesn't keep
     # corrected values.
