@@ -91,6 +91,9 @@ plp_col_init(plp_col_t *p) {
          int_varray_init(& p->base_quals[i], 0);
          int_varray_init(& p->map_quals[i], 0);
          int_varray_init(& p->source_quals[i], 0);
+#ifdef USE_TAILDIST
+         int_varray_init(& p->tail_dists[i], 0);
+#endif
          p->fw_counts[i] = 0;
          p->rv_counts[i] = 0;
     }
@@ -113,6 +116,9 @@ plp_col_free(plp_col_t *p) {
          int_varray_free(& p->base_quals[i]);
          int_varray_free(& p->map_quals[i]);
          int_varray_free(& p->source_quals[i]);
+#ifdef USE_TAILDIST
+         int_varray_free(& p->tail_dists[i]);
+#endif
     }
     int_varray_free(& p->ins_quals);
     int_varray_free(& p->del_quals);
@@ -554,9 +560,9 @@ mplp_func(void *data, bam1_t *b)
 
 
 
-/* Convenience function to press pileup info into one easy to handle data-structure.
- * plp_col members allocated here. Called must free with
- * plp_col_free(plp_col);
+/* Convenience function to press pileup info into one easy to handle
+ * data-structure. plp_col members allocated here. Called must free
+ * with plp_col_free(plp_col);
  */
 void compile_plp_col(plp_col_t *plp_col,
                  const bam_pileup1_t *plp, const int n_plp, 
@@ -682,6 +688,22 @@ void compile_plp_col(plp_col_t *plp_col,
 #ifdef USE_SOURCEQUAL
                PLP_COL_ADD_QUAL(& plp_col->source_quals[nt4], sq);
 #endif
+
+#ifdef USE_TAILDIST
+               {/* FIXME this should be precomputed and then build
+                 *   into model. The following is taken from samtools'
+                 *   ./bam2bcf.c:int bcf_call_glfgen() I have no idea
+                 *   why we need CAP_DIST or any of the dist checks
+                 */
+#define CAP_DIST 25
+    int min_dist = p->b->core.l_qseq - 1 - p->qpos;
+    if (min_dist > p->qpos) min_dist = p->qpos;
+    if (min_dist > CAP_DIST) min_dist = CAP_DIST;
+#undef CAP_DIST
+               PLP_COL_ADD_QUAL(& plp_col->tail_dists[nt4], min_dist);
+               }
+#endif
+
                if (bam1_strand(p->b)) {
                     plp_col->rv_counts[nt4] += 1;
                } else {
