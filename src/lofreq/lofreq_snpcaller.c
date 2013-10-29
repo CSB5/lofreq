@@ -1028,7 +1028,7 @@ for cov in coverage_range:
          return 1;
     }
 
-    if (mplp_conf.flag & MPLP_REALN && ! mplp_conf.fa) {
+    if (mplp_conf.flag & MPLP_REALN && ! mplp_conf.fa && ! plp_summary_only) {
          LOG_FATAL("%s\n", "Can't compute BAQ with no reference...\n"); 
          return 1;
     }
