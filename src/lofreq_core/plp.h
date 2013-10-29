@@ -54,6 +54,9 @@ typedef struct {
      int_varray_t base_quals[NUM_NT4]; 
      int_varray_t map_quals[NUM_NT4]; 
      int_varray_t source_quals[NUM_NT4]; 
+#ifdef USE_TAILDIST
+     int_varray_t tail_dists[NUM_NT4]; /* FIXME this should be precomputed and then build into model */
+#endif
      long int fw_counts[NUM_NT4]; 
      long int rv_counts[NUM_NT4]; 
      /* fw_counts[b] + rv_counts[b] = x_quals.n = coverage */
