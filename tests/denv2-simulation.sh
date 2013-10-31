@@ -8,7 +8,7 @@ source lib.sh || exit 1
 basedir=data/denv2-simulation
 bam=$basedir/denv2-10haplo.bam
 reffa=$basedir/denv2-refseq.fa
-truesnv=$basedir/denv2-10haplo_true-snp.vcf
+truesnv=$basedir/denv2-10haplo_true-snp.vcf.gz
 # samtools mpileup $bam | wc -l;# *3
 bonf=32169
 
