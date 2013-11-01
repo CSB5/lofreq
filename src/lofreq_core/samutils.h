@@ -32,4 +32,19 @@ count_cigar_ops(int *counts, int **quals,
                 const bam1_t *b, const char *ref, int min_bq,
                 char *target);
 
+
+#ifdef USE_ERRORPROF
+int
+parse_errprof_statsfile(FILE *in, bam_header_t *bam_header);
+
+void
+calc_read_errprof(double *err_prof, int *used_pos, 
+                        const bam1_t *b, const char *ref);
+
+void
+write_errprof_stats(char *target_name, unsigned long int *total_errprof_usedpos, 
+                    double *total_errprof, int max_obs_read_len, FILE *out);
+#endif
+
+
 #endif
