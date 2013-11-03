@@ -344,10 +344,10 @@ merge_baseq_and_mapq(const int bq, const int mq)
      jp = mp + (1.0 - mp) * bp;
 #ifdef DEBUG
      LOG_DEBUG("P_M + (1-P_M) P_B:   %g + (1.0 - %g) * %g = %g  ==  Q%d + (1.0 - Q%d) * Q%d  =  Q%d\n",
-               mp, mp, bp, jp, mq, mq, bq, jq);
+               mp, mp, bp, jp, mq, mq, bq, PROB_TO_PHREDQUAL(jp));
 #endif
 #if 0
-     LOG_DEBUG("BQ %d after merging with MQ %d = %d\n", bq, mq, jq);
+     LOG_DEBUG("BQ %d after merging with MQ %d = %d\n", bq, mq, PROB_TO_PHREDQUAL(jp));
 #endif
 
      return jp;
