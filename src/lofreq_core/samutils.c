@@ -52,7 +52,7 @@ parse_errprof_statsfile(FILE *in, bam_header_t *bam_header)
      int free_bam_header_hash = 0;
      int rc;
 
-     /* needed for finding tid */
+     /* needed for finding tid from tname */
      if (bam_header->hash == 0) {
           bam_init_header_hash(bam_header);             
           free_bam_header_hash = 1;
@@ -123,7 +123,6 @@ parse_errprof_statsfile(FILE *in, bam_header_t *bam_header)
                fprintf(stderr, "\n");
           }
      }
-
      rc = 0;
 
 free_and_exit:
@@ -137,7 +136,6 @@ free_and_exit:
      errprof.num_targets = -1;
      
      free(max_obs_pos);
-
 
      if (free_bam_header_hash) {
           bam_destroy_header_hash(bam_header);
@@ -169,40 +167,19 @@ write_errprof_stats(char *target_name, unsigned long int *total_errprof_usedpos,
      }
 }
 
-#endif
 
-
-
-char *
-cigar_str_from_bam(const bam1_t *b)
-{
-     /* from char *bam_format1_core(const bam_header_t *header, const bam1_t *b, int of) */
-     const bam1_core_t *c = &b->core;
-     kstring_t str;
-     int i;
-     str.l = str.m = 0; str.s = 0;
-     for (i = 0; i < c->n_cigar; ++i) {
-          kputw(bam1_cigar(b)[i]>>BAM_CIGAR_SHIFT, &str);
-          kputc("MIDNSHP=X"[bam1_cigar(b)[i]&BAM_CIGAR_MASK], &str);
-     }
-     return str.s;
-}
-/* cigar_str_from_bam() */
-
-
-#ifdef USE_ERRORPROF
 
 /* Counts probability of non-match count along the read after
  * subtracting error prob at that position (using the original
  * orientation). used_pos is an array of ints indicating whether
- * position was used or not (trimmed, clipped etc) err_prof and
+ * position was used or not (trimmed, clipped etc) errprof and
  * used_pos must be of at least length b->core.l_qseq.
  *
  * WARNING code duplication with count_cigar_ops but merging the two
  * functions was too complicated
  */
 void
-calc_read_errprof(double *err_prof, int *used_pos, 
+calc_read_errprof(double *errprof, int *used_pos, 
                    const bam1_t *b, const char *ref)
 {
      /* modelled after bam.c:bam_calend(), bam_format1_core() and
@@ -220,7 +197,7 @@ calc_read_errprof(double *err_prof, int *used_pos,
      uint32_t qpos = 0; /* pos on read/query */
      uint32_t qpos_org = bam1_strand(b) ? qlen-qpos-1 : qpos;/* original qpos before mapping as possible reverse */
 
-     memset(err_prof, 0, b->core.l_qseq * sizeof(double));
+     memset(errprof, 0, b->core.l_qseq * sizeof(double));
      memset(used_pos, 0, b->core.l_qseq * sizeof(int));
 
      /* loop over cigar to get aligned bases
@@ -246,11 +223,12 @@ calc_read_errprof(double *err_prof, int *used_pos,
                     printf("[M]MATCH qpos,i,ref,read = %d,%d,%c,%c\n", qpos, i, ref_nt, read_nt);
 #endif                    
 
-                    if (ref_nt != read_nt || op == BAM_CDIFF) {
-                         err_prof[qpos_org] = 1.0 - PHREDQUAL_TO_PROB(bq);
-                    } /* otherwise leave at 0.0 but count anyway */
-                    used_pos[qpos_org] = 1;
-
+                    if (ref_nt != 'N') {
+                         if (ref_nt != read_nt || op == BAM_CDIFF) {
+                              errprof[qpos_org] = 1.0 - PHREDQUAL_TO_PROB(bq);
+                         } /* otherwise leave at 0.0 but count anyway */
+                         used_pos[qpos_org] = 1;
+                    }
                     qpos += 1;
                     qpos_org = bam1_strand(b) ? qlen-qpos-1 : qpos;
                }
@@ -260,7 +238,7 @@ calc_read_errprof(double *err_prof, int *used_pos,
                for (i=pos; i<pos+l; i++) {
                     assert(qpos < qlen);
                     
-                    err_prof[qpos] = 1.0 - PHREDQUAL_TO_PROB(INDEL_QUAL_DEFAULT);
+                    errprof[qpos] = 1.0 - PHREDQUAL_TO_PROB(INDEL_QUAL_DEFAULT);
                     used_pos[qpos] = 1;
 #if 0
                     printf("INS qpos,i = %d,None\n", qpos);
@@ -276,7 +254,7 @@ calc_read_errprof(double *err_prof, int *used_pos,
 #endif
 
                     if (op == BAM_CDEL) {
-                         err_prof[qpos] = 1.0 - PHREDQUAL_TO_PROB(INDEL_QUAL_DEFAULT);
+                         errprof[qpos] = 1.0 - PHREDQUAL_TO_PROB(INDEL_QUAL_DEFAULT);
                          used_pos[qpos] = 1;
                     }
                }
@@ -304,12 +282,31 @@ calc_read_errprof(double *err_prof, int *used_pos,
 #if 0
      fprintf(stderr, "%s:", __FUNCTION__);
      for (i=0; i< b->core.l_qseq; i++) {
-          fprintf(stderr, " %g/%d", err_prof[i], used_pos[i]);
+          fprintf(stderr, " %g/%d", errprof[i], used_pos[i]);
      }
      fprintf(stderr, "\n");
 #endif
 }
 #endif
+
+
+
+char *
+cigar_str_from_bam(const bam1_t *b)
+{
+     /* from char *bam_format1_core(const bam_header_t *header, const bam1_t *b, int of) */
+     const bam1_core_t *c = &b->core;
+     kstring_t str;
+     int i;
+     str.l = str.m = 0; str.s = 0;
+     for (i = 0; i < c->n_cigar; ++i) {
+          kputw(bam1_cigar(b)[i]>>BAM_CIGAR_SHIFT, &str);
+          kputc("MIDNSHP=X"[bam1_cigar(b)[i]&BAM_CIGAR_MASK], &str);
+     }
+     return str.s;
+}
+/* cigar_str_from_bam() */
+
 
 
 /* Count matches (OP_MATCH), mismatches (OP_MISMATCH), insertions
