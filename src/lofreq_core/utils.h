@@ -54,4 +54,7 @@ readlink_malloc(const char *filename);
 char *
 resolved_path(const char *path);
 
+double
+dbl_median(double data[], int size);
+
 #endif
