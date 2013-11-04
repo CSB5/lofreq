@@ -36,6 +36,7 @@ typedef struct {
      char *fa;
      faidx_t *fai;
      void *bed;
+     char *alnerrprof_file; /* logically belongs to snvcall_conf, but we need it here since only here the bam header is known */
      char cmdline[1024];
 } mplp_conf_t;
 
@@ -54,8 +55,8 @@ typedef struct {
      int_varray_t base_quals[NUM_NT4]; 
      int_varray_t map_quals[NUM_NT4]; 
      int_varray_t source_quals[NUM_NT4]; 
-#ifdef USE_TAILDIST
-     int_varray_t tail_dists[NUM_NT4]; /* FIXME this should be precomputed and then build into model */
+#ifdef USE_MAPERRPROF
+     int_varray_t alnerr_qual[NUM_NT4]; /* FIXME this should be precomputed and then build into model */
 #endif
      long int fw_counts[NUM_NT4]; 
      long int rv_counts[NUM_NT4]; 
