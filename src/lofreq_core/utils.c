@@ -399,6 +399,9 @@ double
 dbl_median(double data[], int size)
 {
      double *sdata = malloc(sizeof(double) * size);
+     if (size==0) {
+          return 0.0;
+     }
      memcpy(sdata, data, sizeof(double) * size);
      qsort(sdata, size, sizeof(double*), *dbl_cmp);
      if (size%2 == 0) {
