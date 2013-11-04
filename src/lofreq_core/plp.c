@@ -66,6 +66,7 @@ typedef struct {
 } mplp_pileup_t;
 
 
+static alnerrprof_t *alnerrprof = NULL;
 
 
 /* convenience function */
@@ -91,8 +92,8 @@ plp_col_init(plp_col_t *p) {
          int_varray_init(& p->base_quals[i], 0);
          int_varray_init(& p->map_quals[i], 0);
          int_varray_init(& p->source_quals[i], 0);
-#ifdef USE_TAILDIST
-         int_varray_init(& p->tail_dists[i], 0);
+#ifdef USE_MAPERRPROF
+         int_varray_init(& p->alnerr_qual[i], 0);
 #endif
          p->fw_counts[i] = 0;
          p->rv_counts[i] = 0;
@@ -116,9 +117,7 @@ plp_col_free(plp_col_t *p) {
          int_varray_free(& p->base_quals[i]);
          int_varray_free(& p->map_quals[i]);
          int_varray_free(& p->source_quals[i]);
-#ifdef USE_TAILDIST
-         int_varray_free(& p->tail_dists[i]);
-#endif
+         int_varray_free(& p->alnerr_qual[i]);
     }
     int_varray_free(& p->ins_quals);
     int_varray_free(& p->del_quals);
@@ -563,6 +562,9 @@ mplp_func(void *data, bam1_t *b)
 /* Convenience function to press pileup info into one easy to handle
  * data-structure. plp_col members allocated here. Called must free
  * with plp_col_free(plp_col);
+ *
+ * NOTE this used to be a convenience function and turned into a big
+ * and slow monster. keeping copies of everything is inefficient.
  */
 void compile_plp_col(plp_col_t *plp_col,
                  const bam_pileup1_t *plp, const int n_plp, 
@@ -688,22 +690,22 @@ void compile_plp_col(plp_col_t *plp_col,
 #ifdef USE_SOURCEQUAL
                PLP_COL_ADD_QUAL(& plp_col->source_quals[nt4], sq);
 #endif
-
-#ifdef USE_TAILDIST
-               {/* FIXME this should be precomputed and then build
-                 *   into model. The following is taken from samtools'
-                 *   ./bam2bcf.c:int bcf_call_glfgen() I have no idea
-                 *   why we need CAP_DIST or any of the dist checks
-                 */
-#define CAP_DIST 25
-    int min_dist = p->b->core.l_qseq - 1 - p->qpos;
-    if (min_dist > p->qpos) min_dist = p->qpos;
-    if (min_dist > CAP_DIST) min_dist = CAP_DIST;
-#undef CAP_DIST
-               PLP_COL_ADD_QUAL(& plp_col->tail_dists[nt4], min_dist);
+#ifdef USE_MAPERRPROF
+               if (alnerrprof) {
+                    int tid = p->b->core.tid;
+                    assert(tid < alnerrprof->num_targets);
+                    if (alnerrprof->prop_len[tid] > p->qpos) {
+                         int q;
+                         q = PROB_TO_PHREDQUAL(alnerrprof->props[tid][p->qpos]);
+                         PLP_COL_ADD_QUAL(& plp_col->alnerr_qual[nt4], q);
+                    } else {
+                         LOG_ERROR("alnerror for tid=%d too small for qpos=%d. Setting to 0\n", tid, p->qpos+1);
+                         PLP_COL_ADD_QUAL(& plp_col->alnerr_qual[nt4], PROB_TO_PHREDQUAL(0.0));
+                    }
+               } else {
+                    PLP_COL_ADD_QUAL(& plp_col->alnerr_qual[nt4], PROB_TO_PHREDQUAL(0.0));
                }
 #endif
-
                if (bam1_strand(p->b)) {
                     plp_col->rv_counts[nt4] += 1;
                } else {
@@ -870,7 +872,14 @@ mpileup(const mplp_conf_t *mplp_conf,
     n_plp = calloc(n, sizeof(int));
 
 
-    /* read the header and initialize data */
+    /* read the header and initialize data 
+     *
+     * note: most of this is overkill since it deals with multiple bam
+     * files, whereas we allow only one. * however, if we keep it
+     * close to the original source then a diff * against future
+     * versions of samtools is easie
+     *
+     */
     for (i = 0; i < n; ++i) {
         bam_header_t *h_tmp;
         if (0 != strcmp(fn[i], "-")) {
@@ -911,8 +920,9 @@ mpileup(const mplp_conf_t *mplp_conf,
             bam_header_destroy(h_tmp);
         }
     }
-    /*LOG_DEBUG("%s\n", "BAM header initialized");*/
+    LOG_DEBUG("%s\n", "BAM header initialized");
 
+    
     if (tid0 >= 0 && mplp_conf->fai) { /* region is set */
         ref = faidx_fetch_seq(mplp_conf->fai, h->target_name[tid0], 0, 0x7fffffff, &ref_len);
         ref_tid = tid0;
@@ -931,7 +941,15 @@ mpileup(const mplp_conf_t *mplp_conf,
     }
     bam_mplp_set_maxcnt(iter, max_depth);
 
-
+    if (mplp_conf->alnerrprof_file) {
+         alnerrprof = calloc(1, sizeof(alnerrprof_t));
+         if (parse_alnerrprof_statsfile(alnerrprof, mplp_conf->alnerrprof_file, h)) {
+              LOG_FATAL("parse_errprof_statsfile() on %s failed\n", mplp_conf->alnerrprof_file);
+              exit(1);
+         }
+         normalize_alnerrprof(alnerrprof);
+    }
+    
     LOG_DEBUG("%s\n", "Starting pileup loop");
     while (bam_mplp_auto(iter, &tid, &pos, n_plp, plp) > 0) {
         plp_col_t plp_col;
@@ -972,6 +990,10 @@ mpileup(const mplp_conf_t *mplp_conf,
 
     } /* while bam_mplp_auto */
 
+    if (alnerrprof) {
+         free_alnerrprof(alnerrprof);
+         free(alnerrprof);
+    }
     free(buf.s);
     bam_mplp_destroy(iter);
     bam_header_destroy(h);
