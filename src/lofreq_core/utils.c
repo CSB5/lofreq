@@ -310,8 +310,8 @@ readlink_malloc(const char *filename)
      char *buffer = NULL;
      
      while (1) {
-          buffer = (char *)realloc(buffer, size);
           int nchars = readlink(filename, buffer, size);
+          buffer = (char *)realloc(buffer, size);
           if (nchars < 0) {
                free(buffer);
                return NULL;
@@ -392,3 +392,38 @@ chdir_and_return:
 
      return resolved_path;
 }
+
+
+/* FIXME use wirth's method instead for larger arrays */
+double
+dbl_median(double data[], int size)
+{
+     double *sdata = malloc(sizeof(double) * size);
+     memcpy(sdata, data, sizeof(double) * size);
+     qsort(sdata, size, sizeof(double*), *dbl_cmp);
+     if (size%2 == 0) {
+          /* even number: return mean of the two elements in the middle */
+        return((sdata[size/2] + sdata[size/2 - 1]) / 2.0);
+    } else {
+          /* odd number: return element in middle */
+        return sdata[size/2];
+    }
+}
+
+#ifdef MAIN
+/* gcc -o utils utils.c log.c -DMAIN -Wall -ansi -pedantic  */
+int main(int argc, char **argv)
+{
+     int i;
+     double *data;
+
+     data = malloc((argc-1) * sizeof(double));
+     for (i=1; i<argc; i++) {
+          printf("%f\n", atof(argv[i]));
+          data[i-1] = atof(argv[i]);
+     }
+     printf("median = %f\n", dbl_median(data, argc-1));
+     free(data);
+     return 0;
+}
+#endif
