@@ -166,23 +166,6 @@ typedef struct {
 
 
 
-#ifdef USE_TAILDIST
-/* FIXME from bcftools/call1.c. Needs kfunc.c 
- */
-static double ttest(int n1, int n2, int a[4])
-{
-	extern double kf_betai(double a, double b, double x);
-	double t, v, u1, u2;
-	if (n1 == 0 || n2 == 0 || n1 + n2 < 3) return 1.0;
-	u1 = (double)a[0] / n1; u2 = (double)a[2] / n2;
-	if (u1 <= u2) return 1.;
-	t = (u1 - u2) / sqrt(((a[1] - n1 * u1 * u1) + (a[3] - n2 * u2 * u2)) / (n1 + n2 - 2) * (1./n1 + 1./n2));
-	v = n1 + n2 - 2;
-/*	printf("%d,%d,%d,%d,%lf,%lf,%lf\n", a[0], a[1], a[2], a[3], t, u1, u2); */
-	return t < 0.? 1. : .5 * kf_betai(.5*v, .5, v/(v+t*t));
-}
-#endif
-
 
 void
 report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char ref, 
@@ -220,55 +203,62 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char ref,
      vcf_var_sprintf_info(var, &p->coverage, &af, &sb_qual,
                           &dp4, is_indel, is_consvar);
 
-#ifdef USE_TAILDIST
-     {
-          /* PV4's tail distance is normally computed via fields 13-16 from I16 
-           * see http://samtools.sourceforge.net/mpileup.shtml
-           * test16_core() etc. Here we use  plp_col->tail_dists[nt4]
-           */
-          double taildist_pv = 0.0;
-          char taildist_info[BUF_SIZE];
-          int a[4];
-          int ref_i = bam_nt4_table[(int)ref];
-          int alt_i = bam_nt4_table[(int)alt];          
-          int i;
-          a[0] = a[1] = a[2] = a[3] = 0;
-          
-          for (i=0; i<p->tail_dists[ref_i].n; i++) {
-               int d = p->tail_dists[ref_i].data[i];
-               a[0] += d;
-               a[1] += d*d;
-          }
-          for (i=0; i<p->tail_dists[alt_i].n; i++) {
-               int d = p->tail_dists[alt_i].data[i];
-               a[2] += d;
-               a[3] += d*d;
-          }
-          
-          if (p->tail_dists[alt_i].n != dp4.alt_fw+dp4.alt_rv) {
-               LOG_FATAL("%s\n", "tail_dist and dp4 count mismatch");
-               exit(1);
-          }
-          if (p->tail_dists[ref_i].n != dp4.ref_fw+dp4.ref_rv) {
-               LOG_FATAL("%s\n", "tail_dist and dp4 count mismatch");
-               exit(1);
-          }
-
-          taildist_pv = ttest(p->tail_dists[ref_i].n, p->tail_dists[alt_i].n, a);
-#if 0
-          if (taildist_pv<0.05) {
-               LOG_FIXME("got sig taildist of %g at %s:%d\n", taildist_pv, var->chrom, var->pos+1);
-          }
-#endif
-          snprintf(taildist_info, 128, "TD=%d", PROB_TO_PHREDQUAL(taildist_pv));
-          vcf_var_add_to_info(var, taildist_info);
-     }
-#endif
-
      vcf_write_var(vcf_file, var);
      vcf_free_var(&var);
 }
 /* report_var() */
+
+
+
+/* J = PM  +  (1-PM) * PS  +  (1-PM) * (1-PS) * PA + (1-PM) * (1-PS) * (1-PA) * PB, where
+   PJ = joined error probability
+   PM = mapping prob.
+   PS = source/genome err.prob.
+   PS = mapping error profile prop.
+   PB = base err.prob.
+   
+   Or in simple English:
+   either this is a mapping error
+   or
+   not a mapping error, but a genome/source error
+   or
+   not mapping error and not genome/source error but a aligner error
+   or
+   not mapping error and not genome/source error and not aligner error but a base error
+*/
+double
+merge_srcq_baseq_mapq_and_alnq(const int sq, const int bq, const int mq, const int aq)
+{
+     double sp, bp, mp, ap, jp; /* corresponding probs */
+     
+     if (-1 == sq) {
+          sp = 0.0;
+     } else {
+          sp = PHREDQUAL_TO_PROB(sq);
+     }
+
+     if (-1 == aq) {
+          ap = 0.0;
+     } else {
+          ap = PHREDQUAL_TO_PROB(aq);
+     }
+
+     bp = PHREDQUAL_TO_PROB(bq);
+
+     if (255 == mq) {
+          mp = 0.0;
+     } else {
+          mp = PHREDQUAL_TO_PROB(mq);
+     }
+
+     jp = mp + (1.0 - mp) * sp + (1-mp) * (1-sp) * ap +  (1-mp) * (1-sp) * (1-ap) * bp;
+#ifdef DEBUG
+     LOG_DEBUG("bq=%d mq=%d aq=%d sq=%d -> jq=%d\n", bq, mq, aq, sq, PROB_TO_PHREDQUAL(jp));
+#endif
+
+     return jp;
+}
+
 
 
 /* J = PM  +  (1-PM) * PS  +  (1-PM) * (1-PS) * PB, where
@@ -545,9 +535,11 @@ call_snvs(const plp_col_t *p, void *confp)
 #ifdef USE_SOURCEQUAL
                int sq = p->source_quals[i].data[j];
 #else
-               int sq = 255;
+               int sq = -1;
 #endif
-
+#ifdef USE_MAPERRPROF
+               int aq = p->alnerr_qual[i].data[j]; /* always set */
+#endif
                if (is_alt_base) {
                     alt_raw_counts[alt_idx] += 1;
                     if (bq < conf->min_altbq) {
@@ -569,12 +561,12 @@ call_snvs(const plp_col_t *p, void *confp)
                     final_err_prob = merge_baseq_and_mapq(bq, mq);
 #endif
                if (! (conf->flag & SNVCALL_USE_MQ)) {
-                    mq = 255; /* i.e. NA */
+                    mq = 255; /* i.e. unkown MQ  according to spec */
                }
                if (! (conf->flag & SNVCALL_USE_SQ)) {
-                    sq = 255; /* i.e. NA */
+                    sq = -1; /* i.e. NA */
                }
-               final_err_prob = merge_srcq_baseq_and_mapq(sq, bq, mq);
+               final_err_prob = merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
                err_probs[num_err_probs++] = final_err_prob;
           }
      }
@@ -727,6 +719,9 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -s | --sig                   P-Value cutoff / significance level [%f]\n", snvcall_conf->sig);
      fprintf(stderr, "       -b | --bonf                  Bonferroni factor. 'dynamic' (increase per actually performed test), 'auto' (infer from bed-file) or INT ['dynamic']\n");
      fprintf(stderr, "- Misc.\n");                                           
+#ifdef USE_MAPERRPROF
+     fprintf(stderr, "       -A | --map-prof FILE         Mapping error profile (produced with bamstats)\n");
+#endif
      fprintf(stderr, "       -C | --min-cov INT           Test only positions having at least this coverage [%d]\n", snvcall_conf->min_cov);
      fprintf(stderr, "       -N | --dont-skip-n           Don't skip positions where refbase is N (will try to predict CONSVARs (only) at those positions)\n");
      fprintf(stderr, "       -I | --illumina-1.3          Assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
@@ -761,6 +756,29 @@ main_call(int argc, char *argv[])
      void (*plp_proc_func)(const plp_col_t*, void*);
      int rc = 0;
      char *ign_vcf = NULL;
+
+
+
+/* FIXME add sens test:
+construct p such with
+quality_range = [20, 25, 30, 35, 40]
+coverage_range = [10, 50, 100, 500, 1000, 5000, 10000]
+refbase = 'A'
+snpbase = 'C'
+for cov in coverage_range:
+    for q in quality_range:
+        num_noncons = 1
+        while True:
+            void call_snvs(const plp_col_t *p, &snvcall_conf);
+            count snvs in output
+            if len(snps):
+                print num_noncons
+                break
+            num_noncons += 1
+            if num_noncons == cov:
+                break
+*/
+
 
 #ifdef SCALE_MQ
      LOG_WARN("%s\n", "MQ scaling switched on!");
@@ -838,7 +856,10 @@ main_call(int argc, char *argv[])
 #endif
               {"sig", required_argument, NULL, 's'},
               {"bonf", required_argument, NULL, 'b'}, /* NOTE changes here must be reflected in pseudo_parallel code as well */
-                   
+
+#ifdef USE_MAPERRPROF
+              {"map-prof", required_argument, NULL, 'A'},
+#endif                   
               {"min-cov", required_argument, NULL, 'C'},
               {"dont-skip-n", required_argument, NULL, 'N'},
               /*{"maxdepth", required_argument, NULL, 'd'},*/
@@ -853,30 +874,9 @@ main_call(int argc, char *argv[])
               {0, 0, 0, 0} /* sentinel */
          };
 
-
-/* FIXME add sens test:
-construct p such with
-quality_range = [20, 25, 30, 35, 40]
-coverage_range = [10, 50, 100, 500, 1000, 5000, 10000]
-refbase = 'A'
-snpbase = 'C'
-for cov in coverage_range:
-    for q in quality_range:
-        num_noncons = 1
-        while True:
-            void call_snvs(const plp_col_t *p, &snvcall_conf);
-            count snvs in output
-            if len(snps):
-                print num_noncons
-                break
-            num_noncons += 1
-            if num_noncons == cov:
-                break
-*/
-
          /* keep in sync with long_opts and usage */
 
-         static const char *long_opts_str = "r:l:f:co:q:Q:a:BEm:M:JSn:V:b:s:C:NIh"; 
+         static const char *long_opts_str = "r:l:f:co:q:Q:a:BEm:M:JSn:V:b:s:A:C:NIh"; 
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
          c = getopt_long(argc-1, argv+1, /* skipping 'lofreq', just leaving 'command', i.e. call */
@@ -988,6 +988,11 @@ for cov in coverage_range:
               }
               break;
 
+#ifdef USE_MAPERRPROF
+         case 'A':
+              mplp_conf.alnerrprof_file = strdup(optarg);
+              break;
+#endif
          case 'b': 
               if (0 == strncmp(optarg, "auto", 4)) {
                    bonf_auto = 1;
@@ -1297,6 +1302,7 @@ for cov in coverage_range:
 
     free(vcf_tmp_out);
     free(vcf_out);
+    free(mplp_conf.alnerrprof_file);
     free(mplp_conf.reg); 
     free(mplp_conf.fa);
     if (mplp_conf.fai) {
