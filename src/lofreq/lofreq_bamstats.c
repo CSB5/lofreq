@@ -35,7 +35,7 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #define MYNAME PACKAGE
 #endif
 
-#define TYPE_ERRPROF 0
+#define TYPE_MAPERRPROF 0
 #define TYPE_OPCAT 1
 
 typedef struct {
@@ -48,6 +48,19 @@ typedef struct {
      int samflags_off;
      int type;
 } bamstats_conf_t;
+
+
+#define WRITE_STATS  if (ref) { \
+          fprintf(out, "# Reads ignored for counting (due to bed/mq filtering): %lu\n", num_ign_reads); \
+          fprintf(out, "# Reads used for counting: %lu\n", num_good_reads); \
+          if (bamstats_conf->type == TYPE_OPCAT) { \
+               fprintf(out, "# Reads with zero matches (after bq filtering): %lu\n", num_zero_matches); \
+               write_cat_stats(target_name, read_cat_counts, num_good_reads, out); \
+          } else { \
+               write_alnerrprof_stats(target_name, alnerrprof_usedpos, alnerrprof, max_obs_read_len, out); \
+          } \
+          free(ref); \
+     }
 
 
 
@@ -89,7 +102,7 @@ usage(bamstats_conf_t *bamstats_conf)
      fprintf(stderr, "  -o | --out FILE       Write stats to this output file [- = stdout]\n");
      fprintf(stderr, "  -q | --min-bq INT     Ignore any base with baseQ smaller than INT [%d]\n", bamstats_conf->min_bq);
      fprintf(stderr, "  -m | --min-mq INT     Ignore reads with mapQ smaller than INT [%d]\n", bamstats_conf->min_mq);
-#ifdef USE_ERRORPROF
+#ifdef USE_MAPERRPROF
      fprintf(stderr, "       --opcat          Report cigar OP categories instead of error profile\n");
 #endif
 }
@@ -136,11 +149,12 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
      unsigned long int **read_cat_counts;
      unsigned long int num_good_reads = 0;
      unsigned long int num_ign_reads = 0;
-     unsigned int num_zero_matches = 0;
+     unsigned long int num_zero_matches = 0;
+     FILE *out = stdout;
 
-#ifdef USE_ERRORPROF
-     double total_errprof[MAX_READ_LEN];
-     unsigned long int total_errprof_usedpos[MAX_READ_LEN];
+#ifdef USE_MAPERRPROF
+     double alnerrprof[MAX_READ_LEN];
+     unsigned long int alnerrprof_usedpos[MAX_READ_LEN];
 #endif
 
      int max_obs_read_len = 0;
@@ -152,9 +166,9 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
          LOG_WARN("%s\n", "cigar op counts not using base qualities and assuming (roughly) equal read length");/* (which could be easily implemented for matches");*/
      }
 
-#ifdef USE_ERRORPROF
-     memset(total_errprof_usedpos, 0, MAX_READ_LEN * sizeof(unsigned long int));
-     memset(total_errprof, 0, MAX_READ_LEN * sizeof(double));
+#ifdef USE_MAPERRPROF
+     memset(alnerrprof_usedpos, 0, MAX_READ_LEN * sizeof(unsigned long int));
+     memset(alnerrprof, 0, MAX_READ_LEN * sizeof(double));
 #endif
 
      read_cat_counts = calloc(NUM_OP_CATS, sizeof(unsigned long int *));
@@ -165,10 +179,6 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
      while ((r = samread(sam, b)) >= 0) { /* read one alignment from `in' */
           int counts[NUM_OP_CATS];
           int ref_len = -1;
-#ifdef USE_ERRORPROF
-          double read_errprof[b->core.l_qseq];
-          int read_errprof_usedpos[b->core.l_qseq];
-#endif
           if (skip_aln(sam->header, b, bamstats_conf->min_mq, 
                        bamstats_conf->samflags_on, bamstats_conf->samflags_off,
                        bamstats_conf->bed)) {
@@ -192,23 +202,17 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
           /* load ref only if necessary. also triggers output of
            * stats per chrom */
           if (ref == NULL || strcmp(target_name, sam->header->target_name[b->core.tid]) != 0) {
-               if (ref) {
-                    if (bamstats_conf->type == TYPE_OPCAT) {
-                         /* we already have some stats:  output */
-                         write_cat_stats(target_name, read_cat_counts, num_good_reads, stdout);
-                    } else {
-                         write_errprof_stats(target_name, total_errprof_usedpos, total_errprof, max_obs_read_len, stdout);
-                    }
+               /* write report. use macro to avoid code duplication with below */
+               WRITE_STATS;
 
-                    /* reset everything for next chrom... */
-                    for (i=0; i<NUM_OP_CATS; i++) {
-                         memset(read_cat_counts[i], 0, MAX_READ_LEN * sizeof(unsigned long int));
-                    }
-                    memset(total_errprof_usedpos, 0, MAX_READ_LEN * sizeof(unsigned long int));
-                    memset(total_errprof, 0, MAX_READ_LEN * sizeof(double));
-                    max_obs_read_len = 0;
-                    free(ref);
-               } 
+               /* reset everything for next chrom... */
+               for (i=0; i<NUM_OP_CATS; i++) {
+                    memset(read_cat_counts[i], 0, MAX_READ_LEN * sizeof(unsigned long int));
+               }
+               memset(alnerrprof_usedpos, 0, MAX_READ_LEN * sizeof(unsigned long int));
+               memset(alnerrprof, 0, MAX_READ_LEN * sizeof(double));
+               max_obs_read_len = 0;
+               num_good_reads = num_ign_reads = num_zero_matches = 0;
 
                target_name = sam->header->target_name[b->core.tid];
                ref = faidx_fetch_seq(bamstats_conf->fai, target_name,
@@ -221,17 +225,10 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
                     continue;
                }
           } else {
-#ifdef USE_ERRORPROF
-               calc_read_errprof(read_errprof, read_errprof_usedpos, b, ref);
-               for (i=0; i<b->core.l_qseq; i++) {
-                    if (read_errprof_usedpos[i]) {
-                         total_errprof[i] += read_errprof[i];
-                         total_errprof_usedpos[i] += 1;
-                    }
-                    /*LOG_FIXME("%d/%d: used %d err %f\n", i+1, b->core.l_qseq, read_errprof_usedpos[i], read_errprof[i]);*/
-               }
-          }
+#ifdef USE_MAPERRPROF
+               calc_read_alnerrprof(alnerrprof, alnerrprof_usedpos, b, ref);
 #endif
+          }
 
           if (bamstats_conf->type == TYPE_OPCAT) {
                for (i=0; i<NUM_OP_CATS; i++) {
@@ -250,22 +247,9 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
 #endif
      }
                
-     /* don't forget to output last seen chrom */
-     if (ref) {
-          if (bamstats_conf->type == TYPE_OPCAT) {
-               write_cat_stats(target_name, read_cat_counts, num_good_reads, stdout);
-          } else {
-               write_errprof_stats(target_name, total_errprof_usedpos, total_errprof, max_obs_read_len, stdout);
-          }
-          free(ref);
-     }
+     /* don't forget to output last seen chrom. use macro to avoid code duplication with above */
+     WRITE_STATS;
 
-
-     if (bamstats_conf->type == TYPE_OPCAT) {
-          LOG_VERBOSE("#reads with zero matches (after bq filtering): %u\n", num_zero_matches);
-     }
-     LOG_VERBOSE("#reads ignored for counting (due to bed/mq filtering): %u\n", num_ign_reads);
-     LOG_VERBOSE("#reads used for counting: %u\n", num_good_reads);
      
      for (i=0; i<NUM_OP_CATS; i++) {
           free(read_cat_counts[i]);
@@ -292,7 +276,7 @@ main_bamstats(int argc, char *argv[])
      samfile_t *sam =  NULL;
      int rc = 0;
      bamstats_conf_t bamstats_conf;
-#ifdef USE_ERRORPROF
+#ifdef USE_MAPERRPROF
      static int report_opcat = 0;
 #else
      static int report_opcat = 1;
@@ -329,7 +313,7 @@ main_bamstats(int argc, char *argv[])
                {"help", no_argument, NULL, 'h'},
                {"verbose", no_argument, &verbose, 1},
                {"debug", no_argument, &debug, 1},
-#ifdef USE_ERRORPROF
+#ifdef USE_MAPERRPROF
                {"opcat", no_argument, &report_opcat, 1},
 #endif
                {0, 0, 0, 0} /* sentinel */
@@ -435,24 +419,9 @@ main_bamstats(int argc, char *argv[])
           LOG_FATAL("Failed to open \"%s\" for reading.\n", bamfile);
           rc = 1;
      } else {
-
-#if 0
-     {
-          const char path[] = "errprof.txt";
-          FILE *fh;
-          LOG_FIXME("testing reading routines with file '%s' and will exit afterwards\n", path);
-          if (NULL == (fh = fopen(path, "r"))) {
-               LOG_ERROR("Couldn't open %s\n", path);
-               exit(0);
-          }
-          parse_errprof_statsfile(fh, sam->header);
-     }
-#endif
-
           rc = bamstats(sam, &bamstats_conf);
+          samclose(sam);
      }
-
-     samclose(sam);
 
 free_and_exit:
 
