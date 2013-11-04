@@ -33,17 +33,32 @@ count_cigar_ops(int *counts, int **quals,
                 char *target);
 
 
-#ifdef USE_ERRORPROF
-int
-parse_errprof_statsfile(FILE *in, bam_header_t *bam_header);
+#ifdef USE_MAPERRPROF
+
+typedef struct {
+     int num_targets; /* bam_header->n_targets */
+     int *prop_len; /* one prop length per target: index is tid */
+     double **props; /* one prop array per target: index is tid */
+} alnerrprof_t;
+
 
 void
-calc_read_errprof(double *err_prof, int *used_pos, 
+normalize_alnerrprof(alnerrprof_t *alnerrprof);
+
+int
+parse_alnerrprof_statsfile(alnerrprof_t *alnerrprof, const char *path, bam_header_t *bam_header);
+
+void
+calc_read_alnerrprof(double *alnerrprof, unsigned long int *used_pos, 
                         const bam1_t *b, const char *ref);
 
 void
-write_errprof_stats(char *target_name, unsigned long int *total_errprof_usedpos, 
-                    double *total_errprof, int max_obs_read_len, FILE *out);
+write_alnerrprof_stats(char *target_name, unsigned long int *alnerrprof_usedpos, 
+                    double *alnerrprof, int max_obs_read_len, FILE *out);
+
+void
+free_alnerrprof(alnerrprof_t *alnerrprof);
+
 #endif
 
 

@@ -30,52 +30,117 @@ extern void bam_destroy_header_hash(bam_header_t *header);
 #define BUF_SIZE 1024
 
 
-typedef struct {
-     int num_targets; /* bam_header->n_targets */
-     int *prop_len; /* one prop length per target: index is tid or target */
-     double **props; /* one prop array per target: index is tid or target */
-} errprof_t;
+
+#ifdef USE_MAPERRPROF
+
+void
+free_alnerrprof(alnerrprof_t *alnerrprof)
+{
+     int i;
+     free(alnerrprof->prop_len);
+     for (i=0; i<alnerrprof->num_targets; i++) {
+          if (alnerrprof->prop_len[i]){
+               free(alnerrprof->props[i]);/* free right-away if no data */
+          }
+     }
+     free(alnerrprof->props);
+     alnerrprof->num_targets = -1;
+}
 
 
-#ifdef USE_ERRORPROF
+void
+normalize_alnerrprof(alnerrprof_t *alnerrprof)
+{
+     int i;
+
+#if 0
+     {/* fixme report */
+          for (i=0; i<alnerrprof->num_targets; i++) {
+               int j;
+               fprintf(stderr, "FIXME in tid=%d len=%d: ", i, alnerrprof->prop_len[i]);
+               for (j=0; j<alnerrprof->prop_len[i]; j++) {
+                    fprintf(stderr, " %d:%g ", j, alnerrprof->props[i][j]);
+               }
+               fprintf(stderr, "\n");
+          }
+     }
+#endif
+
+     for (i=0; i<alnerrprof->num_targets; i++) {
+          int j;
+          double median = dbl_median(alnerrprof->props[i], alnerrprof->prop_len[i]);
+#if 0
+          fprintf(stderr, "FIXME tid=%d median=%g\n", i, median);
+#endif
+          for (j=0; j<alnerrprof->prop_len[i]; j++) {
+               double val = alnerrprof->props[i][j] - median;
+               if (val >= 0.0) {
+                    alnerrprof->props[i][j]  = val;
+               } else {
+                    alnerrprof->props[i][j]  = 0.0;
+               }
+
+          }
+     }
+     
+#if 0
+     {/* fixme report */
+          for (i=0; i<alnerrprof->num_targets; i++) {
+               int j;
+               fprintf(stderr, "FIXME out tid=%d len=%d: ", i, alnerrprof->prop_len[i]);
+               for (j=0; j<alnerrprof->prop_len[i]; j++) {
+                    fprintf(stderr, " %d:%g ", j, alnerrprof->props[i][j]);
+               }
+               fprintf(stderr, "\n");
+          }
+     }
+#endif
+}
+
+
+/* will return non-0 on error. parsed error prof will be written to
+ * alnerrprof. values are allocated here and should be freed with
+ * free_alnerrprof */
 int
-parse_errprof_statsfile(FILE *in, bam_header_t *bam_header)
+parse_alnerrprof_statsfile(alnerrprof_t *alnerrprof, const char *path, bam_header_t *bam_header)
 {
      char line[BUF_SIZE];
-     int pos = -1;
-     char tname[BUF_SIZE];
-     double prop = -1;
-     errprof_t errprof;
      int i;
      int *max_obs_pos;
-     const int default_read_len = 250;
+     const int default_read_len = 1;
      int free_bam_header_hash = 0;
      int rc;
+     FILE *in = fopen(path, "r");
+
 
      /* needed for finding tid from tname */
      if (bam_header->hash == 0) {
           bam_init_header_hash(bam_header);             
-          free_bam_header_hash = 1;
+          free_bam_header_hash = 0; /* FIXME sometimes segfaults for unknown reasons */
      }
 
      max_obs_pos = calloc(bam_header->n_targets, sizeof(int));
-
-     errprof.num_targets = bam_header->n_targets;
-     errprof.prop_len = calloc(errprof.num_targets, sizeof(int));
-     errprof.props = calloc(errprof.num_targets, sizeof(double *));     
-     for (i=0; i<errprof.num_targets; i++) {
-          errprof.prop_len[i] = default_read_len;/* default alloc here and realloc later */
-          errprof.props[i] = calloc(errprof.prop_len[i], sizeof(double));
+     
+     alnerrprof->num_targets = bam_header->n_targets;
+     alnerrprof->prop_len = calloc(alnerrprof->num_targets, sizeof(int));
+     alnerrprof->props = calloc(alnerrprof->num_targets, sizeof(double *));     
+     for (i=0; i<alnerrprof->num_targets; i++) {
+          alnerrprof->prop_len[i] = default_read_len;/* default alloc here and realloc later */
+          alnerrprof->props[i] = calloc(alnerrprof->prop_len[i], sizeof(double));
      }
      i=-1; /* make sure i is not reused improperly; triggers clang warning though */
 
      while (NULL != fgets(line, BUF_SIZE, in)) {
-         int tid = -1;
-         if (line[0]=='#') {
-             continue;
-         }
+          int pos = -1;
+          char tname[BUF_SIZE];
+          double prop = -1;
+          unsigned long int count = -1;
+          int tid = -1;
+          if (line[0]=='#') {
+               continue;
+          }
 
-         if (3 != sscanf(line, "%s\t%d\t%lg\n", tname, &pos, &prop)) {
+          if (4 != sscanf(line, "%s\t%d\t%lg\t%lu\n", tname, &pos, &prop, &count)) {
               LOG_ERROR("Couldn't parse line %s\n", line);
               rc = 1;
               goto free_and_exit;
@@ -91,7 +156,7 @@ parse_errprof_statsfile(FILE *in, bam_header_t *bam_header)
               LOG_ERROR("Target name '%s' found in error profile doesn't match any of the sequences in BAM header. Skipping and trying to continue...\n", tname);
               continue;
          }
-         assert(tid<errprof.num_targets);
+         assert(tid<alnerrprof->num_targets);
 
          /* for later downsizing */
          if (pos+1 > max_obs_pos[tid]) {
@@ -99,47 +164,51 @@ parse_errprof_statsfile(FILE *in, bam_header_t *bam_header)
          }
 
          /* upsize if necessary */
-         while (pos+1 > errprof.prop_len[tid]) {
-              LOG_ERROR("upsizing pos+1=%d errprof.prop_len[tid=%d]=%d\n\n", pos+1, tid, errprof.prop_len[tid]);
-              errprof.props[tid] = realloc(errprof.props[tid], errprof.prop_len[tid]*2);
-              errprof.prop_len[tid] *= 2;
+         while (pos+1 > alnerrprof->prop_len[tid]) {
+              /* LOG_DEBUG("upsizing pos+1=%d alnerrprof->prop_len[tid=%d]=%d\n\n", pos+1, tid, alnerrprof->prop_len[tid]); */
+              alnerrprof->props[tid] = realloc(alnerrprof->props[tid], alnerrprof->prop_len[tid]*2);
+              alnerrprof->prop_len[tid] *= 2;
          }
-         errprof.props[tid][pos] = prop;
+         alnerrprof->props[tid][pos] = prop;
      }
 
-     /* downsize props */
-     for (i=0; i<errprof.num_targets; i++) {
-          errprof.props[i] = realloc(errprof.props[i], max_obs_pos[i] * sizeof(double));
-          errprof.prop_len[i] = max_obs_pos[i];
+     /* downsize */
+     for (i=0; i<alnerrprof->num_targets; i++) {
+          if (max_obs_pos[i]) {
+               alnerrprof->props[i] = realloc(alnerrprof->props[i], max_obs_pos[i] * sizeof(double));
+          } else {
+               free(alnerrprof->props[i]);/* free right-away if no data */
+          }
+          alnerrprof->prop_len[i] = max_obs_pos[i];
      }
 
+#if 0
      {/* fixme report */
-          for (i=0; i<errprof.num_targets; i++) {
+          for (i=0; i<alnerrprof->num_targets; i++) {
                int j;
-               fprintf(stderr, "tid=%d len=%d: ", i, errprof.prop_len[i]);
-               for (j=0; j<errprof.prop_len[i]; j++) {
-                    fprintf(stderr, " %d:%g ", j, errprof.props[i][j]);
+               fprintf(stderr, "tid=%d len=%d: ", i, alnerrprof->prop_len[i]);
+               for (j=0; j<alnerrprof->prop_len[i]; j++) {
+                    fprintf(stderr, " %d:%g ", j, alnerrprof->props[i][j]);
                }
                fprintf(stderr, "\n");
+               fprintf(stderr, "median for tid %d: %g for size %d\n",
+                       i,
+                       dbl_median(alnerrprof->props[i], alnerrprof->prop_len[i]),
+                       alnerrprof->prop_len[i]);
           }
      }
+#endif
+
      rc = 0;
 
 free_and_exit:
-
-     /* free errprof */
-     free(errprof.prop_len);
-     for (i=0; i<errprof.num_targets; i++) {
-          free(errprof.props[i]);
-     }
-     free(errprof.props);
-     errprof.num_targets = -1;
      
      free(max_obs_pos);
 
      if (free_bam_header_hash) {
           bam_destroy_header_hash(bam_header);
      }
+     fclose(in);
 
      return rc;
 }
@@ -147,23 +216,23 @@ free_and_exit:
 
 
 void
-write_errprof_stats(char *target_name, unsigned long int *total_errprof_usedpos, 
-                    double *total_errprof, int max_obs_read_len, FILE *out)
+write_alnerrprof_stats(char *target_name, unsigned long int *alnerrprof_usedpos, 
+                    double *alnerrprof, int max_obs_read_len, FILE *out)
 {
      /* poor man's version (fw reads only and not taking quality into account):
       *  samtools view -h -F 0x10 $bam | samtools calmd -S -e - $reffa | cut -f 10 | awk '{for (i=0; i<length($0); i++) {if (substr($0, i, 1)!="=") {c[i]+=1}}} END {for (i in c) {print i, c[i], c[i]/NR}}' | sort -k 1 -n
       */
      int i;
-     fprintf(out, "# No-match profile along read after subtracting base-call/indel quality\n");
+     fprintf(out, "# Error, i.e. 'no-match' profile along read after subtracting base-call/indel quality\n");
      fprintf(out, "# Numbers are in scientific notation\n");
-     fprintf(out, "# chrom\tread-pos\terror-freq\n");
+     fprintf(out, "# chrom\tread-pos\terror-freq\tcount\n");
 
      for (i=0; i<max_obs_read_len; i++) {
          double prop = 0.0;
-         if (total_errprof_usedpos[i]) {
-              prop = total_errprof[i]/(double)(total_errprof_usedpos[i]);
+         if (alnerrprof_usedpos[i]) {
+              prop = alnerrprof[i]/(double)(alnerrprof_usedpos[i]);
          }
-         fprintf(out, "%s\t%d\t%g\n", target_name, i+1, prop);/*, total_errprof[i], total_errprof_usedpos[i]);*/
+         fprintf(out, "%s\t%d\t%g\t%lu\n", target_name, i+1, prop, alnerrprof_usedpos[i]);/*, alnerrprof[i], alnerrprof_usedpos[i]);*/
      }
 }
 
@@ -172,14 +241,16 @@ write_errprof_stats(char *target_name, unsigned long int *total_errprof_usedpos,
 /* Counts probability of non-match count along the read after
  * subtracting error prob at that position (using the original
  * orientation). used_pos is an array of ints indicating whether
- * position was used or not (trimmed, clipped etc) errprof and
- * used_pos must be of at least length b->core.l_qseq.
+ * position was used or not (trimmed, clipped etc). alnerrprof and
+ * used_pos must be of at least length b->core.l_qseq. Note: will add
+ * to alnerrprof and used_pos, i.e. arrays should be initialized to 0 if
+ * you don't want aggregate values.
  *
  * WARNING code duplication with count_cigar_ops but merging the two
- * functions was too complicated
+ * functions is messy.
  */
 void
-calc_read_errprof(double *errprof, int *used_pos, 
+calc_read_alnerrprof(double *alnerrprof, unsigned long int *used_pos, 
                    const bam1_t *b, const char *ref)
 {
      /* modelled after bam.c:bam_calend(), bam_format1_core() and
@@ -197,8 +268,6 @@ calc_read_errprof(double *errprof, int *used_pos,
      uint32_t qpos = 0; /* pos on read/query */
      uint32_t qpos_org = bam1_strand(b) ? qlen-qpos-1 : qpos;/* original qpos before mapping as possible reverse */
 
-     memset(errprof, 0, b->core.l_qseq * sizeof(double));
-     memset(used_pos, 0, b->core.l_qseq * sizeof(int));
 
      /* loop over cigar to get aligned bases
       *
@@ -225,9 +294,9 @@ calc_read_errprof(double *errprof, int *used_pos,
 
                     if (ref_nt != 'N') {
                          if (ref_nt != read_nt || op == BAM_CDIFF) {
-                              errprof[qpos_org] = 1.0 - PHREDQUAL_TO_PROB(bq);
+                              alnerrprof[qpos_org] += (1.0 - PHREDQUAL_TO_PROB(bq));
                          } /* otherwise leave at 0.0 but count anyway */
-                         used_pos[qpos_org] = 1;
+                         used_pos[qpos_org] += 1;
                     }
                     qpos += 1;
                     qpos_org = bam1_strand(b) ? qlen-qpos-1 : qpos;
@@ -238,8 +307,8 @@ calc_read_errprof(double *errprof, int *used_pos,
                for (i=pos; i<pos+l; i++) {
                     assert(qpos < qlen);
                     
-                    errprof[qpos] = 1.0 - PHREDQUAL_TO_PROB(INDEL_QUAL_DEFAULT);
-                    used_pos[qpos] = 1;
+                    alnerrprof[qpos] += (1.0 - PHREDQUAL_TO_PROB(INDEL_QUAL_DEFAULT));
+                    used_pos[qpos] += 1;
 #if 0
                     printf("INS qpos,i = %d,None\n", qpos);
 #endif
@@ -254,8 +323,8 @@ calc_read_errprof(double *errprof, int *used_pos,
 #endif
 
                     if (op == BAM_CDEL) {
-                         errprof[qpos] = 1.0 - PHREDQUAL_TO_PROB(INDEL_QUAL_DEFAULT);
-                         used_pos[qpos] = 1;
+                         alnerrprof[qpos] += (1.0 - PHREDQUAL_TO_PROB(INDEL_QUAL_DEFAULT));
+                         used_pos[qpos] += 1;
                     }
                }
                pos += l;
@@ -282,7 +351,7 @@ calc_read_errprof(double *errprof, int *used_pos,
 #if 0
      fprintf(stderr, "%s:", __FUNCTION__);
      for (i=0; i< b->core.l_qseq; i++) {
-          fprintf(stderr, " %g/%d", errprof[i], used_pos[i]);
+          fprintf(stderr, " %g/%d", alnerrprof[i], used_pos[i]);
      }
      fprintf(stderr, "\n");
 #endif
