@@ -17,7 +17,6 @@ BAM_H = bam.h bam_endian.h bgzf.h faidx.h kaln.h khash.h knetfile.h \
 libbam_a_SOURCES = bgzf.c kstring.c bam_aux.c bam.c bam_import.c \
 	sam.c bam_index.c bam_pileup.c bam_lpileup.c bam_md.c razf.c \
 	faidx.c bedidx.c $(KNETFILE) sam_header.c \
-	kprobaln.c $(BAM_H) \
-	kfunc.c
+	kprobaln.c $(BAM_H)
 	
 
