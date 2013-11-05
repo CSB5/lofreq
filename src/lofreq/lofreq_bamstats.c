@@ -46,18 +46,19 @@ typedef struct {
      void *bed;
      int samflags_on;
      int samflags_off;
+     FILE *out;
      int type;
 } bamstats_conf_t;
 
 
 #define WRITE_STATS  if (ref) { \
-          fprintf(out, "# Reads ignored for counting (due to bed/mq filtering): %lu\n", num_ign_reads); \
-          fprintf(out, "# Reads used for counting: %lu\n", num_good_reads); \
+          fprintf(bamstats_conf->out, "# Reads ignored for counting (due to bed/mq filtering): %lu\n", num_ign_reads); \
+          fprintf(bamstats_conf->out, "# Reads used for counting: %lu\n", num_good_reads); \
           if (bamstats_conf->type == TYPE_OPCAT) { \
-               fprintf(out, "# Reads with zero matches (after bq filtering): %lu\n", num_zero_matches); \
-               write_cat_stats(target_name, read_cat_counts, num_good_reads, out); \
+               fprintf(bamstats_conf->out, "# Reads with zero matches (after bq filtering): %lu\n", num_zero_matches); \
+               write_cat_stats(target_name, read_cat_counts, num_good_reads, bamstats_conf->out); \
           } else { \
-               write_alnerrprof_stats(target_name, alnerrprof_usedpos, alnerrprof, max_obs_read_len, out); \
+               write_alnerrprof_stats(target_name, alnerrprof_usedpos, alnerrprof, max_obs_read_len, bamstats_conf->out); \
           } \
           free(ref); \
      }
@@ -150,7 +151,6 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
      unsigned long int num_good_reads = 0;
      unsigned long int num_ign_reads = 0;
      unsigned long int num_zero_matches = 0;
-     FILE *out = stdout;
 
 #ifdef USE_MAPERRPROF
      double alnerrprof[MAX_READ_LEN];
@@ -270,7 +270,6 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
 int 
 main_bamstats(int argc, char *argv[])
 {
-     char *outfile = NULL;
      char *bamfile = NULL;
      char *bedfile = NULL;
      samfile_t *sam =  NULL;
@@ -283,6 +282,7 @@ main_bamstats(int argc, char *argv[])
 #endif     
 
      memset(&bamstats_conf, 0, sizeof(bamstats_conf_t));
+     bamstats_conf.out = stdout;
      bamstats_conf.min_mq = DEFAULT_MIN_MQ;
      bamstats_conf.min_bq = DEFAULT_MIN_BQ;
      /* will skip read if any of the following is set */
@@ -357,8 +357,10 @@ main_bamstats(int argc, char *argv[])
                          rc = 1;
                          goto free_and_exit;
                     }
-               } 
-               outfile = strdup(optarg);
+                    bamstats_conf.out = fopen(optarg, "w");
+               } else {
+                    bamstats_conf.out = stdout;
+               }
                break;
                
          case 'q': 
@@ -425,8 +427,9 @@ main_bamstats(int argc, char *argv[])
 
 free_and_exit:
 
-     free(outfile);
-
+     if (bamstats_conf.out != stdout) {
+          fclose(bamstats_conf.out);
+     }
      free(bamstats_conf.fa);
      if (bamstats_conf.fai) {
          fai_destroy(bamstats_conf.fai);
