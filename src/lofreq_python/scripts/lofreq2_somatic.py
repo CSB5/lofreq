@@ -45,6 +45,7 @@ class SomaticSNVCaller(object):
     """
 
     VCF_NORMAL_RLX_EXT = "normal_relaxed.vcf"
+    VCF_TUMOR_MAPERRPROF_EXT = "maperrprof.txt"
     VCF_TUMOR_RLX_EXT = "tumor_relaxed.vcf"
     VCF_TUMOR_STR_EXT = "tumor_stringent.vcf"
     VCF_SOMATIC_RAW_EXT = "somatic_raw.vcf"
@@ -62,6 +63,7 @@ class SomaticSNVCaller(object):
     DEFAULT_BAQ_OFF = False
     DEFAULT_SRC_QUAL_ON = False
     DEFAULT_SRC_QUAL_IGN_VCF = None
+    DEFAULT_ALN_ERR_PROF_ON = False
     DEFAULT_MIN_COV = 10
 
     def __init__(self, bam_n=None, bam_t=None,
@@ -100,13 +102,14 @@ class SomaticSNVCaller(object):
                 "Cowardly refusing to overwrite already existing file %s" % (
                     self.vcf_n_rlx))
 
+        self.vcf_t_maperrprof = self.outprefix + self.VCF_TUMOR_MAPERRPROF_EXT
         self.vcf_t_rlx = self.outprefix + self.VCF_TUMOR_RLX_EXT + ".gz"
         self.vcf_t_str = self.outprefix + self.VCF_TUMOR_STR_EXT + ".gz"
         self.vcf_som_raw = self.outprefix + self.VCF_SOMATIC_RAW_EXT + ".gz"
         self.vcf_som_fin = self.outprefix + self.VCF_SOMATIC_FINAL_EXT
         self.vcf_germl = self.outprefix + self.VCF_GERMLINE_EXT
 
-        self.outfiles = [self.vcf_t_rlx, self.vcf_t_str, self.vcf_som_raw,
+        self.outfiles = [self.vcf_t_maperrprof, self.vcf_t_rlx, self.vcf_t_str, self.vcf_som_raw,
                          self.vcf_som_fin, self.vcf_germl]
         # vcf_n already checked
         for f in self.outfiles:
@@ -121,6 +124,7 @@ class SomaticSNVCaller(object):
         self.mq_filter_t = self.DEFAULT_MQ_FILTER_T
         self.baq_off = self.DEFAULT_BAQ_OFF
         self.src_qual_on = self.DEFAULT_SRC_QUAL_ON
+        self.aln_err_prof_on = self.DEFAULT_ALN_ERR_PROF_ON
         self.src_qual_ign_vcf = self.DEFAULT_SRC_QUAL_IGN_VCF
         self.min_cov = self.DEFAULT_MIN_COV
 
@@ -176,6 +180,9 @@ class SomaticSNVCaller(object):
             LOG.info('Reusing %s' % self.vcf_n_rlx)
             return
 
+        # use of aln_err_prof will only ever reduce the number of FP
+        # which is not wanted to the normal sample
+        
         cmd = [self.LOFREQ, 'call']
         cmd.extend(['-f', self.ref])
         #if self.baq_off:
@@ -205,6 +212,17 @@ class SomaticSNVCaller(object):
         """Variant call on tumor sample
         """
 
+        if self.aln_err_prof_on:
+            cmd = [self.LOFREQ, 'bamstats']
+            cmd.extend(['-f', self.ref])
+            if self.bed:
+                cmd.extend(['-l', self.bed])
+            # -q ?
+            cmd.extend(['-m', "%d" % self.mq_filter_t])
+            cmd.extend(['-o' , self.vcf_t_maperrprof])
+            cmd.append(self.bam_t)
+            self.subprocess_wrapper(cmd)
+            
         cmd = [self.LOFREQ, 'call']
         cmd.extend(['-f', self.ref])
         if self.baq_off:
@@ -220,6 +238,8 @@ class SomaticSNVCaller(object):
         # coverage is filtered later anyway, but ignoring it during call
         # makes things faster and avoids trouble if user forgots to give
         # bed-file etc
+        if self.aln_err_prof_on:
+            cmd.extend(['-A' , self.vcf_t_maperrprof])
         cmd.extend(['-C', "%d" % self.min_cov])
         if self.src_qual_on:
             cmd.append('-S')
@@ -397,13 +417,17 @@ def cmdline_parser():
                         action="store_true",
                         help="Disable BAQ computation")
 
+    parser.add_argument("-A", "--aln-err-prof",
+                        action="store_true",
+                        help="Use alignment error profile")
+
     parser.add_argument("-S", "--src-qual",
                         action="store_true",
-                        help="Enable use of source quality")
+                        help="Expert only: Enable use of source quality (see also -V)")
 
     parser.add_argument("-V", "--ign-vcf",
-                        help="Ignore variants in this vcf file for"
-                        " source quality computation")
+                        help="Expert only: Ignore variants in this vcf file for"
+                        " source quality computation (see above)")
 
     parser.add_argument("--reuse-normal-vcf",
                         help="Expert only: reuse already computed"
@@ -469,6 +493,8 @@ def main():
         somatic_snv_caller.src_qual_on = True
     if args.ign_vcf:
         somatic_snv_caller.src_qual_ign_vcf = args.ign_vcf
+    if args.aln_err_prof:
+        somatic_snv_caller.aln_err_prof_on = True
 
     somatic_snv_caller.run()
 
