@@ -107,7 +107,7 @@ parse_alnerrprof_statsfile(alnerrprof_t *alnerrprof, const char *path, bam_heade
      char line[BUF_SIZE];
      int i;
      int *max_obs_pos;
-     const int default_read_len = 1;
+     const int default_read_len = 250;
      int free_bam_header_hash = 0;
      int rc;
      FILE *in = fopen(path, "r");
@@ -164,10 +164,10 @@ parse_alnerrprof_statsfile(alnerrprof_t *alnerrprof, const char *path, bam_heade
          }
 
          /* upsize if necessary */
-         while (pos+1 > alnerrprof->prop_len[tid]) {
-              /* LOG_DEBUG("upsizing pos+1=%d alnerrprof->prop_len[tid=%d]=%d\n\n", pos+1, tid, alnerrprof->prop_len[tid]); */
-              alnerrprof->props[tid] = realloc(alnerrprof->props[tid], alnerrprof->prop_len[tid]*2);
+         while (pos >= alnerrprof->prop_len[tid]) {
+              LOG_DEBUG("upsizing pos+1=%d alnerrprof->prop_len[tid=%d]=%d\n\n", pos+1, tid, alnerrprof->prop_len[tid]);
               alnerrprof->prop_len[tid] *= 2;
+              alnerrprof->props[tid] = realloc(alnerrprof->props[tid], alnerrprof->prop_len[tid] * sizeof(double));
          }
          alnerrprof->props[tid][pos] = prop;
      }
@@ -175,6 +175,7 @@ parse_alnerrprof_statsfile(alnerrprof_t *alnerrprof, const char *path, bam_heade
      /* downsize */
      for (i=0; i<alnerrprof->num_targets; i++) {
           if (max_obs_pos[i]) {
+               LOG_DEBUG("downsizing alnerrprof->prop_len[tid=%d] to max %d\n", i, max_obs_pos[i]);
                alnerrprof->props[i] = realloc(alnerrprof->props[i], max_obs_pos[i] * sizeof(double));
           } else {
                free(alnerrprof->props[i]);/* free right-away if no data */
