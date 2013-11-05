@@ -116,7 +116,7 @@ parse_alnerrprof_statsfile(alnerrprof_t *alnerrprof, const char *path, bam_heade
      /* needed for finding tid from tname */
      if (bam_header->hash == 0) {
           bam_init_header_hash(bam_header);             
-          free_bam_header_hash = 0; /* FIXME sometimes segfaults for unknown reasons */
+          free_bam_header_hash = 1;
      }
 
      max_obs_pos = calloc(bam_header->n_targets, sizeof(int));
@@ -206,6 +206,7 @@ free_and_exit:
      
      free(max_obs_pos);
 
+     free_bam_header_hash = 0; /* FIXME segfaults often for unknown reason */
      if (free_bam_header_hash) {
           bam_destroy_header_hash(bam_header);
      }
