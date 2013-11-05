@@ -4,18 +4,18 @@ High Prio:
 ==========
 - finalize somatic
 - predict indels
+- maperrprof handling for indels in plp.c
 
 Med Prio:
 =========
-- gzip support to lofreq uniq and vcf.[ch] output
 - filter to c
-- ignore known vars in source qual
 - pseudo parallel: iterating over regions given in bed (if given) or over chroms (if (len(chroms)>1))
 
 Low Prio:
 =========
 - put external licenses into sep folder (incl zlib)
 - add zlib to src?
+- remove tail dist and it's deps if not needed
 - uniq should add uniq filter and set columns accordingly (and also add dp4n for normal sample values)
 - enable pthreads in libbam:
     --- enable at compile time (http://stackoverflow.com/questions/1699113/autoconf-with-pthread)
