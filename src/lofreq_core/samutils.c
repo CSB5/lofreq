@@ -37,13 +37,13 @@ void
 free_alnerrprof(alnerrprof_t *alnerrprof)
 {
      int i;
-     free(alnerrprof->prop_len);
      for (i=0; i<alnerrprof->num_targets; i++) {
           if (alnerrprof->prop_len[i]){
                free(alnerrprof->props[i]);/* free right-away if no data */
           }
      }
      free(alnerrprof->props);
+     free(alnerrprof->prop_len);
      alnerrprof->num_targets = -1;
 }
 
@@ -128,7 +128,7 @@ parse_alnerrprof_statsfile(alnerrprof_t *alnerrprof, const char *path, bam_heade
           alnerrprof->prop_len[i] = default_read_len;/* default alloc here and realloc later */
           alnerrprof->props[i] = calloc(alnerrprof->prop_len[i], sizeof(double));
      }
-     i=-1; /* make sure i is not reused improperly; triggers clang warning though */
+     i=-1; /* make sure value is not reused by accident; triggers clang warning though */
 
      while (NULL != fgets(line, BUF_SIZE, in)) {
           int pos = -1;
@@ -178,7 +178,7 @@ parse_alnerrprof_statsfile(alnerrprof_t *alnerrprof, const char *path, bam_heade
                LOG_DEBUG("downsizing alnerrprof->prop_len[tid=%d] to max %d\n", i, max_obs_pos[i]);
                alnerrprof->props[i] = realloc(alnerrprof->props[i], max_obs_pos[i] * sizeof(double));
           } else {
-               free(alnerrprof->props[i]);/* free right-away if no data */
+               free(alnerrprof->props[i]);/* no data for this tid: free */
           }
           alnerrprof->prop_len[i] = max_obs_pos[i];
      }
