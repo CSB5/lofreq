@@ -206,6 +206,7 @@ free_and_exit:
      
      free(max_obs_pos);
 
+     free_bam_header_hash = 0; /* FIXME segfaults often for unknown reason */
      if (free_bam_header_hash) {
           bam_destroy_header_hash(bam_header);
      }
