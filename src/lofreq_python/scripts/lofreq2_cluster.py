@@ -265,7 +265,7 @@ def main():
         if fh_out != sys.stdout:
             print "No SNPs <-> no clusters!"
             fh_out.close()
-        sys.exit(1)
+        sys.exit(0)
 
         
     cluster = dict()
