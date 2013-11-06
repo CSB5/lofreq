@@ -50,6 +50,7 @@ typedef struct {
      int type;
 } bamstats_conf_t;
 
+#ifdef USE_MAPERRPROF
 
 #define WRITE_STATS  if (ref) { \
           fprintf(bamstats_conf->out, "# Reads ignored for counting (due to bed/mq filtering): %lu\n", num_ign_reads); \
@@ -62,7 +63,18 @@ typedef struct {
           } \
           free(ref); \
      }
+#else
 
+#define WRITE_STATS  if (ref) { \
+          fprintf(bamstats_conf->out, "# Reads ignored for counting (due to bed/mq filtering): %lu\n", num_ign_reads); \
+          fprintf(bamstats_conf->out, "# Reads used for counting: %lu\n", num_good_reads); \
+          if (bamstats_conf->type == TYPE_OPCAT) { \
+               fprintf(bamstats_conf->out, "# Reads with zero matches (after bq filtering): %lu\n", num_zero_matches); \
+               write_cat_stats(target_name, read_cat_counts, num_good_reads, bamstats_conf->out); \
+          } \
+          free(ref); \
+     }
+#endif
 
 
 /* adopted from sam_view.c:__g_skip_aln */
@@ -209,8 +221,11 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
                for (i=0; i<NUM_OP_CATS; i++) {
                     memset(read_cat_counts[i], 0, MAX_READ_LEN * sizeof(unsigned long int));
                }
+
+#ifdef USE_MAPERRPROF
                memset(alnerrprof_usedpos, 0, MAX_READ_LEN * sizeof(unsigned long int));
                memset(alnerrprof, 0, MAX_READ_LEN * sizeof(double));
+#endif
                max_obs_read_len = 0;
                num_good_reads = num_ign_reads = num_zero_matches = 0;
 

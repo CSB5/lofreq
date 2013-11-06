@@ -66,8 +66,9 @@ typedef struct {
 } mplp_pileup_t;
 
 
+#ifdef USE_MAPERRPROF
 static alnerrprof_t *alnerrprof = NULL;
-
+#endif
 
 /* convenience function */
 int
@@ -117,7 +118,9 @@ plp_col_free(plp_col_t *p) {
          int_varray_free(& p->base_quals[i]);
          int_varray_free(& p->map_quals[i]);
          int_varray_free(& p->source_quals[i]);
+#ifdef USE_MAPERRPROF
          int_varray_free(& p->alnerr_qual[i]);
+#endif
     }
     int_varray_free(& p->ins_quals);
     int_varray_free(& p->del_quals);
@@ -563,8 +566,11 @@ mplp_func(void *data, bam1_t *b)
  * data-structure. plp_col members allocated here. Called must free
  * with plp_col_free(plp_col);
  *
- * NOTE this used to be a convenience function and turned into a big
+ * FIXME this used to be a convenience function and turned into a big
  * and slow monster. keeping copies of everything is inefficient.
+ * const bam_pileup1_t *plp is (almost) all we need for snv calling,
+ * so get rid of this function in the future (which will however break
+ * the subcommand plpsummmary)
  */
 void compile_plp_col(plp_col_t *plp_col,
                  const bam_pileup1_t *plp, const int n_plp, 
@@ -774,7 +780,7 @@ void compile_plp_col(plp_col_t *plp_col,
            * bases will be presented as ‘*’ in the following lines.
            */
 
-          if (p->indel != 0) { /* seems to rule out is_del */
+          if (p->indel != 0) {
                /* insertion (+)
                 */
                if (p->indel > 0) {
@@ -941,6 +947,7 @@ mpileup(const mplp_conf_t *mplp_conf,
     }
     bam_mplp_set_maxcnt(iter, max_depth);
 
+#ifdef USE_MAPERRPROF
     if (mplp_conf->alnerrprof_file) {
          alnerrprof = calloc(1, sizeof(alnerrprof_t));
          if (parse_alnerrprof_statsfile(alnerrprof, mplp_conf->alnerrprof_file, h)) {
@@ -949,6 +956,7 @@ mpileup(const mplp_conf_t *mplp_conf,
          }
          normalize_alnerrprof(alnerrprof);
     }
+#endif
     
     LOG_DEBUG("%s\n", "Starting pileup loop");
     while (bam_mplp_auto(iter, &tid, &pos, n_plp, plp) > 0) {
@@ -990,10 +998,12 @@ mpileup(const mplp_conf_t *mplp_conf,
 
     } /* while bam_mplp_auto */
 
+#ifdef USE_MAPERRPROF
     if (alnerrprof) {
          free_alnerrprof(alnerrprof);
          free(alnerrprof);
     }
+#endif
     free(buf.s);
     bam_mplp_destroy(iter);
     bam_header_destroy(h);
