@@ -279,7 +279,7 @@ merge_srcq_baseq_and_mapq(const int sq, const int bq, const int mq)
 {
      double sp, mp, bp, jp; /* corresponding probs */
      
-     if (255 == sq) {
+     if (-1 == sq) {
           sp = 0.0;
      } else {
           sp = PHREDQUAL_TO_PROB(sq);
@@ -566,7 +566,11 @@ call_snvs(const plp_col_t *p, void *confp)
                if (! (conf->flag & SNVCALL_USE_SQ)) {
                     sq = -1; /* i.e. NA */
                }
+#ifdef USE_MAPERRPROF
                final_err_prob = merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
+#else
+               final_err_prob = merge_srcq_baseq_and_mapq(sq, bq, mq);
+#endif
                err_probs[num_err_probs++] = final_err_prob;
           }
      }
