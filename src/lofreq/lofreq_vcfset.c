@@ -363,12 +363,14 @@ main_vcfset(int argc, char *argv[])
                    num_vars_out += 1;
                    vcf_write_var(& vcfset_conf.vcf_out, var_1);
 
-              } else {
+              }
+#ifdef NOT_OKAY_IF_SIMPLE_KEY_AND_MULTIALLELIC
+              else {
                    /* save some mem */
                    HASH_DEL(var_hash_vcf2, var_2);
                    var_hash_free_elem(var_2);
               }
-
+#endif
          } else if (vcfset_conf.vcf_setop == SETOP_INTERSECT) {
               if (NULL != var_2) {
                    num_vars_out += 1;
