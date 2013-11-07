@@ -189,7 +189,10 @@ fi
 AC_SUBST([AM_CFLAGS])
 AC_SUBST([AM_LDFLAGS])
 
-AC_DEFINE([_USE_KNETFILE],[],[KNETFILE for samtools])
+AC_DEFINE([_USE_KNETFILE], [], [KNETFILE for samtools])
+
+AC_DEFINE([USE_SOURCEQUAL], [], [support source quality in LoFreq])
+AC_DEFINE([USE_ALNERRPROF], [], [support mapping error profile in LoFreq])
 
 #        src/cdflib90/Makefile
 AC_CONFIG_FILES(Makefile
