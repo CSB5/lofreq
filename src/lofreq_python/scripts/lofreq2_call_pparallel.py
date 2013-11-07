@@ -404,10 +404,9 @@ def main():
 
 
 if __name__ == "__main__":
-    LOG.info("Running this makes sense when -b is fixed or if coverage is low.")
+    sys.stderr.write("NOTE: Running this only makes sense when -b is fixed or coverage is low.\n")
     # otherwise runtime optimization through dyn. bonf. kicks in
-    LOG.warn("If IO is an issue don't use too many processors")
+    sys.stderr.write("NOTE: If IO is an issue, then don't use too many processors")
     
-    LOG.warn("main: mp output has no SHBC flag")
-    LOG.warn("main: test and diff!")
+    LOG.warn("Largely untested!")
     main()

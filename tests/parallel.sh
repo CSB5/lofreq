@@ -14,7 +14,7 @@ bed=$basedir/denv2-pseudoclonal_incl.bed
 
 basedir=data/somatic
 bam=$basedir/CHH966-tumor-100x-10pur-hg19.chr22-bed-only.bam
-reffa=$basedir/hg19_chr22.fa
+reffa=$basedir/hg19_chr22.fa.gz
 bed=$basedir/SeqCap_EZ_Exome_v3_primary_lib_extend_no_overlap_minus300.chr22.bed
 
 
@@ -26,13 +26,14 @@ log=$outdir/log.txt
 KEEP_TMP=0
 NUM_THREADS=4
 
-cmd="$LOFREQ call -f $reffa -l $bed -b dynamic -o $outraw_single --verbose $bam"
+cmd="$LOFREQ call -f $reffa -l $bed -o $outraw_single --verbose $bam"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
 fi
 
-cmd="$(dirname $LOFREQ)/../lofreq_python/scripts/lofreq2_call_parallel.py -n $NUM_THREADS -f $reffa -l $bed -b dynamic -o $outraw_parallel --verbose $bam"
+LOFREQ_PARALLEL="$(dirname $LOFREQ)/../lofreq_python/scripts/lofreq2_call_pparallel.py"
+cmd="$LOFREQ_PARALLEL -n $NUM_THREADS -f $reffa -l $bed -o $outraw_parallel --verbose $bam"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
