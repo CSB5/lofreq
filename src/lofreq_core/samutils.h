@@ -33,7 +33,7 @@ count_cigar_ops(int *counts, int **quals,
                 char *target);
 
 
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
 
 typedef struct {
      int num_targets; /* bam_header->n_targets */
