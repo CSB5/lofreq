@@ -84,17 +84,19 @@ void
 plp_col_init(plp_col_t *p) {
     int i;
 
+    const int grow_by_size = 1000;
+
     p->target =  NULL;
     p->pos = -INT_MAX;
     p->ref_base = '\0';
     p->cons_base = 'N';
     p->coverage = -INT_MAX;
     for (i=0; i<NUM_NT4; i++) {
-         int_varray_init(& p->base_quals[i], 0);
-         int_varray_init(& p->map_quals[i], 0);
-         int_varray_init(& p->source_quals[i], 0);
+         int_varray_init(& p->base_quals[i], grow_by_size);
+         int_varray_init(& p->map_quals[i], grow_by_size);
+         int_varray_init(& p->source_quals[i], grow_by_size);
 #ifdef USE_MAPERRPROF
-         int_varray_init(& p->alnerr_qual[i], 0);
+         int_varray_init(& p->alnerr_qual[i], grow_by_size);
 #endif
          p->fw_counts[i] = 0;
          p->rv_counts[i] = 0;
@@ -708,9 +710,8 @@ void compile_plp_col(plp_col_t *plp_col,
                          LOG_ERROR("alnerror for tid=%d too small for qpos=%d. Setting to 0\n", tid, p->qpos+1);
                          PLP_COL_ADD_QUAL(& plp_col->alnerr_qual[nt4], PROB_TO_PHREDQUAL(0.0));
                     }
-               } else {
-                    PLP_COL_ADD_QUAL(& plp_col->alnerr_qual[nt4], PROB_TO_PHREDQUAL(0.0));
                }
+               /* don't add anything. keep empty */
 #endif
                if (bam1_strand(p->b)) {
                     plp_col->rv_counts[nt4] += 1;
