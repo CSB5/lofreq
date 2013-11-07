@@ -31,7 +31,7 @@ extern void bam_destroy_header_hash(bam_header_t *header);
 
 
 
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
 
 void
 free_alnerrprof(alnerrprof_t *alnerrprof)
