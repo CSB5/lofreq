@@ -570,7 +570,7 @@ call_snvs(const plp_col_t *p, void *confp)
                }
 #endif
 
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
                if (p->alnerr_qual[i].n) {
                     aq = p->alnerr_qual[i].data[j];
                }
@@ -592,7 +592,7 @@ call_snvs(const plp_col_t *p, void *confp)
                     alt_counts[alt_idx] += 1;
                }
 
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
                final_err_prob = merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
 #else
                final_err_prob = merge_srcq_baseq_and_mapq(sq, bq, mq);
@@ -749,7 +749,7 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -s | --sig                   P-Value cutoff / significance level [%f]\n", snvcall_conf->sig);
      fprintf(stderr, "       -b | --bonf                  Bonferroni factor. 'dynamic' (increase per actually performed test), 'auto' (infer from bed-file) or INT ['dynamic']\n");
      fprintf(stderr, "- Misc.\n");                                           
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
      fprintf(stderr, "       -A | --map-prof FILE         Mapping error profile (produced with bamstats)\n");
 #endif
      fprintf(stderr, "       -C | --min-cov INT           Test only positions having at least this coverage [%d]\n", snvcall_conf->min_cov);
@@ -887,7 +887,7 @@ for cov in coverage_range:
               {"sig", required_argument, NULL, 's'},
               {"bonf", required_argument, NULL, 'b'}, /* NOTE changes here must be reflected in pseudo_parallel code as well */
 
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
               {"map-prof", required_argument, NULL, 'A'},
 #endif                   
               {"min-cov", required_argument, NULL, 'C'},
@@ -1018,7 +1018,7 @@ for cov in coverage_range:
               }
               break;
 
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
          case 'A':
               mplp_conf.alnerrprof_file = strdup(optarg);
               break;

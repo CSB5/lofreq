@@ -66,7 +66,7 @@ typedef struct {
 } mplp_pileup_t;
 
 
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
 static alnerrprof_t *alnerrprof = NULL;
 #endif
 
@@ -95,7 +95,7 @@ plp_col_init(plp_col_t *p) {
          int_varray_init(& p->base_quals[i], grow_by_size);
          int_varray_init(& p->map_quals[i], grow_by_size);
          int_varray_init(& p->source_quals[i], grow_by_size);
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
          int_varray_init(& p->alnerr_qual[i], grow_by_size);
 #endif
          p->fw_counts[i] = 0;
@@ -120,7 +120,7 @@ plp_col_free(plp_col_t *p) {
          int_varray_free(& p->base_quals[i]);
          int_varray_free(& p->map_quals[i]);
          int_varray_free(& p->source_quals[i]);
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
          int_varray_free(& p->alnerr_qual[i]);
 #endif
     }
@@ -698,7 +698,7 @@ void compile_plp_col(plp_col_t *plp_col,
 #ifdef USE_SOURCEQUAL
                PLP_COL_ADD_QUAL(& plp_col->source_quals[nt4], sq);
 #endif
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
                if (alnerrprof) {
                     int tid = p->b->core.tid;
                     assert(tid < alnerrprof->num_targets);
@@ -948,7 +948,7 @@ mpileup(const mplp_conf_t *mplp_conf,
     }
     bam_mplp_set_maxcnt(iter, max_depth);
 
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
     if (mplp_conf->alnerrprof_file) {
          alnerrprof = calloc(1, sizeof(alnerrprof_t));
          if (parse_alnerrprof_statsfile(alnerrprof, mplp_conf->alnerrprof_file, h)) {
@@ -999,7 +999,7 @@ mpileup(const mplp_conf_t *mplp_conf,
 
     } /* while bam_mplp_auto */
 
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
     if (alnerrprof) {
          free_alnerrprof(alnerrprof);
          free(alnerrprof);

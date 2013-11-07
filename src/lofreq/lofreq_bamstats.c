@@ -50,7 +50,7 @@ typedef struct {
      int type;
 } bamstats_conf_t;
 
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
 
 #define WRITE_STATS  if (ref) { \
           fprintf(bamstats_conf->out, "# Reads ignored for counting (due to bed/mq filtering): %lu\n", num_ign_reads); \
@@ -115,7 +115,7 @@ usage(bamstats_conf_t *bamstats_conf)
      fprintf(stderr, "  -o | --out FILE       Write stats to this output file [- = stdout]\n");
      fprintf(stderr, "  -q | --min-bq INT     Ignore any base with baseQ smaller than INT [%d]\n", bamstats_conf->min_bq);
      fprintf(stderr, "  -m | --min-mq INT     Ignore reads with mapQ smaller than INT [%d]\n", bamstats_conf->min_mq);
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
      fprintf(stderr, "       --opcat          Report cigar OP categories instead of error profile\n");
 #endif
 }
@@ -164,7 +164,7 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
      unsigned long int num_ign_reads = 0;
      unsigned long int num_zero_matches = 0;
 
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
      double alnerrprof[MAX_READ_LEN];
      unsigned long int alnerrprof_usedpos[MAX_READ_LEN];
 #endif
@@ -178,7 +178,7 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
          LOG_WARN("%s\n", "cigar op counts not using base qualities and assuming (roughly) equal read length");/* (which could be easily implemented for matches");*/
      }
 
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
      memset(alnerrprof_usedpos, 0, MAX_READ_LEN * sizeof(unsigned long int));
      memset(alnerrprof, 0, MAX_READ_LEN * sizeof(double));
 #endif
@@ -222,7 +222,7 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
                     memset(read_cat_counts[i], 0, MAX_READ_LEN * sizeof(unsigned long int));
                }
 
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
                memset(alnerrprof_usedpos, 0, MAX_READ_LEN * sizeof(unsigned long int));
                memset(alnerrprof, 0, MAX_READ_LEN * sizeof(double));
 #endif
@@ -240,7 +240,7 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
                     continue;
                }
           } else {
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
                calc_read_alnerrprof(alnerrprof, alnerrprof_usedpos, b, ref);
 #endif
           }
@@ -290,7 +290,7 @@ main_bamstats(int argc, char *argv[])
      samfile_t *sam =  NULL;
      int rc = 0;
      bamstats_conf_t bamstats_conf;
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
      static int report_opcat = 0;
 #else
      static int report_opcat = 1;
@@ -328,7 +328,7 @@ main_bamstats(int argc, char *argv[])
                {"help", no_argument, NULL, 'h'},
                {"verbose", no_argument, &verbose, 1},
                {"debug", no_argument, &debug, 1},
-#ifdef USE_MAPERRPROF
+#ifdef USE_ALNERRPROF
                {"opcat", no_argument, &report_opcat, 1},
 #endif
                {0, 0, 0, 0} /* sentinel */
