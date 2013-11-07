@@ -225,12 +225,26 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char ref,
    not mapping error and not genome/source error but a aligner error
    or
    not mapping error and not genome/source error and not aligner error but a base error
-*/
+   
+ * NOTE: for mq the standard says that 255 means NA. In this function we
+ * use -1 instead, and treat 255 as valid phred-score so you might want
+ * to change mq before calling this functio
+ *
+ */
 double
 merge_srcq_baseq_mapq_and_alnq(const int sq, const int bq, const int mq, const int aq)
 {
      double sp, bp, mp, ap, jp; /* corresponding probs */
      
+
+     bp = PHREDQUAL_TO_PROB(bq);
+
+     if (-1 == mq) {
+          mp = 0.0;
+     } else {
+          mp = PHREDQUAL_TO_PROB(mq);
+     }
+
      if (-1 == sq) {
           sp = 0.0;
      } else {
@@ -243,17 +257,10 @@ merge_srcq_baseq_mapq_and_alnq(const int sq, const int bq, const int mq, const i
           ap = PHREDQUAL_TO_PROB(aq);
      }
 
-     bp = PHREDQUAL_TO_PROB(bq);
-
-     if (255 == mq) {
-          mp = 0.0;
-     } else {
-          mp = PHREDQUAL_TO_PROB(mq);
-     }
-
-     jp = mp + (1.0 - mp) * sp + (1-mp) * (1-sp) * ap +  (1-mp) * (1-sp) * (1-ap) * bp;
+     jp = mp + (1.0 - mp) * sp + (1.0-mp) * (1.0-sp) * ap +  (1.0-mp) * (1.0-sp) * (1.0-ap) * bp;
 #ifdef DEBUG
-     LOG_DEBUG("bq=%d mq=%d aq=%d sq=%d -> jq=%d\n", bq, mq, aq, sq, PROB_TO_PHREDQUAL(jp));
+     LOG_DEBUG("jp=%g  =  mp=%g  +  (1.0-mp=%g)*sp=%g  +  (1-mp=%g)*(1-sp=%g)*ap=%g  + (1-mp=%g)*(1-sp=%g)*(1-ap=%g)*bp=%g\n",
+               jp, mp, mp, sp, mp, sp, ap, mp, sp, ap, bp);
 #endif
 
      return jp;
@@ -273,6 +280,11 @@ merge_srcq_baseq_mapq_and_alnq(const int sq, const int bq, const int mq, const i
    not a mapping error, but a genome/source error
    or
    not mapping error and no genome/source error AND base-error
+
+ * NOTE: for mq the standard says that 255 means NA. In this function we
+ * use -1 instead, and treat 255 as valid phred-score so you might want
+ * to change mq before calling this functio
+ *
 */
 double
 merge_srcq_baseq_and_mapq(const int sq, const int bq, const int mq)
@@ -287,13 +299,14 @@ merge_srcq_baseq_and_mapq(const int sq, const int bq, const int mq)
 
      bp = PHREDQUAL_TO_PROB(bq);
 
-     if (255 == mq) {
+     if (-1 == mq) {
           mp = 0.0;
      } else {
           mp = PHREDQUAL_TO_PROB(mq);
      }
 
      jp = mp + (1.0 - mp) * sp + (1-mp) * (1-sp) * bp;
+     LOG_FIXME("jp = %g  =  mp=%g  +  (1.0 - mp=%g) * sp=%g  +  (1-mp=%g) * (1-sp=%g) * bp=%g\n", jp, mp, mp, sp, mp, sp, bp);
 #ifdef DEBUG
      LOG_DEBUG("bq=%d mq=%d sq=%d -> jq=%d\n", bq, mq, sq, PROB_TO_PHREDQUAL(jp));
 #endif
@@ -304,7 +317,12 @@ merge_srcq_baseq_and_mapq(const int sq, const int bq, const int mq)
 
 /* "Merge" MQ and BQ if requested using the following equation:
  *  P_jq = P_mq * + (1-P_mq) P_bq.
- *  If MQ==255 (i.e. not available) return BQ
+ *
+ * NOTE: for mq the standard says that 255 means NA. In this function we
+ * use -1 instead, and treat 255 as valid phred-score so you might want
+ * to change mq before calling this functio
+ *
+
  */
 double
 merge_baseq_and_mapq(const int bq, const int mq)
@@ -312,7 +330,7 @@ merge_baseq_and_mapq(const int bq, const int mq)
      double mp, bp, jp; /* corresponding probs */
 
      bp = PHREDQUAL_TO_PROB(bq);
-     if (255 == mq) {
+     if (-1 == mq) {
           return bp;
      }
 
@@ -529,16 +547,33 @@ call_snvs(const plp_col_t *p, void *confp)
           }
 
           for (j=0; j<p->base_quals[i].n; j++) {
-               int bq = p->base_quals[i].data[j]; 
-               int mq = p->map_quals[i].data[j];
-               double final_err_prob; /* == final quality used for snv calling */
-#ifdef USE_SOURCEQUAL
-               int sq = p->source_quals[i].data[j];
-#else
+               int bq = p->base_quals[i].data[j];                
+               int mq = -1;
                int sq = -1;
+               int aq = -1;
+               double final_err_prob; /* == final quality used for snv calling */
+               
+               if ((conf->flag & SNVCALL_USE_MQ) && p->map_quals[i].n) {
+                    mq = p->map_quals[i].data[j];
+                    /*according to spec 255 is unknown */
+                    if (mq == 255) {
+                         mq = -1;
+                    }
+               }
+
+#ifdef USE_SOURCEQUAL
+               if (p->source_quals[i].n) {
+                    sq = p->source_quals[i].data[j];
+                    if (! (conf->flag & SNVCALL_USE_SQ)) {
+                         sq = -1; /* i.e. NA */
+                    }
+               }
 #endif
+
 #ifdef USE_MAPERRPROF
-               int aq = p->alnerr_qual[i].data[j]; /* always set */
+               if (p->alnerr_qual[i].n) {
+                    aq = p->alnerr_qual[i].data[j];
+               }
 #endif
                if (is_alt_base) {
                     alt_raw_counts[alt_idx] += 1;
@@ -556,16 +591,7 @@ call_snvs(const plp_col_t *p, void *confp)
 
                     alt_counts[alt_idx] += 1;
                }
-#if 0
-               if ((conf->flag & SNVCALL_USE_MQ)) {
-                    final_err_prob = merge_baseq_and_mapq(bq, mq);
-#endif
-               if (! (conf->flag & SNVCALL_USE_MQ)) {
-                    mq = 255; /* i.e. unkown MQ  according to spec */
-               }
-               if (! (conf->flag & SNVCALL_USE_SQ)) {
-                    sq = -1; /* i.e. NA */
-               }
+
 #ifdef USE_MAPERRPROF
                final_err_prob = merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
 #else
