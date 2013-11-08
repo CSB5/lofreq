@@ -635,7 +635,10 @@ void compile_plp_col(plp_col_t *plp_col,
           uint8_t *bi = bam_aux_get(p->b, "BI"); /* GATK indels */
           uint8_t *bd = bam_aux_get(p->b, "BD"); /* GATK deletions */
 #ifdef USE_SOURCEQUAL
-          int sq = bam_aux2i(bam_aux_get(p->b, SRC_QUAL_TAG)); /* lofreq internally computed on the fly */
+          int sq = -1;
+          if (conf->flag & MPLP_USE_SQ) {
+               sq = bam_aux2i(bam_aux_get(p->b, SRC_QUAL_TAG)); /* lofreq internally computed on the fly */
+          }
 #endif
 
 #if 0
@@ -696,7 +699,9 @@ void compile_plp_col(plp_col_t *plp_col,
                PLP_COL_ADD_QUAL(& plp_col->base_quals[nt4], bq);
                PLP_COL_ADD_QUAL(& plp_col->map_quals[nt4], mq);
 #ifdef USE_SOURCEQUAL
-               PLP_COL_ADD_QUAL(& plp_col->source_quals[nt4], sq);
+               if (conf->flag & MPLP_USE_SQ) {
+                    PLP_COL_ADD_QUAL(& plp_col->source_quals[nt4], sq);
+               }
 #endif
 #ifdef USE_ALNERRPROF
                if (alnerrprof) {
