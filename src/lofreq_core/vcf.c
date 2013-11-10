@@ -31,7 +31,6 @@ const char *HEADER_LINE = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n";
 int warned_one_alt_base_support = 0;
 int warned_one_ref_base_support = 0;
 
-
 void 
 var_hash_free_table(var_hash_t *var_hash)
 {
@@ -77,8 +76,9 @@ vcf_var_key(char **key, var_t *var)
 {
      int bufsize = strlen(var->chrom)+16;
      (*key) = malloc(bufsize *sizeof(char));
-     snprintf(*key, bufsize, "%s %ld %c %c", var->chrom, var->pos, 
+     snprintf(*key, bufsize, "%s %ld %c %c", var->chrom, var->pos+1, 
               var->ref, var->alt);
+     /* pos+1 make terminal output easier */
 }
 
 /* as above but only using chrom and pos */
@@ -87,7 +87,8 @@ vcf_var_key_simple(char **key, var_t *var)
 {
      int bufsize = strlen(var->chrom)+16;
      (*key) = malloc(bufsize *sizeof(char));
-     snprintf(*key, bufsize, "%s %ld", var->chrom, var->pos);
+     snprintf(*key, bufsize, "%s %ld", var->chrom, var->pos+1);
+     /* pos+1 make terminal output easier */     
 }
 
 
