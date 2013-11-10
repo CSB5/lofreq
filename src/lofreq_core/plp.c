@@ -313,7 +313,7 @@ source_qual_load_ign_vcf(const char *vcf_path, void *bed)
 
               HASH_FIND_STR(source_qual_ign_vars_hash, key, match);
               if (match) {
-                   LOG_VERBOSE("Already got a variant match for key '%s'. Will keep the old one.\n", key);
+                   LOG_DEBUG("Already got a variant match for key '%s'. Will keep the old one.\n", key);
                    free(var);
                    continue;
               }
