@@ -154,6 +154,7 @@ def lofreq_cmd_for_regions(regions, lofreq_call_args, tmp_dir):
         cmd += ' --no-default-filter'# needed here whether user-arg or not
         cmd += " -r %s -o %s/%d.vcf > %s/%d.log 2>&1" % (
             reg_str, tmp_dir, i, tmp_dir, i)
+        #LOG.warn("DEBUG: yielding %s" % cmd)
         yield cmd
 
 
@@ -249,7 +250,7 @@ def main():
     bed_file = lofreq_call_args[idx+1]
     lofreq_call_args = lofreq_call_args[0:idx] +  lofreq_call_args[idx+2:]
     try:
-        regions = read_bed_coords(bed_file)
+        regions = list(read_bed_coords(bed_file))
     except ValueError:
         LOG.fatal("Parsing of %s failed" % bed_file)
         sys.exit(1)
@@ -340,10 +341,13 @@ def main():
     p.wait()
     # report failures and exit if found
     if any(results):
-        for (res, cmd) in zip(results, thread_cmds):
-            if res != 0:
-                LOG.fatal("The following command failed"
-                          " with code %d: %s" %  (res, cmd))
+        for (res) in results:
+            LOG.fatal("Once process reported: %s", res)
+        
+        #for (res, cmd) in zip(results, thread_cmds):
+        #    if res != 0:
+        #        LOG.fatal("The following command failed"
+        #                  " with code %d: %s" %  (res, cmd))
         LOG.fatal("Can't continue")
         sys.exit(1)
 
