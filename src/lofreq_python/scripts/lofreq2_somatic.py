@@ -107,7 +107,7 @@ class SomaticSNVCaller(object):
         self.vcf_t_str = self.outprefix + self.VCF_TUMOR_STR_EXT + ".gz"
         self.vcf_som_raw = self.outprefix + self.VCF_SOMATIC_RAW_EXT + ".gz"
         self.vcf_som_fin = self.outprefix + self.VCF_SOMATIC_FINAL_EXT
-        self.vcf_germl = self.outprefix + self.VCF_GERMLINE_EXT
+        self.vcf_germl = self.outprefix + self.VCF_GERMLINE_EXT + ".gz"
 
         self.outfiles = [self.vcf_t_maperrprof, self.vcf_t_rlx, self.vcf_t_str, self.vcf_som_raw,
                          self.vcf_som_fin, self.vcf_germl]
