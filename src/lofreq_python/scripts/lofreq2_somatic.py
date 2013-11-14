@@ -107,7 +107,7 @@ class SomaticSNVCaller(object):
         self.vcf_t_str = self.outprefix + self.VCF_TUMOR_STR_EXT + ".gz"
         self.vcf_som_raw = self.outprefix + self.VCF_SOMATIC_RAW_EXT + ".gz"
         self.vcf_som_fin = self.outprefix + self.VCF_SOMATIC_FINAL_EXT
-        self.vcf_germl = self.outprefix + self.VCF_GERMLINE_EXT
+        self.vcf_germl = self.outprefix + self.VCF_GERMLINE_EXT + ".gz"
 
         self.outfiles = [self.vcf_t_maperrprof, self.vcf_t_rlx, self.vcf_t_str, self.vcf_som_raw,
                          self.vcf_som_fin, self.vcf_germl]
@@ -185,8 +185,8 @@ class SomaticSNVCaller(object):
         
         cmd = [self.LOFREQ, 'call']
         cmd.extend(['-f', self.ref])
-        #if self.baq_off:
-        #    cmd.append('-B')
+        # BAQ always off in normal as it only reduces chance of calls, which we don't want for normal
+        cmd.append('-B')
         cmd.append('--verbose')
         if self.bed:
             cmd.extend(['-l', self.bed])
@@ -415,7 +415,7 @@ def cmdline_parser():
 
     parser.add_argument("-B", "--baq-off",
                         action="store_true",
-                        help="Disable BAQ computation")
+                        help="Disable BAQ computation in tumor")
 
     parser.add_argument("-A", "--aln-err-prof",
                         action="store_true",
