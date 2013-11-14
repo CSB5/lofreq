@@ -117,35 +117,45 @@ def read_bed_coords(fbed):
 
     bed_coords = []
 
-    fh = open(fbed, 'r')
-    for line in fh:
-        if line.startswith('#'):
-            continue
-        if len(line.strip()) == 0:
-            continue
-        try:
-            (chrom, start, end) = line.split("\t")[0:3]
-        except IndexError:
-            LOG.fatal(
+    with open(fbed, 'r') as fh:
+        for line in fh:
+            if line.startswith('#'):
+                continue
+            if len(line.strip()) == 0:
+                continue
+            try:
+                (chrom, start, end) = line.split("\t")[0:3]
+            except IndexError:
+                LOG.fatal(
                 "FATAL: Failed to parse bed line: %s\n" % (line))
-            raise ValueError
+                raise ValueError
 
-        # http://genome.ucsc.edu/FAQ/FAQformat.html#format1
-        # 4: name, score, strand...
-        start = int(float(start))
-        end = int(float(end))
-        # stupid float is necessary for scientific notation, e.g. 1.25e+08
-        # the only alternative is to use Decimal
-        if end <= start :
-            LOG.fatal("Start value (%d) not lower end value (%d)."
-            " Parsed from file %s" % (
-                start, end, fbed))
-            raise ValueError
-        bed_coords.append((chrom, start, end))
-    fh.close()
+            # http://genome.ucsc.edu/FAQ/FAQformat.html#format1
+            # 4: name, score, strand...
+            start = int(float(start))
+            end = int(float(end))
+            # stupid float is necessary for scientific notation, e.g. 1.25e+08
+            # the only alternative is to use Decimal
+            if end <= start :
+                LOG.fatal("Start value (%d) not lower end value (%d)."
+                " Parsed from file %s" % (
+                    start, end, fbed))
+                raise ValueError
+            yield (chrom, start, end)
 
-    return bed_coords
 
+def lofreq_cmd_for_regions(regions, lofreq_call_args, tmp_dir):
+    """generator"""
+
+    for (i, reg) in enumerate(regions):
+        # maintain region order by using index
+        reg_str = "%s:%d-%d" % reg
+        cmd = ' '.join(lofreq_call_args)
+        cmd += ' --no-default-filter'# needed here whether user-arg or not
+        cmd += " -r %s -o %s/%d.vcf > %s/%d.log 2>&1" % (
+            reg_str, tmp_dir, i, tmp_dir, i)
+        #LOG.warn("DEBUG: yielding %s" % cmd)
+        yield cmd
 
 
 def work(cmd):
@@ -241,7 +251,7 @@ def main():
     bed_file = lofreq_call_args[idx+1]
     lofreq_call_args = lofreq_call_args[0:idx] +  lofreq_call_args[idx+2:]
     try:
-        regions = read_bed_coords(bed_file)
+        regions = list(read_bed_coords(bed_file))
     except ValueError:
         LOG.fatal("Parsing of %s failed" % bed_file)
         sys.exit(1)
@@ -323,27 +333,23 @@ def main():
 
     LOG.info("Using %d threads with following basic args: %s\n" % (
             num_threads, ' '.join(lofreq_call_args)))
-    thread_cmds = []
-    for (i, reg) in enumerate(regions):
-        # maintain region order by using index
-        reg_str = "%s:%d-%d" % reg
-        this_cmd = ' '.join(lofreq_call_args)
-        this_cmd += ' --no-default-filter'# needed here whether user-arg or not
-        this_cmd += " -r %s -o %s/%d.vcf > %s/%d.log 2>&1" % (
-            reg_str, tmp_dir, i, tmp_dir, i)
-        thread_cmds.append(this_cmd)
 
     results = []
     pool = multiprocessing.Pool(processes=num_threads)
-    p = pool.map_async(work, thread_cmds,
-                        callback=results.extend)
+    p = pool.map_async(work,
+                       lofreq_cmd_for_regions(regions, lofreq_call_args, tmp_dir), 
+                       chunksize=128,
+                       callback=results.extend)
     p.wait()
     # report failures and exit if found
     if any(results):
-        for (res, cmd) in zip(results, thread_cmds):
-            if res != 0:
-                LOG.fatal("The following command failed"
-                          " with code %d: %s" %  (res, cmd))
+        for (res) in results:
+            LOG.fatal("Once process reported: %s", res)
+        
+        #for (res, cmd) in zip(results, thread_cmds):
+        #    if res != 0:
+        #        LOG.fatal("The following command failed"
+        #                  " with code %d: %s" %  (res, cmd))
         LOG.fatal("Can't continue")
         sys.exit(1)
 

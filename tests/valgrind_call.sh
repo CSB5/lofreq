@@ -8,10 +8,10 @@ valgrind_log=$(mktemp -t $(basename $0).XXXXXX.valgrind)
 vcf_out=$(mktemp -t $(basename $0).XXXXXX.vcf)
 rm $vcf_out $valgrind_log
 
-#reffa=data/denv2-pseudoclonal/denv2-pseudoclonal_cons.fa
-#bam=data/denv2-pseudoclonal/denv2-pseudoclonal.bam
-reffa=./data/somatic/hg19_chr22.fa.gz
-bam=./data/somatic/CHH966-tumor-100x-10pur-hg19.chr22-bed-only.bam
+reffa=data/denv2-pseudoclonal/denv2-pseudoclonal_cons.fa
+bam=data/denv2-pseudoclonal/denv2-pseudoclonal.bam
+#reffa=./data/somatic/hg19_chr22.fa.gz
+#bam=./data/somatic/CHH966-tumor-100x-10pur-hg19.chr22-bed-only.bam
 # use region, otherwise execution will take ages
 #region_arg=consensus:100-300 # FIXME
 
