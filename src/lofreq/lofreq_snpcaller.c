@@ -1124,11 +1124,12 @@ for cov in coverage_range:
                    mplp_conf.min_bq, snvcall_conf.min_altbq); 
          return 1;
     }
+#ifdef WHY
     if (bed_file && mplp_conf.reg) {
          LOG_FATAL("%s\n", "Can only use either bed-file or region but not both.\n"); 
          return 1;
     }
-
+#endif
     if (mplp_conf.flag & MPLP_REALN && ! mplp_conf.fa && ! plp_summary_only) {
          LOG_FATAL("%s\n", "Can't compute BAQ with no reference...\n"); 
          return 1;
