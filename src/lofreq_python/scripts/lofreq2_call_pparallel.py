@@ -180,7 +180,7 @@ def main():
     orig_argv = list(sys.argv[1:])
 
     try:
-        idx = orig_argv.index('--pparallel-verbose')
+        idx = orig_argv.index('--pp-verbose')
         orig_argv = orig_argv[0:idx] +  orig_argv[idx+1:]
         verbose = True
     except (IndexError, ValueError):
@@ -189,7 +189,7 @@ def main():
         LOG.setLevel(logging.INFO)
 
     try:
-        idx = orig_argv.index('--pparallel-debug')
+        idx = orig_argv.index('--pp-debug')
         orig_argv = orig_argv[0:idx] +  orig_argv[idx+1:]
         debug = True
     except (IndexError, ValueError):
@@ -197,7 +197,15 @@ def main():
     if debug:
         LOG.setLevel(logging.DEBUG)
 
-   
+    dryrun = False
+    try:
+        idx = orig_argv.index('--pp-dryrun')
+        orig_argv = orig_argv[0:idx] +  orig_argv[idx+1:]
+        dryrun = True
+    except (IndexError, ValueError):
+        pass
+
+    
     # get num threads and remove from arg list
     #
     try:
@@ -218,13 +226,13 @@ def main():
         sys.stderr.write("Calls 'lofreq call' per bed-region or chrom if no"
                          "bed was given and combines result at the end.\n"
                          "All arguments except '-n threads",
-                         "'--pparallel-debug' and 'pparallel-verbose'"
+                         "'--pp-debug', 'pp-verbose' and pp-dryrun"
                          "will be passed down to 'lofreq call'\n")
         sys.exit(1)
 
 
     lofreq_call_args = list(orig_argv)
-    LOG.warn("lofreq_call_args = %s" % ' '.join(lofreq_call_args))
+    #LOG.warn("lofreq_call_args = %s" % ' '.join(lofreq_call_args))
 
 
     # check for disallowed args
@@ -332,6 +340,12 @@ def main():
     LOG.info("Using %d threads with following basic args: %s\n" % (
             num_threads, ' '.join(lofreq_call_args)))
 
+    if dryrun:
+        for cmd in lofreq_cmd_for_regions(regions, lofreq_call_args, tmp_dir):
+            print "%s" % (cmd)
+        LOG.critical("dryrun ending here")
+        sys.exit(1)
+      
     results = []
     pool = multiprocessing.Pool(processes=num_threads)
     p = pool.map_async(work,
