@@ -937,6 +937,7 @@ mpileup(const mplp_conf_t *mplp_conf,
     
     if (tid0 >= 0 && mplp_conf->fai) { /* region is set */
         ref = faidx_fetch_seq(mplp_conf->fai, h->target_name[tid0], 0, 0x7fffffff, &ref_len);
+        LOG_DEBUG("%s\n", "sequence fetched");
         ref_tid = tid0;
         for (i = 0; i < n; ++i) data[i]->ref = ref, data[i]->ref_id = tid0;
     } else {
