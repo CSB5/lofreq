@@ -61,6 +61,7 @@ class SomaticSNVCaller(object):
     DEFAULT_MTC_ALPHA_T = 1
     DEFAULT_MQ_FILTER_T = 13
     DEFAULT_BAQ_OFF = False
+    DEFAULT_MQ_OFF = False
     DEFAULT_SRC_QUAL_ON = False
     DEFAULT_SRC_QUAL_IGN_VCF = None
     DEFAULT_ALN_ERR_PROF_ON = False
@@ -123,6 +124,7 @@ class SomaticSNVCaller(object):
         self.mtc_alpha_t = self.DEFAULT_MTC_ALPHA_T
         self.mq_filter_t = self.DEFAULT_MQ_FILTER_T
         self.baq_off = self.DEFAULT_BAQ_OFF
+        self.mq_off = self.DEFAULT_MQ_OFF
         self.src_qual_on = self.DEFAULT_SRC_QUAL_ON
         self.aln_err_prof_on = self.DEFAULT_ALN_ERR_PROF_ON
         self.src_qual_ign_vcf = self.DEFAULT_SRC_QUAL_IGN_VCF
@@ -185,8 +187,12 @@ class SomaticSNVCaller(object):
         
         cmd = [self.LOFREQ, 'call']
         cmd.extend(['-f', self.ref])
-        # BAQ always off in normal as it only reduces chance of calls, which we don't want for normal
+        # BAQ always off in normal as it only reduces chance of calls,
+        # which we don't want for normal
         cmd.append('-B')
+        # MQ always off in normal as it only reduces chance of calls,
+        # which we don't want for normal
+        cmd.append('-J')
         cmd.append('--verbose')
         if self.bed:
             cmd.extend(['-l', self.bed])
@@ -227,6 +233,8 @@ class SomaticSNVCaller(object):
         cmd.extend(['-f', self.ref])
         if self.baq_off:
             cmd.append('-B')
+        if self.mq_off:
+            cmd.append('-J')
         cmd.append('--verbose')
         if self.bed:
             cmd.extend(['-l', self.bed])
@@ -379,7 +387,7 @@ def cmdline_parser():
                         #required=True,
                         default=default,
                         type=float,
-                        help="Significance threshold (alpha) for SNV pvalues"
+                        help="Expert only: Significance threshold (alpha) for SNV pvalues"
                         " in (relaxed) tumor vcf (default: %f)" % default)
 
     default = 0.01
@@ -387,7 +395,7 @@ def cmdline_parser():
                         #required=True,
                         default=default,
                         type=float,
-                        help="Significance threshold (alpha) for SNV pvalues"
+                        help="Expert only: Significance threshold (alpha) for SNV pvalues"
                         "  in (relaxed) normal vcf (default: %f)" % default)
 
     default = 'bonf'
@@ -399,7 +407,7 @@ def cmdline_parser():
                         help="Type of multiple testing correction for tumor"
                         " (default: %s)" % default)
 
-    default = 1.0
+    default = 10
     parser.add_argument("--tumor-mtc-alpha",
                         #required=True,
                         default=default,
@@ -411,11 +419,15 @@ def cmdline_parser():
     parser.add_argument("-m,", "--mq-filter",
                         type=int,
                         default=default,
-                        help="Mapping quality filter (default=%d)" % default)
+                        help="Ignore reads with mapping quality below this value (default=%d)" % default)
 
     parser.add_argument("-B", "--baq-off",
                         action="store_true",
                         help="Disable BAQ computation in tumor")
+
+    parser.add_argument("-J", "--mq-off",
+                        action="store_true",
+                        help="Disable use of mapping quality in LoFreq's model")
 
     parser.add_argument("-A", "--aln-err-prof",
                         action="store_true",
@@ -427,7 +439,7 @@ def cmdline_parser():
 
     parser.add_argument("-V", "--ign-vcf",
                         help="Expert only: Ignore variants in this vcf file for"
-                        " source quality computation (see above)")
+                        " source quality computation (see -A)")
 
     parser.add_argument("--reuse-normal-vcf",
                         help="Expert only: reuse already computed"
@@ -473,6 +485,15 @@ def main():
 
     LOG.debug("args = %s" % args)
 
+    # check if outdir exists
+    outdir = os.path.dirname(args.outprefix)
+    if outdir != "" and not os.path.exists(outdir):
+        LOG.error("The directory part of the given output prefix points"
+                  " to a non-existing directory: '%s').\n" % (outdir))
+        sys.exit(1)
+        
+        
+    
     somatic_snv_caller = SomaticSNVCaller(
         bam_n = args.normal,
         bam_t = args.tumor,
