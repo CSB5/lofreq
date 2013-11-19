@@ -398,8 +398,8 @@ int vcf_parse_header(char **header, vcf_file_t *vcf_file)
 #endif
           (*header) = realloc((*header), (strlen(*header) + strlen(line) + 1 /* '\0' */) * sizeof(char));
           (void) strcat((*header), line);
-          if (strlen(line) >= strlen(HEADER_LINE)) {
-               if (0 == strncmp(line, HEADER_LINE, strlen(HEADER_LINE))) {
+          if (strlen(line) >= strlen(HEADER_LINE)-1) {
+               if (0 == strncmp(line, HEADER_LINE, strlen(HEADER_LINE)-1)) {
                     return 0;
                }
           }
