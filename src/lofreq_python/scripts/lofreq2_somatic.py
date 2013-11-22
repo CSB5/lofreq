@@ -45,8 +45,10 @@ class SomaticSNVCaller(object):
     """
 
     VCF_NORMAL_RLX_EXT = "normal_relaxed.vcf"
+    VCF_NORMAL_RLX_LOG_EXT = "normal_relaxed.log"
     VCF_TUMOR_MAPERRPROF_EXT = "maperrprof.txt"
     VCF_TUMOR_RLX_EXT = "tumor_relaxed.vcf"
+    VCF_TUMOR_RLX_LOG_EXT = "tumor_relaxed.log"
     VCF_TUMOR_STR_EXT = "tumor_stringent.vcf"
     VCF_SOMATIC_RAW_EXT = "somatic_raw.vcf"
     VCF_SOMATIC_FINAL_EXT = "somatic_final.vcf"
@@ -99,12 +101,14 @@ class SomaticSNVCaller(object):
             self.vcf_n_rlx = reuse_normal_vcf
         else:
             self.vcf_n_rlx = self.outprefix + self.VCF_NORMAL_RLX_EXT + ".gz"
-            assert not os.path.exists(self.vcf_n_rlx), (
-                "Cowardly refusing to overwrite already existing file %s" % (
-                    self.vcf_n_rlx))
+            self.vcf_n_rlx_log = self.outprefix + self.VCF_NORMAL_RLX_LOG_EXT
+            for f in [self.vcf_n_rlx, self.vcf_n_rlx_log]:
+                assert not os.path.exists(f), (
+                "Cowardly refusing to overwrite already existing file %s" % (f))
 
         self.vcf_t_maperrprof = self.outprefix + self.VCF_TUMOR_MAPERRPROF_EXT
         self.vcf_t_rlx = self.outprefix + self.VCF_TUMOR_RLX_EXT + ".gz"
+        self.vcf_t_rlx_log = self.outprefix + self.VCF_TUMOR_RLX_LOG_EXT
         self.vcf_t_str = self.outprefix + self.VCF_TUMOR_STR_EXT + ".gz"
         self.vcf_som_raw = self.outprefix + self.VCF_SOMATIC_RAW_EXT + ".gz"
         self.vcf_som_fin = self.outprefix + self.VCF_SOMATIC_FINAL_EXT
@@ -205,11 +209,16 @@ class SomaticSNVCaller(object):
         # cmd = ['valgrind', '--tool=memcheck', '--leak-check=full'] + cmd
 
         (o, e) = self.subprocess_wrapper(cmd, close_tmp=False)
-
+        fh = open(self.vcf_n_rlx_log, 'w')
+        fh.write('# %s\n' % ' '.join(cmd))
         olines = o.readlines()
         elines = e.readlines()
         for l in elines:
+            fh.write("stderr: %s" % l)
             LOG.info("cmd stderr: %s" % l)
+        for l in olines:
+            fh.write("stdout: %s" % l)
+        fh.close()
         o.close()
         e.close()
 
@@ -258,14 +267,21 @@ class SomaticSNVCaller(object):
         #cmd = ['valgrind', '--tool=memcheck', '--leak-check=full'] + cmd
 
         (o, e) = self.subprocess_wrapper(cmd, close_tmp=False)
-
+        fh = open(self.vcf_t_rlx_log, 'w')
+        fh.write('# %s\n' % ' '.join(cmd))
         olines = o.readlines()
         elines = e.readlines()
+        for l in elines:
+            fh.write("stderr: %s" % l)
+            LOG.info("cmd stderr: %s" % l)
+        for l in olines:
+            fh.write("stdout: %s" % l)
+        fh.close()
         o.close()
         e.close()
+        
         num_tests = -1
         for l in elines:
-            LOG.info("cmd stderr: %s" % l)
             if l.startswith('Number of tests performed'):
                 num_tests = int(l.split(':')[1])
                 break
