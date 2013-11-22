@@ -6,9 +6,6 @@ source lib.sh || exit 1
 
 
 KEEP_TMP=0
-if [ $KEEP_TMP -eq 1 ]; then
-    echowarn "Keeping tmp dir $outdir"
-fi
 
 bam_n=./data/somatic/CHH966-normal-100x-100pur-hg19.chr22-bed-only.bam
 bam_t=./data/somatic/CHH966-tumor-100x-10pur-hg19.chr22-bed-only.bam
@@ -16,6 +13,10 @@ bed=./data/somatic/SeqCap_EZ_Exome_v3_primary_lib_extend_no_overlap_minus300.chr
 reffa=./data/somatic/hg19_chr22.fa.gz
 truesnv=./data/somatic/hg19_chr22_true_snv.vcf.gz
 outprefix=$(mktemp -t $(basename $0) 2>/dev/null || mktemp -t $(basename $0).XXXXXX);#XXXXXX needed on linux?
+if [ $KEEP_TMP -eq 1 ]; then
+    echowarn "Keeping tmp files with prefix $outprefix"
+fi
+
 finalout=${outprefix}somatic_final.vcf
 cmd="$LOFREQ somatic -n $bam_n -t $bam_t -f $reffa -l $bed -o $outprefix";#--verbose";# --debug"
 #echodebug "cmd = $cmd"
