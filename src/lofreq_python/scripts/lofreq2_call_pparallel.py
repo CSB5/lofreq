@@ -164,6 +164,7 @@ def work(cmd):
     #http://stackoverflow.com/questions/884650/how-to-spawn-parallel-child-processes-on-a-multi-processor-system
     #return subprocess.check_output(['which', 'lofreq'])
     #return "Would execute: %s" % (cmd)
+    # FIXME any way to capture stderr?
     return subprocess.call(cmd, shell=True)
 
 
@@ -328,6 +329,7 @@ def main():
     # (%d.log and %d.vcf) and goes into tmp_dir
     #
     tmp_dir = tempfile.mkdtemp(prefix='lofreq2_call_parallel')
+    LOG.debug("tmp_dir = %s" % tmp_dir)
     LOG.debug("bonf_opt = %s" % bonf_opt)
     LOG.debug("sig_opt = %s" % sig_opt)
     LOG.debug("final_vcf_out = %s" % final_vcf_out)
@@ -426,7 +428,7 @@ def main():
 if __name__ == "__main__":
     sys.stderr.write("NOTE: Running this only makes sense when -b is fixed or coverage is low.\n")
     # otherwise runtime optimization through dyn. bonf. kicks in
-    sys.stderr.write("NOTE: If IO is an issue, then don't use too many processors")
+    sys.stderr.write("NOTE: If IO is an issue, then don't use too many processors\n")
     
     LOG.warn("Largely untested!")
     main()
