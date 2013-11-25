@@ -15,7 +15,9 @@
 /* lofreq includes */
 #include "log.h"
 #include "utils.h"
+#ifdef USE_ALNERRPROF
 #include "lofreq_bamstats.h"
+#endif
 #include "lofreq_filter.h"
 #include "lofreq_snpcaller.h"
 #include "lofreq_uniq.h"
@@ -108,8 +110,10 @@ static void usage(const char *myname)
      fprintf(stderr, "  Other Commands:\n");
      fprintf(stderr, "    filter      : Filter variants in VCF file\n");
      fprintf(stderr, "    uniq        : Test whether variants predicted in only one sample really are unique\n");
-     fprintf(stderr, "    plpsummary  : Print pileup summary per position\n");
+     fprintf(stderr, "    plpsummary  : Print pileup summary per position\n"); 
+#ifdef USE_ALNERRPROF
      fprintf(stderr, "    bamstats    : Collect BAM statistics\n");
+#endif
      fprintf(stderr, "    vcfset      : VCF set operations\n");
      fprintf(stderr, "    cluster     : Cluster variants in VCF file (supports legacy SNP format)\n");
 #ifdef FIXME_NOT_IMPLEMENTED
@@ -185,9 +189,10 @@ int main(int argc, char *argv[])
                free(argv_execvp);
                return 0;
           }
+#ifdef USE_ALNERRPROF
      } else if (strcmp(argv[1], "bamstats") == 0) {
           return main_bamstats(argc, argv);
-
+#endif
      } else if (strcmp(argv[1], "plpsummary") == 0) {
           /* modify args to  main_call() */
           char **argv_tmp = calloc(argc+1, sizeof(char*));
