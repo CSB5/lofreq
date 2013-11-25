@@ -206,5 +206,6 @@ AC_CONFIG_FILES(Makefile
         src/lofreq_core/Makefile
         src/lofreq/Makefile
         src/lofreq_python/setup_conf.py        
-        src/lofreq_python/Makefile)
+        src/lofreq_python/Makefile
+        src/uthash/Makefile)
 AC_OUTPUT
