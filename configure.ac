@@ -193,7 +193,10 @@ AC_SUBST([AM_LDFLAGS])
 AC_DEFINE([_USE_KNETFILE], [1], [KNETFILE for samtools])
 
 AC_DEFINE([USE_SOURCEQUAL], [1], [support source quality in LoFreq])
-AC_DEFINE([USE_ALNERRPROF], [1], [support mapping error profile in LoFreq])
+
+AC_ARG_ENABLE([alnerrprof],
+        [AS_HELP_STRING([--enable-alnerrprof], [Enable use of alignment/mapping error profile (default=no)])],
+        AC_DEFINE([USE_ALNERRPROF], [1], [support mapping error profile in LoFreq]))
 
 #        src/cdflib90/Makefile
 AC_CONFIG_FILES(Makefile
