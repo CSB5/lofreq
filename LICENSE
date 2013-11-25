@@ -6,8 +6,10 @@ LoFreq-Star consists of two parts:
 
 1. a compiled core program ('lofreq'), which is free for
 non-commerical use. External libraries used in the core are
-libbam/samtools, cdflib90 (see libbam/COPYING, libbam/AUTHORS and
-cdflib90.README for info on licenses and authors) and zlib (see zlib)
+- libbam/samtools (see libbam/COPYING and libbam/AUTHORS)
+- cdflib90 (see cdflib90.README)
+- zlib (see zlib.LICENSE)
+- uthash (see uthash/LICENSE)
 
 2. a set of Python scripts and modules, which are released under the
 GPL2, which the exception of the two third party modules. See

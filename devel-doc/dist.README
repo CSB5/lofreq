@@ -5,10 +5,12 @@ To create a new distribution:
 - Update top-level README
 - Commit your changes
   commit
+- run 'make dist' to compile a tarball
+- Either
+  -- Upload source and update the websites with info on new usage/bug-fixes/new function
+- or
+  -- Unpack tarball; ./configure --enable-static; make; 
 - Tag this version
   e.g git tag -a v0.3.1 -m 'my version 0.3.1')
   push and push origin --tags
-- run 'make dist' to compile a tarball
-- Upload source and update the websites with info on new usage/bug-fixes/new
-  function
 
