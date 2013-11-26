@@ -3,8 +3,6 @@ To create a new distribution:
 - Make sure tests work test/run_all.sh
 - Update version in configure.ac
 - Update top-level README
-- Commit your changes
-  commit
 - run 'make dist' to compile a tarball
 - Either
   - Upload source and update the websites with info on new usage/bug-fixes/new function
@@ -21,6 +19,7 @@ To create a new distribution:
   - find . -name .libs | xargs rm -rf
   - find . -name setup*py\* | xargs rm
   - cd .. and pack
+- Commit your changes
 - Tag this version
   e.g git tag -a v0.3.1 -m 'my version 0.3.1')
   push and push origin --tags
