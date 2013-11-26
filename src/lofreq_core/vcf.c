@@ -368,9 +368,6 @@ void vcf_write_new_header(vcf_file_t *vcf_file, const char *src, const char *ref
      VCF_PRINTF(vcf_file, "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Raw Depth\">\n");
      VCF_PRINTF(vcf_file, "##INFO=<ID=AF,Number=1,Type=Float,Description=\"Allele Frequency\">\n");
      VCF_PRINTF(vcf_file, "##INFO=<ID=SB,Number=1,Type=Integer,Description=\"Phred-scaled strand bias at this position\">\n");
-#ifdef USE_TAILDIST
-     VCF_PRINTF(vcf_file, "##INFO=<ID=TD,Number=1,Type=Integer,Description=\"Phred-scaled tail dist bias\">\n");
-#endif
      VCF_PRINTF(vcf_file, "##INFO=<ID=DP4,Number=4,Type=Integer,Description=\"Counts for ref-forward bases, ref-reverse, alt-forward and alt-reverse bases\">\n");
      VCF_PRINTF(vcf_file, "##INFO=<ID=INDEL,Number=0,Type=Flag,Description=\"Indicates that the variant is an INDEL.\">\n");
      VCF_PRINTF(vcf_file, "##INFO=<ID=CONSVAR,Number=0,Type=Flag,Description=\"Indicates that the variant is a consensus variant (as opposed to a low frequency variant).\">\n");
