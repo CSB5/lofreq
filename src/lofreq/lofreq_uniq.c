@@ -165,6 +165,7 @@ usage(const uniq_conf_t* uniq_conf)
      fprintf(stderr, "  -o | --vcf-out FILE      Output vcf file [- = stdout; gzip supported]\n");
      fprintf(stderr, "  -s | --sig               Significance threshold [%f]\n", uniq_conf->sig);
      fprintf(stderr, "  -f | --uni-freq          Assume variants have uniform test frequency of this value (unused if <=0) [%f]\n", uniq_conf->uni_freq);
+     fprintf(stderr, "       --use-orphan         Count anomalous read pairs\n");
 }
 /* usage() */
 
@@ -185,6 +186,7 @@ main_uniq(int argc, char *argv[])
      int num_vars = 0;
      char *vcf_header = NULL;
      static int read_only_passed = 0;
+     static int use_orphan = 0;
 
      for (i=0; i<argc; i++) {
           LOG_DEBUG("arg %d: %s\n", i, argv[i]);
@@ -201,6 +203,7 @@ main_uniq(int argc, char *argv[])
      /* default pileup options */
      memset(&mplp_conf, 0, sizeof(mplp_conf_t));
      mplp_conf.max_mq = DEFAULT_MAX_MQ;
+     mplp_conf.min_mq = 1;
      mplp_conf.min_bq = DEFAULT_MIN_BQ;
      mplp_conf.capQ_thres = 0;
      mplp_conf.max_depth = DEFAULT_MAX_PLP_DEPTH;
@@ -219,6 +222,7 @@ main_uniq(int argc, char *argv[])
               {"verbose", no_argument, &verbose, 1},
               {"debug", no_argument, &debug, 1},
               {"read-only-passed", no_argument, &read_only_passed, 1},
+              {"use-orphan", no_argument, &use_orphan, 1},
 
               {"vcf-in", required_argument, NULL, 'v'},
               {"vcf-out", required_argument, NULL, 'o'},
@@ -291,7 +295,13 @@ main_uniq(int argc, char *argv[])
               break;
          }
     }
+    if (use_orphan) {
+         mplp_conf.flag &= ~MPLP_NO_ORPHAN;
+    }
     uniq_conf.read_only_passed = read_only_passed;
+    if (debug) {
+         dump_mplp_conf(& mplp_conf, stderr);
+    }
 
     if (argc == 2) {
         fprintf(stderr, "\n");
