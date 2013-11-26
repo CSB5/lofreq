@@ -306,9 +306,8 @@ merge_srcq_baseq_and_mapq(const int sq, const int bq, const int mq)
      }
 
      jp = mp + (1.0 - mp) * sp + (1-mp) * (1-sp) * bp;
-     LOG_FIXME("jp = %g  =  mp=%g  +  (1.0 - mp=%g) * sp=%g  +  (1-mp=%g) * (1-sp=%g) * bp=%g\n", jp, mp, mp, sp, mp, sp, bp);
 #ifdef DEBUG
-     LOG_DEBUG("bq=%d mq=%d sq=%d -> jq=%d\n", bq, mq, sq, PROB_TO_PHREDQUAL(jp));
+     LOG_DEBUG("jp = %g  =  mp=%g  +  (1.0 - mp=%g) * sp=%g  +  (1-mp=%g) * (1-sp=%g) * bp=%g\n", jp, mp, mp, sp, mp, sp, bp);
 #endif
 
      return jp;
