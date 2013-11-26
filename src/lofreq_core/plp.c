@@ -413,7 +413,7 @@ source_qual(const bam1_t *b, const char *ref, const int nonmatch_qual, char *tar
           
      /* count match operations and get qualities for them
       */
-/*     LOG_FIXME("%s\n", "Don't know ref name in count_cigar_ops which would be needed as hash key");*/
+     /* LOG_FIXME("%s\n", "Don't know ref name in count_cigar_ops which would be needed as hash key");*/
      num_err_probs = count_cigar_ops(op_counts, op_quals, b, ref, -1, target);
      if (-1 == num_err_probs) {
           LOG_WARN("%s\n", "count_cigar_ops failed on read"); /* FIXME print read */
