@@ -509,6 +509,9 @@ mplp_func(void *data, bam1_t *b)
         if (ret < 0) 
              break;
         if (b->core.tid < 0 || (b->core.flag&BAM_FUNMAP)) { /* exclude unmapped reads */
+#ifdef TRACE
+             LOG_DEBUG("%s unmapped\n", bam1_qname(b));
+#endif
             skip = 1;
             continue;
         }
@@ -542,6 +545,9 @@ mplp_func(void *data, bam1_t *b)
              skip = 1; 
         }
         else if ((ma->conf->flag&MPLP_NO_ORPHAN) && (b->core.flag&1) && !(b->core.flag&2)) {
+#ifdef TRACE
+             LOG_DEBUG("%s orphan\n", bam1_qname(b));
+#endif
              skip = 1;
         }
     } while (skip);
