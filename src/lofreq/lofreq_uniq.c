@@ -127,6 +127,7 @@ uniq_snv(const plp_col_t *p, void *confp)
                af, p->coverage, alt_count, p->target, p->pos+1);
 #endif
 
+     /* this is a one sided test */
      if (0 != binom(&pvalue, NULL, p->coverage, alt_count, af)) {
           LOG_ERROR("%s\n", "binom() failed");
           return;
