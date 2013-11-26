@@ -54,9 +54,9 @@ class SomaticSNVCaller(object):
     VCF_SOMATIC_FINAL_EXT = "somatic_final.vcf"
 
     VCF_GERMLINE_EXT = "germline.vcf"
-    
+
     LOFREQ = 'lofreq'
-    
+
     DEFAULT_ALPHA_N = 0.01;# i.e. qual
     DEFAULT_ALPHA_T = 0.01;# i.e. qual
     DEFAULT_MTC_T = 'bonf'
@@ -68,6 +68,7 @@ class SomaticSNVCaller(object):
     DEFAULT_SRC_QUAL_IGN_VCF = None
     DEFAULT_ALN_ERR_PROF_ON = False
     DEFAULT_MIN_COV = 10
+    DEFAULT_USE_ORPHAN = False
 
     def __init__(self, bam_n=None, bam_t=None,
                  ref=None, outprefix=None,
@@ -94,7 +95,7 @@ class SomaticSNVCaller(object):
         self.outprefix = outprefix
 
         # setup output files
-        #        
+        #
         self.outfiles = []
         if reuse_normal_vcf:
             assert os.path.exists(reuse_normal_vcf)
@@ -133,6 +134,7 @@ class SomaticSNVCaller(object):
         self.aln_err_prof_on = self.DEFAULT_ALN_ERR_PROF_ON
         self.src_qual_ign_vcf = self.DEFAULT_SRC_QUAL_IGN_VCF
         self.min_cov = self.DEFAULT_MIN_COV
+        self.use_orphan = self.DEFAULT_USE_ORPHAN
 
 
 
@@ -188,7 +190,7 @@ class SomaticSNVCaller(object):
 
         # use of aln_err_prof will only ever reduce the number of FP
         # which is not wanted to the normal sample
-        
+
         cmd = [self.LOFREQ, 'call']
         cmd.extend(['-f', self.ref])
         # BAQ always off in normal as it only reduces chance of calls,
@@ -197,6 +199,9 @@ class SomaticSNVCaller(object):
         # MQ always off in normal as it only reduces chance of calls,
         # which we don't want for normal
         cmd.append('-J')
+        if self.use_orphan:
+            cmd.append('--use-orphan')
+
         cmd.append('--verbose')
         if self.bed:
             cmd.extend(['-l', self.bed])
@@ -237,13 +242,16 @@ class SomaticSNVCaller(object):
             cmd.extend(['-o' , self.vcf_t_maperrprof])
             cmd.append(self.bam_t)
             self.subprocess_wrapper(cmd)
-            
+
         cmd = [self.LOFREQ, 'call']
         cmd.extend(['-f', self.ref])
         if self.baq_off:
             cmd.append('-B')
         if self.mq_off:
             cmd.append('-J')
+        if self.use_orphan:
+            cmd.append('--use-orphan')
+
         cmd.append('--verbose')
         if self.bed:
             cmd.extend(['-l', self.bed])
@@ -251,7 +259,7 @@ class SomaticSNVCaller(object):
         cmd.extend(['-b', "%d" % 1, '-s', "%f" % self.alpha_t])
         cmd.extend(['-m', "%d" % self.mq_filter_t])
         cmd.extend(['-o', self.vcf_t_rlx])
-        
+
         # coverage is filtered later anyway, but ignoring it during call
         # makes things faster and avoids trouble if user forgots to give
         # bed-file etc
@@ -279,7 +287,7 @@ class SomaticSNVCaller(object):
         fh.close()
         o.close()
         e.close()
-        
+
         num_tests = -1
         for l in elines:
             if l.startswith('Number of tests performed'):
@@ -339,8 +347,11 @@ class SomaticSNVCaller(object):
         cmd = [self.LOFREQ, 'uniq',
                '--uni-freq', "0.5",
                '-v', self.vcf_som_raw,
-               '-o', self.vcf_som_fin,
-               self.bam_n]
+               '-o', self.vcf_som_fin]
+        if self.use_orphan:
+            cmd.append('--use-orphan')
+        cmd.append(self.bam_n)
+
         self.subprocess_wrapper(cmd)
 
 
@@ -403,7 +414,7 @@ def cmdline_parser():
                         #required=True,
                         default=default,
                         type=float,
-                        help="Expert only: Significance threshold (alpha) for SNV pvalues"
+                        help="Advanced: Significance threshold (alpha) for SNV pvalues"
                         " in (relaxed) tumor vcf (default: %f)" % default)
 
     default = 0.01
@@ -411,7 +422,7 @@ def cmdline_parser():
                         #required=True,
                         default=default,
                         type=float,
-                        help="Expert only: Significance threshold (alpha) for SNV pvalues"
+                        help="Advanced: Significance threshold (alpha) for SNV pvalues"
                         "  in (relaxed) normal vcf (default: %f)" % default)
 
     default = 'bonf'
@@ -447,19 +458,23 @@ def cmdline_parser():
 
     parser.add_argument("-A", "--aln-err-prof",
                         action="store_true",
-                        help="Use alignment error profile")
+                        help="Advanced: Use alignment error profile")
 
     parser.add_argument("-S", "--src-qual",
                         action="store_true",
-                        help="Expert only: Enable use of source quality (see also -V)")
+                        help="Advanced: Enable use of source quality (see also -V)")
 
     parser.add_argument("-V", "--ign-vcf",
-                        help="Expert only: Ignore variants in this vcf file for"
+                        help="Advanced: Ignore variants in this vcf file for"
                         " source quality computation (see -A)")
 
     parser.add_argument("--reuse-normal-vcf",
-                        help="Expert only: reuse already computed"
+                        help="Advanced: reuse already computed"
                         " vcf for normal sample")
+
+    parser.add_argument("--use-orphan",
+                        action="store_true",
+                        help="Advanced: use orphaned/anomalous reads from read pairs")
 
     return parser
 
@@ -507,9 +522,9 @@ def main():
         LOG.error("The directory part of the given output prefix points"
                   " to a non-existing directory: '%s').\n" % (outdir))
         sys.exit(1)
-        
-        
-    
+
+
+
     somatic_snv_caller = SomaticSNVCaller(
         bam_n = args.normal,
         bam_t = args.tumor,
@@ -532,6 +547,8 @@ def main():
         somatic_snv_caller.src_qual_ign_vcf = args.ign_vcf
     if args.aln_err_prof:
         somatic_snv_caller.aln_err_prof_on = True
+    if args.use_orphan:
+        somatic_snv_caller.use_orphan = True
 
     somatic_snv_caller.run()
 
