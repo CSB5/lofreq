@@ -40,6 +40,16 @@ logging.basicConfig(level=logging.WARN,
 
 
 
+def bam_index_exists(bam):
+    """check if an index for an BAM file exists
+    """
+    for f in [bam + ".bai", os.path.splitext(bam)[0] + ".bai"]:
+        if os.path.exists(f):
+            return True
+    return False
+
+
+
 class SomaticSNVCaller(object):
     """Somatic SNV caller using LoFreq
     """
@@ -115,7 +125,8 @@ class SomaticSNVCaller(object):
         self.vcf_som_fin = self.outprefix + self.VCF_SOMATIC_FINAL_EXT
         self.vcf_germl = self.outprefix + self.VCF_GERMLINE_EXT + ".gz"
 
-        self.outfiles = [self.vcf_t_maperrprof, self.vcf_t_rlx, self.vcf_t_str, self.vcf_som_raw,
+        self.outfiles = [self.vcf_t_maperrprof, self.vcf_t_rlx,
+                         self.vcf_t_str, self.vcf_som_raw,
                          self.vcf_som_fin, self.vcf_germl]
         # vcf_n already checked
         for f in self.outfiles:
@@ -352,12 +363,22 @@ class SomaticSNVCaller(object):
             cmd.append('--use-orphan')
         cmd.append(self.bam_n)
 
-        self.subprocess_wrapper(cmd)
-
+        (o, e) = self.subprocess_wrapper(cmd, close_tmp=False)
+        for l in e.readlines():
+            LOG.warn("uniq stderr: %s" % l)
+        o.close()
+        e.close()
 
     def run(self):
         """Run the whole somatic SNV calling pipeline
         """
+
+        if not bam_index_exists(self.bam_n):
+            LOG.fatal("Normal BAM file is not indexed."
+                      " Please create the index first"
+                      " with e.g. samtools index %s" % (self.bam_n))
+            return False
+
 
         for (k, v) in [(x, self.__getattribute__(x)) for x in dir(self)
                        if not x.startswith('_')]:
@@ -369,14 +390,17 @@ class SomaticSNVCaller(object):
         if self.src_qual_ign_vcf and not self.src_qual_on:
             LOG.fatal("ign-vcf file was provided, but src-qual is off")
             sys.exit(1)
-        self.call_normal()
-        self.call_tumor()
-        self.complement()
-        self.uniq()
-        self.call_germline()
+        try:
+            self.call_normal()
+            self.call_tumor()
+            self.complement()
+            self.uniq()
+            self.call_germline()
+        except:
+            return False
 
         # FIXME replace source line in final output with sys.argv?
-
+        return True
 
 
 def cmdline_parser():
@@ -414,8 +438,9 @@ def cmdline_parser():
                         #required=True,
                         default=default,
                         type=float,
-                        help="Advanced: Significance threshold (alpha) for SNV pvalues"
-                        " in (relaxed) tumor vcf (default: %f)" % default)
+                        help="Advanced: Significance threshold (alpha)"
+                        " for SNV pvalues in (relaxed) tumor vcf"
+                        " (default: %f)" % default)
 
     default = 0.01
     parser.add_argument("--normal-alpha",
@@ -550,7 +575,9 @@ def main():
     if args.use_orphan:
         somatic_snv_caller.use_orphan = True
 
-    somatic_snv_caller.run()
+    if not somatic_snv_caller.run():
+        LOG.fatal("Somatic SNV caller failed. Exiting")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
