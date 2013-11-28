@@ -8,6 +8,22 @@
  *********************************************************************/
 
 
+/*
+ * Notes about a potentially more refined analysis: Currently we take the
+ * frequency for one of the SNVs as a given. Ideally we would
+ * integrate over the various values possible rather then just taking the
+ * maximum-likelihood value.
+ *
+ * Frequency estimate from first sample snv call: p^hat = k_1/n_1.
+ * Current test: P_bin(n_2, p^hat) (X<=k_2).
+ *
+ * Better: Sum over k=0 to n_1 ( P_bin(n_2, k/n^1) (X<=k) ) * P(k).
+ *
+ * P(k) is prior from Binomial proportion confidence distribution Todo:
+ * find Binomial proportion confidence distribution to get prior
+ *
+ */
+
 #include <math.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -76,20 +92,20 @@ uniq_snv(const plp_col_t *p, void *confp)
 
      if (vcf_var_has_info_key(NULL, conf->var, "INDEL")) {
           LOG_WARN("uniq logic can't be applied to indels."
-                   " Skipping indel var at %s %d\n", 
+                   " Skipping indel var at %s %d\n",
                    conf->var->chrom, conf->var->pos+1);
           return;
      }
 
      if (0 != strcmp(p->target, conf->var->chrom) || p->pos != conf->var->pos) {
-          LOG_ERROR("wrong pileup for var. pileup for %s %d. var for %s %d\n", 
+          LOG_ERROR("wrong pileup for var. pileup for %s %d. var for %s %d\n",
                     p->target, p->pos+1, conf->var->chrom, conf->var->pos+1);
           return;
      }
 
-     /* no cov usually means I won't be called, but just to be safe: 
+     /* no cov usually means I won't be called, but just to be safe:
       */
-     if (0 == p->coverage) {          
+     if (0 == p->coverage) {
           return;
      }
 
@@ -134,7 +150,7 @@ uniq_snv(const plp_col_t *p, void *confp)
      }
 
      is_sig = pvalue < conf->sig/(float)conf->bonf;
-     LOG_VERBOSE("%s %d %c>%c AF=%f | %s (p-value=%g sig/bonf=%g) | BAM alt_count=%d cov=%d (freq=%f)\n", 
+     LOG_VERBOSE("%s %d %c>%c AF=%f | %s (p-value=%g sig/bonf=%g) | BAM alt_count=%d cov=%d (freq=%f)\n",
                  conf->var->chrom, conf->var->pos+1, conf->var->ref, conf->var->alt, af,
                  is_sig ? "unique" : "not necessarily unique", pvalue, conf->sig/(float)conf->bonf,
                  alt_count, p->coverage, alt_count/(float)p->coverage);
@@ -157,7 +173,7 @@ usage(const uniq_conf_t* uniq_conf)
      fprintf(stderr, "Will ignore filtered input variants as well as indels and will only\n");
      fprintf(stderr, "output variants considered unique (Bonferroni corrected p-value<sig).\n\n");
 
-     fprintf(stderr,"Usage: %s [options] in.bam\n\n", MYNAME);
+     fprintf(stderr,"Usage: %s [options] indexed-in.bam\n\n", MYNAME);
      fprintf(stderr,"Options:\n");
      fprintf(stderr, "       --verbose           Be verbose\n");
      fprintf(stderr, "       --debug             Enable debugging\n");
@@ -172,7 +188,7 @@ usage(const uniq_conf_t* uniq_conf)
 
 
 
-int 
+int
 main_uniq(int argc, char *argv[])
 {
      int c, i;
@@ -209,9 +225,9 @@ main_uniq(int argc, char *argv[])
      mplp_conf.capQ_thres = 0;
      mplp_conf.max_depth = DEFAULT_MAX_PLP_DEPTH;
      mplp_conf.flag = MPLP_NO_ORPHAN;
-    
 
-    /* keep in sync with long_opts_str and usage 
+
+    /* keep in sync with long_opts_str and usage
      *
      * getopt is a pain in the whole when it comes to syncing of long
      * and short args and usage. check out gopt, libcfu...
@@ -234,7 +250,7 @@ main_uniq(int argc, char *argv[])
          };
 
          /* keep in sync with long_opts and usage */
-         static const char *long_opts_str = "hv:o:s:f:"; 
+         static const char *long_opts_str = "hv:o:s:f:";
 
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
@@ -246,11 +262,11 @@ main_uniq(int argc, char *argv[])
 
          switch (c) {
          /* keep in sync with long_opts etc */
-         case 'h': 
-              usage(& uniq_conf); 
+         case 'h':
+              usage(& uniq_conf);
               return 0;
 
-         case 'v': 
+         case 'v':
               if (0 != strcmp(optarg, "-")) {
                    if (! file_exists(optarg)) {
                         LOG_FATAL("Input file '%s' does not exist. Exiting...\n", optarg);
@@ -270,27 +286,27 @@ main_uniq(int argc, char *argv[])
               vcf_out = strdup(optarg);
               break;
 
-         case 's': 
+         case 's':
               uniq_conf.sig = strtof(optarg, (char **)NULL); /* atof */
               if (0==uniq_conf.sig) {
-                   LOG_FATAL("%s\n", "Couldn't parse sign-threshold"); 
+                   LOG_FATAL("%s\n", "Couldn't parse sign-threshold");
                    return 1;
               }
               break;
 
-         case 'f': 
+         case 'f':
               uniq_conf.uni_freq = strtof(optarg, (char **)NULL); /* atof */
               if (uniq_conf.uni_freq<=0) {
-                   LOG_WARN("%s\n", "Ignoring uni-freq option"); 
+                   LOG_WARN("%s\n", "Ignoring uni-freq option");
               }
               if (uniq_conf.uni_freq>1.0) {
-                   LOG_FATAL("%s\n", "Value for uni-freq has to be <1.0"); 
+                   LOG_FATAL("%s\n", "Value for uni-freq has to be <1.0");
                    return 1;
               }
               break;
 
-         case '?': 
-              LOG_FATAL("%s\n", "unrecognized arguments found. Exiting...\n"); 
+         case '?':
+              LOG_FATAL("%s\n", "unrecognized arguments found. Exiting...\n");
               return 1;
          default:
               break;
@@ -330,7 +346,7 @@ main_uniq(int argc, char *argv[])
          strcpy(vcf_out, "-");
     }
 
-    if (vcf_file_open(& uniq_conf.vcf_in, vcf_in, 
+    if (vcf_file_open(& uniq_conf.vcf_in, vcf_in,
                       HAS_GZIP_EXT(vcf_in), 'r')) {
          LOG_ERROR("Couldn't open %s\n", vcf_in);
          return 1;
@@ -355,7 +371,7 @@ main_uniq(int argc, char *argv[])
          vcf_header_add_info(&vcf_header, "##INFO=<ID=UQ,Number=1,Type=Integer,Description=\"Phred-scaled uniq score at this position\">\n");
          vcf_write_header(& uniq_conf.vcf_out, vcf_header);
          /*LOG_FIXME("header now: %s", vcf_header);*/
-         free(vcf_header);         
+         free(vcf_header);
     }
 
 
@@ -374,23 +390,23 @@ main_uniq(int argc, char *argv[])
 
          uniq_conf.var = vars[i];
 
-         snprintf(reg_buf, BUF_SIZE, "%s:%ld-%ld", 
+         snprintf(reg_buf, BUF_SIZE, "%s:%ld-%ld",
                   vars[i]->chrom, vars[i]->pos+1, vars[i]->pos+1);
          mplp_conf.reg = strdup(reg_buf);
 
-         LOG_DEBUG("pileup for var no %d at %s %d\n", 
+         LOG_DEBUG("pileup for var no %d at %s %d\n",
                    i+1, uniq_conf.var->chrom, uniq_conf.var->pos+1);
          if (vcf_var_has_info_key(NULL, uniq_conf.var, "INDEL")) {
-              LOG_VERBOSE("Skipping indel var at %s %d\n", 
+              LOG_VERBOSE("Skipping indel var at %s %d\n",
                        uniq_conf.var->chrom, uniq_conf.var->pos+1);
-              free(mplp_conf.reg); 
+              free(mplp_conf.reg);
               mplp_conf.reg = NULL;
               continue;
 
          } else if (vcf_var_filtered(uniq_conf.var)) {
-              LOG_VERBOSE("Skipping filtered var at %s %d\n", 
+              LOG_VERBOSE("Skipping filtered var at %s %d\n",
                        uniq_conf.var->chrom, uniq_conf.var->pos+1);
-              free(mplp_conf.reg); 
+              free(mplp_conf.reg);
               mplp_conf.reg = NULL;
               continue;
          }
@@ -398,7 +414,7 @@ main_uniq(int argc, char *argv[])
          rc = mpileup(&mplp_conf, plp_proc_func, (void*)&uniq_conf,
                       1, (const char **) argv + optind + 1);
 
-         free(mplp_conf.reg); 
+         free(mplp_conf.reg);
          mplp_conf.reg = NULL;
     }
 
@@ -420,4 +436,3 @@ main_uniq(int argc, char *argv[])
     return rc;
 }
 /* main_call */
-
