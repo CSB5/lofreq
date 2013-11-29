@@ -199,17 +199,22 @@ class SomaticSNVCaller(object):
             LOG.info('Reusing %s' % self.vcf_n_rlx)
             return
 
-        # use of aln_err_prof will only ever reduce the number of FP
-        # which is not wanted to the normal sample
+
+        # one could argue that BAQ (and MQ) should always be off for
+        # normal, as it only every reduces the chance of calls. tests
+        # on melanoma CHH930 50-50 g10ac045 orphan show that the ones
+        # called extra, do not overlap with any of the somatic_raw
+        # files. therefore we switched the behaviour back to the
+        # previous default which was to use the same as in tumor
+
+        # FIXME aln_err_prof?
 
         cmd = [self.LOFREQ, 'call']
         cmd.extend(['-f', self.ref])
-        # BAQ always off in normal as it only reduces chance of calls,
-        # which we don't want for normal
-        cmd.append('-B')
-        # MQ always off in normal as it only reduces chance of calls,
-        # which we don't want for normal
-        cmd.append('-J')
+        if self.baq_off:
+            cmd.append('-B')
+        if self.mq_off:
+            cmd.append('-J')
         if self.use_orphan:
             cmd.append('--use-orphan')
 
