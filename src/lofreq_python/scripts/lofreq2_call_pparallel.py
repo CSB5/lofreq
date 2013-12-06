@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 """Parallel wrapper for LoFreq* SNV Caller.
 
-The idea is to run one thread per region listed in a bed-file.
-Additionally, mpileup + region makes use of the BAM index which
-mpileup + bed doesn't, i.e. the latter parses the whole file.
+The idea is to run one thread per seq/chrom listed in header (used as
+region to make use of indexing feature) and bed file (if given).
 """
 
 __author__ = "Andreas Wilm"
@@ -144,12 +143,45 @@ def read_bed_coords(fbed):
             yield (chrom, start, end)
 
 
-def lofreq_cmd_for_regions(regions, lofreq_call_args, tmp_dir):
-    """generator"""
+def sq_list_from_bam(bam):
+    """Extract SQs listed in BAM to which at least one read maps
+    """
 
-    for (i, reg) in enumerate(regions):
+    assert os.path.exists(bam), ("BAM file %s does not exist" % bam)
+    cmd = 'lofreq idxstats %s' % (bam)
+    LOG.critical("cmd=%s" % cmd)
+    process = subprocess.Popen(cmd.split(),
+                               shell=False,
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE)
+    (stdoutdata, stderrdata) =  process.communicate()
+
+    retcode = process.returncode
+    if retcode != 0:
+        LOG.fatal("%s exited with error code '%d'." \
+                  " Command was '%s'. stderr was: '%s'" % (
+                      cmd.split()[0], retcode, cmd, stderrdata))
+        raise OSError
+    stdout_lines = str.splitlines(stdoutdata)
+            
+    # orig src: sq_list_from_header()
+    sq_list = []
+    for line in stdout_lines:
+        # chrom len #mapped #unmapped
+        (sq, sqlen, n_mapped, n_unmapped) = line.rstrip().split()
+        (n_mapped, n_unmapped) = map(int, [n_mapped, n_unmapped])
+        if sq != '*' and n_mapped > 0:
+            sq_list.append(sq)
+    return sq_list
+
+
+def lofreq_cmd_per_sq(sq_list, lofreq_call_args, tmp_dir):
+    """Order in sq_list should be the same as in BAM file1"""
+
+    for (i, sq) in enumerate(sq_list):
         # maintain region order by using index
-        reg_str = "%s:%d-%d" % reg
+        reg_str = "%s" % sq
+        # which surprisingly works without pos:pos
         cmd = ' '.join(lofreq_call_args)
         cmd += ' --no-default-filter'# needed here whether user-arg or not
         cmd += " -r %s -o %s/%d.vcf > %s/%d.log 2>&1" % (
@@ -173,13 +205,12 @@ def main():
     """The main function
     """
 
-
-    # parse pparallel specific args
-    #
-    debug = False
-    verbose = True
     orig_argv = list(sys.argv[1:])
 
+    # parse pparallel specific args: get and remove from list
+    #
+
+    verbose = True
     try:
         idx = orig_argv.index('--pp-verbose')
         orig_argv = orig_argv[0:idx] +  orig_argv[idx+1:]
@@ -189,6 +220,7 @@ def main():
     if verbose:
         LOG.setLevel(logging.INFO)
 
+    debug = False
     try:
         idx = orig_argv.index('--pp-debug')
         orig_argv = orig_argv[0:idx] +  orig_argv[idx+1:]
@@ -205,30 +237,33 @@ def main():
         dryrun = True
     except (IndexError, ValueError):
         pass
-
     
-    # get num threads and remove from arg list
+    # number of threads
     #
+    num_threads = -1
     try:
-        idx = orig_argv.index('-n')
+        idx = orig_argv.index('--pp-threads')
         num_threads = int(orig_argv[idx+1])
         orig_argv = orig_argv[0:idx] +  orig_argv[idx+2:]
     except (ValueError, IndexError) as e:
-        LOG.fatal("Parallel wrapper requires -n"
+        LOG.fatal("Parallel wrapper requires --pp-threads"
                   " [int] as arg (number of threads)")
         sys.exit(1)
     if num_threads > multiprocessing.cpu_count():
-        LOG.warn("Requested number of threads higher than number"
+        LOG.fatal("Requested number of threads higher than number"
                  " of CPUs. Will reduce value to match number of CPUs")
-        num_threads = multiprocessing.cpu_count()
+        #num_threads = multiprocessing.cpu_count()
+        sys.exit(1)
 
+        
     # poor man's usage
+    #
     if '-h' in orig_argv:
-        sys.stderr.write("Calls 'lofreq call' per bed-region or chrom if no"
-                         "bed was given and combines result at the end.\n"
-                         "All arguments except '-n threads",
-                         "'--pp-debug', 'pp-verbose' and pp-dryrun"
-                         "will be passed down to 'lofreq call'\n")
+        sys.stderr.write("Calls 'lofreq call' per chrom/seq in bam"
+                         " and combines result at the end.\n"
+                         "All arguments except '--pp-threads",
+                         "'--pp-debug', '--pp-verbose' and --pp-dryrun"
+                         "will be passed down to 'lofreq call'.")
         sys.exit(1)
 
 
@@ -244,25 +279,6 @@ def main():
         if disallowed_arg in lofreq_call_args:
             LOG.fatal("regions argument -r not allowed in pparallel mode")
             sys.exit(1)
-
-
-    # get bed file, parse regions from it and remove arg
-    #
-    idx = -1
-    for arg in ['-l', '--bed']:
-        if arg in lofreq_call_args:
-            idx = lofreq_call_args.index(arg)
-            break
-    if idx == -1:
-        LOG.fatal("Parallel wrapper requires a bed-file as argument")# FIXME
-        sys.exit(1)
-    bed_file = lofreq_call_args[idx+1]
-    lofreq_call_args = lofreq_call_args[0:idx] +  lofreq_call_args[idx+2:]
-    try:
-        regions = list(read_bed_coords(bed_file))
-    except ValueError:
-        LOG.fatal("Parsing of %s failed" % bed_file)
-        sys.exit(1)
 
 
     # get final/original output file name and remove arg
@@ -334,7 +350,6 @@ def main():
     LOG.debug("sig_opt = %s" % sig_opt)
     LOG.debug("final_vcf_out = %s" % final_vcf_out)
     LOG.debug("num_threads = %s" % num_threads)
-    LOG.debug("regions = %s" % (regions))
     LOG.debug("no_default_filter = %s" % (no_default_filter))
     LOG.debug("lofreq_call_args = %s" % (lofreq_call_args))
     #import pdb; pdb.set_trace()
@@ -342,28 +357,44 @@ def main():
     LOG.info("Using %d threads with following basic args: %s\n" % (
             num_threads, ' '.join(lofreq_call_args)))
 
+    # FIXME how to get BAM?
+    bam = None
+    for arg in lofreq_call_args:
+        ext = os.path.splitext(arg)[1].lower()
+        if ext in [".bam", ".sam"] and os.path.exists(arg):
+            bam = arg
+            break
+    if not bam:
+        LOG.fatal("Could determine BAM file from argument list")
+        sys.exit(1)
+        
+    sq_list = sq_list_from_bam(bam)
+    if len(sq_list) == 1:
+        LOG.warn("Only one SQ found in BAM header. No point in running in parallel mode.")
+        sys.exit(1)
+    import pdb; pdb.set_trace()
+        
+    cmd_list = list(lofreq_cmd_per_sq(sq_list, lofreq_call_args, tmp_dir))
     if dryrun:
-        for cmd in lofreq_cmd_for_regions(regions, lofreq_call_args, tmp_dir):
+        for cmd in cmd_list:
             print "%s" % (cmd)
         LOG.critical("dryrun ending here")
         sys.exit(1)
       
     results = []
     pool = multiprocessing.Pool(processes=num_threads)
-    p = pool.map_async(work,
-                       lofreq_cmd_for_regions(regions, lofreq_call_args, tmp_dir), 
-                       chunksize=128,
+    p = pool.map_async(work, cmd_list, chunksize=128,
                        callback=results.extend)
     p.wait()
     # report failures and exit if found
     if any(results):
-        for (res) in results:
-            LOG.fatal("Once process reported: %s", res)
+        #for (res) in results:
+        #    LOG.fatal("At least one process reported: %s", res)
         
-        #for (res, cmd) in zip(results, thread_cmds):
-        #    if res != 0:
-        #        LOG.fatal("The following command failed"
-        #                  " with code %d: %s" %  (res, cmd))
+        for (res, cmd) in zip(results, cmd_list):
+            if res != 0:
+                LOG.fatal("The following command failed"
+                          " with code %d: %s" %  (res, cmd))
         LOG.fatal("Can't continue")
         sys.exit(1)
 
@@ -426,9 +457,9 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.stderr.write("NOTE: Running this only makes sense when -b is fixed or coverage is low.\n")
+    sys.stderr.write("NOTE: Running this only makes sense,"
+                     " if you have multiple SQs and -b is fixed or coverage is low.\n")
     # otherwise runtime optimization through dyn. bonf. kicks in
-    sys.stderr.write("NOTE: If IO is an issue, then don't use too many processors\n")
     
     LOG.warn("Largely untested!")
     main()
