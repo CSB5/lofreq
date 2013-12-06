@@ -79,6 +79,7 @@ class SomaticSNVCaller(object):
     DEFAULT_ALN_ERR_PROF_ON = False
     DEFAULT_MIN_COV = 10
     DEFAULT_USE_ORPHAN = False
+    DEFAULT_NUM_THREADS = 1
 
     def __init__(self, bam_n=None, bam_t=None,
                  ref=None, outprefix=None,
@@ -146,6 +147,8 @@ class SomaticSNVCaller(object):
         self.src_qual_ign_vcf = self.DEFAULT_SRC_QUAL_IGN_VCF
         self.min_cov = self.DEFAULT_MIN_COV
         self.use_orphan = self.DEFAULT_USE_ORPHAN
+        self.num_threads = self.DEFAULT_NUM_THREADS
+        
 
 
 
@@ -209,7 +212,10 @@ class SomaticSNVCaller(object):
 
         # FIXME aln_err_prof?
 
-        cmd = [self.LOFREQ, 'call']
+        if self.num_threads>1:
+            cmd = [self.LOFREQ, 'call']
+        else:
+            cmd = [self.LOFREQ, 'call-parallel', '--pp-threads', "%d" % self.num_threads]
         cmd.extend(['-f', self.ref])
         if self.baq_off:
             cmd.append('-B')
@@ -259,7 +265,10 @@ class SomaticSNVCaller(object):
             cmd.append(self.bam_t)
             self.subprocess_wrapper(cmd)
 
-        cmd = [self.LOFREQ, 'call']
+        if self.num_threads>1:
+            cmd = [self.LOFREQ, 'call']
+        else:
+            cmd = [self.LOFREQ, 'call-parallel', '--pp-threads', "%d" % self.num_threads]
         cmd.extend(['-f', self.ref])
         if self.baq_off:
             cmd.append('-B')
@@ -505,6 +514,10 @@ def cmdline_parser():
     parser.add_argument("--use-orphan",
                         action="store_true",
                         help="Advanced: use orphaned/anomalous reads from read pairs")
+
+    parser.add_argument("--threads",
+                        type=int,
+                        help="Advanced: use this many threads for each call")
 
     return parser
 
