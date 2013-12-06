@@ -22,6 +22,7 @@
 #include "lofreq_snpcaller.h"
 #include "lofreq_uniq.h"
 #include "lofreq_vcfset.h"
+#include "lofreq_index.h"
 
 
 #ifndef __DATE__
@@ -106,7 +107,12 @@ static void usage(const char *myname)
      fprintf(stderr, "Usage: %s <command> [options]\n\n", myname);
      fprintf(stderr, "  Main Commands:\n");
      fprintf(stderr, "    call        : Call variants\n");
-     fprintf(stderr, "    somatic     : Call somatic variants\n\n");
+     fprintf(stderr, "    somatic     : Call somatic variants\n");
+     fprintf(stderr, "\n");
+     fprintf(stderr, "  Samtools Clones:\n");
+     fprintf(stderr, "    index       : Create index for BAM file\n");
+     fprintf(stderr, "    idxstats    : Print stats for indexed BAM file\n");
+     fprintf(stderr, "\n");
      fprintf(stderr, "  Other Commands:\n");
      fprintf(stderr, "    filter      : Filter variants in VCF file\n");
      fprintf(stderr, "    uniq        : Test whether variants predicted in only one sample really are unique\n");
@@ -119,6 +125,7 @@ static void usage(const char *myname)
 #ifdef FIXME_NOT_IMPLEMENTED
      fprintf(stderr, "    peek        : Check properties of BAM file\n");
 #endif
+
      fprintf(stderr, "    version     : Print version info\n");
      fprintf(stderr, "\n");
 }
@@ -141,12 +148,18 @@ int main(int argc, char *argv[])
      } else if (strcmp(argv[1], "vcfset") == 0)  {
           return main_vcfset(argc, argv);
 
+     } else if (strcmp(argv[1], "index") == 0)  {
+          return main_index(argc, argv);
+
+     } else if (strcmp(argv[1], "idxstats") == 0)  {
+          return main_idxstats(argc, argv);
+
      } else if (strcmp(argv[1], "peek") == 0 ||
                 strcmp(argv[1], "check") == 0 ||
                 strcmp(argv[1], "inspect") == 0 ||
                 strcmp(argv[1], "doctor") == 0 ||
                 strcmp(argv[1], "run-me-first") == 0)  {
-          LOG_FIXME("%s\n", "NOT IMPLEMENT YET: has BI, has BD, readlen, has extra BAQ. is_paired. all based on first, say, 10k read\n");
+          LOG_FIXME("%s\n", "NOT IMPLEMENTED YET: has BI, has BD, readlen, has extra BAQ. is_paired. all based on first, say, 10k read\n");
           return 1;
 
      } else if (strcmp(argv[1], "filter-FIXME") == 0) {
