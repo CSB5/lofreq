@@ -363,16 +363,26 @@ def main():
             bam = arg
             break
     if not bam:
-        LOG.fatal("Could determine BAM file from argument list")
+        LOG.fatal("Could determine BAM file from argument list"
+                  " or file doesn't exist")
         sys.exit(1)
-        
+
+    # FIXME: this can be improved a lot. When asked for x threads we
+    # should simply bin the BAM file such that we get exactly x
+    # threads. The number of mapped reads per sq should be taken
+    # into account for the binning process (and to make it even more
+    # complicated the regions in the optional bed file could be taken
+    # into account as well).
     sq_list = sq_list_from_bam(bam)
     if len(sq_list) == 1:
-        LOG.warn("Only one SQ found in BAM header. No point in running in parallel mode.")
+        LOG.warn("Only one SQ found in BAM header."
+                 " No point in running in parallel mode.")
         sys.exit(1)
     #import pdb; pdb.set_trace()
         
     cmd_list = list(lofreq_cmd_per_sq(sq_list, lofreq_call_args, tmp_dir))
+    LOG.info("Adding %d command to mp-pool" % len(cmd_list))
+    LOG.debug("cmd_list = %s" % cmd_list)
     if dryrun:
         for cmd in cmd_list:
             print "%s" % (cmd)
@@ -409,42 +419,46 @@ def main():
                      "##source=%s" % ' '.join(sys.argv))
 
 
-    # if bonf was computed dynamically, parse bonf from each run's log
-    # and filter using their sum
+    # filtering
     #
+    cmd = ['lofreq2_filter.py', '-p', '-i', vcf_concat, '-o', final_vcf_out]
+    if no_default_filter:
+        cmd.append('--no-defaults')
     if bonf_opt == 'dynamic':
+        # if bonf was computed dynamically, parse bonf from each run's
+        # log and filter using their sum
         log_files = [os.path.join(tmp_dir, "%d.log" % no)
                      for no in range(len(cmd_list))]
         bonf = total_num_tests_from_logs(log_files)
         if bonf == -1:
             sys.exit(1)
         phredqual = prob_to_phredqual(sig_opt/float(bonf))
-        cmd = ['lofreq2_filter.py', '-p', '-i', vcf_concat, '-o', final_vcf_out]
         cmd.extend(['--snv-qual', "%s" % phredqual])
-        if no_default_filter:
-            cmd.append('--no-defaults')
-        cmd = ' '.join(cmd)# subprocess.call takes string
-        LOG.info("Executing %s\n" % (cmd))
-        if subprocess.call(cmd, shell=True):
-            LOG.fatal("Final filtering command failed."
-                      " Commmand was %s" % (cmd))
-            sys.exit(1)
 
     elif bonf_opt == 'auto':
-        assert NotImplementedError
+        raise NotImplementedError
         
-    # otherwise bonf_opt was a fixed int and was already used properly
-    else:
-        LOG.info("Copying concatenated vcf file to final destination\n")
-        fh_in = open(vcf_concat, 'r')
-        if final_vcf_out == "-":
-            fh_out = sys.stdout
-        else:
-            fh_out = open(final_vcf_out, 'w')
-        shutil.copyfileobj(fh_in, fh_out)
-        fh_in.close()
-        if fh_out != sys.stdout:
-            fh_out.close
+    # otherwise bonf_opt was a fixed int, was already used properly
+    # and there's no need to filter against snv qual
+    # WARN: if --no-defaults is given we then don't filter at all?
+    #else:
+    #    LOG.info("Copying concatenated vcf file to final destination\n")
+    #    fh_in = open(vcf_concat, 'r')
+    #    if final_vcf_out == "-":
+    #        fh_out = sys.stdout
+    #    else:
+    #        fh_out = open(final_vcf_out, 'w')
+    #    shutil.copyfileobj(fh_in, fh_out)
+    #    fh_in.close()
+    #    if fh_out != sys.stdout:
+    #        fh_out.close
+            
+    cmd = ' '.join(cmd)# subprocess.call takes string
+    LOG.info("Executing %s\n" % (cmd))
+    if subprocess.call(cmd, shell=True):
+        LOG.fatal("Final filtering command failed."
+                  " Commmand was %s" % (cmd))
+        sys.exit(1)
 
     # remove temp files/dir
     if False:
@@ -457,6 +471,4 @@ if __name__ == "__main__":
     sys.stderr.write("NOTE: Running this only makes sense,"
                      " if you have multiple SQs and -b is fixed or coverage is low.\n")
     # otherwise runtime optimization through dyn. bonf. kicks in
-    
-    LOG.warn("Largely untested!")
     main()
