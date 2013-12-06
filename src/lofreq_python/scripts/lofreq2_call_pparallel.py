@@ -9,9 +9,6 @@ __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
 __copyright__ = "2013 Genome Institute of Singapore"
 __license__ = "Free for non-commercial use"
-#
-# FIXME:update-copyright
-#
 
 
 #--- standard library imports
@@ -23,7 +20,6 @@ import multiprocessing
 import tempfile
 import shutil
 import os
-#import itertools
 
 #--- third-party imports
 #
@@ -149,7 +145,7 @@ def sq_list_from_bam(bam):
 
     assert os.path.exists(bam), ("BAM file %s does not exist" % bam)
     cmd = 'lofreq idxstats %s' % (bam)
-    LOG.critical("cmd=%s" % cmd)
+    LOG.debug("cmd=%s" % cmd)
     process = subprocess.Popen(cmd.split(),
                                shell=False,
                                stdout=subprocess.PIPE,
@@ -259,14 +255,17 @@ def main():
     # poor man's usage
     #
     if '-h' in orig_argv:
-        sys.stderr.write("Calls 'lofreq call' per chrom/seq in bam"
+        LOG.fatal("Calls 'lofreq call' per chrom/seq in bam"
                          " and combines result at the end.\n"
                          "All arguments except '--pp-threads",
                          "'--pp-debug', '--pp-verbose' and --pp-dryrun"
                          "will be passed down to 'lofreq call'.")
         sys.exit(1)
-
-
+        
+    if 'call' in orig_argv:
+        LOG.fatal("argument 'call' not needed")
+        sys.exit(1)
+        
     lofreq_call_args = list(orig_argv)
     #LOG.warn("lofreq_call_args = %s" % ' '.join(lofreq_call_args))
 
@@ -357,7 +356,6 @@ def main():
     LOG.info("Using %d threads with following basic args: %s\n" % (
             num_threads, ' '.join(lofreq_call_args)))
 
-    # FIXME how to get BAM?
     bam = None
     for arg in lofreq_call_args:
         ext = os.path.splitext(arg)[1].lower()
@@ -372,7 +370,7 @@ def main():
     if len(sq_list) == 1:
         LOG.warn("Only one SQ found in BAM header. No point in running in parallel mode.")
         sys.exit(1)
-    import pdb; pdb.set_trace()
+    #import pdb; pdb.set_trace()
         
     cmd_list = list(lofreq_cmd_per_sq(sq_list, lofreq_call_args, tmp_dir))
     if dryrun:
@@ -383,8 +381,7 @@ def main():
       
     results = []
     pool = multiprocessing.Pool(processes=num_threads)
-    p = pool.map_async(work, cmd_list, chunksize=128,
-                       callback=results.extend)
+    p = pool.map_async(work, cmd_list, callback=results.extend)
     p.wait()
     # report failures and exit if found
     if any(results):
@@ -404,7 +401,7 @@ def main():
     vcf_concat = os.path.join(tmp_dir, "concat.vcf")
     # maintain order
     vcf_files = [os.path.join(tmp_dir, "%d.vcf" % no)
-                 for no in range(len(regions))]
+                 for no in range(len(cmd_list))]
     if not all([os.path.exists(f) for f in vcf_files]):
         LOG.fatal("Missing some vcf output from threads")
         sys.exit(1)
@@ -417,7 +414,7 @@ def main():
     #
     if bonf_opt == 'dynamic':
         log_files = [os.path.join(tmp_dir, "%d.log" % no)
-                     for no in range(len(regions))]
+                     for no in range(len(cmd_list))]
         bonf = total_num_tests_from_logs(log_files)
         if bonf == -1:
             sys.exit(1)
