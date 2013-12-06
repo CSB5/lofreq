@@ -106,27 +106,28 @@ static void usage(const char *myname)
      fprintf(stderr, "\n");
      fprintf(stderr, "Usage: %s <command> [options]\n\n", myname);
      fprintf(stderr, "  Main Commands:\n");
-     fprintf(stderr, "    call        : Call variants\n");
-     fprintf(stderr, "    somatic     : Call somatic variants\n");
+     fprintf(stderr, "    call          : Call variants\n");
+     fprintf(stderr, "    call-parallel : Call variants\n");
+     fprintf(stderr, "    somatic       : Call somatic variants\n");
      fprintf(stderr, "\n");
      fprintf(stderr, "  Samtools Clones:\n");
-     fprintf(stderr, "    index       : Create index for BAM file\n");
-     fprintf(stderr, "    idxstats    : Print stats for indexed BAM file\n");
+     fprintf(stderr, "    index         : Create index for BAM file\n");
+     fprintf(stderr, "    idxstats      : Print stats for indexed BAM file\n");
      fprintf(stderr, "\n");
      fprintf(stderr, "  Other Commands:\n");
-     fprintf(stderr, "    filter      : Filter variants in VCF file\n");
-     fprintf(stderr, "    uniq        : Test whether variants predicted in only one sample really are unique\n");
-     fprintf(stderr, "    plpsummary  : Print pileup summary per position\n"); 
+     fprintf(stderr, "    filter        : Filter variants in VCF file\n");
+     fprintf(stderr, "    uniq          : Test whether variants predicted in only one sample really are unique\n");
+     fprintf(stderr, "    plpsummary    : Print pileup summary per position\n"); 
 #ifdef USE_ALNERRPROF
-     fprintf(stderr, "    bamstats    : Collect BAM statistics\n");
+     fprintf(stderr, "    bamstats      : Collect BAM statistics\n");
 #endif
-     fprintf(stderr, "    vcfset      : VCF set operations\n");
-     fprintf(stderr, "    cluster     : Cluster variants in VCF file (supports legacy SNP format)\n");
+     fprintf(stderr, "    vcfset        : VCF set operations\n");
+     fprintf(stderr, "    cluster       : Cluster variants in VCF file (supports legacy SNP format)\n");
 #ifdef FIXME_NOT_IMPLEMENTED
-     fprintf(stderr, "    peek        : Check properties of BAM file\n");
+     fprintf(stderr, "    peek          : Check properties of BAM file\n");
 #endif
 
-     fprintf(stderr, "    version     : Print version info\n");
+     fprintf(stderr, "    version       : Print version info\n");
      fprintf(stderr, "\n");
 }
 
@@ -167,11 +168,13 @@ int main(int argc, char *argv[])
 
      } else if (strcmp(argv[1], "filter") == 0 || 
                 strcmp(argv[1], "somatic") == 0 ||
+                strcmp(argv[1], "call-parallel") == 0 ||
                 strcmp(argv[1], "cluster") == 0) {
           char **argv_execvp = calloc(argc, sizeof(char*));
           int i;
           char *filter_script = "lofreq2_filter.py";
           char *somatic_script = "lofreq2_somatic.py";
+          char *parallel_script = "lofreq2_call_pparallel.py";
           char *vcfset_script = "lofreq2_vcfset.py";
           char *cluster_script = "lofreq2_cluster.py";
           char *script_to_call;
@@ -180,6 +183,8 @@ int main(int argc, char *argv[])
                script_to_call = filter_script;
           } else if (strcmp(argv[1], "somatic") == 0) {
                script_to_call = somatic_script;
+          } else if (strcmp(argv[1], "call-parallel") == 0) {
+               script_to_call = parallel_script;
           } else if (strcmp(argv[1], "vcfset") == 0) {
                script_to_call = vcfset_script;
           } else if (strcmp(argv[1], "cluster") == 0) {
