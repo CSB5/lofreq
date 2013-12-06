@@ -243,7 +243,7 @@ def main():
     if opts.debug:
         LOG.setLevel(logging.DEBUG)
 
-    for (in_file, descr) in [(opts.vcf_in, "VCF input file")]:
+    for (in_file, descr) in [(opts.vcf_in, "VCF")]:
         if not in_file:
             parser.error("%s input file argument missing." % descr)
             sys.exit(1)
