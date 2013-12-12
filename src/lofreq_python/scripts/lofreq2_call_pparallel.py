@@ -110,8 +110,6 @@ def read_bed_coords(fbed):
     Based on lofreq 0.6.0
     """
 
-    bed_coords = []
-
     with open(fbed, 'r') as fh:
         for line in fh:
             if line.startswith('#'):
@@ -139,6 +137,45 @@ def read_bed_coords(fbed):
             yield (chrom, start, end)
 
 
+def sq_list_from_bam_samtools(bam):
+    """Extract SQs listed in BAM head using samtools
+    """
+
+    assert os.path.exists(bam), ("BAM file %s does not exist" % bam)
+    cmd = 'samtools view -H %s' % (bam)
+    LOG.debug("cmd=%s" % cmd)
+    process = subprocess.Popen(cmd.split(),
+                               shell=False,
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE)
+    (stdoutdata, stderrdata) =  process.communicate()
+
+    retcode = process.returncode
+    if retcode != 0:
+        LOG.fatal("%s exited with error code '%d'." \
+                  " Command was '%s'. stderr was: '%s'" % (
+                      cmd.split()[0], retcode, cmd, stderrdata))
+        raise OSError
+    stdout_lines = str.splitlines(stdoutdata)
+            
+    sq_list = []
+    for line in stdout_lines:
+        if not line.startswith("@SQ"):
+            continue
+        line_split = line.rstrip().split()
+        sn_field = [x for x in line_split if x.startswith("SN:")][0]
+        sq = sn_field[3:]
+        sq_list.append(sq)
+
+    if len(sq_list) == 0:
+        LOG.error("No mapping reads in index for %s found."
+                  " Reindexing should solve this. Trying samtools instead" % (bam))
+        sys.exit(1)
+       
+    return sq_list
+
+
+
 def sq_list_from_bam(bam):
     """Extract SQs listed in BAM to which at least one read maps
     """
@@ -160,6 +197,7 @@ def sq_list_from_bam(bam):
         raise OSError
     stdout_lines = str.splitlines(stdoutdata)
             
+
     # orig src: sq_list_from_header()
     sq_list = []
     for line in stdout_lines:
@@ -168,6 +206,15 @@ def sq_list_from_bam(bam):
         (n_mapped, n_unmapped) = map(int, [n_mapped, n_unmapped])
         if sq != '*' and n_mapped > 0:
             sq_list.append(sq)
+
+    if len(sq_list) == 0:
+        LOG.error("No mapping reads in index for %s found."
+                  " Reindexing should solve this. Trying samtools instead" % (bam))
+        sq_list = sq_list_from_bam_samtools(bam)
+        if len(sq_list) == 0:
+            LOG.fatal("samtools failed as well :(")
+            sys.exit(1)
+       
     return sq_list
 
 
@@ -374,14 +421,15 @@ def main():
     # complicated the regions in the optional bed file could be taken
     # into account as well).
     sq_list = sq_list_from_bam(bam)
-    if len(sq_list) == 1:
-        LOG.warn("Only one SQ found in BAM header."
+    if len(sq_list) < 2:
+        LOG.warn("Not more than one SQ found in BAM header."
                  " No point in running in parallel mode.")
         sys.exit(1)
-    #import pdb; pdb.set_trace()
         
     cmd_list = list(lofreq_cmd_per_sq(sq_list, lofreq_call_args, tmp_dir))
-    LOG.info("Adding %d command to mp-pool" % len(cmd_list))
+    assert len(cmd_list)>1, (
+        "Oops...got only one command for sq_list: %s" % (sq_list))
+    LOG.info("Adding %d commands to mp-pool" % len(cmd_list))
     LOG.debug("cmd_list = %s" % cmd_list)
     if dryrun:
         for cmd in cmd_list:
