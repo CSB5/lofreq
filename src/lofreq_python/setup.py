@@ -39,7 +39,8 @@ setup(name = setup_conf.PACKAGE_NAME,
       scripts = [
           'scripts/lofreq2_cluster.py',
           'scripts/lofreq2_filter.py',
-          'scripts/lofreq2_somatic.py', 
+          'scripts/lofreq2_somatic.py',
+          'scripts/lofreq2_vcfplot.py'
       ],
       # http://pypi.python.org/pypi?%3Aaction=list_classifiers
       classifiers=['Environment :: Console',
