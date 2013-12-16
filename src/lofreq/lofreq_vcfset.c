@@ -364,7 +364,7 @@ main_vcfset(int argc, char *argv[])
                    vcf_write_var(& vcfset_conf.vcf_out, var_1);
 
               }
-#ifdef NOT_OKAY_IF_SIMPLE_KEY_AND_MULTIALLELIC
+#ifdef NOT_OKAY_IF_SIMPLE_KEY_AND_MULTIALLELIC_AND_ACTUALLY_NOT_NEEDED_AFTER_ALL
               else {
                    /* save some mem */
                    HASH_DEL(var_hash_vcf2, var_2);
