@@ -91,7 +91,6 @@ dump_filter_conf(filter_conf_t *cfg)
 static void
 usage(const filter_conf_t* filter_conf)
 {
-     /* FIXME all */
      fprintf(stderr, "%s: Filter variant parsed from vcf file\n\n", MYNAME);
      fprintf(stderr, "Usage: %s [options] -i input.vcf -o output.vcf\n", MYNAME);
 
@@ -101,12 +100,12 @@ usage(const filter_conf_t* filter_conf)
      fprintf(stderr, "  -o | --out FILE             VCF output file (default: - for stdout; gzip supported).\n");
 
      fprintf(stderr, "  Coverage:\n");
-     fprintf(stderr, "  -v | --cov-min INT          Minimum coverage allowed\n");
-     fprintf(stderr, "  -V | --cov-max INT          Maximum coverage allowed\n");
+     fprintf(stderr, "  -v | --cov-min INT          Minimum coverage allowed (<1=off)\n");
+     fprintf(stderr, "  -V | --cov-max INT          Maximum coverage allowed (<1=off)\n");
 
-     fprintf(stderr, "  Allele Frequency:\n");
-     fprintf(stderr, "  -a | --af-min FLOAT         Maximum allele freq allowed\n");
-     fprintf(stderr, "  -A | --af-max FLOAT         Minimum allele freq allowed\n");
+     fprintf(stderr, "  Allele Frequency (neg. values = off):\n");
+     fprintf(stderr, "  -a | --af-min FLOAT         Maximum allele freq allowed (<1=off)\n");
+     fprintf(stderr, "  -A | --af-max FLOAT         Minimum allele freq allowed (<1=off)\n");
 
      fprintf(stderr, "  Strand Bias:\n");
      fprintf(stderr, "  -B | --sb-thresh INT        Maximum phred-value allowed. Conflicts with -b.\n");
@@ -131,11 +130,13 @@ int
 main_filter(int argc, char *argv[])
 {
      filter_conf_t cfg;
-     char *vcf_in, *vcf_out;
+     char *vcf_in = NULL, *vcf_out = NULL;
      static int print_only_passed = 0;
      char *vcf_header = NULL;
-     var_t *vars_in = NULL;
-     vcf_in = vcf_out = NULL;
+     var_t **vars = NULL;
+     long int num_vars = 0;
+     long int vars_size = 0;
+     long int i;
 
      /* default filter options */
      memset(&cfg, 0, sizeof(filter_conf_t));
@@ -171,14 +172,11 @@ main_filter(int argc, char *argv[])
               {"sb-thresh", required_argument, NULL, 'B'},
               {"sb-mtc", required_argument, NULL, 'b'},
               {"sb-alpha", required_argument, NULL, 'c'},
-              /* FIXME check settings: thresh rules out all others etc ! */
-              /* FIXME set ntests ! */
 
               {"snvqual-thresh", required_argument, NULL, 'Q'},
               {"snvqual-mtc", required_argument, NULL, 'q'},
               {"snvqual-alpha", required_argument, NULL, 'r'},
               {"snvqual-ntests", required_argument, NULL, 's'},
-              /* FIXME check settings: thresh rules out all others etc ! */
 
               {0, 0, 0, 0} /* sentinel */
          };
@@ -203,7 +201,6 @@ main_filter(int argc, char *argv[])
          case 'i': 
               vcf_in = strdup(optarg);
               break;
-
          case 'o':
               if (0 != strcmp(optarg, "-")) {
                    if (file_exists(optarg)) {
@@ -214,7 +211,6 @@ main_filter(int argc, char *argv[])
               vcf_out = strdup(optarg);
               break;
 
-
          case 'v': 
               cfg.cov_filter.min = atoi(optarg);
               break;
@@ -222,14 +218,12 @@ main_filter(int argc, char *argv[])
               cfg.cov_filter.max = atoi(optarg);
               break;
 
-
          case 'a': 
               cfg.af_filter.min = strtof(optarg, NULL);
               break;
          case 'A': 
               cfg.af_filter.max = strtof(optarg, NULL);
               break;
-
 
          case 'B':
               cfg.sb_filter.thresh = atoi(optarg);
@@ -262,7 +256,6 @@ main_filter(int argc, char *argv[])
               cfg.snvqual_filter.ntests = atoi(optarg);
               break;
 
-
          case '?': 
               LOG_FATAL("%s\n", "Unrecognized argument found. Exiting...\n"); 
               return 1;
@@ -274,10 +267,12 @@ main_filter(int argc, char *argv[])
     cfg.print_only_passed = print_only_passed;
 
     if (0 != argc - optind - 1) {/* FIXME needed at all? */
-        fprintf(stderr, "unrecognized argument found. Exiting...\n");
-        return 1;
+         LOG_FATAL("%s\n", "Unrecognized argument found. Exiting...\n");
+         return 1;
     }
 
+    /* logic check of command line parameters
+     */
     if (cfg.cov_filter.max > 0 &&  cfg.cov_filter.max < cfg.cov_filter.min) {
          LOG_FATAL("%s\n", "Invalid coverage-filter settings");
          return 1;
@@ -287,19 +282,17 @@ main_filter(int argc, char *argv[])
          LOG_FATAL("%s\n", "Invalid AF-filter settings");
          return 1;
     }
-    if (cfg.sb_filter.thresh && cfg.sb_filter.thresh != MTC_NONE) {
+
+    if (cfg.sb_filter.thresh && cfg.sb_filter.mtc_type != MTC_NONE) {
          LOG_FATAL("%s\n", "Can't use fixed strand-bias threshold *and* multiple testing correction.");
          return 1;
     }
-    if (cfg.snvqual_filter.thresh && cfg.snvqual_filter.thresh != MTC_NONE) {
+    if (cfg.snvqual_filter.thresh && cfg.snvqual_filter.mtc_type != MTC_NONE) {
          LOG_FATAL("%s\n", "Can't use fixed SNV quality threshold *and* multiple testing correction.");
          return 1;
     }
 
-
-
     LOG_FIXME("add more checks esp. for sb and snvqual. Also init values\n");
-
 
     if (argc == 2) {
         fprintf(stderr, "\n");
@@ -319,6 +312,7 @@ main_filter(int argc, char *argv[])
          vcf_out = malloc(2 * sizeof(char));
          strcpy(vcf_out, "-");
     }
+    LOG_DEBUG("vcf_in=%s vcf_out=%s\n", vcf_in, vcf_out);
 
     /* open vcf files
      */
@@ -332,7 +326,6 @@ main_filter(int argc, char *argv[])
          LOG_ERROR("Couldn't open %s\n", vcf_out);
          return 1;
     }
-
     free(vcf_in);
     free(vcf_out);
 
@@ -347,14 +340,15 @@ main_filter(int argc, char *argv[])
          }
     } 
 
+    LOG_FIXME("%s\n", "Add filter to header");
     vcf_write_header(& cfg.vcf_out, vcf_header);
     free(vcf_header);
-
 
     /* read variants. since many filters perform multiple testing
      * correction and therefore need to look at all variants we keep
      * it simple and load them all into memory.
      */
+    num_vars = 0;
     while (1) {
          var_t *var;
          int rc;
@@ -364,20 +358,49 @@ main_filter(int argc, char *argv[])
               LOG_FATAL("%s\n", "Error while parsing vcf-file");
               exit(1);
          }
+                   
          if (1 == rc) {/* EOF */
               free(var);
               break;
          }
-         LOG_FIXME("%s\n", "Save this var to var_in. Extend dynamically or use utarray"); exit(1);
+
+         /* read all in no matter if already filtered. we keep adding to filters */         
+         num_vars +=1;
+         if (num_vars >= vars_size) {
+              const long incr = 128;
+              vars = realloc(vars, (vars_size+incr) * sizeof(var_t**));
+              vars_size += incr;
+         }
+         vars[num_vars-1] = var;
+#ifdef TRACE
+         {
+              char *key;
+              vcf_var_key(&key,  vars[num_vars-1]);
+              fprintf(stderr, "storing var %ld+1: %s\n", num_vars, key);
+              free(key);
+         }
+#endif
+    }
+    if (num_vars) {
+         vars = realloc(vars, (num_vars * sizeof(var_t**)));
     }
     vcf_file_close(& cfg.vcf_in);
+    LOG_FIXME("%s\n", "init ntests in sb_ and snvqual_ if type != MTC_NONE");
+
+    LOG_FIXME("Got %d vars\n", num_vars);
+    for (i=0; i<num_vars; i++) {
+         var_t *v = vars[i];
+         if (cfg.print_only_passed && ! (VCF_VAR_PASSES(v))) {
+              continue;
+         }
+         vcf_write_var(& cfg.vcf_out, v);
+    }
 
     LOG_FIXME("%s\n", "Implement lazy option:\n" \
               " - suck all into mem" \
               " - apply filter one by one\n" \
-              " - final iteration: set pass to any without filter tag\n");
-    LOG_FIXME("%s\n", "don't forget to init ntests in sb_ and snvqual_ if type != MTC_NONE");
-    LOG_FIXME("%s\n", "unfinished"); exit(1);
+              " - final iteration: set pass to any without filter tag");
+    LOG_FIXME("%s\n", "unfinished");
 
     vcf_file_close(& cfg.vcf_out);
 
@@ -392,6 +415,6 @@ main_filter(int argc, char *argv[])
 int 
 main(int argc, char *argv[])
 {
-     return main_filter(argc, argv);
+     return main_filter(argc+1, argv-1);
 }
 #endif
