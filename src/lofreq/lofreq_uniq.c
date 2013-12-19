@@ -368,7 +368,7 @@ main_uniq(int argc, char *argv[])
          }
     } else {
          /*LOG_FIXME("header was: %s", vcf_header);*/
-         vcf_header_add_info(&vcf_header, "##INFO=<ID=UQ,Number=1,Type=Integer,Description=\"Phred-scaled uniq score at this position\">\n");
+         vcf_header_add(&vcf_header, "##INFO=<ID=UQ,Number=1,Type=Integer,Description=\"Phred-scaled uniq score at this position\">\n");
          vcf_write_header(& uniq_conf.vcf_out, vcf_header);
          /*LOG_FIXME("header now: %s", vcf_header);*/
          free(vcf_header);
