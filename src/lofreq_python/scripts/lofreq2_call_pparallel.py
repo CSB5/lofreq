@@ -1,8 +1,7 @@
 #!/usr/bin/env python
-"""Parallel wrapper for LoFreq* SNV Caller.
-
-The idea is to run one thread per seq/chrom listed in header (used as
-region to make use of indexing feature) and bed file (if given).
+"""Parallel wrapper for LoFreq* SNV Caller: Runs one thread per
+seq/chrom listed in header (used as region to make use of indexing
+feature) and bed file (if given) and combines results at the end.
 """
 
 __author__ = "Andreas Wilm"
@@ -139,6 +138,8 @@ def read_bed_coords(fbed):
 
 def sq_list_from_bam_samtools(bam):
     """Extract SQs listed in BAM head using samtools
+
+    Elements of returned list is a 2-tuple with sq, length.
     """
 
     assert os.path.exists(bam), ("BAM file %s does not exist" % bam)
@@ -157,27 +158,32 @@ def sq_list_from_bam_samtools(bam):
                       cmd.split()[0], retcode, cmd, stderrdata))
         raise OSError
     stdout_lines = str.splitlines(stdoutdata)
-            
+
     sq_list = []
+
     for line in stdout_lines:
         if not line.startswith("@SQ"):
             continue
         line_split = line.rstrip().split()
         sn_field = [x for x in line_split if x.startswith("SN:")][0]
         sq = sn_field[3:]
-        sq_list.append(sq)
+        ln_field = [x for x in line_split if x.startswith("LN:")][0]
+        ln = int(ln_field[3:])
+        sq_list.append((sq, ln))
 
     if len(sq_list) == 0:
         LOG.error("No mapping reads in index for %s found."
-                  " Reindexing should solve this. Trying samtools instead" % (bam))
+                  " Reindexing should solve this."
+                  " Trying samtools instead" % (bam))
         sys.exit(1)
-       
+
     return sq_list
 
 
 
 def sq_list_from_bam(bam):
-    """Extract SQs listed in BAM to which at least one read maps
+    """Extract SQs listed in BAM. Elements of returned list is a
+    3-tuple with sq, length and number of mapped reads.
     """
 
     assert os.path.exists(bam), ("BAM file %s does not exist" % bam)
@@ -196,16 +202,16 @@ def sq_list_from_bam(bam):
                       cmd.split()[0], retcode, cmd, stderrdata))
         raise OSError
     stdout_lines = str.splitlines(stdoutdata)
-            
 
     # orig src: sq_list_from_header()
     sq_list = []
     for line in stdout_lines:
         # chrom len #mapped #unmapped
         (sq, sqlen, n_mapped, n_unmapped) = line.rstrip().split()
-        (n_mapped, n_unmapped) = map(int, [n_mapped, n_unmapped])
-        if sq != '*' and n_mapped > 0:
-            sq_list.append(sq)
+        (sqlen, n_mapped, n_unmapped) = [int(x) for x in [
+            sqlen, n_mapped, n_unmapped]]
+        if sq != '*':
+            sq_list.append((sq, sqlen, n_mapped))
 
     if len(sq_list) == 0:
         LOG.error("No mapping reads in index for %s found."
@@ -214,14 +220,59 @@ def sq_list_from_bam(bam):
         if len(sq_list) == 0:
             LOG.fatal("samtools failed as well :(")
             sys.exit(1)
-       
+
     return sq_list
 
 
-def lofreq_cmd_per_sq(sq_list, lofreq_call_args, tmp_dir):
-    """Order in sq_list should be the same as in BAM file1"""
+def lofreq_cmd_per_sq(bam, lofreq_call_args, tmp_dir):
+    """Order in sq_list should be the same as in BAM file1
 
-    for (i, sq) in enumerate(sq_list):
+    Returns in addition length, number of mapped reads as separate
+    lists
+    """
+
+
+    # FIXME: this can be improved a lot. When asked for x threads we
+    # should simply bin the BAM file such that we get exactly x
+    # threads. The number of mapped reads per sq should be taken into
+    # account for the binning process (and to make it even more
+    # complicated the regions in the optional bed file could be taken
+    # into account as well). problem with using regions on WGS is that
+    # we will get boundary effects when using BAM.
+    #
+
+    sq_list = sq_list_from_bam(bam)
+    if len(sq_list) < 2:
+        LOG.warn("Not more than one SQ found in BAM header."
+                 " No point in running in parallel mode.")
+        sys.exit(1)
+
+    # A quick&dirty way to make sure all processors are always busy is
+    # to sort chromosomes by coverage/nreads/length (but keep original
+    # order for output prefixing)
+    #
+    # sq_list contains extra info len and, where possible, number of
+    # mapped reads as two or three-tuple. if three elems then third is
+    # n_mapped. use that for sorting otherwise fall back to chromosome
+    # length
+    #
+    if len(sq_list[0])==3:
+        # have three elements and 3rd is #reads
+        sort_idx = 2
+        # remove those with no reads mapped
+        sq_list = [x for x in sq_list if x[2] > 0]
+    else:
+        # only have two elements and 2nd is chrom length
+        sort_idx = 1
+    # sort list, but keep original index
+    enum_sq_list = sorted(enumerate(sq_list), key=lambda x:x[1][sort_idx], reverse=True)
+    # remove unnecessary info
+    enum_sq_list = [(x[0], x[1][0]) for x in enum_sq_list]
+    import pdb; pdb.set_trace()
+
+    # if all the above is too compliated just use  enumerate(sq_list) below
+
+    for (i, sq) in enum_sq_list:
         # maintain region order by using index
         reg_str = "%s" % sq
         # which surprisingly works without pos:pos
@@ -253,6 +304,18 @@ def main():
     # parse pparallel specific args: get and remove from list
     #
 
+    # poor man's usage
+    #
+    if '-h' in orig_argv:
+        sys.stderr.write(__doc__ + "\n")
+        sys.stderr.write("All arguments except --pp-threads (mandatory),"
+                  " --pp-debug, --pp-verbose\nand --pp-dryrun"
+                  " will be passed down to 'lofreq call'."
+                  "Make sure that the\nremaining args are valid 'lofreq call'"
+                  " args as no syntax check will be\nperformed.\n")
+        sys.exit(1)
+
+
     verbose = True
     try:
         idx = orig_argv.index('--pp-verbose')
@@ -280,7 +343,7 @@ def main():
         dryrun = True
     except (IndexError, ValueError):
         pass
-    
+
     # number of threads
     #
     num_threads = -1
@@ -298,21 +361,11 @@ def main():
         #num_threads = multiprocessing.cpu_count()
         sys.exit(1)
 
-        
-    # poor man's usage
-    #
-    if '-h' in orig_argv:
-        LOG.fatal("Calls 'lofreq call' per chrom/seq in bam"
-                         " and combines result at the end.\n"
-                         "All arguments except '--pp-threads",
-                         "'--pp-debug', '--pp-verbose' and --pp-dryrun"
-                         "will be passed down to 'lofreq call'.")
-        sys.exit(1)
-        
+    # Doh!
     if 'call' in orig_argv:
         LOG.fatal("argument 'call' not needed")
         sys.exit(1)
-        
+
     lofreq_call_args = list(orig_argv)
     #LOG.warn("lofreq_call_args = %s" % ' '.join(lofreq_call_args))
 
@@ -359,7 +412,7 @@ def main():
         bonf_opt = lofreq_call_args[idx+1]
 
     if bonf_opt == 'auto':
-        raise NotImplementedError, (
+        raise NotImplementedError(
             'FIXME bonf "auto" handling not implemented')
         # Just need derivation here and no more filtering at end
 
@@ -372,14 +425,14 @@ def main():
     if idx != -1:
         sig_opt = float(lofreq_call_args[idx+1])
 
-        
+
     # determine whether no-default-filter was given
     #
     no_default_filter = False
     if '--no-default-filter' in lofreq_call_args:
         no_default_filter = True
 
-        
+
     # prepend actual lofreq command
     #
     # lofreq2_local makes automatically sure we call the correct binary
@@ -414,21 +467,9 @@ def main():
                   " or file doesn't exist")
         sys.exit(1)
 
-    # FIXME: this can be improved a lot. When asked for x threads we
-    # should simply bin the BAM file such that we get exactly x
-    # threads. The number of mapped reads per sq should be taken
-    # into account for the binning process (and to make it even more
-    # complicated the regions in the optional bed file could be taken
-    # into account as well).
-    sq_list = sq_list_from_bam(bam)
-    if len(sq_list) < 2:
-        LOG.warn("Not more than one SQ found in BAM header."
-                 " No point in running in parallel mode.")
-        sys.exit(1)
-        
-    cmd_list = list(lofreq_cmd_per_sq(sq_list, lofreq_call_args, tmp_dir))
+    cmd_list = list(lofreq_cmd_per_sq(bam, lofreq_call_args, tmp_dir))
     assert len(cmd_list)>1, (
-        "Oops...got only one command for sq_list: %s" % (sq_list))
+        "Oops...got only one command for BAM: %s" % (bam))
     LOG.info("Adding %d commands to mp-pool" % len(cmd_list))
     LOG.debug("cmd_list = %s" % cmd_list)
     if dryrun:
@@ -436,7 +477,7 @@ def main():
             print "%s" % (cmd)
         LOG.critical("dryrun ending here")
         sys.exit(1)
-      
+
     results = []
     pool = multiprocessing.Pool(processes=num_threads)
     p = pool.map_async(work, cmd_list, callback=results.extend)
@@ -445,7 +486,7 @@ def main():
     if any(results):
         #for (res) in results:
         #    LOG.fatal("At least one process reported: %s", res)
-        
+
         for (res, cmd) in zip(results, cmd_list):
             if res != 0:
                 LOG.fatal("The following command failed"
@@ -485,7 +526,7 @@ def main():
 
     elif bonf_opt == 'auto':
         raise NotImplementedError
-        
+
     # otherwise bonf_opt was a fixed int, was already used properly
     # and there's no need to filter against snv qual
     # WARN: if --no-defaults is given we then don't filter at all?
@@ -500,7 +541,7 @@ def main():
     #    fh_in.close()
     #    if fh_out != sys.stdout:
     #        fh_out.close
-            
+
     cmd = ' '.join(cmd)# subprocess.call takes string
     LOG.info("Executing %s\n" % (cmd))
     if subprocess.call(cmd, shell=True):
@@ -516,7 +557,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.stderr.write("NOTE: Running this only makes sense,"
-                     " if you have multiple SQs and -b is fixed or coverage is low.\n")
-    # otherwise runtime optimization through dyn. bonf. kicks in
     main()
