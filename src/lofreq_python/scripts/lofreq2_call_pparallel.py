@@ -268,7 +268,7 @@ def lofreq_cmd_per_sq(bam, lofreq_call_args, tmp_dir):
     enum_sq_list = sorted(enumerate(sq_list), key=lambda x:x[1][sort_idx], reverse=True)
     # remove unnecessary info
     enum_sq_list = [(x[0], x[1][0]) for x in enum_sq_list]
-    import pdb; pdb.set_trace()
+    #import pdb; pdb.set_trace()
 
     # if all the above is too compliated just use  enumerate(sq_list) below
 
