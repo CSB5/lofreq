@@ -12,8 +12,10 @@ rm -f $vcf
 test -s ${bam}.bai || samtools index $bam
 
 $LOFREQ call -f $reffa -l $bed -b auto -o $vcf $bam || exit 1
+# this tests 'filter' as well as it's part of call
 #export  PERL5LIB=/Users/wilma/local/lib/
-if perl -mVcf -e validate ../tests/denv2-pseudoclonal.vcf; then
+#if perl -mVcf -e validate ../tests/denv2-pseudoclonal.vcf; then
+if vcf-validator ../tests/denv2-pseudoclonal.vcf; then
     echook "Got valid VCF output"
 else
     echoerror "Invalid VCF output"
