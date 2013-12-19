@@ -97,6 +97,7 @@ int vcf_parse_vars(var_t ***vars, vcf_file_t *vcf_file, int only_filtered);
 int vcf_var_has_info_key(char **value, const var_t *var, const char *key);
 int vcf_var_filtered(const var_t *var);
 
+void vcf_var_add_to_filter(var_t *var, const char *filter_name);
 void vcf_var_add_to_info(var_t *var, const char *info_str);
 void vcf_var_sprintf_info(var_t *var,
                           const int *dp, const float *af, const int *sb,
@@ -105,5 +106,5 @@ void vcf_var_sprintf_info(var_t *var,
 void vcf_write_var(vcf_file_t *vcf_file, const var_t *var);
 void vcf_write_header(vcf_file_t *vcf_file, const char *header);
 void vcf_write_new_header(vcf_file_t *vcf_file, const char *srcprog, const char *reffa);
-void vcf_header_add_info(char **header, const char *info);
+void vcf_header_add(char **header, const char *info);
 #endif
