@@ -534,7 +534,7 @@ def main():
                 if s.FILTER == '.' or s.FILTER == 'PASS':
                     snvs[i] = s._replace(FILTER=f)
                 else:
-                    snvs[i] = s._replace(FILTER="%s,%s" % (s.FILTER, f))
+                    snvs[i] = s._replace(FILTER="%s;%s" % (s.FILTER, f))
 
                         
     
