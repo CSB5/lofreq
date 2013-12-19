@@ -200,8 +200,9 @@ int vcf_var_filtered(const var_t *var)
 }
 
 /* value for key will be stored in value if not NULL. value will NULL
- * if not found. Otherwise its allocated here and caller must free. FIXME
- * shoddily written */
+ * if not found. Otherwise its allocated here and caller must free.
+ * FIXME shoddily written and we should use a hash for info key:val
+ * pairs anyway */
 int
 vcf_var_has_info_key(char **value, const var_t *var, const char *key) {
      const char field_delimiter[] = ";";
@@ -316,6 +317,43 @@ void vcf_var_add_to_info(var_t *var, const char *info_str)
 }
 
 
+void vcf_var_add_to_filter(var_t *var, const char *filter_name)
+{
+     if (var->filter) {
+          /* clear field, if PASSED or missing  */
+          if ((strlen(var->filter)>=4 && 0 == strcmp(var->filter, "PASS"))
+              ||
+              (strlen(var->filter) && var->filter[0] == VCF_MISSING_VAL_CHAR)) {
+               free(var->filter);
+               var->filter = NULL;
+          }
+     }
+
+     if (! var->filter) {/* could have been freed above so don't else if */
+          var->filter = malloc(1 * sizeof(char));
+          var->filter[0] = '\0';
+     }
+
+     /* realloc */
+     if (var->filter) {
+          var->filter = realloc(var->filter,
+                                (strlen(var->filter) + strlen(filter_name)
+                                + 1/*;*/ + 1/*\0*/) * sizeof(char));
+     }
+
+     if (var->filter==NULL) {
+          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
+                  __FILE__, __FUNCTION__, __LINE__);
+     }
+
+     /* add */
+     if (strlen(var->filter)) {
+          (void) strcat(var->filter, ";");
+     }
+     (void) strcat(var->filter, filter_name);
+}
+
+
 /* var->info allocated here. caller has to free */
 void vcf_var_sprintf_info(var_t *var,
                          const int *dp, const float *af, const int *sb,
@@ -383,7 +421,7 @@ void vcf_write_new_header(vcf_file_t *vcf_file, const char *src, const char *ref
 int vcf_parse_header(char **header, vcf_file_t *vcf_file)
 {
      char line[LINE_BUF_SIZE];
-
+     
      /* make sure strlen below will work on header */
      (*header) = malloc(sizeof(char));
      (*header)[0] = '\0';
@@ -555,10 +593,12 @@ int vcf_parse_vars(var_t ***vars, vcf_file_t *vcf_file, int only_passed)
 
 
 /* info needs to be terminated with a newline character */
-void vcf_header_add_info(char **header, const char *info)
+void vcf_header_add(char **header, const char *info)
 {
      char *token;
      int pos;
+
+     /* make sure to insert before HEADER_LINE */
 
      token = strstr(*header, HEADER_LINE);
      if (! token) {
@@ -658,7 +698,6 @@ int main(int argc, char *argv[]) {
 
      vcf_file_close(& vcf_file_in);
      vcf_file_close(& vcf_file_out);
-
 
      LOG_VERBOSE("%s\n", "successful exit");
 
