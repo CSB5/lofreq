@@ -33,29 +33,37 @@
 
 #define DEFAULT_ALPHA 0.05
 
+#define FILTER_ID_STRSIZE 64
+#define FILTER_STRSIZE 128
 
 typedef struct {
      int min;
+     char id_min[FILTER_ID_STRSIZE];
      int max;
-} cov_filter_t;
+     char id_max[FILTER_ID_STRSIZE];
+} dp_filter_t;
 
 typedef struct {
      float min;
+     char id_min[FILTER_ID_STRSIZE];
      float max;
+     char id_max[FILTER_ID_STRSIZE];
 } af_filter_t;
 
 typedef struct {
      int thresh;/* use if > 0; otherwise use multiple testing correction that's if >0 */
      int mtc_type;/* holm; holmbonf; fdr; none */
      double alpha;
-     int ntests;
+     long int ntests;
+     char id[FILTER_ID_STRSIZE];
 } sb_filter_t;
 
 typedef struct {
      int thresh;/* use if > 0; otherwise use multiple testing correction that's if >0 */
      int mtc_type;/* holm; holmbonf; fdr; none */
      double alpha;
-     int ntests;
+     long int ntests;
+     char id[FILTER_ID_STRSIZE];
 } snvqual_filter_t;
 
 typedef struct {
@@ -64,7 +72,7 @@ typedef struct {
      int print_only_passed;
 
      /* each allowed to be NULL if not set */
-     cov_filter_t cov_filter;
+     dp_filter_t dp_filter;
      af_filter_t af_filter;
      sb_filter_t sb_filter;
      snvqual_filter_t snvqual_filter;
@@ -77,14 +85,16 @@ dump_filter_conf(filter_conf_t *cfg)
      fprintf(stderr, "filter_conf:\n");
      fprintf(stderr, "  print_only_passed=%d\n", cfg->print_only_passed);
 
-     fprintf(stderr, "  cov_filter min=%d max=%d\n",
-             cfg->cov_filter.min, cfg->cov_filter.max);
-     fprintf(stderr, "  af_filter min=%f max=%f\n", 
+     fprintf(stderr, "  dp_filter min=%d max=%d\n",
+             cfg->dp_filter.min, cfg->dp_filter.max);
+     fprintf(stderr, "  af_filter min=%f max=%f\n",
              cfg->af_filter.min, cfg->af_filter.max);
-     fprintf(stderr, "  sb_filter thresh=%d mtc_type=%d|%s alpha=%f ntests=%d\n", 
-             cfg->sb_filter.thresh, cfg->sb_filter.mtc_type, mtc_type_str[cfg->sb_filter.mtc_type], cfg->sb_filter.alpha, cfg->sb_filter.ntests);
-     fprintf(stderr, "  snvqual_filter thresh=%d mtc_type=%d|%s alpha=%f ntests=%d\n", 
-             cfg->snvqual_filter.thresh, cfg->snvqual_filter.mtc_type, mtc_type_str[cfg->snvqual_filter.mtc_type], cfg->snvqual_filter.alpha, cfg->snvqual_filter.ntests);
+     fprintf(stderr, "  sb_filter thresh=%d mtc_type=%d|%s alpha=%f ntests=%ld\n",
+             cfg->sb_filter.thresh, cfg->sb_filter.mtc_type, mtc_type_str[cfg->sb_filter.mtc_type],
+             cfg->sb_filter.alpha, cfg->sb_filter.ntests);
+     fprintf(stderr, "  snvqual_filter thresh=%d mtc_type=%d|%s alpha=%f ntests=%ld\n",
+             cfg->snvqual_filter.thresh, cfg->snvqual_filter.mtc_type, mtc_type_str[cfg->snvqual_filter.mtc_type],
+             cfg->snvqual_filter.alpha, cfg->snvqual_filter.ntests);
 }
 
 
@@ -95,7 +105,7 @@ usage(const filter_conf_t* filter_conf)
      fprintf(stderr, "Usage: %s [options] -i input.vcf -o output.vcf\n", MYNAME);
 
      fprintf(stderr,"Options:\n");
-     fprintf(stderr, "  Files:\n"); 
+     fprintf(stderr, "  Files:\n");
      fprintf(stderr, "  -i | --in FILE              VCF input file (gzip supported)\n");
      fprintf(stderr, "  -o | --out FILE             VCF output file (default: - for stdout; gzip supported).\n");
 
@@ -126,7 +136,91 @@ usage(const filter_conf_t* filter_conf)
 /* usage() */
 
 
-int 
+void apply_af_filter(var_t *var, af_filter_t *af_filter)
+{
+     char *af_char = NULL;
+     float af;
+
+     if (af_filter->min > 0 || af_filter->max > 0) {
+          if ( ! vcf_var_has_info_key(&af_char, var, "AF")) {
+               LOG_WARN("%s\n", "Requested AF filtering failed since AF tag is missing in variant");
+               return;
+          }
+          af = strtof(af_char, (char **)NULL); /* atof */
+          free(af_char);
+          if (af_filter->min > 0.0 && af < af_filter->min) {
+               vcf_var_add_to_filter(var, af_filter->id_min);
+          }
+          if (af_filter->max > 0.0 && af > af_filter->max) {
+               vcf_var_add_to_filter(var, af_filter->id_max);
+          }
+     }
+}
+
+
+void apply_dp_filter(var_t *var, dp_filter_t *dp_filter)
+{
+     char *dp_char = NULL;
+     float cov;
+
+     if (dp_filter->min > 0 || dp_filter->max > 0) {
+          if ( ! vcf_var_has_info_key(&dp_char, var, "DP")) {
+               LOG_WARN("%s\n", "Requested coverage filtering failed since DP tag is missing in variant");
+               return;
+          }
+          cov = atoi(dp_char);
+          free(dp_char);
+          if (dp_filter->min > 0 && cov < dp_filter->min) {
+               vcf_var_add_to_filter(var, dp_filter->id_min);
+          }
+          if (dp_filter->max > 0 && cov > dp_filter->max) {
+               vcf_var_add_to_filter(var, dp_filter->id_max);
+          }
+     }
+}
+
+
+void cfg_filter_to_vcf_header(filter_conf_t *cfg, char **header)
+{
+     /* We might want to use http://stackoverflow.com/questions/277772/avoid-trailing-zeroes-in-printf */
+     char full_filter_str[FILTER_STRSIZE];
+
+     if (cfg->af_filter.min > 0) {
+          snprintf(cfg->af_filter.id_min, FILTER_ID_STRSIZE, "min_af_%f", cfg->af_filter.min);
+          snprintf(full_filter_str, FILTER_STRSIZE,
+                   "##FILTER=<ID=%s,Description=\"Minimum allele frequency %f\">\n",
+                   cfg->af_filter.id_min, cfg->af_filter.min);
+          vcf_header_add(header, full_filter_str);
+     }
+
+     if (cfg->af_filter.max > 0) {
+          snprintf(cfg->af_filter.id_max, FILTER_ID_STRSIZE, "max_af_%f", cfg->af_filter.max);
+          snprintf(full_filter_str, FILTER_STRSIZE,
+               "##FILTER=<ID=%s,Description=\"Maximum allele frequency %f\">\n",
+               cfg->af_filter.id_max, cfg->af_filter.max);
+          vcf_header_add(header, full_filter_str);
+     }
+
+     if (cfg->dp_filter.min > 0) {
+          snprintf(cfg->dp_filter.id_min, FILTER_ID_STRSIZE, "min_dp_%d", cfg->dp_filter.min);
+          snprintf(full_filter_str, FILTER_STRSIZE,
+               "##FILTER=<ID=%s,Description=\"Minimum Coverage %d\">\n",
+               cfg->dp_filter.id_min, cfg->dp_filter.min);
+          vcf_header_add(header, full_filter_str);
+     }
+     if (cfg->dp_filter.max > 0) {
+          snprintf(cfg->dp_filter.id_max, FILTER_ID_STRSIZE, "max_dp_%d", cfg->dp_filter.max);
+          snprintf(full_filter_str, FILTER_STRSIZE,
+               "##FILTER=<ID=%s,Description=\"Maximum Coverage %d\">\n",
+               cfg->dp_filter.id_max, cfg->dp_filter.max);
+          vcf_header_add(header, full_filter_str);
+     }
+
+     LOG_FIXME("%s\n", "sb and snvqual filter info addition missing");
+}
+
+
+int
 main_filter(int argc, char *argv[])
 {
      filter_conf_t cfg;
@@ -140,13 +234,13 @@ main_filter(int argc, char *argv[])
 
      /* default filter options */
      memset(&cfg, 0, sizeof(filter_conf_t));
-     cfg.cov_filter.min = cfg.cov_filter.max = -1;
+     cfg.dp_filter.min = cfg.dp_filter.max = -1;
      cfg.af_filter.min = cfg.af_filter.max = -1;
      cfg.sb_filter.alpha = DEFAULT_ALPHA;
      cfg.snvqual_filter.alpha = DEFAULT_ALPHA;
 
 
-    /* keep in sync with long_opts_str and usage 
+    /* keep in sync with long_opts_str and usage
      *
      * getopt is a pain in the whole when it comes to syncing of long
      * and short args and usage. check out gopt, libcfu...
@@ -182,7 +276,7 @@ main_filter(int argc, char *argv[])
          };
 
          /* keep in sync with long_opts and usage */
-         static const char *long_opts_str = "hi:o:v:V:a:A:B:b:c:Q:q:r:s:"; 
+         static const char *long_opts_str = "hi:o:v:V:a:A:B:b:c:Q:q:r:s:";
 
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
@@ -194,11 +288,11 @@ main_filter(int argc, char *argv[])
 
          switch (c) {
          /* keep in sync with long_opts etc */
-         case 'h': 
-              usage(& cfg); 
+         case 'h':
+              usage(& cfg);
               return 0;
 
-         case 'i': 
+         case 'i':
               vcf_in = strdup(optarg);
               break;
          case 'o':
@@ -211,17 +305,17 @@ main_filter(int argc, char *argv[])
               vcf_out = strdup(optarg);
               break;
 
-         case 'v': 
-              cfg.cov_filter.min = atoi(optarg);
+         case 'v':
+              cfg.dp_filter.min = atoi(optarg);
               break;
-         case 'V': 
-              cfg.cov_filter.max = atoi(optarg);
+         case 'V':
+              cfg.dp_filter.max = atoi(optarg);
               break;
 
-         case 'a': 
+         case 'a':
               cfg.af_filter.min = strtof(optarg, NULL);
               break;
-         case 'A': 
+         case 'A':
               cfg.af_filter.max = strtof(optarg, NULL);
               break;
 
@@ -253,11 +347,11 @@ main_filter(int argc, char *argv[])
               cfg.snvqual_filter.alpha = strtof(optarg, NULL);
               break;
          case 's':
-              cfg.snvqual_filter.ntests = atoi(optarg);
+              cfg.snvqual_filter.ntests = atol(optarg);
               break;
 
-         case '?': 
-              LOG_FATAL("%s\n", "Unrecognized argument found. Exiting...\n"); 
+         case '?':
+              LOG_FATAL("%s\n", "Unrecognized argument found. Exiting...\n");
               return 1;
 
          default:
@@ -273,7 +367,7 @@ main_filter(int argc, char *argv[])
 
     /* logic check of command line parameters
      */
-    if (cfg.cov_filter.max > 0 &&  cfg.cov_filter.max < cfg.cov_filter.min) {
+    if (cfg.dp_filter.max > 0 &&  cfg.dp_filter.max < cfg.dp_filter.min) {
          LOG_FATAL("%s\n", "Invalid coverage-filter settings");
          return 1;
     }
@@ -292,17 +386,17 @@ main_filter(int argc, char *argv[])
          return 1;
     }
 
-    LOG_FIXME("add more checks esp. for sb and snvqual. Also init values\n");
-
     if (argc == 2) {
         fprintf(stderr, "\n");
         usage(& cfg);
         return 1;
     }
 
-    dump_filter_conf(& cfg);
+    if (debug) {
+          dump_filter_conf(& cfg);
+     }
 
-    /* missing file args default to stdin and stdout 
+    /* missing file args default to stdin and stdout
      */
     if  (! vcf_in) {
          vcf_in = malloc(2 * sizeof(char));
@@ -316,12 +410,12 @@ main_filter(int argc, char *argv[])
 
     /* open vcf files
      */
-    if (vcf_file_open(& cfg.vcf_in, vcf_in, 
+    if (vcf_file_open(& cfg.vcf_in, vcf_in,
                       HAS_GZIP_EXT(vcf_in), 'r')) {
          LOG_ERROR("Couldn't open %s\n", vcf_in);
          return 1;
     }
-    if (vcf_file_open(& cfg.vcf_out, vcf_out, 
+    if (vcf_file_open(& cfg.vcf_out, vcf_out,
                       HAS_GZIP_EXT(vcf_out), 'w')) {
          LOG_ERROR("Couldn't open %s\n", vcf_out);
          return 1;
@@ -338,9 +432,10 @@ main_filter(int argc, char *argv[])
                         " after header parsing failed");
               return -1;
          }
-    } 
+    }
 
-    LOG_FIXME("%s\n", "Add filter to header");
+    cfg_filter_to_vcf_header(& cfg, &vcf_header);
+
     vcf_write_header(& cfg.vcf_out, vcf_header);
     free(vcf_header);
 
@@ -358,13 +453,24 @@ main_filter(int argc, char *argv[])
               LOG_FATAL("%s\n", "Error while parsing vcf-file");
               exit(1);
          }
-                   
+
          if (1 == rc) {/* EOF */
               free(var);
               break;
          }
 
-         /* read all in no matter if already filtered. we keep adding to filters */         
+         if (vcf_var_has_info_key(NULL, var, "INDEL")) {
+              LOG_WARN("%s\n", "Skipping INDEL variants for now\n");
+              free(var);
+              continue;
+         }
+
+         /* in theory we could apply all simple filters directly here
+          * and spit variant out (or not). only complex filters need
+          * to see all variants first to, e.g. apply multiple
+          * testing */
+
+         /* read all in, no matter if already filtered. we keep adding filters */
          num_vars +=1;
          if (num_vars >= vars_size) {
               const long incr = 128;
@@ -380,31 +486,55 @@ main_filter(int argc, char *argv[])
               free(key);
          }
 #endif
+
+
+         apply_af_filter(var, & cfg.af_filter);
+         apply_dp_filter(var, & cfg.dp_filter);
+
+         /* FIXME sb and snvqual thresh can go here or the collection
+          * of their values for mtc call  if mtc_type!=MTC_NONE */
     }
+    LOG_FIXME("%s\n", "sb and snvqual filter missing");
     if (num_vars) {
          vars = realloc(vars, (num_vars * sizeof(var_t**)));
     }
     vcf_file_close(& cfg.vcf_in);
-    LOG_FIXME("%s\n", "init ntests in sb_ and snvqual_ if type != MTC_NONE");
+    LOG_VERBOSE("Parsed %d variants\n", num_vars);
 
-    LOG_FIXME("Got %d vars\n", num_vars);
+    if (cfg.sb_filter.mtc_type != MTC_NONE && ! cfg.sb_filter.ntests) {
+         cfg.sb_filter.ntests = num_vars;
+    }
+    if (cfg.snvqual_filter.mtc_type != MTC_NONE && cfg.snvqual_filter.ntests) {
+         cfg.snvqual_filter.ntests = num_vars;
+    }
+
     for (i=0; i<num_vars; i++) {
          var_t *v = vars[i];
+
          if (cfg.print_only_passed && ! (VCF_VAR_PASSES(v))) {
               continue;
          }
+
+         /* add pass if no filters were set */
+         if (! v->filter || strlen(v->filter)<=1) {
+              char pass_str[] = "PASS";
+              if (v->filter) {
+                   free(v->filter);
+              }
+              v->filter = strdup(pass_str);
+         }
+
          vcf_write_var(& cfg.vcf_out, v);
     }
-
-    LOG_FIXME("%s\n", "Implement lazy option:\n" \
-              " - suck all into mem" \
-              " - apply filter one by one\n" \
-              " - final iteration: set pass to any without filter tag");
-    LOG_FIXME("%s\n", "unfinished");
-
     vcf_file_close(& cfg.vcf_out);
 
+    for (i=0; i<num_vars; i++) {
+         vcf_free_var(& vars[i]);
+    }
+    free(vars);
+
     LOG_VERBOSE("%s\n", "Successful exit.");
+    LOG_FIXME("%s\n", "Unfinished");
     return 0;
 }
 /* main_filter */
@@ -412,7 +542,7 @@ main_filter(int argc, char *argv[])
 
 /* cc lofreq_filter.c -o lofreq_filter -I../lofreq_core -I../uthash/ ../lofreq_core/liblofreq_core.a   -lz -DMAIN_FILTER */
 #ifdef MAIN_FILTER
-int 
+int
 main(int argc, char *argv[])
 {
      return main_filter(argc+1, argv-1);
