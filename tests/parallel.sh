@@ -25,15 +25,18 @@ log=$outdir/log.txt
 
 KEEP_TMP=0
 NUM_THREADS=4
+DEBUG=0
 
 cmd="/usr/bin/time $LOFREQ call -f $reffa -l $bed -o $outraw_single --verbose $bam"
+test $DEBUG -eq 1 && echo "DEBUG: cmd=$cmd" 1>&2
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
 fi
 
 LOFREQ_PARALLEL="$(dirname $LOFREQ)/../lofreq_python/scripts/lofreq2_call_pparallel.py"
-cmd="/usr/bin/time -p $LOFREQ_PARALLEL -n $NUM_THREADS -f $reffa -l $bed -o $outraw_parallel --verbose $bam"
+cmd="/usr/bin/time -p $LOFREQ_PARALLEL --pp-threads $NUM_THREADS -f $reffa -l $bed -o $outraw_parallel --verbose $bam"
+test $DEBUG -eq 1 && echo "DEBUG: cmd=$cmd" 1>&2
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
