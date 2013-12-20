@@ -9,10 +9,12 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
+#include <ctype.h>
 
 /* lofreq includes */
 #include "utils.h"
 #include "multtest.h"
+
 
 
 typedef struct {
@@ -109,9 +111,9 @@ fdr(double array[], int n, double alpha, int **irejected)
 
 int
 mtc_str_to_type(char *t) {
-     if (0 == strcmp(t, "bonf")) {
+     if (0 == strcmp(t, "bonf") || 0 == strcmp(t, "bonferroni")) {
           return MTC_BONF;
-     } else if (0 == strcmp(t, "holm") || 0 == strcmp(t, "holmbonf")) {
+     } else if (0 == strcmp(t, "holm") || 0 == strcmp(t, "holmbonf") ||  0 == strcmp(t, "holm-bonf") || 0 == strcmp(t, "holmbonferroni")) {
           return MTC_HOLMBONF;
      } else if (0 == strcmp(t, "fdr")) {
           return MTC_FDR;
@@ -120,6 +122,17 @@ mtc_str_to_type(char *t) {
      }
 }
 
+
+void
+mtc_str(char *buf, int mtc_type) {
+     char *str;
+     int i;
+     str = mtc_type_str[mtc_type];
+     strcpy(buf, &(str[4]));
+     for (i=0; i<strlen(buf); i++) {
+          buf[i] = tolower(buf[i]);
+     }
+}
 
 
 #ifdef MULTTEST_MAIN

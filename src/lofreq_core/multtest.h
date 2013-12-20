@@ -15,6 +15,7 @@ typedef enum
      MTC_FDR
 } mtc_type_t;
 
+
 #define STR(name) # name
 
 static char *mtc_type_str[] = {
@@ -24,8 +25,11 @@ static char *mtc_type_str[] = {
     STR(MTC_FDR),
 };
 
+
 int
 mtc_str_to_type(char *t);
 
+void
+mtc_str(char *buf, int mtc_type);
 
 #endif
