@@ -119,12 +119,12 @@ usage(const filter_conf_t* filter_conf)
 
      fprintf(stderr, "  Strand Bias:\n");
      fprintf(stderr, "  -B | --sb-thresh INT        Maximum phred-value allowed. Conflicts with -b.\n");
-     fprintf(stderr, "  -b | --sb-mtc STRING        Multiple testing correction type. One of bonf, holm or fdr. Conflicts with -B\n");
+     fprintf(stderr, "  -b | --sb-mtc STRING        Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -B\n");
      fprintf(stderr, "  -c | --sb-alpha FLOAT       Multiple testing correcion pvalue threshold\n");
 
      fprintf(stderr, "  SNV quality:\n");
      fprintf(stderr, "  -Q  | --snvqual-thresh INT  Maximum phred-value allowed. Conflicts with -q\n");
-     fprintf(stderr, "  -q  | --snvqual-mtc STRING  Multiple testing correction type. One of bonf, holm or fdr. Conflicts with -Q\n");
+     fprintf(stderr, "  -q  | --snvqual-mtc STRING  Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -Q\n");
      fprintf(stderr, "  -r  | --snvqual-alpha FLOAT Multiple testing correcion pvalue threshold\n");
      fprintf(stderr, "  -s  | --snvqual-ntests INT  Multiple testing correcion pvalue threshold\n");
 
@@ -180,10 +180,15 @@ void apply_dp_filter(var_t *var, dp_filter_t *dp_filter)
 }
 
 
+/* adds FILTER tags to vcf header based on config. also initializes
+ * filter ids 
+ */
 void cfg_filter_to_vcf_header(filter_conf_t *cfg, char **header)
 {
-     /* We might want to use http://stackoverflow.com/questions/277772/avoid-trailing-zeroes-in-printf */
      char full_filter_str[FILTER_STRSIZE];
+
+     /* for getting rid of all those trailong float zeros we might want to look at
+        http://stackoverflow.com/questions/277772/avoid-trailing-zeroes-in-printf */
 
      if (cfg->af_filter.min > 0) {
           snprintf(cfg->af_filter.id_min, FILTER_ID_STRSIZE, "min_af_%f", cfg->af_filter.min);
@@ -216,7 +221,41 @@ void cfg_filter_to_vcf_header(filter_conf_t *cfg, char **header)
           vcf_header_add(header, full_filter_str);
      }
 
-     LOG_FIXME("%s\n", "sb and snvqual filter info addition missing");
+     assert (! (cfg->sb_filter.thresh > 0 && cfg->sb_filter.mtc_type != MTC_NONE));
+     if (cfg->sb_filter.thresh > 0) {
+          snprintf(cfg->sb_filter.id, FILTER_ID_STRSIZE, "max_sb_%d", cfg->sb_filter.thresh);
+          snprintf(full_filter_str, FILTER_STRSIZE,
+               "##FILTER=<ID=%s,Description=\"Maximum Strand-Bias Phred %d\">\n",
+               cfg->sb_filter.id, cfg->sb_filter.thresh);
+          vcf_header_add(header, full_filter_str);
+          
+     } else if (cfg->sb_filter.mtc_type != MTC_NONE) {
+          char buf[64];
+          mtc_str(buf, cfg->sb_filter.mtc_type);
+          snprintf(cfg->sb_filter.id, FILTER_ID_STRSIZE, "sb_%s", buf);
+          snprintf(full_filter_str, FILTER_STRSIZE,
+               "##FILTER=<ID=%s,Description=\"Strand-Bias Multpiple Testing Correction: %s\">\n",
+               cfg->sb_filter.id, buf);
+          vcf_header_add(header, full_filter_str);
+     }
+
+     assert (! (cfg->snvqual_filter.thresh > 0 && cfg->snvqual_filter.mtc_type != MTC_NONE));
+     if (cfg->snvqual_filter.thresh > 0) {
+          snprintf(cfg->snvqual_filter.id, FILTER_ID_STRSIZE, "min_snvqual_%d", cfg->snvqual_filter.thresh);
+          snprintf(full_filter_str, FILTER_STRSIZE,
+               "##FILTER=<ID=%s,Description=\"Minimum SNV Quality (Phred) %d\">\n",
+               cfg->snvqual_filter.id, cfg->snvqual_filter.thresh);
+          vcf_header_add(header, full_filter_str);
+          
+     } else if (cfg->snvqual_filter.mtc_type != MTC_NONE) {
+          char buf[64];
+          mtc_str(buf, cfg->snvqual_filter.mtc_type);
+          snprintf(cfg->snvqual_filter.id, FILTER_ID_STRSIZE, "snvqual_%s", buf);
+          snprintf(full_filter_str, FILTER_STRSIZE,
+               "##FILTER=<ID=%s,Description=\"SNV Quality Multpiple Testing Correction: %s\">\n",
+               cfg->snvqual_filter.id, buf);
+          vcf_header_add(header, full_filter_str);
+     }
 }
 
 
@@ -407,6 +446,10 @@ main_filter(int argc, char *argv[])
          strcpy(vcf_out, "-");
     }
     LOG_DEBUG("vcf_in=%s vcf_out=%s\n", vcf_in, vcf_out);
+
+
+    /* everything below here could go into a function */
+
 
     /* open vcf files
      */
