@@ -517,6 +517,7 @@ def cmdline_parser():
 
     parser.add_argument("--threads",
                         type=int,
+                        dest="num_threads",
                         help="Advanced: use this many threads for each call")
 
     return parser
@@ -580,6 +581,7 @@ def main():
     somatic_snv_caller.alpha_t = args.tumor_alpha
     somatic_snv_caller.mtc_t = args.tumor_mtc
     somatic_snv_caller.mtc_alpha_t = args.tumor_mtc_alpha
+    somatic_snv_caller.num_threads = args.num_threads
     if args.mq_filter:
         somatic_snv_caller.mq_filter_t = args.mq_filter
     if args.baq_off:
