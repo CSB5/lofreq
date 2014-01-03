@@ -212,7 +212,7 @@ class SomaticSNVCaller(object):
 
         # FIXME aln_err_prof?
 
-        if self.num_threads>1:
+        if self.num_threads<2:
             cmd = [self.LOFREQ, 'call']
         else:
             cmd = [self.LOFREQ, 'call-parallel', '--pp-threads', "%d" % self.num_threads]
