@@ -265,7 +265,7 @@ class SomaticSNVCaller(object):
             cmd.append(self.bam_t)
             self.subprocess_wrapper(cmd)
 
-        if self.num_threads>1:
+        if self.num_threads<2:
             cmd = [self.LOFREQ, 'call']
         else:
             cmd = [self.LOFREQ, 'call-parallel', '--pp-threads', "%d" % self.num_threads]
