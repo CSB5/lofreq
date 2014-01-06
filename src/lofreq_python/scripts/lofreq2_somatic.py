@@ -151,7 +151,6 @@ class SomaticSNVCaller(object):
         
 
 
-
     @staticmethod
     def subprocess_wrapper(cmd, close_tmp=True):
         """Wrapper for subprocess.check_call
@@ -242,7 +241,7 @@ class SomaticSNVCaller(object):
         elines = e.readlines()
         for l in elines:
             fh.write("stderr: %s" % l)
-            LOG.info("cmd stderr: %s" % l)
+            LOG.info("cmd stderr: %s" % l.rstrip())
         for l in olines:
             fh.write("stdout: %s" % l)
         fh.close()
@@ -306,7 +305,7 @@ class SomaticSNVCaller(object):
         elines = e.readlines()
         for l in elines:
             fh.write("stderr: %s" % l)
-            LOG.info("cmd stderr: %s" % l)
+            LOG.info("cmd stderr: %s" % l.rstrip())
         for l in olines:
             fh.write("stdout: %s" % l)
         fh.close()
@@ -315,7 +314,7 @@ class SomaticSNVCaller(object):
 
         num_tests = -1
         for l in elines:
-            if l.startswith('Number of tests performed'):
+            if l.startswith('Number of substitution tests performed'):
                 num_tests = int(l.split(':')[1])
                 break
         if num_tests == -1:
