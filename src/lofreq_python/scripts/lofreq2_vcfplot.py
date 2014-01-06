@@ -285,11 +285,13 @@ def calc_dist_slow(variants, na=None):
     return dist_to_next
 
 
-def calc_dist(variants):
-    """Calculated distance to next variant. Might contain values of -1
-    when a chromosome only contains a single variant.
+def calc_dist(variants): 
+    """Calculated distance to next variant. 
 
-    Variants need to be sorted (doing asserts here)
+    If a chromosome only contains a single SNV, -1 will be stored as
+    dist as we can't use 0 which would mean multi-allelic position.
+
+    Variants need to be sorted (checking via assert here)
 
     This is several order of magnitudes faster then calc_dist_to_next
     """
@@ -346,7 +348,8 @@ def calc_dist(variants):
 def dist_hist(ax, var_dist, bins=15):
     """FIXME
     """
-    ax.hist([np.log10(d) for d in var_dist if d], bins=bins)
+    x = [np.log10(d) if d>0 else -1 for d in var_dist]
+    ax.hist(x, bins=bins)
     #xlim([0, xlim()[1]])
     ax.set_ylabel('#')
     ax.set_xlabel("SNV distance (log10)")
@@ -358,7 +361,7 @@ def heatmap_dist_vs_cov_1(ax, variants, var_dist, bins=20):
     """
     #from matplotlib.colors import LogNorm
     # FIXME: need to set bins only 70 seems to work best
-    x = [np.log10(d) if d else -1 for d in var_dist]
+    x = [np.log10(d) if d>0 else -1 for d in var_dist]
     y = [v.INFO['DP'] for v in variants]
     ax.dist_vs_dp_plot = plt.hist2d(x, y, bins=bins)
 
@@ -385,7 +388,7 @@ def heatmap_dist_vs_cov_2(ax, variants, var_dists, bins=20):
         # FIXME
         import scipy.ndimage as ndi
 
-    x = [np.log10(d) if d else -1 for d in var_dists]
+    x = [np.log10(d) if d>0 else -1 for d in var_dists]
     y = [v.INFO['DP'] for v in variants]
     heatmap, xedges, yedges = np.histogram2d(x, y, bins=bins)
     extent = [xedges.min(), xedges.max(), yedges.min(), yedges.max()]
@@ -418,7 +421,7 @@ def heatmap_freq_vs_cov(ax, variants, bins=50):
 
     ax.set_xlabel('DP')
     ax.set_ylabel('AF')
-    #ax1.set_xlim([0, xlim()[1]])
+    ax.set_xlim([0, ax.get_xlim()[1]])
     #ax1.set_ylim([0, 1])
     plt.colorbar()
 
@@ -526,7 +529,7 @@ def main():
 
     # FIXME filters should go here
     filter_list = []
-    filter_list.append((lambda v: v.INFO['DP']<100, "DP<100"))
+    #filter_list.append((lambda v: v.INFO['DP']<100, "DP<100"))
     #filter_list.append(lambda v: v.CHROM=='chr1')
     filtered_vars = variants
     for (f, n) in filter_list:
@@ -598,7 +601,6 @@ def main():
     #
 
 
-    #dist_to_next = calc_dist_slow(filtered_vars)
     dist_to_next = calc_dist(filtered_vars)
 
     fig = plt.figure()
@@ -628,7 +630,7 @@ def main():
     fig = plt.figure()
     ax = plt.subplot(1, 1, 1)
     heatmap_freq_vs_cov(ax, [v for v in filtered_vars if not v.INFO.has_key('CONSVAR')])
-    plt.title('AF vs Coverage')
+    plt.title('AF vs. Coverage')
     pp.savefig()
     plt.close()
 
@@ -637,7 +639,7 @@ def main():
     ax = plt.subplot(1, 1, 1)
     x = [v.INFO['DP'] for v in filtered_vars]
     #x = [v.INFO['AF'] for v in vars]
-    #x = [log10(d) if d else -1 for d in dist_to_next]
+    #x = [log10(d) if d>0 else -1 for d in dist_to_next]
     violin_plot(ax, x, True)
     ax.set_xlabel('DP')
     plt.title('DP distribution')
@@ -681,7 +683,7 @@ def main():
     ax = plt.subplot(NROWS, NCOLS, 21)
     x = [v.INFO['DP'] for v in filtered_vars]
     #x = [v.INFO['AF'] for v in filtered_vars]
-    #x = [log10(d) if d else -1 for d in dist_to_next]
+    #x = [log10(d) if d>0 else -1 for d in dist_to_next]
     violin_plot(ax, x, True)
     ax.set_xlabel('DP')
     """
