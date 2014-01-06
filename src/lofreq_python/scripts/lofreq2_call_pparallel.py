@@ -19,6 +19,7 @@ import multiprocessing
 import tempfile
 import shutil
 import os
+import gzip
 
 #--- third-party imports
 #
@@ -60,7 +61,7 @@ def total_num_tests_from_logs(log_files):
         num_tests_found = False
 
         for line in fh:
-            if line.startswith('Number of tests performed'):
+            if line.startswith('Number of substitution tests performed'):
                 num_tests = int(line.split(':')[1])
                 total_num_tests += num_tests
                 num_tests_found = True
@@ -82,8 +83,7 @@ def concat_vcf_files(vcf_files, vcf_concat, source=None):
 
     """
 
-    LOG.warn("FIXME add gzip support to concat_vcf_files()"
-             " or make vcfset subcommand")
+    # FIXME add gzip support to concat_vcf_files() or make vcfset subcommand"
     assert not os.path.exists(vcf_concat)
     fh_out = open(vcf_concat, 'w')
 
@@ -510,44 +510,52 @@ def main():
 
     # filtering
     #
+    log_files = [os.path.join(tmp_dir, "%d.log" % no)
+                 for no in range(len(cmd_list))]
+    num_tests = total_num_tests_from_logs(log_files)
+    if num_tests == -1:
+        sys.exit(1)
+    # same as in lofreq_snpcaller.c and used by lofreq2_somatic.py
+    sys.stderr.write("Number of substitution tests performed: %d\n" % num_tests)
+
     cmd = ['lofreq2_filter.py', '-p', '-i', vcf_concat, '-o', final_vcf_out]
     if no_default_filter:
         cmd.append('--no-defaults')
+
     if bonf_opt == 'dynamic':
-        # if bonf was computed dynamically, parse bonf from each run's
-        # log and filter using their sum
-        log_files = [os.path.join(tmp_dir, "%d.log" % no)
-                     for no in range(len(cmd_list))]
-        bonf = total_num_tests_from_logs(log_files)
-        if bonf == -1:
-            sys.exit(1)
+        # if bonf was computed dynamically, use bonf sum
+        bonf = num_tests
         phredqual = prob_to_phredqual(sig_opt/float(bonf))
         cmd.extend(['--snv-qual', "%s" % phredqual])
 
     elif bonf_opt == 'auto':
         raise NotImplementedError
-
-    # otherwise bonf_opt was a fixed int, was already used properly
-    # and there's no need to filter against snv qual
-    # WARN: if --no-defaults is given we then don't filter at all?
-    #else:
-    #    LOG.info("Copying concatenated vcf file to final destination\n")
-    #    fh_in = open(vcf_concat, 'r')
-    #    if final_vcf_out == "-":
-    #        fh_out = sys.stdout
-    #    else:
-    #        fh_out = open(final_vcf_out, 'w')
-    #    shutil.copyfileobj(fh_in, fh_out)
-    #    fh_in.close()
-    #    if fh_out != sys.stdout:
-    #        fh_out.close
-
-    cmd = ' '.join(cmd)# subprocess.call takes string
-    LOG.info("Executing %s\n" % (cmd))
-    if subprocess.call(cmd, shell=True):
-        LOG.fatal("Final filtering command failed."
-                  " Commmand was %s" % (cmd))
-        sys.exit(1)
+    
+    if bonf_opt not in ['auto', 'dynamic'] and no_default_filter:
+        # if bonf_opt was a fixed int, then it was already used properly and
+        # there's no need to filter against snv qual. if furthermore,
+        # --no-defaults is given we then don't filter at all
+        LOG.info("Copying concatenated vcf file to final destination")
+        LOG.debug("vcf_concat=%s final_vcf_out=%s" % (vcf_concat, final_vcf_out))
+        fh_in = open(vcf_concat, 'r')
+        if final_vcf_out == "-":
+            fh_out = sys.stdout
+        else:
+            if final_vcf_out[-3:] == '.gz':
+                fh_out = gzip.open(final_vcf_out, 'w')
+            else:
+                fh_out = open(final_vcf_out, 'w')
+        shutil.copyfileobj(fh_in, fh_out)
+        fh_in.close()
+        if fh_out != sys.stdout:
+            fh_out.close
+    else:
+        cmd = ' '.join(cmd)# subprocess.call takes string
+        LOG.info("Executing %s\n" % (cmd))
+        if subprocess.call(cmd, shell=True):
+            LOG.fatal("Final filtering command failed."
+            " Commmand was %s" % (cmd))
+            sys.exit(1)
 
     # remove temp files/dir
     if False:
