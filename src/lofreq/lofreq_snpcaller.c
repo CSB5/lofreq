@@ -1322,7 +1322,8 @@ for cov in coverage_range:
           * changing the format */
          int org_verbose = verbose;
          verbose = 1;
-         LOG_VERBOSE("Number of tests performed: %lld\n", num_tests);
+         /* lofreq2_call_parallel.py and used by lofreq2_somatic.py */
+         LOG_VERBOSE("Number of substitution tests performed: %lld\n", num_tests);
          verbose = org_verbose;
     }
 
