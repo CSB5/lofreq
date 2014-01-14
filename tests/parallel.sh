@@ -6,6 +6,8 @@
 source lib.sh || exit 1
 
 
+echo "NEED TEST DATA WITH MULTIPLE SQs (only get first 1k for each)" 1>&2
+
 basedir=data/denv2-pseudoclonal
 bam=$basedir/denv2-pseudoclonal.bam
 reffa=$basedir/denv2-pseudoclonal_cons.fa

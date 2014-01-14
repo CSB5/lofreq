@@ -89,7 +89,7 @@ def subst_type_str(ref, alt, strand_specific=False):
         return s
     else:
         c = complement(s)
-        return ' '.join(sorted([s, c]))
+        return '|'.join(sorted([s, c]))
     
 
 # FIXME cleanup
@@ -186,16 +186,6 @@ def r_ify(axes):
     return axes
 
 
-def print_simple_stats(variants):
-    """FIXME:add-doc
-    """
-    print "#SNVs = %d (%d CONSVARs and %d INDELs)" % (len(variants),
-                                                           sum([1 for v in variants if v.INFO.has_key('CONSVAR')]),
-                                                           sum([1 for v in variants if v.INFO.has_key('INDEL')]))
-    print "avg. DP = %.2f" % (np.mean([v.INFO['DP'] for v in variants]))
-    print "avg. AF = %.2f" % (np.mean([v.INFO['AF'] for v in variants]))
-    # FIXME: report quality/p-value distribution
-
 
 
 def af_hist(ax, af_list, bins=20):
@@ -236,6 +226,10 @@ def subst_perc(ax, subst_type_counts):
     # FIXME ticks as string won't work
     ax.set_ylabel('[%]')
     ax.set_xlabel('Type')
+    
+    # prevent clipping of tick-labels
+    #plt.subplots_adjust(bottom=0.15)
+    plt.tight_layout()
 
     
 def calc_dist_slow(variants, na=None):
@@ -285,11 +279,13 @@ def calc_dist_slow(variants, na=None):
     return dist_to_next
 
 
-def calc_dist(variants):
-    """Calculated distance to next variant. Might contain values of -1
-    when a chromosome only contains a single variant.
+def calc_dist(variants): 
+    """Calculated distance to next variant. 
 
-    Variants need to be sorted (doing asserts here)
+    If a chromosome only contains a single SNV, -1 will be stored as
+    dist as we can't use 0 which would mean multi-allelic position.
+
+    Variants need to be sorted (checking via assert here)
 
     This is several order of magnitudes faster then calc_dist_to_next
     """
@@ -346,32 +342,37 @@ def calc_dist(variants):
 def dist_hist(ax, var_dist, bins=15):
     """FIXME
     """
-    ax.hist([np.log10(d) for d in var_dist if d], bins=bins)
+    x = [np.log10(d) if d>0 else -1 for d in var_dist]
+    ax.hist(x, bins=bins)
     #xlim([0, xlim()[1]])
     ax.set_ylabel('#')
     ax.set_xlabel("SNV distance (log10)")
     ax.set_title("(%d bins)" % bins)
 
 
-def heatmap_dist_vs_cov_1(ax, variants, var_dist, bins=20):
+def heatmap_dist_vs_x_1(ax, variants, var_dist, info_key, bins=20):
     """FIXME:add-doc
+
+    info_key must be a valid vcf.INFO key, e.g. AF or DP
     """
     #from matplotlib.colors import LogNorm
-    # FIXME: need to set bins only 70 seems to work best
-    x = [np.log10(d) if d else -1 for d in var_dist]
-    y = [v.INFO['DP'] for v in variants]
+
+    assert all([v.INFO.has_key(info_key) for v in variants]), (
+        "Not all variants contain INFO key %s", info_key)
+    x = [np.log10(d) if d>0 else -1 for d in var_dist]
+    y = [v.INFO[info_key] for v in variants]
     ax.dist_vs_dp_plot = plt.hist2d(x, y, bins=bins)
 
     # FIXME add option to whiten missing values
 
     #print min(x), max(x)
     #print min(y), max(y)
-    ax.set_ylabel("DP")
+    ax.set_ylabel(info_key)
     ax.set_xlabel("SNV distance (log10)")
     ax.set_ylim([0, plt.ylim()[1]])
 
     plt.colorbar()
-
+    
 
 def heatmap_dist_vs_cov_2(ax, variants, var_dists, bins=20):
 
@@ -385,7 +386,7 @@ def heatmap_dist_vs_cov_2(ax, variants, var_dists, bins=20):
         # FIXME
         import scipy.ndimage as ndi
 
-    x = [np.log10(d) if d else -1 for d in var_dists]
+    x = [np.log10(d) if d>0 else -1 for d in var_dists]
     y = [v.INFO['DP'] for v in variants]
     heatmap, xedges, yedges = np.histogram2d(x, y, bins=bins)
     extent = [xedges.min(), xedges.max(), yedges.min(), yedges.max()]
@@ -418,30 +419,34 @@ def heatmap_freq_vs_cov(ax, variants, bins=50):
 
     ax.set_xlabel('DP')
     ax.set_ylabel('AF')
-    #ax1.set_xlim([0, xlim()[1]])
+    ax.set_xlim([0, ax.get_xlim()[1]])
     #ax1.set_ylim([0, 1])
     plt.colorbar()
 
     
-# from http://pyinsci.blogspot.sg/2009/09/violin-plot-with-matplotlib.html
-def violin_plot(ax, data, bp=True):
+def violin_plot(ax, data):
     '''
-    create violin plots on an axis
+    Create violin plots on an axis
+
+    from http://pyinsci.blogspot.sg/2009/09/violin-plot-with-matplotlib.html
     '''
 
+    # FIXME possible that this needs values between 0 and 1?
+    
     w = min(0.15, 0.5)
     k = gaussian_kde(data) # calculates the kernel density
     m = k.dataset.min() #lower bound of violin
     M = k.dataset.max() #upper bound of violin
     x = np.arange(m, M, (M-m)/100.) # support for violin
     v = k.evaluate(x) # violin profile (density curve)
-    v = v/v.max()*w # scaling the violin to the available space
+    if v.max():
+        v = v/v.max()*w # scaling the violin to the available space
+    else:
+        LOG.warn("v.max()==0. won't be able to print violin_plot")
+        v = 0
     p = 0
     ax.fill_betweenx(x, p, v+p, facecolor='y', alpha=0.3)
     ax.fill_betweenx(x,p, -v+p, facecolor='y', alpha=0.3)
-    if bp:
-        ax.boxplot(data, notch=1, positions=[0], vert=1)
-        #ax1.boxplot(data, notch=1, vert=1)
     l = w+w*0.1
     plt.xlim((-l, l))
     #print "DEBUG", w, k, m, M, x, v
@@ -449,6 +454,29 @@ def violin_plot(ax, data, bp=True):
     #ax1.set_xticklabels(ticks, rotation=45, ha="left")
 
 
+
+def print_overview(ax, text_list):
+    """FIXME:add-doc
+    """
+
+    # options:
+    # - annotate () or text()
+    # - tex or text
+    
+    # See http://jakevdp.github.io/mpl_tutorial/tutorial_pages/tut4.html
+    
+    #matplotlib.rc('text', usetex=True)
+    #table = r'\begin{table} \begin{tabular}{|l|l|l|}  \hline  $\alpha$      & $\beta$        & $\gamma$      \\ \hline   32     & $\alpha$ & 123    \\ \hline   200 & 321    & 50 \\  \hline  \end{tabular} \end{table}'
+
+    ax.axis('off')     
+    ax.text(0, 0.8, '\n'.join(text_list), size=14, ha='left', va="top")#, va='center')#, size=50)
+    
+    # relative to invisible axes
+    #ax.annotate('\n'.join(text_list), (0, 1), textcoords='data', size=14)# ha='left', va='center')#, size=50)
+
+    #matplotlib.rc('text', usetex=False)
+
+    
 def cmdline_parser():
     """
     creates an OptionParser instance
@@ -468,6 +496,10 @@ def cmdline_parser():
                       dest="vcf",
                       required=False,
                       help="Input vcf file (gzip supported; - for stdin).")
+    parser.add_argument("--maxdp",
+                      dest="maxdp",
+                      type=int,
+                      help="Maximum DP")
     parser.add_argument("-o", "--outplot",
                       dest="outplot",
                       required=True,
@@ -520,28 +552,46 @@ def main():
     else:
         vcf_fh = open(args.vcf)
     vcfreader = vcf.VCFReader(vcf_fh)
-    variants = [v for v in vcfreader if v.FILTER in ['PASS', '.']]
+    vars = [v for v in vcfreader if v.FILTER in ['PASS', '.']]
     vcf_fh.close()
-    LOG.info("Loaded %d (non-filtered) variants from %s" % (len(variants), args.vcf))
 
+    summary_txt = []
+    summary_txt.append("Reading vars from %s" % args.vcf)
+    LOG.info(summary_txt[-1])
+    summary_txt.append("Loaded %d (non-filtered) vars" % (len(vars)))
+    LOG.info(summary_txt[-1])
+
+    
     # FIXME filters should go here
     filter_list = []
-    filter_list.append((lambda v: v.INFO['DP']<100, "DP<100"))
+    if args.maxdp:
+        filter_list.append((lambda v: v.INFO['DP']<=args.maxdp, "DP<=%d" % args.maxdp))
     #filter_list.append(lambda v: v.CHROM=='chr1')
-    filtered_vars = variants
+    filtered_vars = vars
     for (f, n) in filter_list:
+        n_in = len(filtered_vars)
         try:
             filtered_vars = [v for v in filtered_vars if f(v)]
         except:
             LOG.fatal("Filter %s failed" % n)
-            raise
-    LOG.info("%d variants left after filtering" % (len(variants)))
+            raise 
+        n_out = len(filtered_vars)
+        summary_txt.append("Filter '%s' removed %d (more) vars" % (n, n_in-n_out))
+        LOG.info(summary_txt[-1])
+        
+    summary_txt.append("%d vars left after filtering" % (len(filtered_vars)))
+    LOG.info(summary_txt[-1])
+
+    vars = filtered_vars
+    
+    summary_txt.append("#SNVs = %d (%d CONSVARs and %d INDELs)" % (
+        len(vars),
+        sum([1 for v in vars if v.INFO.has_key('CONSVAR')]),
+        sum([1 for v in vars if v.INFO.has_key('INDEL')])))
+    LOG.info(summary_txt[-1])
 
     # np.histogram([v.INFO['DP'] for v in vars if v.INFO['DP']<1000], bins=20)
 
-
-    # FIXME should go to pdf as report, incl subst types
-    print_simple_stats(filtered_vars)
 
     pp = PdfPages(args.outplot)
         
@@ -550,38 +600,65 @@ def main():
     # multiple columns and rows seem to only make sense with shared x or y
     #ax = fig1.add_subplot(2, 2, 1)
 
+
+    # FIXME: report quality/p-value distribution
+
+    # create a summary table
+    # 
+    #matplotlib.rc('text', usetex=False)
     fig = plt.figure()
-    ax = plt.subplot(1, 1, 1)
-    af_hist(ax, [v.INFO['AF'] for v in variants], bins=15)#filtered_vars])
-    plt.title('AF Histogram')
+    ax = plt.subplot(1,1,1)    
+    print_overview(ax, summary_txt)
+    plt.title('Overview')
     pp.savefig()
     plt.close()
+
+
+        
+    # FIXME: lim wrong
+    # FIXME bp overwrites violin or doesn't work at all
         
     fig = plt.figure()
     ax = plt.subplot(1, 1, 1)
-    cov_hist(ax, [v.INFO['DP'] for v in filtered_vars])
+    x = [v.INFO['DP'] for v in vars]
+    #x = [v.INFO['AF'] for v in vars]
+    #x = [log10(d) if d>0 else -1 for d in dist_to_next]
+    ax.boxplot(x, notch=1, positions=[0], vert=1)
+    violin_plot(ax, x)
+    ax.set_xlabel('DP')
+    plt.title('DP distribution')
+    pp.savefig()
+    plt.close()
+
+    fig = plt.figure()
+    ax = plt.subplot(1, 1, 1)
+    cov_hist(ax, [v.INFO['DP'] for v in vars])
     plt.title('DP Histogram')
     pp.savefig()
     plt.close()
-
-        
-    # FIXME needs percentages
-    subst_type_counts = Counter([subst_type_str(v.REF, v.ALT) for v in filtered_vars])
-    # turn into list of tuples sorted by key
-    # subst_type_counts = sorted((k, v/100.0*len(filtered_vars)) for (k, v) in subst_type_counts.items())
-    subst_type_counts = sorted(subst_type_counts.items())
-    # FIXME should go to text report
-    #for (k, v) in subst_type_counts:
-    #    print "%s %d" % (k, v)
-    #print
-
+    
+            
     fig = plt.figure()
     ax = plt.subplot(1, 1, 1)
-    subst_perc(ax, subst_type_counts)
-    plt.title('Substitution Types')
+    x = [v.INFO['AF'] for v in vars]
+    #x = [v.INFO['AF'] for v in vars]
+    #x = [log10(d) if d>0 else -1 for d in dist_to_next]
+    ax.boxplot(x, notch=1, positions=[0], vert=1)
+    violin_plot(ax, x)
+    ax.set_xlabel('AF')
+    plt.title('AF distribution')
     pp.savefig()
     plt.close()
 
+    
+    fig = plt.figure()
+    ax = plt.subplot(1, 1, 1)
+    af_hist(ax, [v.INFO['AF'] for v in vars], bins=15)#vars])
+    plt.title('AF Histogram')
+    pp.savefig()
+    plt.close()
+
+        
 
     # add distance to closest SNV to all vars and keep as separate array (FIXME: could do this for all properties)
     # taken from LoFreq's 0.6.1 lofreq_filter.py
@@ -598,8 +675,7 @@ def main():
     #
 
 
-    #dist_to_next = calc_dist_slow(filtered_vars)
-    dist_to_next = calc_dist(filtered_vars)
+    dist_to_next = calc_dist(vars)
 
     fig = plt.figure()
     ax = plt.subplot(1, 1, 1)
@@ -610,7 +686,7 @@ def main():
 
     fig = plt.figure()
     ax = plt.subplot(1, 1, 1)
-    heatmap_dist_vs_cov_1(ax, filtered_vars, dist_to_next)
+    heatmap_dist_vs_x_1(ax, vars, dist_to_next, 'DP')
     plt.title('Distance vs DP')
     pp.savefig()
     plt.close()
@@ -618,36 +694,47 @@ def main():
     if False:
         fig = plt.figure()
         ax = plt.subplot(1, 1, 1)
-        im = heatmap_dist_vs_cov_2(ax, filtered_vars, dist_to_next)
+        im = heatmap_dist_vs_cov_2(ax, vars, dist_to_next)
         fig.colorbar(im)
-        plt.title('Distance vs DF (alternate, smoothed version)')
+        plt.title('Distance vs. DF (alternate, smoothed version)')
         pp.savefig()
         plt.close()
 
 
     fig = plt.figure()
     ax = plt.subplot(1, 1, 1)
-    heatmap_freq_vs_cov(ax, [v for v in filtered_vars if not v.INFO.has_key('CONSVAR')])
-    plt.title('AF vs Coverage')
+    heatmap_dist_vs_x_1(ax, vars, dist_to_next, "AF")
+    plt.title('Distance vs. AF')
     pp.savefig()
     plt.close()
 
-    
     fig = plt.figure()
     ax = plt.subplot(1, 1, 1)
-    x = [v.INFO['DP'] for v in filtered_vars]
-    #x = [v.INFO['AF'] for v in vars]
-    #x = [log10(d) if d else -1 for d in dist_to_next]
-    violin_plot(ax, x, True)
-    ax.set_xlabel('DP')
-    plt.title('DP distribution')
+    heatmap_freq_vs_cov(ax, [v for v in vars if not v.INFO.has_key('CONSVAR')])
+    plt.title('AF vs. Coverage')
     pp.savefig()
     plt.close()
 
-    # FIXME: lim wrong
-    # FIXME bp overwrites violin or doesn't work at all
+
+    # FIXME needs percentages
+    subst_type_counts = Counter([subst_type_str(v.REF, v.ALT) for v in vars])
+    # turn into list of tuples sorted by key
+    # subst_type_counts = sorted((k, v/100.0*len(vars)) for (k, v) in subst_type_counts.items())
+    subst_type_counts = sorted(subst_type_counts.items())
+    # FIXME should go to text report
+    #for (k, v) in subst_type_counts:
+    #    print "%s %d" % (k, v)
+    #print
+
+    fig = plt.figure()
+    ax = plt.subplot(1, 1, 1)
+    subst_perc(ax, subst_type_counts)
+    plt.title('Substitution Types')
+    pp.savefig()
+    plt.close()
 
     
+    LOG.critical("Put related plots together. See http://blog.marmakoide.org/?p=94")
     """
     # FIXME setup such that they don't share axis
     # FIXME other way to make subplots
@@ -657,10 +744,10 @@ def main():
     NCOLS = 3
 
     ax = plt.subplot(NROWS, NCOLS, 1)
-    cov_hist(ax, [v.INFO['DP'] for v in filtered_vars])
+    cov_hist(ax, [v.INFO['DP'] for v in vars])
 
     ax = plt.subplot(NROWS, NCOLS, 3)
-    af_hist(ax, [v.INFO['AF'] for v in filtered_vars])
+    af_hist(ax, [v.INFO['AF'] for v in vars])
 
     ax = plt.subplot(NROWS, NCOLS, 7)
     subst_perc(ax, subst_type_counts)
@@ -669,19 +756,19 @@ def main():
     dist_hist(ax, dist_to_next)
 
     ax = plt.subplot(NROWS, NCOLS, 13)
-    heatmap_dist_vs_cov_1(ax, filtered_vars, dist_to_next)
+    heatmap_dist_vs_cov_1(ax, vars, dist_to_next)
 
     ax = plt.subplot(NROWS, NCOLS, 15)
-    im = heatmap_dist_vs_cov_2(ax, filtered_vars, dist_to_next)
+    im = heatmap_dist_vs_cov_2(ax, vars, dist_to_next)
     fig.colorbar(im)
 
     ax = plt.subplot(NROWS, NCOLS, 19)
-    heatmap_freq_vs_cov(ax, [v for v in filtered_vars if not v.INFO.has_key('CONSVAR')])
+    heatmap_freq_vs_cov(ax, [v for v in vars if not v.INFO.has_key('CONSVAR')])
 
     ax = plt.subplot(NROWS, NCOLS, 21)
-    x = [v.INFO['DP'] for v in filtered_vars]
-    #x = [v.INFO['AF'] for v in filtered_vars]
-    #x = [log10(d) if d else -1 for d in dist_to_next]
+    x = [v.INFO['DP'] for v in vars]
+    #x = [v.INFO['AF'] for v in vars]
+    #x = [log10(d) if d>0 else -1 for d in dist_to_next]
     violin_plot(ax, x, True)
     ax.set_xlabel('DP')
     """
@@ -691,6 +778,5 @@ def main():
     
 if __name__ == "__main__":
     LOG.critical("FIXME unfinished")
-    LOG.critical("Put related plots together. See http://blog.marmakoide.org/?p=94")
     main()
     LOG.info("Successful program exit")
