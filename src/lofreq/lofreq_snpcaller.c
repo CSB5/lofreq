@@ -549,11 +549,15 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
 #else
                final_err_prob = merge_srcq_baseq_and_mapq(sq, bq, mq);
 #endif
-               /* final decision whether to let alt through */
-               if (is_alt_base && final_err_prob<DEFAULT_MIN_ALT_MERGEDQ) {
-                    continue;
-               } else {
-                    alt_counts[alt_idx] += 1;
+               /* final decision whether to let alt through 
+                * FIXME this only makes sense if altq was set to median or not filtered at all
+                */
+               if (is_alt_base) {
+                    if (PROB_TO_PHREDQUAL(final_err_prob) < DEFAULT_MIN_ALT_MERGEDQ) {
+                         continue;
+                    } else {
+                         alt_counts[alt_idx] += 1;
+                    }
                }
 
                (*err_probs)[(*num_err_probs)++] = final_err_prob;
