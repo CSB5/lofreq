@@ -148,7 +148,7 @@ class SomaticSNVCaller(object):
         self.min_cov = self.DEFAULT_MIN_COV
         self.use_orphan = self.DEFAULT_USE_ORPHAN
         self.num_threads = self.DEFAULT_NUM_THREADS
-        
+
 
 
     @staticmethod
@@ -157,8 +157,7 @@ class SomaticSNVCaller(object):
 
         Returns (rewound) fh for cmd stdout and stderr if close_tmp is
         False. Caller will then have to closer upon which the files
-        will be deleted automaitcally.
-
+        will be deleted automatically.
         """
 
         assert isinstance(cmd, list)
@@ -211,7 +210,7 @@ class SomaticSNVCaller(object):
 
         # FIXME aln_err_prof?
 
-        if self.num_threads<2:
+        if self.num_threads < 2:
             cmd = [self.LOFREQ, 'call']
         else:
             cmd = [self.LOFREQ, 'call-parallel', '--pp-threads', "%d" % self.num_threads]
@@ -264,7 +263,7 @@ class SomaticSNVCaller(object):
             cmd.append(self.bam_t)
             self.subprocess_wrapper(cmd)
 
-        if self.num_threads<2:
+        if self.num_threads < 2:
             cmd = [self.LOFREQ, 'call']
         else:
             cmd = [self.LOFREQ, 'call-parallel', '--pp-threads', "%d" % self.num_threads]
@@ -334,6 +333,8 @@ class SomaticSNVCaller(object):
     def call_germline(self):
         """Call germline variants by taking the intersection between
         the stringent tumor and relaxed normal calls
+
+        FIXME this is ad-hoc
         """
 
         cmd = [self.LOFREQ, 'vcfset', '-1', self.vcf_n_rlx,
@@ -347,21 +348,29 @@ class SomaticSNVCaller(object):
     def complement(self):
         """Produce complement of tumor and normal variants and filter
         them
+
+        Also adds SOMATIC tag
         """
+
+        assert not os.path.exists(self.vcf_som_raw)
+        vcf_som_raw_fh =  open(self.vcf_som_raw, 'w')
 
         cmd = [self.LOFREQ, 'vcfset', '-1', self.vcf_t_str,
                '-2', self.vcf_n_rlx,
-               '-a', 'complement',
-               '-o', self.vcf_som_raw]
-        self.subprocess_wrapper(cmd)
+               '-a', 'complement', '-o', '-']
 
-        ## apply filter to complement
-        ##
-        #cmd = [self.LOFREQ, 'filter', '-i', self.vcf_som_raw,
-        #       '--min-cov', "%d" % self.MIN_COV,
-        #       '--strandbias', 'holm-bonf',
-        #       '--pass-only', '-o', self.vcf_som_filtered]
-        #self.subprocess_wrapper(cmd)
+        (cmd_o, cmd_e) = self.subprocess_wrapper(cmd, close_tmp=False)
+        for l in cmd_e:
+            LOG.warn("cmd stderr: %s" % l.rstrip())
+        cmd_e.close()
+
+        # quick and dirty vcf agnostic way of tagging them as SOMATIC
+        for l in cmd_o:
+            if not l.startswith('#'):
+                l = l.rstrip() + ";SOMATIC"  + "\n"
+            vcf_som_raw_fh.write("%s" % l)
+        cmd_o.close()
+        vcf_som_raw_fh.close()
 
 
     def uniq(self):
@@ -381,6 +390,7 @@ class SomaticSNVCaller(object):
             LOG.warn("uniq stderr: %s" % l)
         o.close()
         e.close()
+
 
     def run(self):
         """Run the whole somatic SNV calling pipeline
