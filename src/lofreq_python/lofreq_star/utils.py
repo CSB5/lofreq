@@ -14,6 +14,8 @@ __license__ = "GPL2"
 #
 from math import log10
 import sys
+from time import strftime
+import string
 
 MAX_INT = 2147483647
 # instead of sys.maxint
@@ -50,6 +52,30 @@ MAX_INT = 2147483647
 #    std = sqrt(std / float(num-1))
 # 
 #    return mean, std
+
+
+
+def now():
+    return strftime("%Y-%m-%d %H:%M:%S")
+
+
+def complement(strand, na_type='DNA'):
+    """return complement of nucleic acid seqeunce
+
+    original source http://stackoverflow.com/questions/1738633/more-pythonic-way-to-find-a-complementary-dna-strand
+    Nadia Alramli
+
+    Added DNA/RNA handling
+    """
+
+    if na_type == 'DNA':
+        tr = string.maketrans('UTAGCutagc', 'AATCGaatcg')
+    elif na_type == 'RNA':
+        tr = string.maketrans('UTAGCutagc', 'AAUCGaaucg')
+    else:
+        raise ValueError, ("Unknown NA type %s" % na_type)
+    return strand.translate(tr)
+
 
 
 
