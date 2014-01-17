@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""FIXME
+"""Plot characteristics of variants listed in VCF file
 """
 
 
@@ -19,10 +19,8 @@ import os
 import argparse
 import logging
 import gzip
-from time import strftime
 from collections import Counter, deque
 import itertools
-import string
 
 #--- third-party imports
 #
@@ -56,6 +54,7 @@ except ImportError:
                      " Are you sure your PYTHONPATH is set correctly (= %s)?\n" % (
                          (sys.argv[0], os.environ['PYTHONPATH'])))
     sys.exit(1)
+from lofreq_star.utils import complement, now
 
 
 # invocation of ipython on exceptions
@@ -128,27 +127,6 @@ def subst_type_str(ref, alt, strand_specific=False):
 
 
 
-def now():
-    return strftime("%Y-%m-%d %H:%M:%S")
-
-
-def complement(strand, na_type='DNA'):
-    """return complement of nucleic acid seqeunce
-
-    original source http://stackoverflow.com/questions/1738633/more-pythonic-way-to-find-a-complementary-dna-strand
-    Nadia Alramli
-
-    Added DNA/RNA handling
-    """
-
-    if na_type == 'DNA':
-        tr = string.maketrans('UTAGCutagc', 'AATCGaatcg')
-    elif na_type == 'RNA':
-        tr = string.maketrans('UTAGCutagc', 'AAUCGaaucg')
-    else:
-        raise ValueError, ("Unknown NA type %s" % na_type)
-    return strand.translate(tr)
-
 
 def r_ify(axes):
     '''
@@ -210,6 +188,8 @@ def subst_perc(ax, subst_type_counts):
     subst_type_counts should be list of array with type as 1st element and count as 2nd
     """
 
+    # FIXME sort by transition/transversion type. Add Ts/Tv ratio to plot
+    
     #colors = [cm.jet(1.*i/len(subst_type_counts)) for i in xrange(len(subst_type_counts))]
     colors = [COLORS[i % len(COLORS)] for i in xrange(len(subst_type_counts))]
 
