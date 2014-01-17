@@ -122,6 +122,7 @@ static void usage(const char *myname)
      fprintf(stderr, "    bamstats      : Collect BAM statistics\n");
 #endif
      fprintf(stderr, "    vcfset        : VCF set operations\n");
+     fprintf(stderr, "    vcfplot       : Plot VCF statistics\n");
      fprintf(stderr, "    cluster       : Cluster variants in VCF file (supports legacy SNP format)\n");
 #ifdef FIXME_NOT_IMPLEMENTED
      fprintf(stderr, "    peek          : Check properties of BAM file\n");
@@ -168,6 +169,7 @@ int main(int argc, char *argv[])
 
      } else if (strcmp(argv[1], "filter") == 0 || 
                 strcmp(argv[1], "somatic") == 0 ||
+                strcmp(argv[1], "vcfplot") == 0 ||
                 strcmp(argv[1], "call-parallel") == 0 ||
                 strcmp(argv[1], "cluster") == 0) {
           char **argv_execvp = calloc(argc, sizeof(char*));
@@ -176,6 +178,7 @@ int main(int argc, char *argv[])
           char *somatic_script = "lofreq2_somatic.py";
           char *parallel_script = "lofreq2_call_pparallel.py";
           char *vcfset_script = "lofreq2_vcfset.py";
+          char *vcfplot_script = "lofreq2_vcfplot.py";
           char *cluster_script = "lofreq2_cluster.py";
           char *script_to_call;
 
@@ -187,6 +190,8 @@ int main(int argc, char *argv[])
                script_to_call = parallel_script;
           } else if (strcmp(argv[1], "vcfset") == 0) {
                script_to_call = vcfset_script;
+          } else if (strcmp(argv[1], "vcfplot") == 0) {
+               script_to_call = vcfplot_script;
           } else if (strcmp(argv[1], "cluster") == 0) {
                script_to_call = cluster_script;
           } else {
