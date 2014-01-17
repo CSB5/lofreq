@@ -550,7 +550,14 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                final_err_prob = merge_srcq_baseq_and_mapq(sq, bq, mq);
 #endif
                /* final decision whether to let alt through 
-                * FIXME this only makes sense if altq was set to median or not filtered at all
+                *
+                * FIXME this only makes sense if altbq was not set to
+                * some hardcoded threshold
+                * 
+                * FIXME this comes with reduced sens on the
+                * denv2-pseudoclonal data-set. However that is because
+                * of refq biases there, i.e. the avg ref q used to
+                * replace the varq is already <Q20
                 */
                if (is_alt_base) {
                     if (PROB_TO_PHREDQUAL(final_err_prob) < DEFAULT_MIN_ALT_MERGEDQ) {
@@ -570,8 +577,8 @@ void
 plp_summary(const plp_col_t *plp_col, void* confp) 
 {
      FILE* stream = stdout;
-     int i;
-
+     int i, x;
+     
      fprintf(stream, "%s\t%d\t%c\t%c", plp_col->target, plp_col->pos+1,
              plp_col->ref_base, plp_col->cons_base);
      for (i=0; i<NUM_NT4; i++) {
@@ -586,8 +593,24 @@ plp_summary(const plp_col_t *plp_col, void* confp)
      fprintf(stream, "\tins=%d\tdels=%d", plp_col->num_ins, 
              plp_col->num_dels);
      fprintf(stream, "\n");
-#if 0
-     LOG_FIXME("%s\n", "unfinished");
+#if 1
+     for (i=0; i<NUM_NT4; i++) {
+          for (x=0; x<2; x++) {/* bq or mq */
+               int j;
+               int nt = bam_nt4_rev_table[i];
+               fprintf(stream, "  %s %c =", x==0? "BQ":"MQ", nt);
+               for (j=0; j<plp_col->base_quals[i].n; j++) {
+                    int q;
+                    if (x==0) {
+                         q = plp_col->base_quals[i].data[j];
+                    } else {
+                         q = plp_col->map_quals[i].data[j];
+                    }
+                    fprintf(stream, " %d", q);
+               }
+               fprintf(stream, "\n");
+          }
+     }
 #endif
 }
 
