@@ -176,7 +176,13 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char ref,
      dp4_counts_t dp4;
      double sb_left_pv, sb_right_pv, sb_two_pv;
      int sb_qual;
-     
+     long int i;
+     int *ref_mq = NULL, *alt_mq = NULL;
+     long int num_ref;
+     long int num_alt;
+     int ref_nt4 = bam_nt4_table[(int)ref];
+     int alt_nt4 = bam_nt4_table[(int)alt];
+
      vcf_new_var(&var);
      var->chrom = strdup(p->target);
      var->pos = p->pos;
@@ -188,23 +194,76 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char ref,
      }
      /* var->filter = NA */ 
    
-     dp4.ref_fw = p->fw_counts[bam_nt4_table[(int)ref]];
-     dp4.ref_rv = p->rv_counts[bam_nt4_table[(int)ref]];
-     dp4.alt_fw = p->fw_counts[bam_nt4_table[(int)alt]];
-     dp4.alt_rv = p->rv_counts[bam_nt4_table[(int)alt]];
+     dp4.ref_fw = p->fw_counts[ref_nt4];
+     dp4.ref_rv = p->rv_counts[ref_nt4];
+     dp4.alt_fw = p->fw_counts[alt_nt4];
+     dp4.alt_rv = p->rv_counts[alt_nt4];
 
-
+     assert (p->map_quals[ref_nt4].n == p->fw_counts[ref_nt4] + p->rv_counts[ref_nt4]);
+     assert (p->map_quals[alt_nt4].n == p->fw_counts[alt_nt4] + p->rv_counts[alt_nt4]);
+     num_alt = p->map_quals[alt_nt4].n;
+     num_ref = p->map_quals[ref_nt4].n;
+#if 0
+     LOG_FIXME("%s\n", "fisher's test on unfiltered counts. Is that wanted?");
+     LOG_FIXME("%s\n", "Hand down filtered quals/counts might solve fisher and mq bias problems. DP4 is supposed to be filtered version anyway");
+#endif
+     /* strand bias
+      */
      /* double sb_prob = kt... Assignment removed to shut up clang static analyzer */
      (void) kt_fisher_exact(dp4.ref_fw, dp4.ref_rv, 
-                               dp4.alt_fw, dp4.alt_rv,
-                               &sb_left_pv, &sb_right_pv, &sb_two_pv);
+                            dp4.alt_fw, dp4.alt_rv,
+                            &sb_left_pv, &sb_right_pv, &sb_two_pv);
      sb_qual = PROB_TO_PHREDQUAL(sb_two_pv);
 
+     /* mq bias
+      */
+     assert (p->map_quals[ref_nt4].n == p->base_quals[ref_nt4].n);
+     assert (p->map_quals[alt_nt4].n == p->base_quals[alt_nt4].n);
+     /* FIXME intro of n_alt and n_ref would make things easier here */
+     if (NULL == (ref_mq = malloc(num_ref * sizeof(double)))) {
+          /* coverage = base-count after read level filtering */
+          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
+                  __FILE__, __FUNCTION__, __LINE__);
+          return;
+     }
+     if (NULL == (alt_mq = malloc(num_alt * sizeof(double)))) {
+          /* coverage = base-count after read level filtering */
+          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
+                  __FILE__, __FUNCTION__, __LINE__);
+          return;
+     }
+#if MQ_BIAS_FIXME
+/*
+     for (i=0; i<p->map_quals[ref_nt4].n; j++) {
+          mq = p->map_quals[i].data[j];
+     }
+     for (i=0; i<p->map_quals[alt_nt4].n; j++) {
+          mq = p->map_quals[i].data[j];
+     }
+*/
+/* FIXME mq bias
+   see mann_whitney_1947 in samtools
+   need NUM_NT4 altbase
+   need NUM_NT4 refbase
+
+   LOG_FIXME("%s\n", "mq and bq filtering should be done here but needs conf");
+   
+   for (i=0; i<NUM_NT4; i++) {
+     int nt = bam_nt4_rev_table[i];
+     for (j=0; j<p->map_quals[i].n; j++) {
+          mq = p->map_quals[i].data[j];
+     }
+}
+*/
+#endif
      vcf_var_sprintf_info(var, &p->coverage, &af, &sb_qual,
                           &dp4, is_indel, is_consvar);
 
      vcf_write_var(vcf_file, var);
      vcf_free_var(&var);
+
+     free(ref_mq);
+     free(alt_mq);
 }
 /* report_var() */
 
@@ -363,6 +422,146 @@ merge_baseq_and_mapq(const int bq, const int mq)
 
 
 
+/* allocates err_probs (to size num_err_probs; also set here) and sets
+ * values. user must free.
+ *
+ * qualities are merged here and filtering also happens here
+ *
+ * alt_bases, alt_counts and alt_raw_counts must be pre-allocated and
+ * of size 3 and values will be set here (FIXME that makes the
+ * function call awkward)
+ */
+void
+plp_to_errprobs(double **err_probs, int *num_err_probs, 
+                int *alt_bases, int *alt_counts, int *alt_raw_counts,
+                const plp_col_t *p, snvcall_conf_t *conf)
+{
+     int i, j;
+     int alt_idx;
+     int avg_qual = -1;
+
+     if (NULL == ((*err_probs) = malloc(p->coverage * sizeof(double)))) {
+          /* coverage = base-count after read level filtering */
+          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
+                  __FILE__, __FUNCTION__, __LINE__);
+          return;
+     }
+
+     /* determine avg_qual if needed */
+     if (-1 == conf->def_altbq) {
+          /* need the average error probability of all, unfiltered
+           * non-cons bases in this column. cons bases are usually
+           * biased towards higher scores */
+          double err_prob_sum = 0;
+          unsigned int err_prob_count = 0;
+
+          for (i=0; i<NUM_NT4; i++) {
+               int nt = bam_nt4_rev_table[i];
+               if (nt == p->cons_base || nt == 'N') {
+                    continue;
+               }
+               err_prob_count += p->base_quals[i].n;
+               for (j=0; j<p->base_quals[i].n; j++) {
+                    err_prob_sum += PHREDQUAL_TO_PROB(
+                         p->base_quals[i].data[j]);
+               }
+          }
+
+          if (err_prob_count==0) {
+               /* set avg_qual to non-sense value, won't use it anyway
+                * if there were no 'errors'. can't return here though
+                * since we still want to report the consvar */
+               avg_qual = -1;
+          } else {
+               avg_qual = PROB_TO_PHREDQUAL(err_prob_sum/err_prob_count);
+               /*LOG_FIXME("Got average quality of %d at %s:%d\n", avg_qual, p->target, p->pos+1);*/
+          }
+     }
+
+
+     (*num_err_probs) = 0;
+     alt_idx = -1;
+     for (i=0; i<NUM_NT4; i++) {
+          int is_alt_base;
+          int nt = bam_nt4_rev_table[i];
+          if (nt == 'N') {
+               continue;
+          }
+
+          is_alt_base = 0;
+          if (nt != p->cons_base) {
+               is_alt_base = 1;
+
+               alt_idx += 1;
+               alt_bases[alt_idx] = nt;
+               alt_counts[alt_idx] = 0;
+               alt_raw_counts[alt_idx] = 0;
+          }
+
+          for (j=0; j<p->base_quals[i].n; j++) {
+               int bq = p->base_quals[i].data[j];                
+               int mq = -1;
+               int sq = -1;
+#ifdef USE_ALNERRPROF
+               int aq = -1;
+#endif
+               double final_err_prob; /* == final quality used for snv calling */
+               
+               if ((conf->flag & SNVCALL_USE_MQ) && p->map_quals[i].n) {
+                    mq = p->map_quals[i].data[j];
+                    /*according to spec 255 is unknown */
+                    if (mq == 255) {
+                         mq = -1;
+                    }
+               }
+
+#ifdef USE_SOURCEQUAL
+               if (p->source_quals[i].n) {
+                    sq = p->source_quals[i].data[j];
+                    if (! (conf->flag & SNVCALL_USE_SQ)) {
+                         sq = -1; /* i.e. NA */
+                    }
+               }
+#endif
+
+#ifdef USE_ALNERRPROF
+               if (p->alnerr_qual[i].n) {
+                    aq = p->alnerr_qual[i].data[j];
+               }
+#endif
+               if (is_alt_base) {
+                    alt_raw_counts[alt_idx] += 1;
+                    if (bq < conf->min_altbq) {
+                         continue; 
+                         /* WARNING base counts now invalid. We use
+                          * them for freq reporting anyway, otherwise
+                          * heterozygous calls look odd */
+                    }
+                    if (-1 == conf->def_altbq) {
+                         bq = avg_qual;
+                    } else {
+                         bq = conf->def_altbq;
+                    }
+               }
+
+#ifdef USE_ALNERRPROF
+               final_err_prob = merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
+#else
+               final_err_prob = merge_srcq_baseq_and_mapq(sq, bq, mq);
+#endif
+               /* final decision whether to let alt through */
+               if (is_alt_base && final_err_prob<DEFAULT_MIN_ALT_MERGEDQ) {
+                    continue;
+               } else {
+                    alt_counts[alt_idx] += 1;
+               }
+
+               (*err_probs)[(*num_err_probs)++] = final_err_prob;
+          }
+     }
+}
+
+
 void
 plp_summary(const plp_col_t *plp_col, void* confp) 
 {
@@ -404,7 +603,7 @@ call_snvs(const plp_col_t *p, void *confp)
 {
      double *err_probs; /* error probs (qualities) passed down to snpcaller */
      int num_err_probs; /* #elements in err_probs */
-     int i, j;
+     int i;
 
      snvcall_conf_t *conf = (snvcall_conf_t *)confp;
      /* 4 bases ignoring N, -1 reference/consensus base makes 3 */
@@ -412,9 +611,8 @@ call_snvs(const plp_col_t *p, void *confp)
      int alt_counts[3]; /* counts for alt bases handed down to snpcaller */
      int alt_raw_counts[3]; /* raw, unfiltered alt-counts */
      int alt_bases[3];/* actual alt bases */
-     int alt_idx;
      int got_alt_bases = 0;
-     int avg_qual = -1;
+     int cons_as_ref = conf->flag & SNVCALL_CONS_AS_REF;
 
      /* 
       * as snv-ref we always report what the user wanted (given
@@ -438,7 +636,7 @@ call_snvs(const plp_col_t *p, void *confp)
       *
       * First branch is "default" i.e. doesn't need exception checking
       */
-     int cons_as_ref = conf->flag & SNVCALL_CONS_AS_REF;
+
 
      /* don't call if no coverage or if we don't know what to call
       * against */
@@ -448,39 +646,8 @@ call_snvs(const plp_col_t *p, void *confp)
      if (p->coverage < conf->min_cov) {          
           return;
      }
-
      if (! conf->dont_skip_n && p->ref_base == 'N') {
           return;
-     }
-
-     if (-1 == conf->def_altbq) {
-          /* need the average error probability of all, unfiltered
-           * non-cons bases in this column. cons bases are usually
-           * biased towards higher scores */
-          double err_prob_sum = 0;
-          unsigned int err_prob_count = 0;
-
-          for (i=0; i<NUM_NT4; i++) {
-               int nt = bam_nt4_rev_table[i];
-               if (nt == p->cons_base || nt == 'N') {
-                    continue;
-               }
-               err_prob_count += p->base_quals[i].n;
-               for (j=0; j<p->base_quals[i].n; j++) {
-                    err_prob_sum += PHREDQUAL_TO_PROB(
-                         p->base_quals[i].data[j]);
-               }
-          }
-
-          if (err_prob_count==0) {
-               /* set avg_qual to non-sense value, won't use it anyway
-                * if there were no 'errors'. can't return here though
-                * since we still want to report the consvar */
-               avg_qual = -1;
-          } else {
-               avg_qual = PROB_TO_PHREDQUAL(err_prob_sum/err_prob_count);
-               /*LOG_FIXME("Got average quality of %d at %s:%d\n", avg_qual, p->target, p->pos+1);*/
-          }
      }
 
 #ifdef FIXME
@@ -497,8 +664,9 @@ call_snvs(const plp_col_t *p, void *confp)
           }
      }
 #endif
+
      /* CONSVAR, i.e. the consensus determined here is different from
-      * the reference coming from a fasta file 
+      * the reference coming from a fasta file
       */
      if (p->ref_base != p->cons_base && !cons_as_ref) {/* && p->ref_base != 'N') {*/
           const int is_indel = 0;
@@ -512,93 +680,18 @@ call_snvs(const plp_col_t *p, void *confp)
                     p->target, p->pos+1, p->ref_base, p->cons_base);          
      }
      
-     /* no point continuing if 'ref is ref' and ref nt is an n. only
-      * consvars should be predicted then */
+     /* no point continuing we're calling against a reference (not
+      * consensus) and ref nt is an n. only consvars should be
+      * predicted then (see above) */
      if (p->ref_base == 'N' && !cons_as_ref) {
           return;
      }
 
-     if (NULL == (err_probs = malloc(p->coverage * sizeof(double)))) {
-          /* coverage = base-count after read level filtering */
-          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
-                  __FILE__, __FUNCTION__, __LINE__);
-          free(err_probs);
-          return;
-     }
     
-     num_err_probs = 0;
-     alt_idx = -1;
-     for (i=0; i<NUM_NT4; i++) {
-          int is_alt_base;
-          int nt = bam_nt4_rev_table[i];
-          if (nt == 'N') {
-               continue;
-          }
+     plp_to_errprobs(&err_probs, &num_err_probs, 
+                     alt_bases, alt_counts, alt_raw_counts,
+                     p, conf);
 
-          is_alt_base = 0;
-          if (nt != p->cons_base) {
-               is_alt_base = 1;
-
-               alt_idx += 1;
-               alt_bases[alt_idx] = nt;
-               alt_counts[alt_idx] = 0;
-               alt_raw_counts[alt_idx] = 0;
-          }
-
-          for (j=0; j<p->base_quals[i].n; j++) {
-               int bq = p->base_quals[i].data[j];                
-               int mq = -1;
-               int sq = -1;
-               int aq = -1;
-               double final_err_prob; /* == final quality used for snv calling */
-               
-               if ((conf->flag & SNVCALL_USE_MQ) && p->map_quals[i].n) {
-                    mq = p->map_quals[i].data[j];
-                    /*according to spec 255 is unknown */
-                    if (mq == 255) {
-                         mq = -1;
-                    }
-               }
-
-#ifdef USE_SOURCEQUAL
-               if (p->source_quals[i].n) {
-                    sq = p->source_quals[i].data[j];
-                    if (! (conf->flag & SNVCALL_USE_SQ)) {
-                         sq = -1; /* i.e. NA */
-                    }
-               }
-#endif
-
-#ifdef USE_ALNERRPROF
-               if (p->alnerr_qual[i].n) {
-                    aq = p->alnerr_qual[i].data[j];
-               }
-#endif
-               if (is_alt_base) {
-                    alt_raw_counts[alt_idx] += 1;
-                    if (bq < conf->min_altbq) {
-                         continue; 
-                         /* WARNING base counts now invalid. We use
-                          * them for freq reporting anyway, otherwise
-                          * heterozygous calls are odd */
-                    }
-                    if (-1 == conf->def_altbq) {
-                         bq = avg_qual;
-                    } else {
-                         bq = conf->def_altbq;
-                    }
-
-                    alt_counts[alt_idx] += 1;
-               }
-
-#ifdef USE_ALNERRPROF
-               final_err_prob = merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
-#else
-               final_err_prob = merge_srcq_baseq_and_mapq(sq, bq, mq);
-#endif
-               err_probs[num_err_probs++] = final_err_prob;
-          }
-     }
 
      for (i=0; i<3; i++) {
           if (alt_counts[i]) {
@@ -741,8 +834,8 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
 #ifdef USE_SOURCEQUAL                                     
      fprintf(stderr, "- Source quality\n");                                
      fprintf(stderr, "       -S | --source-qual           Enable computation of source quality for reads\n");
-     fprintf(stderr, "       -n | --def-nm-q INT          If >= 0, then replace non-match base qualities with this default value [%d]\n", mplp_conf->def_nm_q);
      fprintf(stderr, "       -V | --ign-vcf FILE          Ignore variants in this vcf file for source quality computation\n"),
+     fprintf(stderr, "       -n | --def-nm-q INT          If >= 0, then replace non-match base qualities with this default value [%d]\n", mplp_conf->def_nm_q);
 #endif                                                    
      fprintf(stderr, "- P-Values\n");                                          
      fprintf(stderr, "       -s | --sig                   P-Value cutoff / significance level [%f]\n", snvcall_conf->sig);
@@ -927,6 +1020,10 @@ for cov in coverage_range:
               break;
 
          case 'f':
+              if (! file_exists(optarg)) {
+                   LOG_FATAL("Reference fasta file '%s' does not exist. Exiting...\n", optarg);
+                   return 1;
+              }
               mplp_conf.fa = strdup(optarg);
               mplp_conf.fai = fai_load(optarg);
               if (mplp_conf.fai == 0)  {
