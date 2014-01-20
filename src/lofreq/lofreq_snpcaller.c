@@ -447,7 +447,9 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
           return;
      }
 
-     /* determine avg_qual if needed */
+     /* determine avg_qual if needed, which is to be the avg quality
+      * of reference bases (ie. cons bases since vars are always
+      * called against cons_base) */
      if (-1 == conf->def_altbq) {
           /* need the average error probability of all, unfiltered
            * non-cons bases in this column. cons bases are usually
@@ -457,7 +459,7 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
 
           for (i=0; i<NUM_NT4; i++) {
                int nt = bam_nt4_rev_table[i];
-               if (nt == p->cons_base || nt == 'N') {
+               if (nt != p->cons_base) {
                     continue;
                }
                err_prob_count += p->base_quals[i].n;
@@ -474,8 +476,8 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                avg_qual = -1;
           } else {
                avg_qual = PROB_TO_PHREDQUAL(err_prob_sum/err_prob_count);
-               /*LOG_FIXME("Got average quality of %d at %s:%d\n", avg_qual, p->target, p->pos+1);*/
           }
+          LOG_DEBUG("avg qual %s:%d = %d\n", p->target, p->pos+1, avg_qual);
      }
 
 
@@ -559,6 +561,9 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                 * of refq biases there, i.e. the avg ref q used to
                 * replace the varq is already <Q20
                 */
+#if 0
+               LOG_FIXME("%s:%d %c bq=%d mq=%d finalq=%d is_alt_base=%d\n", p->target, p->pos+1, nt, bq, mq, PROB_TO_PHREDQUAL(final_err_prob), is_alt_base);
+#endif
                if (is_alt_base) {
                     if (PROB_TO_PHREDQUAL(final_err_prob) < DEFAULT_MIN_ALT_MERGEDQ) {
                          continue;
