@@ -119,7 +119,7 @@ vcf_file_open(vcf_file_t *f, const char *path, const int gzip, char mode)
           return -1;
      }
 
-     if (path[0] != '-') {
+     if (path[0] != '-' && mode=='r') {
           if (! file_exists(path) || is_dir(path)) {
                LOG_ERROR("VCF file %s does not exist\n", path);
                return -1;
