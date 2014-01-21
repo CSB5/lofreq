@@ -58,4 +58,7 @@ resolved_path(const char *path);
 double
 dbl_median(double data[], int size);
 
+int
+int_median(int data[], int size);
+
 #endif

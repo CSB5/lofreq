@@ -414,24 +414,58 @@ chdir_and_return:
      return resolved_path;
 }
 
+/* FIXME use wirth's method instead for larger arrays 
+ * FIXME Make malloc optional in case input data can be sorted
+ */
+int
+int_median(int data[], int size)
+{
+     int ret;
+     int *sdata = malloc(sizeof(int) * size);
 
-/* FIXME use wirth's method instead for larger arrays */
+     if (size==0) {
+          return 0;
+     }
+
+     memcpy(sdata, data, sizeof(int) * size);
+     qsort(sdata, size, sizeof(int), int_cmp);
+     if (size%2 == 0) {
+          /* even number: return mean of the two elements in the middle */
+          ret = (sdata[size/2] + sdata[size/2 - 1]) / 2.0;
+     } else {
+          /* odd number: return element in middle */
+          ret = sdata[size/2];
+     }
+
+     free(sdata);
+     return ret;
+}
+
+
+
+/* FIXME use wirth's method instead for larger arrays
+ * FIXME Make malloc optional in case input data can be sorted */
 double
 dbl_median(double data[], int size)
 {
+     double ret;
      double *sdata = malloc(sizeof(double) * size);
+
      if (size==0) {
           return 0.0;
      }
+
      memcpy(sdata, data, sizeof(double) * size);
-     qsort(sdata, size, sizeof(double*), *dbl_cmp);
+     qsort(sdata, size, sizeof(double), dbl_cmp);
      if (size%2 == 0) {
           /* even number: return mean of the two elements in the middle */
-        return((sdata[size/2] + sdata[size/2 - 1]) / 2.0);
-    } else {
+          ret = (sdata[size/2] + sdata[size/2 - 1]) / 2.0;
+     } else {
           /* odd number: return element in middle */
-        return sdata[size/2];
-    }
+          ret = sdata[size/2];
+     }
+     free(sdata);
+     return ret;
 }
 
 #ifdef MAIN
