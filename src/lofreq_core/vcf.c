@@ -104,6 +104,7 @@ vcf_file_seek(vcf_file_t *f, long int offset, int whence)
 }
 
 
+/* returns 0 on success. non-zero otherwise */
 int
 vcf_file_open(vcf_file_t *f, const char *path, const int gzip, char mode) 
 {
@@ -115,13 +116,20 @@ vcf_file_open(vcf_file_t *f, const char *path, const int gzip, char mode)
 
      if (mode!='r' && mode!='w') {
           LOG_FATAL("Internal error: unknown mode %c\n", mode);
-          return 1;
+          return -1;
+     }
+
+     if (path[0] != '-') {
+          if (! file_exists(path) || is_dir(path)) {
+               LOG_ERROR("VCF file %s does not exist\n", path);
+               return -1;
+          }
      }
 
      if (gzip) {
           if (path[0] == '-') {
                LOG_FIXME("%s\n", "gzip support for stdin/stdout not implemented yet");
-                    exit(1);
+               return -1;
           }
           f->gz = 1;
           f->fh = NULL;
@@ -150,7 +158,7 @@ vcf_file_open(vcf_file_t *f, const char *path, const int gzip, char mode)
      }     
 
      if (! f->fh && ! f->fh_gz) {
-          return 1;
+          return -1;
      } else {
           return 0;
      }
