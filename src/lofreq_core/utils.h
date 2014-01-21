@@ -19,6 +19,7 @@
 #define BASENAME(x) strrchr((x), '/') ? strrchr((x), '/')+1 : (x)
 
 int file_exists(const char *fname);
+int  is_dir(const char *path);
 int ae_load_file_to_memory(const char *filename, char **result);
 int int_cmp(const void *a, const void *b);
 int dbl_cmp(const void *a, const void *b);
