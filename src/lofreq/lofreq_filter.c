@@ -76,7 +76,15 @@ typedef struct {
      af_filter_t af_filter;
      sb_filter_t sb_filter;
      snvqual_filter_t snvqual_filter;
+#ifdef ENABLE_INDELS
+     FIXME
+#endif
 } filter_conf_t;
+
+
+static int af_missing_warning_printed = 0;
+static int dp_missing_warning_printed = 0;
+static int sb_missing_warning_printed = 0;
 
 
 void
@@ -95,6 +103,9 @@ dump_filter_conf(filter_conf_t *cfg)
      fprintf(stderr, "  snvqual_filter thresh=%d mtc_type=%d|%s alpha=%f ntests=%ld\n",
              cfg->snvqual_filter.thresh, cfg->snvqual_filter.mtc_type, mtc_type_str[cfg->snvqual_filter.mtc_type],
              cfg->snvqual_filter.alpha, cfg->snvqual_filter.ntests);
+#ifdef ENABLE_INDELS
+     FIXME
+#endif
 }
 
 
@@ -122,12 +133,18 @@ usage(const filter_conf_t* filter_conf)
      fprintf(stderr, "  -b | --sb-mtc STRING        Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -B\n");
      fprintf(stderr, "  -c | --sb-alpha FLOAT       Multiple testing correcion pvalue threshold\n");
 
-     fprintf(stderr, "  SNV quality:\n");
+     fprintf(stderr, "  SNVs:\n");
      fprintf(stderr, "  -Q  | --snvqual-thresh INT  Maximum phred-value allowed. Conflicts with -q\n");
      fprintf(stderr, "  -q  | --snvqual-mtc STRING  Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -Q\n");
      fprintf(stderr, "  -r  | --snvqual-alpha FLOAT Multiple testing correcion pvalue threshold\n");
      fprintf(stderr, "  -s  | --snvqual-ntests INT  Multiple testing correcion pvalue threshold\n");
-
+#ifdef ENABLE_INDELS
+     fprintf(stderr, "  Indels:\n");
+     fprintf(stderr, "  -K  | --indel-thresh INT  Maximum phred-value allowed. Conflicts with -q\n");
+     fprintf(stderr, "  -k  | --indel-mtc STRING  Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -Q\n");
+     fprintf(stderr, "  -l  | --indel-alpha FLOAT Multiple testing correcion pvalue threshold\n");
+     fprintf(stderr, "  -m  | --indel-ntests INT  Multiple testing correcion pvalue threshold\n");
+#endif
      fprintf(stderr, "  Misc.:\n");
      fprintf(stderr, "       --verbose              Be verbose\n");
      fprintf(stderr, "       --debug                Enable debugging\n");
@@ -141,12 +158,25 @@ void apply_af_filter(var_t *var, af_filter_t *af_filter)
      char *af_char = NULL;
      float af;
 
+     if (af_missing_warning_printed) {
+          return;
+     }
+
      if (af_filter->min > 0 || af_filter->max > 0) {
           if ( ! vcf_var_has_info_key(&af_char, var, "AF")) {
-               LOG_WARN("%s\n", "Requested AF filtering failed since AF tag is missing in variant");
-               return;
+               if ( ! af_missing_warning_printed) {
+                    LOG_WARN("%s\n", "Requested AF filtering failed since AF tag is missing in variant");
+                    af_missing_warning_printed = 1;
+                    return;
+               }
           }
           af = strtof(af_char, (char **)NULL); /* atof */
+          if (errno==ERANGE) {
+               LOG_ERROR("Couldn't parse EF from af_char %s. Disabling AF filtering", af_char);
+               af_missing_warning_printed = 1;
+               return;
+          }
+
           free(af_char);
           if (af_filter->min > 0.0 && af < af_filter->min) {
                vcf_var_add_to_filter(var, af_filter->id_min);
@@ -163,10 +193,17 @@ void apply_dp_filter(var_t *var, dp_filter_t *dp_filter)
      char *dp_char = NULL;
      float cov;
 
+     if (dp_missing_warning_printed) {
+          return;
+     }
+
      if (dp_filter->min > 0 || dp_filter->max > 0) {
           if ( ! vcf_var_has_info_key(&dp_char, var, "DP")) {
-               LOG_WARN("%s\n", "Requested coverage filtering failed since DP tag is missing in variant");
-               return;
+               if ( ! dp_missing_warning_printed) {
+                    LOG_WARN("%s\n", "Requested coverage filtering failed since DP tag is missing in variant");
+                    dp_missing_warning_printed = 1;
+                    return;
+               }
           }
           cov = atoi(dp_char);
           free(dp_char);
@@ -179,6 +216,125 @@ void apply_dp_filter(var_t *var, dp_filter_t *dp_filter)
      }
 }
 
+
+void apply_snvqual_threshold(var_t *var, snvqual_filter_t *snvqual_filter)
+{
+     if (! snvqual_filter->thresh) {
+          return;
+     }
+
+     if (var->qual < snvqual_filter->thresh) {
+          vcf_var_add_to_filter(var, snvqual_filter->id);
+     }
+}
+
+
+void apply_sb_threshold(var_t *var, sb_filter_t *sb_filter)
+{
+     char *sb_char = NULL;
+     int sb;
+
+     if (! sb_filter->thresh) {
+          return;
+     }
+
+     if (sb_missing_warning_printed) {
+          return;
+     }
+
+     if ( ! vcf_var_has_info_key(&sb_char, var, "SB")) {
+          if ( ! sb_missing_warning_printed) {
+               LOG_WARN("%s\n", "Requested SB filtering failed since SB tag is missing in variant");
+               sb_missing_warning_printed = 1;
+               return;
+          }
+     }
+     sb = atoi(sb_char);
+     if (sb > sb_filter->thresh) {
+          vcf_var_add_to_filter(var, sb_filter->id);
+     }
+}
+
+
+int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, int num_vars)
+{
+
+     /* FIXME make function */
+    if (sb_filter->mtc_type != MTC_NONE) {
+         double *sb_values = NULL;
+         long int i;
+
+         if (! sb_filter->ntests) {
+              sb_filter->ntests = num_vars;
+         }
+         
+         /* collect values from vars kept in mem
+          */
+         sb_values = malloc(num_vars * sizeof(double));
+         if ( ! sb_values) {
+              LOG_FATAL("%s\n", "out of memory");
+              return -1;
+         }
+         for (i=0; i<num_vars; i++) {
+              char *sb_char = NULL;
+              int sb;
+              if ( ! vcf_var_has_info_key(&sb_char, vars[i], "SB")) {
+                   LOG_WARN("%s\n", "Requested SB filtering failed since SB tag is missing in variant");
+                   sb_missing_warning_printed = 1;
+                   free(sb_values);
+                   break;
+              }
+              sb_values[i] = PHREDQUAL_TO_PROB(atoi(sb_char));
+         }
+
+         /* multiple testing correction
+          */
+         /* FIXME since the mtc routines use ints we better check for overflow */
+         if (num_vars>INT_MAX) {
+              LOG_FATAL("Prevented int overflow. That's a lot of variants (%ld) you got there. Please get in touch with the developers\n", num_vars);
+              return 1;
+         }       
+         if (sb_filter->mtc_type == MTC_BONF) {
+              bonf_corr(sb_values, num_vars, 
+                        sb_filter->ntests);
+
+         } else if (sb_filter->mtc_type == MTC_HOLMBONF) {
+              holm_bonf_corr(sb_values, num_vars, 
+                             sb_filter->alpha, sb_filter->ntests);
+
+         } else if (sb_filter->mtc_type == MTC_FDR) {
+              int num_rej = 0;
+              int *idx_rej; /* indices of rejected i.e. significant values */
+              int i;
+
+              num_rej = fdr(sb_values, num_vars, 
+                            sb_filter->alpha, sb_filter->ntests, 
+                            &idx_rej);
+              for (i=0; i<num_rej; i++) {
+                   int idx = idx_rej[i];
+                   sb_values[idx] = -1;
+              }
+              free(idx_rej);
+
+         } else {
+              LOG_FATAL("Internal error: unknown mtc type %d\n", sb_filter->mtc_type);
+              return -1;
+         }
+
+         for (i=0; i<num_vars; i++) {
+              if (sb_values[i] < sb_filter->alpha) {
+                   vcf_var_add_to_filter(vars[i], sb_filter->id);
+              }
+         }
+#if 0
+         for (i=0; i<num_vars; i++) {
+              LOG_FIXME("New sb_value for var %d: %f\n", vars[i], sb_values[i]);
+         }
+#endif    
+         free(sb_values);
+    }
+
+}
 
 /* adds FILTER tags to vcf header based on config. also initializes
  * filter ids 
@@ -234,8 +390,8 @@ void cfg_filter_to_vcf_header(filter_conf_t *cfg, char **header)
           mtc_str(buf, cfg->sb_filter.mtc_type);
           snprintf(cfg->sb_filter.id, FILTER_ID_STRSIZE, "sb_%s", buf);
           snprintf(full_filter_str, FILTER_STRSIZE,
-               "##FILTER=<ID=%s,Description=\"Strand-Bias Multpiple Testing Correction: %s\">\n",
-               cfg->sb_filter.id, buf);
+               "##FILTER=<ID=%s,Description=\"Strand-Bias Multiple Testing Correction: %s corr. pvalue <%f\">\n",
+                   cfg->sb_filter.id, buf, cfg->sb_filter.alpha);
           vcf_header_add(header, full_filter_str);
      }
 
@@ -252,8 +408,8 @@ void cfg_filter_to_vcf_header(filter_conf_t *cfg, char **header)
           mtc_str(buf, cfg->snvqual_filter.mtc_type);
           snprintf(cfg->snvqual_filter.id, FILTER_ID_STRSIZE, "snvqual_%s", buf);
           snprintf(full_filter_str, FILTER_STRSIZE,
-               "##FILTER=<ID=%s,Description=\"SNV Quality Multpiple Testing Correction: %s\">\n",
-               cfg->snvqual_filter.id, buf);
+               "##FILTER=<ID=%s,Description=\"SNV Quality Multiple Testing Correction: %s corr. pvalue >%f\">\n",
+                   cfg->snvqual_filter.id, buf, cfg->snvqual_filter.alpha);
           vcf_header_add(header, full_filter_str);
      }
 }
@@ -267,8 +423,8 @@ main_filter(int argc, char *argv[])
      static int print_only_passed = 0;
      char *vcf_header = NULL;
      var_t **vars = NULL;
-     long int num_vars = 0;
-     long int vars_size = 0;
+     long int num_vars = 0; /* isn't long overkill here ? */
+     long int vars_size = 0; /* keeping track of how much memory we've got pre-allocated */
      long int i;
 
      /* default filter options */
@@ -310,12 +466,17 @@ main_filter(int argc, char *argv[])
               {"snvqual-mtc", required_argument, NULL, 'q'},
               {"snvqual-alpha", required_argument, NULL, 'r'},
               {"snvqual-ntests", required_argument, NULL, 's'},
-
+#ifdef ENABLE_INDELS
+              {"indel-thresh", required_argument, NULL, 'K'},
+              {"indel-mtc", required_argument, NULL, 'k'},
+              {"indel-alpha", required_argument, NULL, 'l'},
+              {"indel-ntests", required_argument, NULL, 'm'},
+#endif
               {0, 0, 0, 0} /* sentinel */
          };
 
          /* keep in sync with long_opts and usage */
-         static const char *long_opts_str = "hi:o:v:V:a:A:B:b:c:Q:q:r:s:";
+         static const char *long_opts_str = "hi:o:v:V:a:A:B:b:c:Q:q:r:s:K:k:l:m:";
 
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
@@ -448,7 +609,10 @@ main_filter(int argc, char *argv[])
     LOG_DEBUG("vcf_in=%s vcf_out=%s\n", vcf_in, vcf_out);
 
 
-    /* everything below here could go into a function */
+    /* FIXME everything below here should go into a function with args:
+       - cfg
+       ...
+    */
 
 
     /* open vcf files
@@ -482,14 +646,21 @@ main_filter(int argc, char *argv[])
     vcf_write_header(& cfg.vcf_out, vcf_header);
     free(vcf_header);
 
-    /* read variants. since many filters perform multiple testing
+    /* read in variants. since many filters perform multiple testing
      * correction and therefore need to look at all variants we keep
-     * it simple and load them all into memory.
+     * it simple and load them all into memory. 
+     * 
+     * in theory we could apply all 'simple' filters directly within
+     * the loop here and depending on the result spit the variant out
+     * or not. only complex filters need to see all variants first to,
+     * e.g. apply multiple testing.
      */
     num_vars = 0;
     while (1) {
          var_t *var;
          int rc;
+         int is_indel = 0;
+
          vcf_new_var(&var);
          rc = vcf_parse_var(& cfg.vcf_in, var);
          if (-1 == rc) {
@@ -502,16 +673,14 @@ main_filter(int argc, char *argv[])
               break;
          }
 
-         if (vcf_var_has_info_key(NULL, var, "INDEL")) {
+         is_indel = vcf_var_has_info_key(NULL, var, "INDEL");
+#ifndef ENABLE_INDELS
+         if (is_indel) {
               LOG_WARN("%s\n", "Skipping INDEL variants for now\n");
               free(var);
               continue;
          }
-
-         /* in theory we could apply all simple filters directly here
-          * and spit variant out (or not). only complex filters need
-          * to see all variants first to, e.g. apply multiple
-          * testing */
+#endif
 
          /* read all in, no matter if already filtered. we keep adding filters */
          num_vars +=1;
@@ -530,27 +699,58 @@ main_filter(int argc, char *argv[])
          }
 #endif
 
-
+         /* filters applying to all types of variants
+          */
          apply_af_filter(var, & cfg.af_filter);
          apply_dp_filter(var, & cfg.dp_filter);
 
-         /* FIXME sb and snvqual thresh can go here or the collection
-          * of their values for mtc call  if mtc_type!=MTC_NONE */
+         /* filters depending on type of variant
+          */
+         if (! is_indel) {
+              if (cfg.snvqual_filter.thresh) {
+                   assert(cfg.snvqual_filter.mtc_type == MTC_NONE);
+                   apply_snvqual_threshold(var, & cfg.snvqual_filter);
+              }
+
+              if (cfg.sb_filter.thresh) {
+                   assert(cfg.sb_filter.mtc_type == MTC_NONE);
+                   apply_sb_threshold(var, & cfg.sb_filter);
+              }
+         } 
+#ifdef ENABLE_INDELS
+           else {
+              if (cfg.snvqual_filter.thresh)) {
+                   assert(cfg.indel_filter.mtc_type == MTC_NONE);
+                   apply_indel_threshold(var, cfg.indel_filter.thresh);
+              } FIXME:implement-and-continue
+         }
+#endif
     }
-    LOG_FIXME("%s\n", "sb and snvqual filter missing");
+
     if (num_vars) {
          vars = realloc(vars, (num_vars * sizeof(var_t**)));
     }
     vcf_file_close(& cfg.vcf_in);
     LOG_VERBOSE("Parsed %d variants\n", num_vars);
 
-    if (cfg.sb_filter.mtc_type != MTC_NONE && ! cfg.sb_filter.ntests) {
-         cfg.sb_filter.ntests = num_vars;
-    }
-    if (cfg.snvqual_filter.mtc_type != MTC_NONE && cfg.snvqual_filter.ntests) {
-         cfg.snvqual_filter.ntests = num_vars;
+
+    apply_sb_filter_mtc(& cfg.sb_filter, vars, num_vars);
+
+    if (cfg.snvqual_filter.mtc_type != MTC_NONE) {
+         double *snvqual_values;
+         long int i;
+
+         if (! cfg.snvqual_filter.ntests) {
+              cfg.snvqual_filter.ntests = num_vars;
+         }
+         LOG_FIXME("%s\n", "snvqual mtc filter missing");
+         LOG_FIXME("%s\n", "needs reverse pvalue check than sb");
+         return -1;
     }
 
+
+    /* output
+     */
     for (i=0; i<num_vars; i++) {
          var_t *v = vars[i];
 
@@ -571,6 +771,7 @@ main_filter(int argc, char *argv[])
     }
     vcf_file_close(& cfg.vcf_out);
 
+
     for (i=0; i<num_vars; i++) {
          vcf_free_var(& vars[i]);
     }
@@ -578,12 +779,15 @@ main_filter(int argc, char *argv[])
 
     LOG_VERBOSE("%s\n", "Successful exit.");
     LOG_FIXME("%s\n", "Unfinished");
+    LOG_FIXME("%s\n", "Missing check against Python version");
+    LOG_FIXME("%s\n", "self test: sb: -b bonf -c 100000 > -b bonf <= resp. -b holmbonf -c 100000 > -b holmbonf <= -b fdr -c 100000 > -b fdr");
+
     return 0;
 }
 /* main_filter */
 
 
-/* cc lofreq_filter.c -o lofreq_filter -I../lofreq_core -I../uthash/ ../lofreq_core/liblofreq_core.a   -lz -DMAIN_FILTER */
+/* gcc lofreq_filter.c -o lofreq_filter -I../lofreq_core -I../uthash/ ../lofreq_core/liblofreq_core.a   -lz -DMAIN_FILTER */
 #ifdef MAIN_FILTER
 int
 main(int argc, char *argv[])
