@@ -117,16 +117,37 @@ void int_varray_add_value(int_varray_t *a, const int value)
 }
 
 
+/* returns 1 of path is directory, otherwise 0 if it's anything else
+ * or if there's permission problem 
+*/
+int is_dir(const char *path)
+{
+     struct stat s;
+     if (stat(path, &s) == 0) {
+          if (s.st_mode & S_IFDIR) {
+               return 1;
+          } else {
+               return 0;
+          }
+     } else {
+          /* error: could check set errno for more details */
+          return 0;
+     }         
+
+}
+
+
 int file_exists(const char *fname) 
 {
-  /* from 
-   * http://stackoverflow.com/questions/230062/whats-the-best-way-to-check-if-a-file-exists-in-c-cross-platform 
-   */
-  if (access(fname, F_OK) != -1) {
-      return 1;
-  } else {
-      return 0;
-  }
+     /* from 
+      * http://stackoverflow.com/questions/230062/whats-the-best-way-to-check-if-a-file-exists-in-c-cross-platform 
+      */
+     if (access(fname, F_OK) != -1) {
+          return 1;
+
+     } else {
+          return 0;
+     }
 }
 
 
