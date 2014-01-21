@@ -447,37 +447,34 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
           return;
      }
 
-     /* determine avg_qual if needed, which is to be the avg quality
-      * of reference bases (ie. cons bases since vars are always
-      * called against cons_base) */
+     /* determine avg_qual if needed, which is to be the median
+      * quality of reference bases (ie. cons bases since vars are
+      * always called against cons_base). compute average of all
+      * unfiltered cons bases in this column (pretending we did that
+      * many experiments)
+     */
      if (-1 == conf->def_altbq) {
-          /* need the average error probability of all, unfiltered
-           * non-cons bases in this column. cons bases are usually
-           * biased towards higher scores */
-          double err_prob_sum = 0;
-          unsigned int err_prob_count = 0;
 
           for (i=0; i<NUM_NT4; i++) {
                int nt = bam_nt4_rev_table[i];
                if (nt != p->cons_base) {
                     continue;
                }
-               err_prob_count += p->base_quals[i].n;
-               for (j=0; j<p->base_quals[i].n; j++) {
-                    err_prob_sum += PHREDQUAL_TO_PROB(
-                         p->base_quals[i].data[j]);
+
+               if (p->base_quals[i].n == 0) {
+                    /* set avg_qual to non-sense value, won't use it anyway
+                     * if there were no 'errors'. can't return here though
+                     * since we still want to report the consvar */
+                    avg_qual = -1;
+               } else {
+                    int *ref_quals = malloc(sizeof(int) * p->base_quals[i].n);
+                    memcpy(ref_quals, p->base_quals[i].data, sizeof(int) * p->base_quals[i].n);
+                    avg_qual = int_median(ref_quals, p->base_quals[i].n);
+                    free(ref_quals);
+                    break; /* there can only be one */
                }
           }
 
-          if (err_prob_count==0) {
-               /* set avg_qual to non-sense value, won't use it anyway
-                * if there were no 'errors'. can't return here though
-                * since we still want to report the consvar */
-               avg_qual = -1;
-          } else {
-               avg_qual = PROB_TO_PHREDQUAL(err_prob_sum/err_prob_count);
-          }
-          LOG_DEBUG("avg qual %s:%d = %d\n", p->target, p->pos+1, avg_qual);
      }
 
 
@@ -669,7 +666,6 @@ call_snvs(const plp_col_t *p, void *confp)
       * First branch is "default" i.e. doesn't need exception checking
       */
 
-
      /* don't call if no coverage or if we don't know what to call
       * against */
      if (p->coverage == 0 || p->cons_base == 'N') {          
@@ -718,8 +714,7 @@ call_snvs(const plp_col_t *p, void *confp)
      if (p->ref_base == 'N' && !cons_as_ref) {
           return;
      }
-
-    
+     
      plp_to_errprobs(&err_probs, &num_err_probs, 
                      alt_bases, alt_counts, alt_raw_counts,
                      p, conf);
@@ -853,7 +848,7 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "- Base-call quality\n");                      
      fprintf(stderr, "       -q | --min-bq INT            Skip any base with baseQ smaller than INT [%d]\n", mplp_conf->min_bq);
      fprintf(stderr, "       -Q | --min-altbq INT         Skip nonref-bases with baseQ smaller than INT [%d]. Not active if ref is N\n", snvcall_conf->min_altbq);
-     fprintf(stderr, "       -a | --def-altbq INT         Nonref base qualities will be replaced with this value (use mean if -1) [%d]\n", snvcall_conf->def_altbq);
+     fprintf(stderr, "       -a | --def-altbq INT         Nonref base qualities will be replaced with this value (use median if -1) [%d]\n", snvcall_conf->def_altbq);
 #if DEFAULT_BAQ_ON
      fprintf(stderr, "       -B | --no-baq                Disable BAQ computation (increases sensitivity if no indels are expected or mapper doesn't support them)\n");
 #else
