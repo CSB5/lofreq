@@ -19,7 +19,7 @@
 
 /* minimum base quality for alt bases */
 #define DEFAULT_MIN_ALT_BQ 20
-#define DEFAULT_DEF_ALT_BQ -1
+#define DEFAULT_DEF_ALT_BQ 20
 /* FIXME make arg FIXME might affect on src qual untested */
 #define DEFAULT_MIN_ALT_MERGEDQ 20
 
