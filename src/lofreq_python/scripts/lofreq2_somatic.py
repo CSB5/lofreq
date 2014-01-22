@@ -515,9 +515,9 @@ def cmdline_parser():
     parser.add_argument("-V", "--ign-vcf",
                         default = default,
                         help="Ignore variants in this vcf-file for"
-                        " source quality computation in tumor (see -S)."
+                        " source quality computation in tumor (only used if -S was given)."
                         " Use 'None' for NA and 'normal' for predictions"
-                        " in normal sample (default = %s, if -S was given)" % default)
+                        " in normal sample (default = %s)" % default)
 
     parser.add_argument("--reuse-normal-vcf",
                         help="Advanced: reuse already computed"
@@ -607,10 +607,6 @@ def main():
                     somatic_snv_caller.src_qual_ign_vcf = somatic_snv_caller.vcf_n_rlx
                 else:
                     somatic_snv_caller.src_qual_ign_vcf = args.ign_vcf
-    else:
-        if args.ign_vcf and args.ign_vcf.lower() not in ["none", "na"]:
-            LOG.fatal("Can't run somatic SNV caller with ignore vcf if source qualty was disabled. Exiting")
-            sys.exit(1)
         
     if args.aln_err_prof:
         somatic_snv_caller.aln_err_prof_on = True
