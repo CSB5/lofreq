@@ -176,8 +176,8 @@ void apply_af_filter(var_t *var, af_filter_t *af_filter)
                af_missing_warning_printed = 1;
                return;
           }
-
           free(af_char);
+
           if (af_filter->min > 0.0 && af < af_filter->min) {
                vcf_var_add_to_filter(var, af_filter->id_min);
           }
@@ -207,6 +207,7 @@ void apply_dp_filter(var_t *var, dp_filter_t *dp_filter)
           }
           cov = atoi(dp_char);
           free(dp_char);
+
           if (dp_filter->min > 0 && cov < dp_filter->min) {
                vcf_var_add_to_filter(var, dp_filter->id_min);
           }
@@ -250,91 +251,198 @@ void apply_sb_threshold(var_t *var, sb_filter_t *sb_filter)
           }
      }
      sb = atoi(sb_char);
+     free(sb_char);
+
      if (sb > sb_filter->thresh) {
           vcf_var_add_to_filter(var, sb_filter->id);
      }
 }
 
 
-int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, int num_vars)
+/* returns -1 on error 
+ *
+ * filter everything that's not significant
+ * 
+ * Very similar to apply_sb_filter_mtc, but reverse testing logic and only looking at non consvars
+ *
+ */
+int apply_snvqual_filter_mtc(snvqual_filter_t *snvqual_filter, var_t **vars, const int num_vars)
 {
+     double *snvqual_values = NULL;
+     int i;
+     /* can only apply this logic to variants that are not consensus
+      * variants, i.e those that actually have a quality. therefore
+      * keep track of non cons var indeces */
+     int num_noncons_vars = 0;
+     int *non_cons_idxs = NULL;
 
-     /* FIXME make function */
-    if (sb_filter->mtc_type != MTC_NONE) {
-         double *sb_values = NULL;
-         long int i;
+     if (snvqual_filter->ntests && num_vars > snvqual_filter->ntests) {
+         LOG_WARN("%s\n", "Number of predefined tests for SB filter larger than number of variants! Are you sure that makes sense?");
+     }
 
-         if (! sb_filter->ntests) {
-              sb_filter->ntests = num_vars;
-         }
-         
-         /* collect values from vars kept in mem
-          */
-         sb_values = malloc(num_vars * sizeof(double));
-         if ( ! sb_values) {
-              LOG_FATAL("%s\n", "out of memory");
-              return -1;
-         }
-         for (i=0; i<num_vars; i++) {
-              char *sb_char = NULL;
-              int sb;
-              if ( ! vcf_var_has_info_key(&sb_char, vars[i], "SB")) {
-                   LOG_WARN("%s\n", "Requested SB filtering failed since SB tag is missing in variant");
-                   sb_missing_warning_printed = 1;
-                   free(sb_values);
-                   break;
-              }
-              sb_values[i] = PHREDQUAL_TO_PROB(atoi(sb_char));
-         }
+     /* collect values from noncons vars only and keep track of their indeces
+      */
+     non_cons_idxs = malloc(num_vars * sizeof(int));
+     if ( ! non_cons_idxs) {
+          LOG_FATAL("%s\n", "out of memory");
+          return -1;
+     }
+     snvqual_values = malloc(num_vars * sizeof(double));
+     if ( ! snvqual_values) {
+          LOG_FATAL("%s\n", "out of memory");
+          return -1;
+     }
+     for (i=0; i<num_vars; i++) {
+          if (vars[i]->qual>0) {
+               snvqual_values[num_noncons_vars] = PHREDQUAL_TO_PROB(vars[i]->qual);
+               non_cons_idxs[num_noncons_vars] = i;
+               num_noncons_vars += 1;
+          }
+     }
+     if (! num_noncons_vars) {
+          free(snvqual_values);
+          free(non_cons_idxs);
+          return 0;
+     }
+     non_cons_idxs = realloc(non_cons_idxs, (num_noncons_vars * sizeof(int)));
+     snvqual_values = realloc(snvqual_values, (num_noncons_vars * sizeof(double)));
 
-         /* multiple testing correction
-          */
-         /* FIXME since the mtc routines use ints we better check for overflow */
-         if (num_vars>INT_MAX) {
-              LOG_FATAL("Prevented int overflow. That's a lot of variants (%ld) you got there. Please get in touch with the developers\n", num_vars);
-              return 1;
-         }       
-         if (sb_filter->mtc_type == MTC_BONF) {
-              bonf_corr(sb_values, num_vars, 
-                        sb_filter->ntests);
+     /* only now we can set the number of tests (if it wasn't set by
+      * caller) */
+     if (! snvqual_filter->ntests) {
+          snvqual_filter->ntests = num_noncons_vars;
+     }
+     
 
-         } else if (sb_filter->mtc_type == MTC_HOLMBONF) {
-              holm_bonf_corr(sb_values, num_vars, 
-                             sb_filter->alpha, sb_filter->ntests);
-
-         } else if (sb_filter->mtc_type == MTC_FDR) {
-              int num_rej = 0;
-              int *idx_rej; /* indices of rejected i.e. significant values */
-              int i;
-
-              num_rej = fdr(sb_values, num_vars, 
-                            sb_filter->alpha, sb_filter->ntests, 
-                            &idx_rej);
-              for (i=0; i<num_rej; i++) {
-                   int idx = idx_rej[i];
-                   sb_values[idx] = -1;
-              }
-              free(idx_rej);
-
-         } else {
-              LOG_FATAL("Internal error: unknown mtc type %d\n", sb_filter->mtc_type);
-              return -1;
-         }
-
-         for (i=0; i<num_vars; i++) {
-              if (sb_values[i] < sb_filter->alpha) {
-                   vcf_var_add_to_filter(vars[i], sb_filter->id);
-              }
-         }
+     /* multiple testing correction
+      */
+     if (snvqual_filter->mtc_type == MTC_BONF) {
+          bonf_corr(snvqual_values, num_noncons_vars, 
+                    snvqual_filter->ntests);
+          
+     } else if (snvqual_filter->mtc_type == MTC_HOLMBONF) {
+          holm_bonf_corr(snvqual_values, num_noncons_vars, 
+                         snvqual_filter->alpha, snvqual_filter->ntests);
+          
+     } else if (snvqual_filter->mtc_type == MTC_FDR) {
+          int num_rej = 0;
+          int *idx_rej; /* indices of rejected i.e. significant values */
+          int i;
+          
+          num_rej = fdr(snvqual_values, num_noncons_vars, 
+                        snvqual_filter->alpha, snvqual_filter->ntests, 
+                        &idx_rej);
+          for (i=0; i<num_rej; i++) {
+               int idx = idx_rej[i];
+               snvqual_values[non_cons_idxs[idx]] = -1;
+          }
+          free(idx_rej);
+          
+     } else {
+          LOG_FATAL("Internal error: unknown MTC type %d\n", snvqual_filter->mtc_type);
+          return -1;
+     }
+     
+     for (i=0; i<num_noncons_vars; i++) {
+          if (snvqual_values[non_cons_idxs[i]] > snvqual_filter->alpha) {
+               vcf_var_add_to_filter(vars[non_cons_idxs[i]], snvqual_filter->id);
+          }
+     }
 #if 0
-         for (i=0; i<num_vars; i++) {
-              LOG_FIXME("New sb_value for var %d: %f\n", vars[i], sb_values[i]);
-         }
+     for (i=0; i<num_noncons_vars; i++) {
+          LOG_FIXME("New snvqual_value for var %d: %f\n", vars[i], snvqual_values[i]);
+     }
 #endif    
-         free(sb_values);
-    }
+     free(non_cons_idxs);
+     free(snvqual_values);
 
+     return 0;
 }
+
+
+/* returns -1 on error 
+ *
+ * filter everything that's significant
+ *
+ * very similar to in apply_snvqual_filter_mtc, but reverse logic and looking at all vars
+ */
+int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const int num_vars)
+{
+     double *sb_values = NULL;
+     int i;
+
+     if (sb_filter->ntests && num_vars > sb_filter->ntests) {
+         LOG_WARN("%s\n", "Number of predefined tests for SB filter larger than number of variants! Are you sure that makes sense?");
+     }
+
+     if (! sb_filter->ntests) {
+          sb_filter->ntests = num_vars;
+     }
+     
+     /* collect values from vars kept in mem
+      */
+     sb_values = malloc(num_vars * sizeof(double));
+     if ( ! sb_values) {
+          LOG_FATAL("%s\n", "out of memory");
+          return -1;
+     }
+     for (i=0; i<num_vars; i++) {
+          char *sb_char = NULL;
+          int sb;
+          if ( ! vcf_var_has_info_key(&sb_char, vars[i], "SB")) {
+               LOG_WARN("%s\n", "Requested SB filtering failed since SB tag is missing in variant");
+               sb_missing_warning_printed = 1;
+               free(sb_values);
+               break;
+          }
+          sb_values[i] = PHREDQUAL_TO_PROB(atoi(sb_char));
+          free(sb_char);
+     }
+     
+     /* multiple testing correction
+      */
+     if (sb_filter->mtc_type == MTC_BONF) {
+          bonf_corr(sb_values, num_vars, 
+                    sb_filter->ntests);
+          
+     } else if (sb_filter->mtc_type == MTC_HOLMBONF) {
+          holm_bonf_corr(sb_values, num_vars, 
+                         sb_filter->alpha, sb_filter->ntests);
+          
+     } else if (sb_filter->mtc_type == MTC_FDR) {
+          int num_rej = 0;
+          int *idx_rej; /* indices of rejected i.e. significant values */
+          int i;
+          
+          num_rej = fdr(sb_values, num_vars, 
+                        sb_filter->alpha, sb_filter->ntests, 
+                        &idx_rej);
+          for (i=0; i<num_rej; i++) {
+               int idx = idx_rej[i];
+               sb_values[idx] = -1;
+          }
+          free(idx_rej);
+          
+     } else {
+          LOG_FATAL("Internal error: unknown MTC type %d\n", sb_filter->mtc_type);
+          return -1;
+     }
+     
+     for (i=0; i<num_vars; i++) {
+          if (sb_values[i] < sb_filter->alpha) {
+               vcf_var_add_to_filter(vars[i], sb_filter->id);
+          }
+     }
+#if 0
+     for (i=0; i<num_vars; i++) {
+          LOG_FIXME("New sb_value for var %d: %f\n", vars[i], sb_values[i]);
+     }
+#endif    
+     free(sb_values);
+
+     return 0;
+}
+
 
 /* adds FILTER tags to vcf header based on config. also initializes
  * filter ids 
@@ -390,7 +498,7 @@ void cfg_filter_to_vcf_header(filter_conf_t *cfg, char **header)
           mtc_str(buf, cfg->sb_filter.mtc_type);
           snprintf(cfg->sb_filter.id, FILTER_ID_STRSIZE, "sb_%s", buf);
           snprintf(full_filter_str, FILTER_STRSIZE,
-               "##FILTER=<ID=%s,Description=\"Strand-Bias Multiple Testing Correction: %s corr. pvalue <%f\">\n",
+               "##FILTER=<ID=%s,Description=\"Strand-Bias Multiple Testing Correction: %s corr. pvalue > %f\">\n",
                    cfg->sb_filter.id, buf, cfg->sb_filter.alpha);
           vcf_header_add(header, full_filter_str);
      }
@@ -408,7 +516,7 @@ void cfg_filter_to_vcf_header(filter_conf_t *cfg, char **header)
           mtc_str(buf, cfg->snvqual_filter.mtc_type);
           snprintf(cfg->snvqual_filter.id, FILTER_ID_STRSIZE, "snvqual_%s", buf);
           snprintf(full_filter_str, FILTER_STRSIZE,
-               "##FILTER=<ID=%s,Description=\"SNV Quality Multiple Testing Correction: %s corr. pvalue >%f\">\n",
+               "##FILTER=<ID=%s,Description=\"SNV Quality Multiple Testing Correction: %s corr. pvalue < %f\">\n",
                    cfg->snvqual_filter.id, buf, cfg->snvqual_filter.alpha);
           vcf_header_add(header, full_filter_str);
      }
@@ -609,12 +717,6 @@ main_filter(int argc, char *argv[])
     LOG_DEBUG("vcf_in=%s vcf_out=%s\n", vcf_in, vcf_out);
 
 
-    /* FIXME everything below here should go into a function with args:
-       - cfg
-       ...
-    */
-
-
     /* open vcf files
      */
     if (vcf_file_open(& cfg.vcf_in, vcf_in,
@@ -629,6 +731,11 @@ main_filter(int argc, char *argv[])
     }
     free(vcf_in);
     free(vcf_out);
+
+    /* FIXME everything below here should go into a function with args:
+       - cfg
+       - what else?
+    */
 
     /* print header
      */
@@ -734,18 +841,18 @@ main_filter(int argc, char *argv[])
     LOG_VERBOSE("Parsed %d variants\n", num_vars);
 
 
-    apply_sb_filter_mtc(& cfg.sb_filter, vars, num_vars);
+    if (cfg.sb_filter.mtc_type != MTC_NONE) {
+         if (apply_sb_filter_mtc(& cfg.sb_filter, vars, num_vars)) {
+              LOG_FATAL("%s\n", "Multiple testing correction on strand-bias pvalues failed");
+              return -1;
+         }
+    }
 
     if (cfg.snvqual_filter.mtc_type != MTC_NONE) {
-         double *snvqual_values;
-         long int i;
-
-         if (! cfg.snvqual_filter.ntests) {
-              cfg.snvqual_filter.ntests = num_vars;
+         if (apply_snvqual_filter_mtc(& cfg.snvqual_filter, vars, num_vars)) {
+              LOG_FATAL("%s\n", "Multiple testing correction on SNV qualities failed");
+              return -1;
          }
-         LOG_FIXME("%s\n", "snvqual mtc filter missing");
-         LOG_FIXME("%s\n", "needs reverse pvalue check than sb");
-         return -1;
     }
 
 
@@ -778,9 +885,14 @@ main_filter(int argc, char *argv[])
     free(vars);
 
     LOG_VERBOSE("%s\n", "Successful exit.");
-    LOG_FIXME("%s\n", "Unfinished");
-    LOG_FIXME("%s\n", "Missing check against Python version");
-    LOG_FIXME("%s\n", "self test: sb: -b bonf -c 100000 > -b bonf <= resp. -b holmbonf -c 100000 > -b holmbonf <= -b fdr -c 100000 > -b fdr");
+
+
+    LOG_FIXME("%s\n", "Pick vcf with reasonable number of vars incl some consvars or randomize");
+    LOG_FIXME("%s\n", "self test: sb: -b bonf -c 100000 > -b bonf\n");
+    LOG_FIXME("%s\n",  "<= resp.: -b holmbonf -c 100000 > -b holmbonf\n");
+    LOG_FIXME("%s\n",  "<= resp.: -b fdr -c 100000 > -b fdr");
+    LOG_FIXME("%s\n", "Check against Python version");
+    LOG_FIXME("%s\n", "Note: no defaults here");
 
     return 0;
 }
@@ -789,6 +901,27 @@ main_filter(int argc, char *argv[])
 
 /* gcc lofreq_filter.c -o lofreq_filter -I../lofreq_core -I../uthash/ ../lofreq_core/liblofreq_core.a   -lz -DMAIN_FILTER */
 #ifdef MAIN_FILTER
+
+/*  FIXME
+vcf with random af:0-1, dp:0-1000, 
+VCF=FIXME
+num_vars=$(zgrep -vc '^#' $VCF)
+
+./lofreq_filter -i $VCF --af-min 0.2 --af-max 0.3
+check that af only in that range
+
+./lofreq_filter -i $VCF --cov-min 4500 --cov-max 5000 
+check that dp only in that range
+
+--sb-thresh
+--sb-mtc
+  --sb-alpha
+--snvqual-thresh
+--snvqual-mtc
+  --snvqual-alpha
+  --snvqual-ntests
+
+ */
 int
 main(int argc, char *argv[])
 {
