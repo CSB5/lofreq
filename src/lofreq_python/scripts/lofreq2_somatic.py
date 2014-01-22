@@ -217,8 +217,8 @@ class SomaticSNVCaller(object):
         cmd.extend(['-f', self.ref])
         if self.baq_off:
             cmd.append('-B')
-        if self.mq_off:
-            cmd.append('-J')
+        #if self.mq_off:
+        cmd.append('-J')
         if self.use_orphan:
             cmd.append('--use-orphan')
 
@@ -510,11 +510,14 @@ def cmdline_parser():
 
     parser.add_argument("-S", "--src-qual",
                         action="store_true",
-                        help="Advanced: Enable use of source quality (see also -V)")
-
+                        help="Advanced: Enable use of source quality in tumor (see also -V)")
+    default = "normal"
     parser.add_argument("-V", "--ign-vcf",
-                        help="Advanced: Ignore variants in this vcf file for"
-                        " source quality computation (see -A)")
+                        default = default,
+                        help="Ignore variants in this vcf-file for"
+                        " source quality computation in tumor (see -S)."
+                        " Use 'None' for NA and 'normal' for predictions"
+                        " in normal sample (default = %s, if -S was given)" % default)
 
     parser.add_argument("--reuse-normal-vcf",
                         help="Advanced: reuse already computed"
@@ -595,10 +598,20 @@ def main():
         somatic_snv_caller.mq_filter_t = args.mq_filter
     if args.baq_off:
         somatic_snv_caller.baq_off = True
+        
     if args.src_qual:
         somatic_snv_caller.src_qual_on = True
-    if args.ign_vcf:
-        somatic_snv_caller.src_qual_ign_vcf = args.ign_vcf
+        if args.ign_vcf:
+            if args.ign_vcf.lower() not in ["none", "na"]:
+                if args.ign_vcf == "normal":
+                    somatic_snv_caller.src_qual_ign_vcf = somatic_snv_caller.vcf_n_rlx
+                else:
+                    somatic_snv_caller.src_qual_ign_vcf = args.ign_vcf
+    else:
+        if args.ign_vcf and args.ign_vcf.lower() not in ["none", "na"]:
+            LOG.fatal("Can't run somatic SNV caller with ignore vcf if source qualty was disabled. Exiting")
+            sys.exit(1)
+        
     if args.aln_err_prof:
         somatic_snv_caller.aln_err_prof_on = True
     if args.use_orphan:
