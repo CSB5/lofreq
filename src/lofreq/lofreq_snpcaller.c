@@ -528,46 +528,41 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                     aq = p->alnerr_qual[i].data[j];
                }
 #endif
-               if (is_alt_base) {
-                    alt_raw_counts[alt_idx] += 1;
-                    if (bq < conf->min_altbq) {
-                         continue; 
-                         /* WARNING base counts now invalid. We use
-                          * them for freq reporting anyway, otherwise
-                          * heterozygous calls look odd */
-                    }
-                    if (-1 == conf->def_altbq) {
-                         bq = avg_qual;
-                    } else {
-                         bq = conf->def_altbq;
-                    }
-               }
 
 #ifdef USE_ALNERRPROF
                final_err_prob = merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
 #else
                final_err_prob = merge_srcq_baseq_and_mapq(sq, bq, mq);
 #endif
-               /* final decision whether to let alt through 
-                *
-                * FIXME this only makes sense if altbq was not set to
-                * some hardcoded threshold
-                * 
-                * FIXME this comes with reduced sens on the
-                * denv2-pseudoclonal data-set. However that is because
-                * of refq biases there, i.e. the avg ref q used to
-                * replace the varq is already <Q20
-                */
+
+               /* special treatment of alt bases */
+               if (is_alt_base) {
+                    alt_raw_counts[alt_idx] += 1;
+
+                    /* ignore if below bq or merged threshold */
+                    if (bq < conf->min_altbq || PROB_TO_PHREDQUAL(final_err_prob) < DEFAULT_MIN_ALT_MERGEDQ) {
+                         continue; 
+                    }
+                    alt_counts[alt_idx] += 1;
+                    /* if passed filter, set to default */
+                    if (-1 == conf->def_altbq) {
+                         /* ...change bq which also requires change of final_err_prob */
+                         bq = avg_qual;
+#ifdef USE_ALNERRPROF
+                         final_err_prob = merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
+#else
+                         final_err_prob = merge_srcq_baseq_and_mapq(sq, bq, mq);
+#endif
+
+                    } else {
+                         /* easy case: just set to default */
+                         final_err_prob = PHREDQUAL_TO_PROB(conf->def_altbq);
+                    }
+               }
+
 #if 0
                LOG_FIXME("%s:%d %c bq=%d mq=%d finalq=%d is_alt_base=%d\n", p->target, p->pos+1, nt, bq, mq, PROB_TO_PHREDQUAL(final_err_prob), is_alt_base);
 #endif
-               if (is_alt_base) {
-                    if (PROB_TO_PHREDQUAL(final_err_prob) < DEFAULT_MIN_ALT_MERGEDQ) {
-                         continue;
-                    } else {
-                         alt_counts[alt_idx] += 1;
-                    }
-               }
 
                (*err_probs)[(*num_err_probs)++] = final_err_prob;
           }
@@ -847,8 +842,8 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -o | --out FILE              Vcf output file [- = stdout]\n");
      fprintf(stderr, "- Base-call quality\n");                      
      fprintf(stderr, "       -q | --min-bq INT            Skip any base with baseQ smaller than INT [%d]\n", mplp_conf->min_bq);
-     fprintf(stderr, "       -Q | --min-altbq INT         Skip nonref-bases with baseQ smaller than INT [%d]. Not active if ref is N\n", snvcall_conf->min_altbq);
-     fprintf(stderr, "       -a | --def-altbq INT         Nonref base qualities will be replaced with this value (use median if -1) [%d]\n", snvcall_conf->def_altbq);
+     fprintf(stderr, "       -Q | --min-altbq INT         Skip non-reference bases with baseQ smaller than INT [%d]. Not active if ref is N\n", snvcall_conf->min_altbq);
+     fprintf(stderr, "       -a | --def-altbq INT         Non-reference base qualities will be replaced with this value (use median ref-bq if -1) [%d]\n", snvcall_conf->def_altbq);
 #if DEFAULT_BAQ_ON
      fprintf(stderr, "       -B | --no-baq                Disable BAQ computation (increases sensitivity if no indels are expected or mapper doesn't support them)\n");
 #else
@@ -874,7 +869,7 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -C | --min-cov INT           Test only positions having at least this coverage [%d]\n", snvcall_conf->min_cov);
      fprintf(stderr, "       -N | --dont-skip-n           Don't skip positions where refbase is N (will try to predict CONSVARs (only) at those positions)\n");
      fprintf(stderr, "       -I | --illumina-1.3          Assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
-     fprintf(stderr, "            --use-orphan            Count anomalous read pairs\n");
+     fprintf(stderr, "            --use-orphan            Count anomalous read pairs (i.e. where mate is not aligned properly)\n");
      fprintf(stderr, "            --plp-summary-only      No snv-calling: just output pileup summary per column\n");
      fprintf(stderr, "            --no-default-filter     Don't apply default filter command after calling variants\n");
      fprintf(stderr, "            --verbose               Be verbose\n");
