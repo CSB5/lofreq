@@ -541,6 +541,12 @@ def main():
         if final_vcf_out == "-":
             fh_out = sys.stdout
         else:
+            # check again to make race conditions less likely
+            if os.path.exists(final_vcf_out):
+                LOG.fatal("Cowardly refusing to overwrite %s with %s" % (
+                    final_vcf_out, vcf_concat))
+                sys.exit(1)
+                                
             if final_vcf_out[-3:] == '.gz':
                 fh_out = gzip.open(final_vcf_out, 'w')
             else:
