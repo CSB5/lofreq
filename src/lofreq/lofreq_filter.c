@@ -176,8 +176,8 @@ void apply_af_filter(var_t *var, af_filter_t *af_filter)
                af_missing_warning_printed = 1;
                return;
           }
-
           free(af_char);
+
           if (af_filter->min > 0.0 && af < af_filter->min) {
                vcf_var_add_to_filter(var, af_filter->id_min);
           }
@@ -207,6 +207,7 @@ void apply_dp_filter(var_t *var, dp_filter_t *dp_filter)
           }
           cov = atoi(dp_char);
           free(dp_char);
+
           if (dp_filter->min > 0 && cov < dp_filter->min) {
                vcf_var_add_to_filter(var, dp_filter->id_min);
           }
@@ -250,6 +251,8 @@ void apply_sb_threshold(var_t *var, sb_filter_t *sb_filter)
           }
      }
      sb = atoi(sb_char);
+     free(sb_char);
+
      if (sb > sb_filter->thresh) {
           vcf_var_add_to_filter(var, sb_filter->id);
      }
@@ -393,6 +396,7 @@ int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const int num_vars
                break;
           }
           sb_values[i] = PHREDQUAL_TO_PROB(atoi(sb_char));
+          free(sb_char);
      }
      
      /* multiple testing correction
