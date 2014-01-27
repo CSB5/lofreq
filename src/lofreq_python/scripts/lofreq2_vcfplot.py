@@ -68,26 +68,10 @@ logging.basicConfig(level=logging.WARN,
 COLORS = ["b", "g", "r", "c", "m", "y", "k"]
 
 
-def subst_type_str(ref, alt, strand_specific=False):
-    """
-    """
-    
-    # in case we get a list
-    assert len(ref)==1 and len(alt)==1
-    ref = ref[0]
-    alt = alt[0]
-
-    s = "%s>%s" % (ref, alt)
-    if strand_specific:
-        return s
-    else:
-        c = complement(s)
-        return '|'.join(sorted([s, c]))
-    
-
 
 def r_ify(axes):
-    '''
+    '''FIXME:unused
+    
     source:
     http://stackoverflow.com/questions/14349055/making-matplotlib-graphs-look-like-r-by-default
     ttp://messymind.net/2012/07/making-matplotlib-look-like-ggplot/
@@ -122,22 +106,21 @@ def r_ify(axes):
     return axes
 
 
+def subst_type_str(ref, alt, strand_specific=False):
+    """
+    """
+    
+    # in case we get a list
+    assert len(ref)==1 and len(alt)==1
+    ref = ref[0]
+    alt = alt[0]
 
-def af_hist(ax, af_list, bins=20):
-    ax.hist(af_list, bins=bins)
-    ax.set_xlim((0, 1.0))
-    ax.set_ylabel('#SNVs')
-    ax.set_xlabel('AF')
-    #r_ify(ax)
-    # FIXME would be nice to 'clip' max
-
-
-def cov_hist(ax, dp_list, bins=20):
-    ax.hist(dp_list, bins=bins)
-    ax.set_xlim([0, plt.xlim()[1]])
-    ax.set_ylabel('#SNVs')
-    ax.set_xlabel('DP')
-    #r_ify(ax)
+    s = "%s>%s" % (ref, alt)
+    if strand_specific:
+        return s
+    else:
+        c = complement(s)
+        return '|'.join(sorted([s, c]))
 
     
 def subst_perc(ax, subst_type_counts):
@@ -169,52 +152,6 @@ def subst_perc(ax, subst_type_counts):
     plt.tight_layout()
 
     
-def calc_dist_slow(variants, na=None):
-    """FIXME:add-doc
-    """
-
-    sys.stderr.write("Don't use me. I'm slow. Use calc_dist() instead\n")
-
-    print "starting at %s" % now()
-    dist_to_next = []
-    for i in xrange(len(variants)):
-        cur_var = variants[i]
-
-        mod = len(variants)/5
-        if i % mod == 0:
-            print "Alive and munching away at var %d of %d" % (i, len(variants)) # FIXME to log
-
-        prev_var_pos = None
-        for j in reversed(range(i)):
-            if variants[j].CHROM != cur_var.CHROM:
-                break
-            assert variants[j].POS <= cur_var.POS, ("vcf file needs to be sorted but isn't!")
-            if variants[j].POS != cur_var.POS:
-                prev_var_pos = variants[j].POS
-                break
-
-        next_var_pos = None
-        for j in range(i+1, len(variants)):
-            if variants[j].CHROM != cur_var.CHROM:
-                break
-            assert variants[j].POS >= cur_var.POS, ("vcf file needs to be sorted but isn't!")
-            if variants[j].POS != cur_var.POS:
-                next_vars_pos = variants[j].POS
-                break
-
-        min_dist = na
-        if prev_var_pos != None:
-            dist_prev = cur_var.POS - prev_var_pos
-            min_dist = dist_prev
-        if next_var_pos != None:
-            dist_next = next_var_pos - cur_var.POS
-            if prev_var_pos:
-                min_dist = min([dist_prev, dist_next])
-        dist_to_next.append(min_dist)
-
-    print "end at %s" % now()
-    return dist_to_next
-
 
 def calc_dist(variants): 
     """Calculated distance to next variant. 
@@ -276,95 +213,7 @@ def calc_dist(variants):
     return dists
 
 
-def dist_hist(ax, var_dist, bins=15):
-    """FIXME
-    """
-    x = [np.log10(d) if d>0 else -1 for d in var_dist]
-    ax.hist(x, bins=bins)
-    #xlim([0, xlim()[1]])
-    ax.set_ylabel('#')
-    ax.set_xlabel("SNV distance (log10)")
-    ax.set_title("(%d bins)" % bins)
-    ax.set_xlim([0, plt.xlim()[1]])
-
-def heatmap_dist_vs_x_1(ax, variants, var_dist, info_key, bins=20):
-    """FIXME:add-doc
-
-    info_key must be a valid vcf.INFO key, e.g. AF or DP
-    """
-    #from matplotlib.colors import LogNorm
-
-    assert all([v.INFO.has_key(info_key) for v in variants]), (
-        "Not all variants contain INFO key %s", info_key)
-    x = [np.log10(d) if d>0 else -1 for d in var_dist]
-    y = [v.INFO[info_key] for v in variants]
-    ax.dist_vs_dp_plot = plt.hist2d(x, y, bins=bins)
-
-    # FIXME add option to whiten missing values
-
-    #print min(x), max(x)
-    #print min(y), max(y)
-    ax.set_ylabel(info_key)
-    ax.set_xlabel("SNV distance (log10)")
     
-    ax.set_ylim([0, plt.ylim()[1]])
-    ax.set_xlim([0, plt.xlim()[1]])
-
-    plt.colorbar()
-    
-
-def heatmap_dist_vs_cov_2(ax, variants, var_dists, bins=20):
-
-    # numpy.histogram2d and then heatmap instead of hist2d:
-    # http://stackoverflow.com/questions/2369492/generate-a-heatmap-in-matplotlib-using-a-scatter-data-set
-    # http://stackoverflow.com/questions/16917836/matplotlib-stretches-histogram2d-vertically
-    # smoothing: http://stackoverflow.com/questions/6652671/efficient-method-of-calculating-density-of-irregularly-spaced-points
-    # still need to set bins but smoothing should iron out sub-optimal choice
-    SMOOTH = False
-    if SMOOTH:
-        # FIXME
-        import scipy.ndimage as ndi
-
-    x = [np.log10(d) if d>0 else -1 for d in var_dists]
-    y = [v.INFO['DP'] for v in variants]
-    heatmap, xedges, yedges = np.histogram2d(x, y, bins=bins)
-    extent = [xedges.min(), xedges.max(), yedges.min(), yedges.max()]
-    # http://stackoverflow.com/questions/8762610/heatmap-using-scatter-dataset-python-matplotlib
-    data = heatmap.T
-    if SMOOTH:
-        gk_std = (np.std(x), np.std(y))
-        gk_std = (np.std(y), np.std(x))
-        #gk_std = (2, 2)
-        #gk_std = (min([std(x), std(y)]))
-        data = ndi.gaussian_filter(data, (gk_std))
-        # small values work better for gaussian kernel stdev
-        # swapped(!) std values give good results. not sure why.
-        # any value between 1 and 2 worked fine as well
-
-    im = ax.imshow(data, extent=extent,  origin='lower', aspect='auto',
-        interpolation=None)#nearest|None|bicubic|bilinear
-    ax.set_xlabel("SNV distance (log10)")
-    ax.set_ylabel('DP')
-    
-    return im
-
-
-def heatmap_freq_vs_cov(ax, variants, bins=50):
-    """FIXME: this is clipped at 50% AF?!
-    """
-    
-    x = [v.INFO['DP'] for v in variants]
-    y = [v.INFO['AF'] for v in variants]
-
-    # FIXME add option to whiten missing values
-    ax.dist_vs_dp_plot = plt.hist2d(x, y, bins=bins)
-
-    ax.set_xlabel('DP')
-    ax.set_ylabel('AF')
-    ax.set_xlim([0, ax.get_xlim()[1]])
-    #ax1.set_ylim([0, 1])
-    plt.colorbar()
-
     
 def violin_plot(ax, data):
     '''
@@ -497,13 +346,6 @@ def main():
     vars = [v for v in vcfreader if v.FILTER in ['PASS', '.']]
     vcf_fh.close()
 
-    try:
-        tmp = [v.INFO['AF'] for v in vars]
-        tmp = [v.INFO['DP'] for v in vars]
-    except KeyError:
-        LOG.critical("Couldn't find AF and DP info tag in all variants"
-                     " (is %s a LoFreq file?). Won't plot..." % (args.vcf))
-        sys.exit(1)
         
     summary_txt = []
     summary_txt.append("Reading vars from %s" % args.vcf)
@@ -511,7 +353,6 @@ def main():
     summary_txt.append("Loaded %d (non-filtered) vars" % (len(vars)))
     LOG.info(summary_txt[-1])
 
-    
     filter_list = []
     if args.maxdp:
         filter_list.append((lambda v: v.INFO['DP']<=args.maxdp, "DP<=%d" % args.maxdp))
@@ -532,7 +373,7 @@ def main():
     LOG.info(summary_txt[-1])
 
     vars = filtered_vars
-    
+        
     summary_txt.append("#SNVs = %d (%d CONSVARs and %d INDELs)" % (
         len(vars),
         sum([1 for v in vars if v.INFO.has_key('CONSVAR')]),
@@ -542,15 +383,22 @@ def main():
     # np.histogram([v.INFO['DP'] for v in vars if v.INFO['DP']<1000], bins=20)
 
 
+    
+    # setup props we want to check in all possible combinations
+    #
+    props = dict()
+    for t in ['AF', 'DP']:
+        try:
+            props[t] = [v.INFO[t] for v in vars]
+        except KeyError:
+            LOG.critical("Couldn't find %s info tag in all variants"
+            " (is %s a LoFreq file?). Won't plot..." % (t, args.vcf))
+    props['Distance (log10)'] = [np.log10(d) if d>0 else -1 for d in calc_dist(vars)]
+    
+
+    
     pp = PdfPages(args.outplot)
         
-    #f, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
-    #f, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, sharex=False, sharey=False)        
-    # multiple columns and rows seem to only make sense with shared x or y
-    #ax = fig1.add_subplot(2, 2, 1)
-
-
-    # FIXME: report quality/p-value distribution
 
     # create a summary table
     # 
@@ -563,108 +411,68 @@ def main():
     plt.close()
 
 
-        
-    # FIXME: lim wrong
-    # FIXME bp overwrites violin or doesn't work at all
-        
-    fig = plt.figure()
-    ax = plt.subplot(1, 1, 1)
-    x = [v.INFO['DP'] for v in vars]
-    #x = [v.INFO['AF'] for v in vars]
-    #x = [log10(d) if d>0 else -1 for d in dist_to_next]
-    ax.boxplot(x, notch=1, positions=[0], vert=1)
-    violin_plot(ax, x)
-    ax.set_xlabel('DP')
-    plt.title('DP distribution')
-    pp.savefig()
-    plt.close()
 
-    fig = plt.figure()
-    ax = plt.subplot(1, 1, 1)
-    cov_hist(ax, [v.INFO['DP'] for v in vars])
-    plt.title('DP Histogram')
-    pp.savefig()
-    plt.close()
-    
-            
-    fig = plt.figure()
-    ax = plt.subplot(1, 1, 1)
-    x = [v.INFO['AF'] for v in vars]
-    #x = [v.INFO['AF'] for v in vars]
-    #x = [log10(d) if d>0 else -1 for d in dist_to_next]
-    ax.boxplot(x, notch=1, positions=[0], vert=1)
-    violin_plot(ax, x)
-    ax.set_xlabel('AF')
-    plt.title('AF distribution')
-    pp.savefig()
-    plt.close()
-
-    
-    fig = plt.figure()
-    ax = plt.subplot(1, 1, 1)
-    af_hist(ax, [v.INFO['AF'] for v in vars], bins=15)#vars])
-    plt.title('AF Histogram')
-    pp.savefig()
-    plt.close()
-
-        
-
-    # add distance to closest SNV to all vars and keep as separate array (FIXME: could do this for all properties)
-    # taken from LoFreq's 0.6.1 lofreq_filter.py
-    # determines SNVs on same chrom to left and to the right (ignore multip-allelic, might be none) and record pos
-    # FIXME this is slow. Could use groupby for chroms, remove multi-allelic (no need for tests then) etc.
+    # boxplots and histograms first
     #
-    # # group by chromosome
-    # processed_chroms = []
-    # for (chrom, group) in itertools.groupby(vars, lambda v: v.CHROM):
-    #    assert chrom not in processed_chroms;# to ensure vars where sorted by chrom
-    #    processed_chroms.append(chrom)
-    #    for var in group:
-    #        print v
-    #
-
-
-    dist_to_next = calc_dist(vars)
-
-    fig = plt.figure()
-    ax = plt.subplot(1, 1, 1)
-    dist_hist(ax, dist_to_next)
-    plt.title('Distance Histogram')
-    pp.savefig()
-    plt.close()
-
-    fig = plt.figure()
-    ax = plt.subplot(1, 1, 1)
-    heatmap_dist_vs_x_1(ax, vars, dist_to_next, 'DP')
-    plt.title('Distance vs. DP')
-    pp.savefig()
-    plt.close()
-
-    if False:
+    for p in [p for p in props.keys()]:
+        # boxplots
         fig = plt.figure()
         ax = plt.subplot(1, 1, 1)
-        im = heatmap_dist_vs_cov_2(ax, vars, dist_to_next)
-        fig.colorbar(im)
-        plt.title('Distance vs. DF (alternate, smoothed version)')
+        x = props[p]
+        ax.boxplot(x, notch=1, positions=[0], vert=1)
+        violin_plot(ax, x)
+        ax.set_ylabel('#SNVs')
+        ax.set_xlabel(p)
+        plt.title('%s Boxplot' % p)
+        pp.savefig()
+        plt.close()
+        
+        # histogram
+        fig = plt.figure()
+        ax = plt.subplot(1, 1, 1)
+        x = props[p]
+        ax.hist(x, bins=20)
+        ax.set_xlim([0, plt.xlim()[1]])
+        ax.set_ylabel('#SNVs')
+        ax.set_xlabel(p)
+        plt.title('%s Histogram' % p)
+        pp.savefig()
+        plt.close()        
+
+        # scatter plot per positions. assuming snvs are sorted by position!
+        fig = plt.figure()
+        ax = plt.subplot(1, 1, 1)
+        y = props[p]
+        ax.scatter(range(len(y)), y)
+        ax.set_xlim([0, len(y)])
+        ax.set_ylabel(p)
+        ax.set_xlabel("Neighbourhood")
+        #plt.title('%s Histogram' % p)
+        pp.savefig()
+        plt.close()        
+
+
+    # heatmaps of all combinations
+    #
+    for (x, y) in itertools.combinations(props.keys(), 2):
+        fig = plt.figure()
+        ax = plt.subplot(1, 1, 1)
+
+        p = plt.hist2d(props[x], props[y], bins=20)    
+        ax.set_ylim([0, plt.ylim()[1]])
+        ax.set_xlim([0, plt.xlim()[1]])
+        plt.colorbar()
+    
+        ax.set_xlabel(x)
+        ax.set_ylabel(y)
+        plt.title('%s vs. %s' % (x, y))
         pp.savefig()
         plt.close()
 
 
-    fig = plt.figure()
-    ax = plt.subplot(1, 1, 1)
-    heatmap_dist_vs_x_1(ax, vars, dist_to_next, "AF")
-    plt.title('Distance vs. AF')
-    pp.savefig()
-    plt.close()
 
-    fig = plt.figure()
-    ax = plt.subplot(1, 1, 1)
-    heatmap_freq_vs_cov(ax, [v for v in vars if not v.INFO.has_key('CONSVAR')])
-    plt.title('AF vs. Coverage')
-    pp.savefig()
-    plt.close()
-
-
+    # substitution types
+    #
     # FIXME needs percentages
     subst_type_counts = Counter([subst_type_str(v.REF, v.ALT) for v in vars])
     # turn into list of tuples sorted by key
@@ -674,7 +482,6 @@ def main():
     #for (k, v) in subst_type_counts:
     #    print "%s %d" % (k, v)
     #print
-
     fig = plt.figure()
     ax = plt.subplot(1, 1, 1)
     subst_perc(ax, subst_type_counts)
@@ -684,48 +491,10 @@ def main():
 
     
     # FIXME Put related plots together. See http://blog.marmakoide.org/?p=94"
-    """
-    # FIXME setup such that they don't share axis
-    # FIXME other way to make subplots
-    # FIXME create figures separately and add separately?
-
-    NROWS = 8
-    NCOLS = 3
-
-    ax = plt.subplot(NROWS, NCOLS, 1)
-    cov_hist(ax, [v.INFO['DP'] for v in vars])
-
-    ax = plt.subplot(NROWS, NCOLS, 3)
-    af_hist(ax, [v.INFO['AF'] for v in vars])
-
-    ax = plt.subplot(NROWS, NCOLS, 7)
-    subst_perc(ax, subst_type_counts)
-
-    ax = plt.subplot(NROWS, NCOLS, 9)
-    dist_hist(ax, dist_to_next)
-
-    ax = plt.subplot(NROWS, NCOLS, 13)
-    heatmap_dist_vs_cov_1(ax, vars, dist_to_next)
-
-    ax = plt.subplot(NROWS, NCOLS, 15)
-    im = heatmap_dist_vs_cov_2(ax, vars, dist_to_next)
-    fig.colorbar(im)
-
-    ax = plt.subplot(NROWS, NCOLS, 19)
-    heatmap_freq_vs_cov(ax, [v for v in vars if not v.INFO.has_key('CONSVAR')])
-
-    ax = plt.subplot(NROWS, NCOLS, 21)
-    x = [v.INFO['DP'] for v in vars]
-    #x = [v.INFO['AF'] for v in vars]
-    #x = [log10(d) if d>0 else -1 for d in dist_to_next]
-    violin_plot(ax, x, True)
-    ax.set_xlabel('DP')
-    """
-
+    
     pp.close()
 
     
 if __name__ == "__main__":
-    #  FIXME unfinished
     main()
     LOG.info("Successful program exit")
