@@ -19,8 +19,9 @@
  *
  * Better: Sum over k=0 to n_1 ( P_bin(n_2, k/n^1) (X<=k) ) * P(k).
  *
- * P(k) is prior from Binomial proportion confidence distribution Todo:
- * find Binomial proportion confidence distribution to get prior
+ * P(k) is prior from Binomial proportion confidence distribution
+ *
+ * TODO: find Binomial proportion confidence distribution to get prior
  *
  */
 
@@ -44,6 +45,7 @@
 #include "binom.h"
 #include "plp.h"
 #include "defaults.h"
+#include "snpcaller.h"
 
 
 #if 1
@@ -65,7 +67,7 @@ typedef struct {
      vcf_file_t vcf_out;
      vcf_file_t vcf_in;
      long long int bonf;
-     int read_only_passed;
+     int use_freq_diff;
 
      /* changing per pos: the var to test */
      var_t *var;
@@ -84,11 +86,9 @@ void
 uniq_snv(const plp_col_t *p, void *confp)
 {
      uniq_conf_t *conf = (uniq_conf_t *)confp;
-     int alt_count;
      char *af_char = NULL;
      float af;
-     double pvalue = DBL_MAX;
-     int is_sig;
+     int is_uniq = 0;
 
      if (vcf_var_has_info_key(NULL, conf->var, "INDEL")) {
           LOG_WARN("uniq logic can't be applied to indels."
@@ -103,8 +103,7 @@ uniq_snv(const plp_col_t *p, void *confp)
           return;
      }
 
-     /* no cov usually means I won't be called, but just to be safe:
-      */
+     /* no coverage usually means I won't be called, but to be safe: */
      if (0 == p->coverage) {
           return;
      }
@@ -136,53 +135,116 @@ uniq_snv(const plp_col_t *p, void *confp)
           af = conf->uni_freq;
      }
 
-     alt_count = base_count(p, conf->var->alt);
+
+    if (! conf->use_freq_diff) {
+          /* given the current base counts and their error probs,
+           * would we've been able to detect at given frequency.
+           */
+          double pvalues[NUM_NONCONS_BASES];
+          double *err_probs; /* error probs (qualities) passed down to snpcaller */
+          int num_err_probs;
+
+          int alt_bases[NUM_NONCONS_BASES];/* actual alt bases */
+          int alt_counts[NUM_NONCONS_BASES]; /* counts for alt bases handed down to snpcaller */
+          int alt_raw_counts[NUM_NONCONS_BASES]; /* raw, unfiltered alt-counts */
+          snvcall_conf_t snvcall_conf;
+
+          init_snvcall_conf(&snvcall_conf);
+          if (debug) {
+               dump_snvcall_conf(&snvcall_conf, stderr);
+          }
+
+          plp_to_errprobs(&err_probs, &num_err_probs,
+                          alt_bases, alt_counts, alt_raw_counts,
+                          p, &snvcall_conf);
+          LOG_DEBUG("at %s:%d with cov %d and num_err_probs %d\n", 
+              p->target, p->pos, p->coverage, num_err_probs);
+
+          /* Now pretend we see AF(SNV-to-test)*coverage variant
+           * bases. Truncate to int, i.e err on the side of caution
+           * during rounding (assume fewer alt bases) */
+          alt_counts[0] = af * num_err_probs; /* don't use p->coverage as that is before filtering */
+          alt_counts[1] = alt_counts[2] = 0;
+
+          if (snpcaller(pvalues, err_probs, num_err_probs,
+                        alt_counts, conf->bonf, conf->sig)) {
+               fprintf(stderr, "FATAL: snpcaller() failed at %s:%s():%d\n",
+                       __FILE__, __FUNCTION__, __LINE__);
+               free(err_probs);
+               return;
+          }
+
+          /* only need to test first one */
+          if (pvalues[0] * (float)conf->bonf < conf->sig) {
+              /* sign. value, i.e. we would have been able to detect
+               * this uncalled SNV, but didn't */
+              is_uniq = 1;
+          }
+
+          LOG_VERBOSE("%s %d num_quals=%d assumed-var-counts=%d would-have-been-detectable=%d\n",
+               conf->var->chrom, conf->var->pos+1, num_err_probs, alt_counts[0], is_uniq);
+          free(err_probs);
+          
+     } else {
+          int alt_count = base_count(p, conf->var->alt);
+          double pvalue;
 
 #ifdef DEBUG
-     LOG_DEBUG("Now testing af=%f cov=%d alt_count=%d at %s %d for var:",
-               af, p->coverage, alt_count, p->target, p->pos+1);
+          LOG_DEBUG("Now testing af=%f cov=%d alt_count=%d at %s %d for var:",
+          af, p->coverage, alt_count, p->target, p->pos+1);
 #endif
+          
+          /* this is a one sided test */
+          if (0 != binom(&pvalue, NULL, p->coverage, alt_count, af)) {
+               LOG_ERROR("%s\n", "binom() failed");
+               return;
+          }
 
-     /* this is a one sided test */
-     if (0 != binom(&pvalue, NULL, p->coverage, alt_count, af)) {
-          LOG_ERROR("%s\n", "binom() failed");
-          return;
+          if (pvalue < conf->sig/(float)conf->bonf) {
+               char info_str[128];
+               is_uniq = 1;
+               snprintf(info_str, 128, "UQ=%d", PROB_TO_PHREDQUAL(pvalue));
+               vcf_var_add_to_info(conf->var, info_str);
+          }
+          LOG_VERBOSE("%s %d %c>%c AF=%f | %s (p-value=%g sig/bonf=%g) | BAM alt_count=%d cov=%d (freq=%f)\n",
+                      conf->var->chrom, conf->var->pos+1, conf->var->ref, conf->var->alt, af,
+                      is_uniq ? "unique" : "not necessarily unique", pvalue, conf->sig/(float)conf->bonf,
+                      alt_count, p->coverage, alt_count/(float)p->coverage);
+
      }
 
-     is_sig = pvalue < conf->sig/(float)conf->bonf;
-     LOG_VERBOSE("%s %d %c>%c AF=%f | %s (p-value=%g sig/bonf=%g) | BAM alt_count=%d cov=%d (freq=%f)\n",
-                 conf->var->chrom, conf->var->pos+1, conf->var->ref, conf->var->alt, af,
-                 is_sig ? "unique" : "not necessarily unique", pvalue, conf->sig/(float)conf->bonf,
-                 alt_count, p->coverage, alt_count/(float)p->coverage);
-     if (is_sig) {
-          char info_str[128];
-          snprintf(info_str, 128, "UQ=%d", PROB_TO_PHREDQUAL(pvalue));
-          vcf_var_add_to_info(conf->var, info_str);
-
-          vcf_write_var(& conf->vcf_out, conf->var);
-     }
+    if (is_uniq) {
+        vcf_write_var(& conf->vcf_out, conf->var);
+    }
 }
 
 
 static void
 usage(const uniq_conf_t* uniq_conf)
 {
-     fprintf(stderr, "%s: Checks whether variants predicted in one sample (listed in vcf input)\n", MYNAME);
-     fprintf(stderr, "are truly 'unique', i.e. coverage in other sample (bam input) is high\n");
-     fprintf(stderr, "enough and alt counts are significantly low (1-sided Binomial test).\n");
-     fprintf(stderr, "Will ignore filtered input variants as well as indels and will only\n");
-     fprintf(stderr, "output variants considered unique (Bonferroni corrected p-value<sig).\n\n");
+     fprintf(stderr,
+                  "%s: Checks whether variants predicted in one sample (listed in vcf input)" \
+                  " are unique to this sample or if they were not called in other sample due" \
+                  " to coverage issues. This is either done by" \
+                  " (1) checking whether the variant frequency would have been above LoFreq's" \
+                  " detection limit given the BAM coverage and base-qualities or" \
+                  " (2) using a Binomial the BAM alternate and reference counts and the variant frequency (more suited for testing freq differences)." \
+                  "\n\n" \
+                  "Will ignore filtered input variants as well as indels and will only" \
+                  " output variants considered unique.\n\n", MYNAME);
 
      fprintf(stderr,"Usage: %s [options] indexed-in.bam\n\n", MYNAME);
      fprintf(stderr,"Options:\n");
-     fprintf(stderr, "       --verbose           Be verbose\n");
-     fprintf(stderr, "       --debug             Enable debugging\n");
-     fprintf(stderr, "       --read-only-passed  Read only passed variants\n");
      fprintf(stderr, "  -v | --vcf-in FILE       Input vcf file listing variants [- = stdin; gzip supported]\n");
      fprintf(stderr, "  -o | --vcf-out FILE      Output vcf file [- = stdout; gzip supported]\n");
      fprintf(stderr, "  -s | --sig               Significance threshold [%f]\n", uniq_conf->sig);
      fprintf(stderr, "  -f | --uni-freq          Assume variants have uniform test frequency of this value (unused if <=0) [%f]\n", uniq_conf->uni_freq);
-     fprintf(stderr, "       --use-orphan         Count anomalous read pairs\n");
+     fprintf(stderr, "       --use-freq-diff     Use binomial test to check for frequency differences\n");
+     fprintf(stderr, "                           (Probably not a good idea at high coverage positions)\n");
+     fprintf(stderr, "                           Default is to report variants if they are above implied detection limit\n");
+     fprintf(stderr, "       --use-orphan        Count anomalous read pairs\n");
+     fprintf(stderr, "       --verbose           Be verbose\n");
+     fprintf(stderr, "       --debug             Enable debugging\n");
 }
 /* usage() */
 
@@ -202,7 +264,7 @@ main_uniq(int argc, char *argv[])
      var_t **vars = NULL;
      int num_vars = 0;
      char *vcf_header = NULL;
-     static int read_only_passed = 0;
+     static int use_freq_diff = 0;
      static int use_orphan = 0;
 
      for (i=0; i<argc; i++) {
@@ -215,7 +277,7 @@ main_uniq(int argc, char *argv[])
      uniq_conf.sig = DEFAULT_SIG;
      uniq_conf.uni_freq = DEFAULT_UNI_FREQ;
      uniq_conf.bonf = 1;
-     uniq_conf.read_only_passed = 0;
+     uniq_conf.use_freq_diff = 0;
 
      /* default pileup options */
      memset(&mplp_conf, 0, sizeof(mplp_conf_t));
@@ -238,7 +300,7 @@ main_uniq(int argc, char *argv[])
               {"help", no_argument, NULL, 'h'},
               {"verbose", no_argument, &verbose, 1},
               {"debug", no_argument, &debug, 1},
-              {"read-only-passed", no_argument, &read_only_passed, 1},
+              {"use-freq-diff", no_argument, &use_freq_diff, 1},
               {"use-orphan", no_argument, &use_orphan, 1},
 
               {"vcf-in", required_argument, NULL, 'v'},
@@ -315,10 +377,11 @@ main_uniq(int argc, char *argv[])
     if (use_orphan) {
          mplp_conf.flag &= ~MPLP_NO_ORPHAN;
     }
-    uniq_conf.read_only_passed = read_only_passed;
     if (debug) {
          dump_mplp_conf(& mplp_conf, stderr);
     }
+
+    uniq_conf.use_freq_diff = use_freq_diff;
 
     if (argc == 2) {
         fprintf(stderr, "\n");
@@ -338,8 +401,13 @@ main_uniq(int argc, char *argv[])
 
 
     if (! vcf_in) {
+#if 0
          vcf_in = malloc(2 * sizeof(char));
          strcpy(vcf_in, "-");
+#else
+         LOG_FATAL("%s\n", "No input vcf specified. Exiting...");
+         return -1;
+#endif
     }
     if (! vcf_out) {
          vcf_out = malloc(2 * sizeof(char));
@@ -359,7 +427,7 @@ main_uniq(int argc, char *argv[])
     }
 
 
-    if (0 !=  vcf_parse_header(&vcf_header, & uniq_conf.vcf_in)) {
+    if (0 != vcf_parse_header(&vcf_header, & uniq_conf.vcf_in)) {
          LOG_WARN("%s\n", "vcf_parse_header() failed. trying to rewind to start...");
          if (vcf_file_seek(& uniq_conf.vcf_in, 0, SEEK_SET)) {
               LOG_FATAL("%s\n", "Couldn't rewind file to parse variants"
@@ -375,7 +443,7 @@ main_uniq(int argc, char *argv[])
     }
 
 
-    if (-1 == (num_vars = vcf_parse_vars(&vars, & uniq_conf.vcf_in, uniq_conf.read_only_passed))) {
+    if (-1 == (num_vars = vcf_parse_vars(&vars, & uniq_conf.vcf_in, 1))) {
          LOG_FATAL("%s\n", "vcf_parse_vars() failed");
          return -1;
     }
@@ -432,6 +500,7 @@ main_uniq(int argc, char *argv[])
     if (0==rc) {
          LOG_VERBOSE("%s\n", "Successful exit.");
     }
+    /* LOG_FIXME("%s\n", "allow user setting of -S and -J. Currently just using default") */
 
     return rc;
 }
