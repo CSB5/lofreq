@@ -16,6 +16,7 @@ import os
 import argparse
 import subprocess
 import tempfile
+import gzip
 
 #--- third-party imports
 #
@@ -353,8 +354,11 @@ class SomaticSNVCaller(object):
         """
 
         assert not os.path.exists(self.vcf_som_raw)
-        vcf_som_raw_fh =  open(self.vcf_som_raw, 'w')
-
+        if self.vcf_som_raw[-3:] == ".gz":
+            vcf_som_raw_fh = gzip.open(self.vcf_som_raw, 'w')
+        else:
+            vcf_som_raw_fh = open(self.vcf_som_raw, 'w')
+            
         cmd = [self.LOFREQ, 'vcfset', '-1', self.vcf_t_str,
                '-2', self.vcf_n_rlx,
                '-a', 'complement', '-o', '-']
