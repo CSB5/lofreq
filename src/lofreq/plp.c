@@ -70,6 +70,27 @@ typedef struct {
 static alnerrprof_t *alnerrprof = NULL;
 #endif
 
+
+/* initialize members of preallocated snvcall_conf */
+void init_mplp_conf(mplp_conf_t *c) 
+{
+     memset(c, 0, sizeof(mplp_conf_t));
+     c->max_mq = DEFAULT_MAX_MQ;
+     c->min_mq = DEFAULT_MIN_MQ;
+     c->def_nm_q = DEFAULT_DEF_NM_QUAL;
+     c->min_bq = DEFAULT_MIN_BQ;
+     c->capQ_thres = 0;
+     c->max_depth = DEFAULT_MAX_PLP_DEPTH;
+#if DEFAULT_BAQ_ON
+     c->flag = MPLP_NO_ORPHAN | MPLP_REALN | MPLP_REDO_BAQ;
+#else
+     c->flag = MPLP_NO_ORPHAN;
+#endif
+}
+
+
+
+
 /* convenience function */
 int
 base_count(const plp_col_t *p, char base)
