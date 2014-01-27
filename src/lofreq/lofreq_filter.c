@@ -9,6 +9,7 @@
 
 
 #include <stdio.h>
+#include <ctype.h>
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
@@ -388,7 +389,6 @@ int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const int num_vars
      }
      for (i=0; i<num_vars; i++) {
           char *sb_char = NULL;
-          int sb;
           if ( ! vcf_var_has_info_key(&sb_char, vars[i], "SB")) {
                LOG_WARN("%s\n", "Requested SB filtering failed since SB tag is missing in variant");
                sb_missing_warning_printed = 1;
@@ -614,20 +614,40 @@ main_filter(int argc, char *argv[])
               break;
 
          case 'v':
+              if (! isdigit(optarg[0])) {
+                   LOG_FATAL("Non-numeric argument provided: %s\n", optarg);
+                   return -1;
+              }
               cfg.dp_filter.min = atoi(optarg);
               break;
          case 'V':
+              if (! isdigit(optarg[0])) {
+                   LOG_FATAL("Non-numeric argument provided: %s\n", optarg);
+                   return -1;
+              }
               cfg.dp_filter.max = atoi(optarg);
               break;
 
          case 'a':
+              if (! isdigit(optarg[0])) {
+                   LOG_FATAL("Non-numeric argument provided: %s\n", optarg);
+                   return -1;
+              }
               cfg.af_filter.min = strtof(optarg, NULL);
               break;
          case 'A':
+              if (! isdigit(optarg[0])) {
+                   LOG_FATAL("Non-numeric argument provided: %s\n", optarg);
+                   return -1;
+              }
               cfg.af_filter.max = strtof(optarg, NULL);
               break;
 
          case 'B':
+              if (! isdigit(optarg[0])) {
+                   LOG_FATAL("Non-numeric argument provided: %s\n", optarg);
+                   return -1;
+              }
               cfg.sb_filter.thresh = atoi(optarg);
               break;
          case 'b':
@@ -638,10 +658,18 @@ main_filter(int argc, char *argv[])
               }
               break;
          case 'c':
+              if (! isdigit(optarg[0])) {
+                   LOG_FATAL("Non-numeric argument provided: %s\n", optarg);
+                   return -1;
+              }
               cfg.sb_filter.alpha = strtof(optarg, NULL);
               break;
 
          case 'Q':
+              if (! isdigit(optarg[0])) {
+                   LOG_FATAL("Non-numeric argument provided: %s\n", optarg);
+                   return -1;
+              }
               cfg.snvqual_filter.thresh = atoi(optarg);
               break;
          case 'q':
@@ -652,9 +680,17 @@ main_filter(int argc, char *argv[])
               }
               break;
          case 'r':
+              if (! isdigit(optarg[0])) {
+                   LOG_FATAL("Non-numeric argument provided: %s\n", optarg);
+                   return -1;
+              }
               cfg.snvqual_filter.alpha = strtof(optarg, NULL);
               break;
          case 's':
+              if (! isdigit(optarg[0])) {
+                   LOG_FATAL("Non-numeric argument provided: %s\n", optarg);
+                   return -1;
+              }
               cfg.snvqual_filter.ntests = atol(optarg);
               break;
 
@@ -886,14 +922,6 @@ main_filter(int argc, char *argv[])
 
     LOG_VERBOSE("%s\n", "Successful exit.");
 
-
-    LOG_FIXME("%s\n", "Pick vcf with reasonable number of vars incl some consvars or randomize");
-    LOG_FIXME("%s\n", "self test: sb: -b bonf -c 100000 > -b bonf\n");
-    LOG_FIXME("%s\n",  "<= resp.: -b holmbonf -c 100000 > -b holmbonf\n");
-    LOG_FIXME("%s\n",  "<= resp.: -b fdr -c 100000 > -b fdr");
-    LOG_FIXME("%s\n", "Check against Python version");
-    LOG_FIXME("%s\n", "Note: no defaults here");
-
     return 0;
 }
 /* main_filter */
@@ -902,26 +930,6 @@ main_filter(int argc, char *argv[])
 /* gcc lofreq_filter.c -o lofreq_filter -I../lofreq_core -I../uthash/ ../lofreq_core/liblofreq_core.a   -lz -DMAIN_FILTER */
 #ifdef MAIN_FILTER
 
-/*  FIXME
-vcf with random af:0-1, dp:0-1000, 
-VCF=FIXME
-num_vars=$(zgrep -vc '^#' $VCF)
-
-./lofreq_filter -i $VCF --af-min 0.2 --af-max 0.3
-check that af only in that range
-
-./lofreq_filter -i $VCF --cov-min 4500 --cov-max 5000 
-check that dp only in that range
-
---sb-thresh
---sb-mtc
-  --sb-alpha
---snvqual-thresh
---snvqual-mtc
-  --snvqual-alpha
-  --snvqual-ntests
-
- */
 int
 main(int argc, char *argv[])
 {
