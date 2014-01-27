@@ -17,6 +17,39 @@
  *
  *********************************************************************/
 
+#include "vcf.h"
+#include "plp.h"
+#include "defaults.h"
+
+
+
+typedef struct {
+     int min_altbq;
+     int def_altbq;
+     int bonf_dynamic; /* boolean: incr bonf as we go along. eventual
+                        * filtering of all has to be done by
+                        * caller! */
+     int min_cov;
+     int dont_skip_n;
+     long long int bonf; /* warning: changed dynamically ! */
+     float sig;
+     vcf_file_t vcf_out;
+     int flag;
+} snvcall_conf_t;
+
+
+void
+plp_to_errprobs(double **err_probs, int *num_err_probs, 
+                int *alt_bases, int *alt_counts, int *alt_raw_counts,
+                const plp_col_t *p, snvcall_conf_t *conf);
+
+void
+init_snvcall_conf(snvcall_conf_t *c);
+
+void
+dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream) ;
+
+
 extern double *
 poissbin(double *pvalue, const double *err_probs,
          const int num_err_probs, const int num_failures, 

@@ -36,9 +36,6 @@
 #define LOGZERO -1e100 
 /* FIXME shouldn't we use something from float.h ? */
 
-/* Four nucleotides, with one consensus, makes three
-   non-consensus bases */
-#define NUM_NONCONS_BASES 3
 
 #if 0
 #define DEBUG
@@ -61,6 +58,181 @@ double *naive_calc_prob_dist(const double *err_probs, int N, int K);
 double *pruned_calc_prob_dist(const double *err_probs, int N, int K, 
                       long long int bonf_factor, double sig_level);
 
+
+
+void
+plp_to_errprobs(double **err_probs, int *num_err_probs, 
+                int *alt_bases, int *alt_counts, int *alt_raw_counts,
+                const plp_col_t *p, snvcall_conf_t *conf)
+{
+     int i, j;
+     int alt_idx;
+     int avg_qual = -1;
+
+     if (NULL == ((*err_probs) = malloc(p->coverage * sizeof(double)))) {
+          /* coverage = base-count after read level filtering */
+          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
+                  __FILE__, __FUNCTION__, __LINE__);
+          return;
+     }
+
+     /* determine avg_qual if needed, which is to be the median
+      * quality of reference bases (ie. cons bases since vars are
+      * always called against cons_base). compute average of all
+      * unfiltered cons bases in this column (pretending we did that
+      * many experiments)
+     */
+     if (-1 == conf->def_altbq) {
+
+          for (i=0; i<NUM_NT4; i++) {
+               int nt = bam_nt4_rev_table[i];
+               if (nt != p->cons_base) {
+                    continue;
+               }
+
+               if (p->base_quals[i].n == 0) {
+                    /* set avg_qual to non-sense value, won't use it anyway
+                     * if there were no 'errors'. can't return here though
+                     * since we still want to report the consvar */
+                    avg_qual = -1;
+               } else {
+                    int *ref_quals = malloc(sizeof(int) * p->base_quals[i].n);
+                    memcpy(ref_quals, p->base_quals[i].data, sizeof(int) * p->base_quals[i].n);
+                    avg_qual = int_median(ref_quals, p->base_quals[i].n);
+                    free(ref_quals);
+                    break; /* there can only be one */
+               }
+          }
+
+     }
+
+
+     (*num_err_probs) = 0;
+     alt_idx = -1;
+     for (i=0; i<NUM_NT4; i++) {
+          int is_alt_base;
+          int nt = bam_nt4_rev_table[i];
+          if (nt == 'N') {
+               continue;
+          }
+
+          is_alt_base = 0;
+          if (nt != p->cons_base) {
+               is_alt_base = 1;
+
+               alt_idx += 1;
+               alt_bases[alt_idx] = nt;
+               alt_counts[alt_idx] = 0;
+               alt_raw_counts[alt_idx] = 0;
+          }
+
+          for (j=0; j<p->base_quals[i].n; j++) {
+               int bq = p->base_quals[i].data[j];                
+               int mq = -1;
+               int sq = -1;
+#ifdef USE_ALNERRPROF
+               int aq = -1;
+#endif
+               double final_err_prob; /* == final quality used for snv calling */
+               
+               if ((conf->flag & SNVCALL_USE_MQ) && p->map_quals[i].n) {
+                    mq = p->map_quals[i].data[j];
+                    /*according to spec 255 is unknown */
+                    if (mq == 255) {
+                         mq = -1;
+                    }
+               }
+
+#ifdef USE_SOURCEQUAL
+               if (p->source_quals[i].n) {
+                    sq = p->source_quals[i].data[j];
+                    if (! (conf->flag & SNVCALL_USE_SQ)) {
+                         sq = -1; /* i.e. NA */
+                    }
+               }
+#endif
+
+#ifdef USE_ALNERRPROF
+               if (p->alnerr_qual[i].n) {
+                    aq = p->alnerr_qual[i].data[j];
+               }
+#endif
+
+#ifdef USE_ALNERRPROF
+               final_err_prob = merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
+#else
+               final_err_prob = merge_srcq_baseq_and_mapq(sq, bq, mq);
+#endif
+
+               /* special treatment of alt bases */
+               if (is_alt_base) {
+                    alt_raw_counts[alt_idx] += 1;
+
+                    /* ignore if below bq or merged threshold */
+                    if (bq < conf->min_altbq || PROB_TO_PHREDQUAL(final_err_prob) < DEFAULT_MIN_ALT_MERGEDQ) {
+                         continue; 
+                    }
+                    alt_counts[alt_idx] += 1;
+                    /* if passed filter, set to default */
+                    if (-1 == conf->def_altbq) {
+                         /* ...change bq which also requires change of final_err_prob */
+                         bq = avg_qual;
+#ifdef USE_ALNERRPROF
+                         final_err_prob = merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
+#else
+                         final_err_prob = merge_srcq_baseq_and_mapq(sq, bq, mq);
+#endif
+
+                    } else {
+                         /* easy case: just set to default */
+                         final_err_prob = PHREDQUAL_TO_PROB(conf->def_altbq);
+                    }
+               }
+
+#if 0
+               LOG_FIXME("%s:%d %c bq=%d mq=%d finalq=%d is_alt_base=%d\n", p->target, p->pos+1, nt, bq, mq, PROB_TO_PHREDQUAL(final_err_prob), is_alt_base);
+#endif
+
+               (*err_probs)[(*num_err_probs)++] = final_err_prob;
+          }
+     }
+}
+
+
+
+/* initialize members of preallocated snvcall_conf */
+void
+init_snvcall_conf(snvcall_conf_t *c) 
+{
+     memset(c, 0, sizeof(snvcall_conf_t));
+     c->min_altbq = DEFAULT_MIN_ALT_BQ;
+     c->def_altbq = DEFAULT_DEF_ALT_BQ; /* c->min_altbq; */
+     c->min_cov = DEFAULT_MIN_COV;
+     c->dont_skip_n = 0;
+     c->bonf_dynamic = 1;
+     c->bonf = 1;
+     c->sig = 0.05;
+     /* c->out = ; */
+     c->flag = SNVCALL_USE_MQ;
+}
+
+
+void
+dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream) 
+{
+     fprintf(stream, "snvcall options\n");
+     fprintf(stream, "  min_altbq      = %d\n", c->min_altbq);
+     fprintf(stream, "  def_altbq      = %d\n", c->def_altbq);
+     fprintf(stream, "  min_cov        = %d\n", c->min_cov);
+     fprintf(stream, "  dont_skip_n    = %d\n", c->dont_skip_n);
+     fprintf(stream, "  bonf           = %lld  (might get recalculated)\n", c->bonf);
+     fprintf(stream, "  bonf_dynamic   = %d\n", c->bonf_dynamic);
+     fprintf(stream, "  sig            = %f\n", c->sig);
+/*     fprintf(stream, "  out            = %p\n", (void*)c->out);*/
+     fprintf(stream, "  flag & SNVCALL_USE_MQ      = %d\n", c->flag&SNVCALL_USE_MQ?1:0);
+     fprintf(stream, "  flag & SNVCALL_USE_SQ      = %d\n", c->flag&SNVCALL_USE_SQ?1:0);
+     fprintf(stream, "  flag & SNVCALL_CONS_AS_REF = %d\n", c->flag&SNVCALL_CONS_AS_REF?1:0);
+}
 
 
 
