@@ -32,4 +32,15 @@
 
 #define DEFAULT_BAQ_ON 1
 
+
+/* ---------------------------------------------------------------------- */
+
+/* Four nucleotides, with one consensus, makes three
+   non-consensus bases */
+#define NUM_NONCONS_BASES 3
+
+#define SNVCALL_USE_MQ      0x10
+#define SNVCALL_USE_SQ      0x20
+#define SNVCALL_CONS_AS_REF 0x40
+
 #endif
