@@ -77,6 +77,9 @@ typedef struct {
 
 #define PLP_COL_ADD_QUAL(p, q)   int_varray_add_value((p), (q))
 
+/* initialize members of preallocated snvcall_conf */
+void init_mplp_conf(mplp_conf_t *c);
+
 int
 base_count(const plp_col_t *p, char base);
 
