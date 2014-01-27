@@ -26,6 +26,15 @@ static char *mtc_type_str[] = {
 };
 
 
+void
+bonf_corr(double data[], int size, int num_tests);
+
+void
+holm_bonf_corr(double data[], int size, double alpha, int num_tests);
+
+int
+fdr(double data[], int size, double alpha, int num_tests, int **irejected);
+
 int
 mtc_str_to_type(char *t);
 
