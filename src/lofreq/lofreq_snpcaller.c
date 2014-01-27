@@ -53,10 +53,6 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #endif
 
 
-#define SNVCALL_USE_MQ      0x10
-#define SNVCALL_USE_SQ      0x20
-#define SNVCALL_CONS_AS_REF 0x40
-
 #define BUF_SIZE 1<<16
 
 
@@ -149,20 +145,6 @@ const int MQ_TRANS_TABLE[61] = {
  * true. */
 long long int num_tests = 0;
 /* FIXME extend to keep some more stats, e.g. num_pos_with_cov etc */
-
-typedef struct {
-     int min_altbq;
-     int def_altbq;
-     int bonf_dynamic; /* boolean: incr bonf as we go along. eventual
-                        * filtering of all has to be done by
-                        * caller! */
-     int min_cov;
-     int dont_skip_n;
-     long long int bonf; /* warning: changed dynamically ! */
-     float sig;
-     vcf_file_t vcf_out;
-     int flag;
-} snvcall_conf_t;
 
 
 
@@ -432,145 +414,6 @@ merge_baseq_and_mapq(const int bq, const int mq)
  * function call awkward)
  */
 void
-plp_to_errprobs(double **err_probs, int *num_err_probs, 
-                int *alt_bases, int *alt_counts, int *alt_raw_counts,
-                const plp_col_t *p, snvcall_conf_t *conf)
-{
-     int i, j;
-     int alt_idx;
-     int avg_qual = -1;
-
-     if (NULL == ((*err_probs) = malloc(p->coverage * sizeof(double)))) {
-          /* coverage = base-count after read level filtering */
-          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
-                  __FILE__, __FUNCTION__, __LINE__);
-          return;
-     }
-
-     /* determine avg_qual if needed, which is to be the median
-      * quality of reference bases (ie. cons bases since vars are
-      * always called against cons_base). compute average of all
-      * unfiltered cons bases in this column (pretending we did that
-      * many experiments)
-     */
-     if (-1 == conf->def_altbq) {
-
-          for (i=0; i<NUM_NT4; i++) {
-               int nt = bam_nt4_rev_table[i];
-               if (nt != p->cons_base) {
-                    continue;
-               }
-
-               if (p->base_quals[i].n == 0) {
-                    /* set avg_qual to non-sense value, won't use it anyway
-                     * if there were no 'errors'. can't return here though
-                     * since we still want to report the consvar */
-                    avg_qual = -1;
-               } else {
-                    int *ref_quals = malloc(sizeof(int) * p->base_quals[i].n);
-                    memcpy(ref_quals, p->base_quals[i].data, sizeof(int) * p->base_quals[i].n);
-                    avg_qual = int_median(ref_quals, p->base_quals[i].n);
-                    free(ref_quals);
-                    break; /* there can only be one */
-               }
-          }
-
-     }
-
-
-     (*num_err_probs) = 0;
-     alt_idx = -1;
-     for (i=0; i<NUM_NT4; i++) {
-          int is_alt_base;
-          int nt = bam_nt4_rev_table[i];
-          if (nt == 'N') {
-               continue;
-          }
-
-          is_alt_base = 0;
-          if (nt != p->cons_base) {
-               is_alt_base = 1;
-
-               alt_idx += 1;
-               alt_bases[alt_idx] = nt;
-               alt_counts[alt_idx] = 0;
-               alt_raw_counts[alt_idx] = 0;
-          }
-
-          for (j=0; j<p->base_quals[i].n; j++) {
-               int bq = p->base_quals[i].data[j];                
-               int mq = -1;
-               int sq = -1;
-#ifdef USE_ALNERRPROF
-               int aq = -1;
-#endif
-               double final_err_prob; /* == final quality used for snv calling */
-               
-               if ((conf->flag & SNVCALL_USE_MQ) && p->map_quals[i].n) {
-                    mq = p->map_quals[i].data[j];
-                    /*according to spec 255 is unknown */
-                    if (mq == 255) {
-                         mq = -1;
-                    }
-               }
-
-#ifdef USE_SOURCEQUAL
-               if (p->source_quals[i].n) {
-                    sq = p->source_quals[i].data[j];
-                    if (! (conf->flag & SNVCALL_USE_SQ)) {
-                         sq = -1; /* i.e. NA */
-                    }
-               }
-#endif
-
-#ifdef USE_ALNERRPROF
-               if (p->alnerr_qual[i].n) {
-                    aq = p->alnerr_qual[i].data[j];
-               }
-#endif
-
-#ifdef USE_ALNERRPROF
-               final_err_prob = merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
-#else
-               final_err_prob = merge_srcq_baseq_and_mapq(sq, bq, mq);
-#endif
-
-               /* special treatment of alt bases */
-               if (is_alt_base) {
-                    alt_raw_counts[alt_idx] += 1;
-
-                    /* ignore if below bq or merged threshold */
-                    if (bq < conf->min_altbq || PROB_TO_PHREDQUAL(final_err_prob) < DEFAULT_MIN_ALT_MERGEDQ) {
-                         continue; 
-                    }
-                    alt_counts[alt_idx] += 1;
-                    /* if passed filter, set to default */
-                    if (-1 == conf->def_altbq) {
-                         /* ...change bq which also requires change of final_err_prob */
-                         bq = avg_qual;
-#ifdef USE_ALNERRPROF
-                         final_err_prob = merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
-#else
-                         final_err_prob = merge_srcq_baseq_and_mapq(sq, bq, mq);
-#endif
-
-                    } else {
-                         /* easy case: just set to default */
-                         final_err_prob = PHREDQUAL_TO_PROB(conf->def_altbq);
-                    }
-               }
-
-#if 0
-               LOG_FIXME("%s:%d %c bq=%d mq=%d finalq=%d is_alt_base=%d\n", p->target, p->pos+1, nt, bq, mq, PROB_TO_PHREDQUAL(final_err_prob), is_alt_base);
-#endif
-
-               (*err_probs)[(*num_err_probs)++] = final_err_prob;
-          }
-     }
-}
-
-
-void
 plp_summary(const plp_col_t *plp_col, void* confp) 
 {
      FILE* stream = stdout;
@@ -631,10 +474,10 @@ call_snvs(const plp_col_t *p, void *confp)
 
      snvcall_conf_t *conf = (snvcall_conf_t *)confp;
      /* 4 bases ignoring N, -1 reference/consensus base makes 3 */
-     double pvalues[3]; /* pvalues reported back from snpcaller */
-     int alt_counts[3]; /* counts for alt bases handed down to snpcaller */
-     int alt_raw_counts[3]; /* raw, unfiltered alt-counts */
-     int alt_bases[3];/* actual alt bases */
+     double pvalues[NUM_NONCONS_BASES]; /* pvalues reported back from snpcaller */
+     int alt_counts[NUM_NONCONS_BASES]; /* counts for alt bases handed down to snpcaller */
+     int alt_raw_counts[NUM_NONCONS_BASES]; /* raw, unfiltered alt-counts */
+     int alt_bases[NUM_NONCONS_BASES];/* actual alt bases */
      int got_alt_bases = 0;
      int cons_as_ref = conf->flag & SNVCALL_CONS_AS_REF;
 
@@ -715,7 +558,7 @@ call_snvs(const plp_col_t *p, void *confp)
                      p, conf);
 
 
-     for (i=0; i<3; i++) {
+     for (i=0; i<NUM_NONCONS_BASES; i++) {
           if (alt_counts[i]) {
                got_alt_bases = 1;
                break;
@@ -746,9 +589,9 @@ call_snvs(const plp_col_t *p, void *confp)
                num_err_probs, alt_counts[0], alt_counts[1], alt_counts[2]);
  
      if (conf->bonf_dynamic) {
-          conf->bonf += 3; /* will do one test per non-cons nuc */
+          conf->bonf += NUM_NONCONS_BASES; /* will do one test per non-cons nuc */
      }
-     num_tests += 3;
+     num_tests += NUM_NONCONS_BASES;
 
      if (snpcaller(pvalues, err_probs, num_err_probs, 
                   alt_counts, conf->bonf, conf->sig)) {
@@ -760,7 +603,7 @@ call_snvs(const plp_col_t *p, void *confp)
 
      /* for all alt-bases, i.e. non-cons bases (which might include
       * the ref-base!) */
-     for (i=0; i<3; i++) {
+     for (i=0; i<NUM_NONCONS_BASES; i++) {
           int alt_base = alt_bases[i];
           int alt_count = alt_counts[i];
           int alt_raw_count = alt_raw_counts[i];
@@ -806,25 +649,6 @@ call_snvs(const plp_col_t *p, void *confp)
 }
 /* call_snvs() */
 
-
-
-
-void
-dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream) 
-{
-     fprintf(stream, "snvcall options\n");
-     fprintf(stream, "  min_altbq      = %d\n", c->min_altbq);
-     fprintf(stream, "  def_altbq      = %d\n", c->def_altbq);
-     fprintf(stream, "  min_cov        = %d\n", c->min_cov);
-     fprintf(stream, "  dont_skip_n    = %d\n", c->dont_skip_n);
-     fprintf(stream, "  bonf           = %lld  (might get recalculated)\n", c->bonf);
-     fprintf(stream, "  bonf_dynamic   = %d\n", c->bonf_dynamic);
-     fprintf(stream, "  sig            = %f\n", c->sig);
-/*     fprintf(stream, "  out            = %p\n", (void*)c->out);*/
-     fprintf(stream, "  flag & SNVCALL_USE_MQ      = %d\n", c->flag&SNVCALL_USE_MQ?1:0);
-     fprintf(stream, "  flag & SNVCALL_USE_SQ      = %d\n", c->flag&SNVCALL_USE_SQ?1:0);
-     fprintf(stream, "  flag & SNVCALL_CONS_AS_REF = %d\n", c->flag&SNVCALL_CONS_AS_REF?1:0);
-}
 
 
 static void
@@ -935,35 +759,11 @@ for cov in coverage_range:
      }
 
 
-     /* default pileup options
-      * FIXME make function
-      */
-     memset(&mplp_conf, 0, sizeof(mplp_conf_t));
-     mplp_conf.max_mq = DEFAULT_MAX_MQ;
-     mplp_conf.min_mq = DEFAULT_MIN_MQ;
-     mplp_conf.def_nm_q = DEFAULT_DEF_NM_QUAL;
-     mplp_conf.min_bq = DEFAULT_MIN_BQ;
-     mplp_conf.capQ_thres = 0;
-     mplp_conf.max_depth = DEFAULT_MAX_PLP_DEPTH;
-#if DEFAULT_BAQ_ON
-     mplp_conf.flag = MPLP_NO_ORPHAN | MPLP_REALN | MPLP_REDO_BAQ;
-#else
-     mplp_conf.flag = MPLP_NO_ORPHAN;
-#endif
-     /* default snvcall options
-      * FIXME make function
-      */
-     memset(&snvcall_conf, 0, sizeof(snvcall_conf_t));
-     snvcall_conf.min_altbq = DEFAULT_MIN_ALT_BQ;
-     snvcall_conf.def_altbq = DEFAULT_DEF_ALT_BQ; /* snvcall_conf.min_altbq; */
-     snvcall_conf.min_cov = DEFAULT_MIN_COV;
-     snvcall_conf.dont_skip_n = 0;
-     snvcall_conf.bonf_dynamic = 1;
-     snvcall_conf.bonf = 1;
-     snvcall_conf.sig = 0.05;
-     /* snvcall_conf.out = ; */
-     snvcall_conf.flag = SNVCALL_USE_MQ;
+     /* default pileup options */
+     init_mplp_conf(& mplp_conf);
 
+     /* default snvcall options */
+     init_snvcall_conf(& snvcall_conf);
     
     /* keep in sync with long_opts_str and usage 
      *
