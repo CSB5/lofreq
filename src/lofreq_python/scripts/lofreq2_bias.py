@@ -152,6 +152,9 @@ def main():
         alt_mquals = []
         ref_bquals = []
         alt_bquals = []
+        # only for PE
+        ref_isize = []
+        alt_isize = []
         # following two meant to test
         #alt_vpos = [] 
         #rlens = []
@@ -193,9 +196,13 @@ def main():
             if b.upper() == var.REF[0].upper():
                 ref_mquals.append(mq)
                 ref_bquals.append(bq)
+                if not args.use_orphan:
+                    ref_isize.append(abs(r.tlen))
             elif b.upper() == var.ALT[0].upper():
                 alt_mquals.append(mq)
                 alt_bquals.append(bq)
+                if not args.use_orphan:
+                    alt_isize.append(abs(r.tlen))
             else:            
                 LOG.debug("Skipping non-ref-alt base %s at %s:%d" % (b, var.CHROM, var.POS))
                 continue
@@ -217,35 +224,34 @@ def main():
             ustat = mannwhitneyu(ref_bquals, alt_bquals)
             b_pv = ustat[1]
 
+        # same for bqs
+        if len(ref_isize) and len(alt_isize):
+            if len(set(ref_isize).union(alt_isize))==1:
+                i_pv = 1
+            else:
+                ustat = mannwhitneyu(ref_isize, alt_isize)
+                i_pv = ustat[1]
+        else:
+            i_pv = 1
+            
         #import pdb; pdb.set_trace()
         LOG.info("%s %d: %f %f" % (var.CHROM, var.POS, m_pv, b_pv))
 
         var.INFO['MB'] = prob_to_phredqual(m_pv)
         var.INFO['BB'] = prob_to_phredqual(b_pv)
+        var.INFO['IB'] = prob_to_phredqual(i_pv)
 
         keep = True
 
         #import pdb; pdb.set_trace()
-        
-        if m_pv*bonf < ALPHA:
-            ftag = "MB"
-            
-            if var.FILTER == '.' or var.FILTER == 'PASS':
-                var = var._replace(FILTER=ftag)
-            else:
-                var = var._replace(FILTER="%s;%s" % (var.FILTER, ftag))
-            if args.pass_only:
-                keep = False
-            
-        if b_pv*bonf < ALPHA:
-            ftag = "BB"
-            if var.FILTER == '.' or var.FILTER == 'PASS':
-                var = var._replace(FILTER=ftag)
-            else:
-                var = var._replace(FILTER="%s;%s" % (var.FILTER, ftag))
-            if args.pass_only:
-                keep = False
-
+        for (pv, ftag) in [(m_pv, 'MB'), (b_pv, 'BB'), (i_pv, 'IB')]:
+            if pv*bonf < ALPHA:
+                if var.FILTER == '.' or var.FILTER == 'PASS':
+                    var = var._replace(FILTER=ftag)
+                else:
+                    var = var._replace(FILTER="%s;%s" % (var.FILTER, ftag))
+                if args.pass_only:
+                    keep = False
         if keep:
             outvars.append(var)
 
