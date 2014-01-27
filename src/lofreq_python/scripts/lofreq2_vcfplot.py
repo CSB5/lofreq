@@ -9,7 +9,6 @@ __copyright__ = "2014 Genome Institute of Singapore"
 __license__ = "GPL2"
 
 
-
 # --- standard library imports
 #
 
@@ -286,7 +285,7 @@ def dist_hist(ax, var_dist, bins=15):
     ax.set_ylabel('#')
     ax.set_xlabel("SNV distance (log10)")
     ax.set_title("(%d bins)" % bins)
-
+    ax.set_xlim([0, plt.xlim()[1]])
 
 def heatmap_dist_vs_x_1(ax, variants, var_dist, info_key, bins=20):
     """FIXME:add-doc
@@ -307,7 +306,9 @@ def heatmap_dist_vs_x_1(ax, variants, var_dist, info_key, bins=20):
     #print min(y), max(y)
     ax.set_ylabel(info_key)
     ax.set_xlabel("SNV distance (log10)")
+    
     ax.set_ylim([0, plt.ylim()[1]])
+    ax.set_xlim([0, plt.xlim()[1]])
 
     plt.colorbar()
     
@@ -349,6 +350,9 @@ def heatmap_dist_vs_cov_2(ax, variants, var_dists, bins=20):
 
 
 def heatmap_freq_vs_cov(ax, variants, bins=50):
+    """FIXME: this is clipped at 50% AF?!
+    """
+    
     x = [v.INFO['DP'] for v in variants]
     y = [v.INFO['AF'] for v in variants]
 
@@ -380,7 +384,7 @@ def violin_plot(ax, data):
     if v.max():
         v = v/v.max()*w # scaling the violin to the available space
     else:
-        LOG.warn("v.max()==0. won't be able to print violin_plot")
+        # FIXME LOG.warn("v.max()==0. won't be able to correctly print violin_plot")
         v = 0
     p = 0
     ax.fill_betweenx(x, p, v+p, facecolor='y', alpha=0.3)
@@ -493,6 +497,14 @@ def main():
     vars = [v for v in vcfreader if v.FILTER in ['PASS', '.']]
     vcf_fh.close()
 
+    try:
+        tmp = [v.INFO['AF'] for v in vars]
+        tmp = [v.INFO['DP'] for v in vars]
+    except KeyError:
+        LOG.critical("Couldn't find AF and DP info tag in all variants"
+                     " (is %s a LoFreq file?). Won't plot..." % (args.vcf))
+        sys.exit(1)
+        
     summary_txt = []
     summary_txt.append("Reading vars from %s" % args.vcf)
     LOG.info(summary_txt[-1])
@@ -624,7 +636,7 @@ def main():
     fig = plt.figure()
     ax = plt.subplot(1, 1, 1)
     heatmap_dist_vs_x_1(ax, vars, dist_to_next, 'DP')
-    plt.title('Distance vs DP')
+    plt.title('Distance vs. DP')
     pp.savefig()
     plt.close()
 
@@ -671,7 +683,7 @@ def main():
     plt.close()
 
     
-    LOG.critical("Put related plots together. See http://blog.marmakoide.org/?p=94")
+    # FIXME Put related plots together. See http://blog.marmakoide.org/?p=94"
     """
     # FIXME setup such that they don't share axis
     # FIXME other way to make subplots
