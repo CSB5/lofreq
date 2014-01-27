@@ -250,160 +250,6 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char ref,
 /* report_var() */
 
 
-
-/* J = PM  +  (1-PM) * PS  +  (1-PM) * (1-PS) * PA + (1-PM) * (1-PS) * (1-PA) * PB, where
-   PJ = joined error probability
-   PM = mapping prob.
-   PS = source/genome err.prob.
-   PS = mapping error profile prop.
-   PB = base err.prob.
-   
-   Or in simple English:
-   either this is a mapping error
-   or
-   not a mapping error, but a genome/source error
-   or
-   not mapping error and not genome/source error but a aligner error
-   or
-   not mapping error and not genome/source error and not aligner error but a base error
-   
- * NOTE: for mq the standard says that 255 means NA. In this function we
- * use -1 instead, and treat 255 as valid phred-score so you might want
- * to change mq before calling this functio
- *
- */
-double
-merge_srcq_baseq_mapq_and_alnq(const int sq, const int bq, const int mq, const int aq)
-{
-     double sp, bp, mp, ap, jp; /* corresponding probs */
-     
-
-     bp = PHREDQUAL_TO_PROB(bq);
-
-     if (-1 == mq) {
-          mp = 0.0;
-     } else {
-          mp = PHREDQUAL_TO_PROB(mq);
-     }
-
-     if (-1 == sq) {
-          sp = 0.0;
-     } else {
-          sp = PHREDQUAL_TO_PROB(sq);
-     }
-
-     if (-1 == aq) {
-          ap = 0.0;
-     } else {
-          ap = PHREDQUAL_TO_PROB(aq);
-     }
-
-     jp = mp + (1.0 - mp) * sp + (1.0-mp) * (1.0-sp) * ap +  (1.0-mp) * (1.0-sp) * (1.0-ap) * bp;
-#ifdef DEBUG
-     LOG_DEBUG("jp=%g  =  mp=%g  +  (1.0-mp=%g)*sp=%g  +  (1-mp=%g)*(1-sp=%g)*ap=%g  + (1-mp=%g)*(1-sp=%g)*(1-ap=%g)*bp=%g\n",
-               jp, mp, mp, sp, mp, sp, ap, mp, sp, ap, bp);
-#endif
-
-     return jp;
-}
-
-
-
-/* J = PM  +  (1-PM) * PS  +  (1-PM) * (1-PS) * PB, where
-   PJ = joined error probability
-   PM = mapping err.prob.
-   PS = source/genome err.prob.
-   PB = base err.prob.
-   
-   Or in simple English:
-   either this is a mapping error
-   or
-   not a mapping error, but a genome/source error
-   or
-   not mapping error and no genome/source error AND base-error
-
- * NOTE: for mq the standard says that 255 means NA. In this function we
- * use -1 instead, and treat 255 as valid phred-score so you might want
- * to change mq before calling this functio
- *
-*/
-double
-merge_srcq_baseq_and_mapq(const int sq, const int bq, const int mq)
-{
-     double sp, mp, bp, jp; /* corresponding probs */
-     
-     if (-1 == sq) {
-          sp = 0.0;
-     } else {
-          sp = PHREDQUAL_TO_PROB(sq);
-     }
-
-     bp = PHREDQUAL_TO_PROB(bq);
-
-     if (-1 == mq) {
-          mp = 0.0;
-     } else {
-          mp = PHREDQUAL_TO_PROB(mq);
-     }
-
-     jp = mp + (1.0 - mp) * sp + (1-mp) * (1-sp) * bp;
-#ifdef DEBUG
-     LOG_DEBUG("jp = %g  =  mp=%g  +  (1.0 - mp=%g) * sp=%g  +  (1-mp=%g) * (1-sp=%g) * bp=%g\n", jp, mp, mp, sp, mp, sp, bp);
-#endif
-
-     return jp;
-}
-
-
-/* "Merge" MQ and BQ if requested using the following equation:
- *  P_jq = P_mq * + (1-P_mq) P_bq.
- *
- * NOTE: for mq the standard says that 255 means NA. In this function we
- * use -1 instead, and treat 255 as valid phred-score so you might want
- * to change mq before calling this functio
- *
-
- */
-double
-merge_baseq_and_mapq(const int bq, const int mq)
-{
-     double mp, bp, jp; /* corresponding probs */
-
-     bp = PHREDQUAL_TO_PROB(bq);
-     if (-1 == mq) {
-          return bp;
-     }
-
-#ifdef SCALE_MQ
-     mp = PHREDQUAL_TO_PROB(254/60.0*mq * pow(mq, SCALE_MQ_FAC)/pow(60, SCALE_MQ_FAC));
-#else
-     mp = PHREDQUAL_TO_PROB(mq);
-#endif
-      
-#ifdef TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
-     assert(mq <= 60);
-     mp = PHREDQUAL_TO_PROB(MQ_TRANS_TABLE[mq]); 
-#endif
-     /* No need to do computation in phred-space as
-      * numbers won't get small enough.
-      */
-
-     /* note: merging Q1 with anything else will result in Q0. */
-     jp = mp + (1.0 - mp) * bp;
-#ifdef DEBUG
-     LOG_DEBUG("P_M + (1-P_M) P_B:   %g + (1.0 - %g) * %g = %g  ==  Q%d + (1.0 - Q%d) * Q%d  =  Q%d\n",
-               mp, mp, bp, jp, mq, mq, bq, PROB_TO_PHREDQUAL(jp));
-#endif
-#if 0
-     LOG_DEBUG("BQ %d after merging with MQ %d = %d\n", bq, mq, PROB_TO_PHREDQUAL(jp));
-#endif
-
-     return jp;
-}
-/* merge_baseq_and_mapq() */
-
-
-
 /* allocates err_probs (to size num_err_probs; also set here) and sets
  * values. user must free.
  *
@@ -557,6 +403,11 @@ call_snvs(const plp_col_t *p, void *confp)
                      alt_bases, alt_counts, alt_raw_counts,
                      p, conf);
 
+#if 0
+     for (i=0; i<NUM_NONCONS_BASES; i++) {
+          LOG_FIXME("NUM_NONCONS_BASES=%d alt_counts=%d alt_raw_counts=%d\n", i, alt_counts[i], alt_raw_counts[i]);
+     }
+#endif
 
      for (i=0; i<NUM_NONCONS_BASES; i++) {
           if (alt_counts[i]) {
