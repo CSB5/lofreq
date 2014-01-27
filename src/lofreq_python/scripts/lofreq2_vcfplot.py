@@ -24,19 +24,14 @@ import itertools
 
 #--- third-party imports
 #
-# FIXME from http://matplotlib.org/api/pyplot_api.html pylab combines
-# pyplot with numpy into a single namespace. This is convenient for
-# interactive work, but for programming it is recommended that the
-# namespaces be kept separate
 import numpy as np
 
-# next two lines ensure to use non-interactive matplotlib
 import matplotlib
 matplotlib.use('Agg')
-
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
+# only for boxplots
 from scipy.stats import gaussian_kde
 
 
@@ -91,42 +86,6 @@ def subst_type_str(ref, alt, strand_specific=False):
         return '|'.join(sorted([s, c]))
     
 
-# FIXME cleanup
-#
-# * Put plots with same y-axis on same row
-# * Put plots with same x-axis in same col
-# * More functions
-# * Would be nice to have site by site comparisons of two input files
-#
-#
-# # Notes
-#
-# * Keep track of axes and why: http://nbviewer.ipython.org/urls/raw.github.com/jakevdp/matplotlib_pydata2013/master/notebooks/01_Introduction.ipynb
-#
-#
-# * Denis' plots:
-#
-#   * violin plot: log10 SNV coverage
-#   * violin plot: SNV coverage <=100
-#   * hist: SNV coverage (<=100)
-#
-#   * violin plot: AF
-#   * hist: AF
-#   * heatplot: AF vs coverage (x)
-#
-#   * hist (density): log10 SNV dist
-#   * heatplot: AF vs log10 SNV dist (x)
-#   * heatplot: coverage vs log10 SNV dist (x)
-#
-#   * hist: subst-type
-#
-#   * hist: SNV dist
-#
-#
-# * Alternative to boxplot is violin pot
-
-
-
 
 def r_ify(axes):
     '''
@@ -162,7 +121,6 @@ def r_ify(axes):
     axes.set_yticks(yticks[:-1])
 
     return axes
-
 
 
 
@@ -542,7 +500,6 @@ def main():
     LOG.info(summary_txt[-1])
 
     
-    # FIXME filters should go here
     filter_list = []
     if args.maxdp:
         filter_list.append((lambda v: v.INFO['DP']<=args.maxdp, "DP<=%d" % args.maxdp))
