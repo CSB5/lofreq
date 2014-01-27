@@ -203,7 +203,6 @@ AC_CONFIG_FILES(Makefile
         src/cdflib90/Makefile   
         src/helper_scripts/Makefile
         src/libbam/Makefile
-        src/lofreq_core/Makefile
         src/lofreq/Makefile
         src/lofreq_python/setup_conf.py        
         src/lofreq_python/Makefile
