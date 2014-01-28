@@ -487,7 +487,9 @@ int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
      chomp(line);
      line_ptr = line;
 
+#if 0
      LOG_DEBUG("parsing line: %s\n", line);
+#endif
 
      /* note: strsep modifies line_ptr */
      while (NULL != (token = strsep(&line_ptr, delimiter))) {
