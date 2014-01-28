@@ -29,8 +29,9 @@
 __DATE__ = "NA";
 #endif
 
-/* prepend dirname(argv0) and python source dir to PATH making sure
- * that package works even without properly installing it
+/* prepend dirname(argv0) and python source dir to PATH. This way we
+ * make sure that package works even without properly installing it
+ * and that the binary can repeatedly can call itself it necessary
  */
 void 
 add_local_dir_to_path(char *argv0) {
@@ -76,7 +77,10 @@ add_local_dir_to_path(char *argv0) {
      }
 
      path_var = strdup(dirname(lofreq_script_abs));
+     path_var = realloc(path_var, (strlen(path_var) + 1 + strlen(dirname_argv0) + 1) * sizeof(char));
+     sprintf(path_var, "%s:%s", dirname_argv0, path_var);
 #if 0
+     LOG_WARN("dirname_argv0 = %s\n", dirname_argv0);
      LOG_WARN("Adding local source directory %s to PATH\n", path_var);
 #endif
 
@@ -90,7 +94,6 @@ add_local_dir_to_path(char *argv0) {
           (void) strcat(path_var, old_path);
           setenv(PATH_NAME, path_var, 1);
      }
-
 
      free(path_var);
      free(lofreq_script_abs);
