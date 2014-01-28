@@ -526,6 +526,7 @@ main_filter(int argc, char *argv[])
      long int num_vars = 0; /* isn't long overkill here ? */
      long int vars_size = 0; /* keeping track of how much memory we've got pre-allocated */
      long int i;
+     static int no_defaults = 0;
 
      /* default filter options */
      memset(&cfg, 0, sizeof(filter_conf_t));
@@ -547,6 +548,7 @@ main_filter(int argc, char *argv[])
               {"verbose", no_argument, &verbose, 1},
               {"debug", no_argument, &debug, 1},
               {"only-passed", no_argument, &print_only_passed, 1},
+              {"no-defaults", no_argument, &no_defaults, 1},
 
               {"help", no_argument, NULL, 'h'},
               {"in", required_argument, NULL, 'i'},
@@ -695,6 +697,17 @@ main_filter(int argc, char *argv[])
          }
     }
     cfg.print_only_passed = print_only_passed;
+
+    if (! no_defaults) {
+         if (cfg.sb_filter.mtc_type==MTC_NONE && ! cfg.sb_filter.thresh) {
+              LOG_VERBOSE("%s\n", "Setting default SB filtering method to holm-bonf");
+              cfg.sb_filter.mtc_type = MTC_HOLMBONF;
+         }
+         if (cfg.dp_filter.min<0) {
+              LOG_VERBOSE("%s\n", "Setting default minimum coverage to 10");
+              cfg.dp_filter.min = 10;
+         }
+    }
 
     if (0 != argc - optind - 1) {/* FIXME needed at all? */
          LOG_FATAL("%s\n", "Unrecognized argument found. Exiting...\n");
