@@ -16,7 +16,6 @@ EXTRA_DIST = setup.py \
 	lofreq_star/fdr.py \
 	lofreq_star/utils.py \
 	scripts/lofreq2_cluster.py \
-	scripts/lofreq2_filter.py \
 	scripts/lofreq2_local.py \
 	scripts/lofreq2_somatic.py \
 	scripts/lofreq2_vcfplot.py \
