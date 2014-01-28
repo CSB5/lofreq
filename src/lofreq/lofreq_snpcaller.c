@@ -1054,17 +1054,17 @@ for cov in coverage_range:
          char base_cmd[BUF_SIZE];
          char full_cmd[BUF_SIZE];
          snprintf(base_cmd, BUF_SIZE, 
-                  "lofreq2_filter.py -p -i %s -o %s",
+                  "lofreq filter --only-passed -i %s -o %s",
                   vcf_tmp_out, NULL==vcf_out ? "-" : vcf_out);
 
          if (no_default_filter && snvcall_conf.bonf_dynamic) {
               snprintf(full_cmd, BUF_SIZE, 
-                      "%s --no-defaults --snv-qual %d", 
+                      "%s --no-defaults --snvqual-thresh %d", 
                       base_cmd, PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf));
 
          } else if (! no_default_filter && snvcall_conf.bonf_dynamic) {
               snprintf(full_cmd, BUF_SIZE, 
-                      "%s --snv-qual %d", 
+                      "%s --snvqual-thresh %d", 
                       base_cmd, PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf));
 
          } else if (! no_default_filter && ! snvcall_conf.bonf_dynamic) {
