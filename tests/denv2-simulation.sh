@@ -29,7 +29,7 @@ if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
 fi
-cmd="$LOFREQ filter -p -i $outraw_def -o $outfinal_def"
+cmd="$LOFREQ filter --only-passed -i $outraw_def -o $outfinal_def"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
@@ -41,7 +41,7 @@ if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
 fi
-cmd="$LOFREQ filter -p -i $outraw_nomq -o $outfinal_nomq"
+cmd="$LOFREQ filter --only-passed -i $outraw_nomq -o $outfinal_nomq"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
