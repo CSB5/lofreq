@@ -364,7 +364,7 @@ resolved_path(const char *path)
           struct stat stat_buf;
 
           if (lstat(resolved_path, &stat_buf)) {
-               LOG_ERROR("%s\n", "lstat() failed");               
+               /*LOG_WARN("%s\n", "lstat() failed");*/
                free(resolved_path);
                resolved_path = NULL;
                goto chdir_and_return;
