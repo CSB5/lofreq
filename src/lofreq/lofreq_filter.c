@@ -707,6 +707,8 @@ main_filter(int argc, char *argv[])
               LOG_VERBOSE("%s\n", "Setting default minimum coverage to 10");
               cfg.dp_filter.min = 10;
          }
+    } else {
+         LOG_VERBOSE("%s\n", "Skipping default settings");
     }
 
     if (0 != argc - optind - 1) {/* FIXME needed at all? */
