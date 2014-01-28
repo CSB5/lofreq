@@ -39,7 +39,7 @@ add_local_dir_to_path(char *argv0) {
      char *old_path = NULL;
      char *argv0_cp = NULL;
      char *dirname_argv0 = NULL;
-     char lofreq_script_rel[] = "../lofreq_python/scripts/lofreq2_filter.py";
+     char lofreq_script_rel[] = "../lofreq_python/scripts/lofreq2_somatic.py";
      char *lofreq_script_abs = NULL;
 
      argv0_cp = resolved_path(argv0);
@@ -164,17 +164,15 @@ int main(int argc, char *argv[])
           LOG_FIXME("%s\n", "NOT IMPLEMENTED YET: has BI, has BD, readlen, has extra BAQ. is_paired. all based on first, say, 10k read\n");
           return 1;
 
-     } else if (strcmp(argv[1], "filter-FIXME") == 0) {
+     } else if (strcmp(argv[1], "filter") == 0) {
           return main_filter(argc, argv);
 
-     } else if (strcmp(argv[1], "filter") == 0 || 
-                strcmp(argv[1], "somatic") == 0 ||
+     } else if (strcmp(argv[1], "somatic") == 0 ||
                 strcmp(argv[1], "vcfplot") == 0 ||
                 strcmp(argv[1], "call-parallel") == 0 ||
                 strcmp(argv[1], "cluster") == 0) {
           char **argv_execvp = calloc(argc, sizeof(char*));
           int i;
-          char *filter_script = "lofreq2_filter.py";
           char *somatic_script = "lofreq2_somatic.py";
           char *parallel_script = "lofreq2_call_pparallel.py";
           char *vcfset_script = "lofreq2_vcfset.py";
@@ -182,9 +180,7 @@ int main(int argc, char *argv[])
           char *cluster_script = "lofreq2_cluster.py";
           char *script_to_call;
 
-          if (strcmp(argv[1], "filter") == 0) {
-               script_to_call = filter_script;
-          } else if (strcmp(argv[1], "somatic") == 0) {
+          if (strcmp(argv[1], "somatic") == 0) {
                script_to_call = somatic_script;
           } else if (strcmp(argv[1], "call-parallel") == 0) {
                script_to_call = parallel_script;
