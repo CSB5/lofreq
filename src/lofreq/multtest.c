@@ -19,7 +19,7 @@
 
 typedef struct {
      double p;
-     int i;
+     long int i;
 } ixp; /* indexed p-value */
 
 int
@@ -38,10 +38,10 @@ ixp_dbl_cmp(const void *a, const void *b)
  * will use size as bonferroni factor if num_test (AKA bonf fac) < 1
  */
 void
-bonf_corr(double data[], int size, int num_tests)
+bonf_corr(double data[], long int size, long int num_tests)
 {
-     int i;
-     int bonf_fac;
+     long int i;
+     long int bonf_fac;
 
      if (num_tests<1) {
           bonf_fac = size;
@@ -63,11 +63,11 @@ bonf_corr(double data[], int size, int num_tests)
  * 
  */
 void
-holm_bonf_corr(double data[], int size, double alpha, int num_tests)
+holm_bonf_corr(double data[], long int size, double alpha, long int num_tests)
 {
      ixp iarr[size];
-     int i;
-     int lp = size;
+     long int i;
+     long int lp = size;
      double tp;
      double pp;
 
@@ -116,21 +116,20 @@ holm_bonf_corr(double data[], int size, double alpha, int num_tests)
  *
  * content of data will not be overwritten
  */
-int
-fdr(double data[], int size, double alpha, int num_tests, int **irejected)
+long int
+fdr(double data[], long int size, double alpha, long int num_tests, long int **irejected)
 {
 
      ixp iarr[size];
-     int i;
-     int nrejected = 0;
-     int n;
+     long int i;
+     long int nrejected = 0;
+     long int n;
 
      if (num_tests<1) {
           n = size;
      } else {
           n = num_tests;
      }
-
      /* first index the pvalues and store them in ixp data to sort indices*/
      for (i = 0; i < size; i++) {
           iarr[i].i = i;
@@ -141,14 +140,14 @@ fdr(double data[], int size, double alpha, int num_tests, int **irejected)
      /* starting from the largest rank, evaluate p(m) < alpha * (m/M) where m is the
       * rank and M is the total number of pvalues. If true, reject pvals 1..m */
      for (i = size; i > 0; i--) { /* ranks are 1-based */
-          if (iarr[i-1].p < (alpha*i/n)) {
+          if (iarr[i-1].p < (alpha*i/(float)n)) {
                nrejected = i; /* therefore, nrejected includes first rejected (0-based) */
                break;
           }
      }
 
      /* return data of indices to rejected pvalues */
-     (*irejected) = (int*) malloc(nrejected * sizeof(int));
+     (*irejected) = (long int*) malloc(nrejected * sizeof(long int));
      for (i = 0; i < nrejected; i++) {
           /* printf("%d\t%f\t%d\n", iarr[i].i, iarr[i].p); */
           (*irejected)[i] = iarr[i].i;
