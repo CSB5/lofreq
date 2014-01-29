@@ -78,7 +78,11 @@ add_local_dir_to_path(char *argv0) {
 
      path_var = strdup(dirname(lofreq_script_abs));
      path_var = realloc(path_var, (strlen(path_var) + 1 + strlen(dirname_argv0) + 1) * sizeof(char));
-     sprintf(path_var, "%s:%s", dirname_argv0, path_var);
+     /* if sprintf(path_var, "%s:%s", dirname_argv0, path_var); then valgrind says source and destination overlap in memcpy */
+     strcat(path_var, ":");
+     strcat(path_var, dirname_argv0);
+
+
 #if 0
      LOG_WARN("dirname_argv0 = %s\n", dirname_argv0);
      LOG_WARN("Adding local source directory %s to PATH\n", path_var);
