@@ -43,4 +43,12 @@
 #define SNVCALL_USE_SQ      0x20
 #define SNVCALL_CONS_AS_REF 0x40
 
+
+#ifndef MIN
+#define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
+#endif
+#ifndef MAX
+#define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
+#endif
+
 #endif
