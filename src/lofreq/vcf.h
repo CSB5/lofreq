@@ -92,7 +92,7 @@ void vcf_var_key_simple(char **key, var_t *var);
 int vcf_parse_header(char **header, vcf_file_t *vcf_file);
 int vcf_skip_header(vcf_file_t *vcf_file);
 int vcf_parse_var(vcf_file_t *vcf_file, var_t *var);
-int vcf_parse_vars(var_t ***vars, vcf_file_t *vcf_file, int only_filtered);
+int vcf_parse_vars(var_t ***vars, vcf_file_t *vcf_file, int only_passed);
 
 int vcf_var_has_info_key(char **value, const var_t *var, const char *key);
 int vcf_var_filtered(const var_t *var);
