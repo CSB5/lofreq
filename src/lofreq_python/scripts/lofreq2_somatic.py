@@ -84,9 +84,11 @@ class SomaticSNVCaller(object):
     # FIXME we should use fdr here and it should become a user arg
     DEFAULT_UNIQ_MTC_ALPHA = 1.0
 
+    
     def __init__(self, bam_n=None, bam_t=None,
                  ref=None, outprefix=None,
-                 bed=None, reuse_normal_vcf=None):
+                 bed=None, reuse_normal_vcf=None,
+                 continue_interrupted=False):
         """init function
         """
 
@@ -108,6 +110,11 @@ class SomaticSNVCaller(object):
         self.bed = bed
         self.outprefix = outprefix
 
+        # continue interrupted program. use with caution. existing
+        # files will be treated as coming from a successfully
+        # completed process run with the same options as here
+        self.continue_interrupted = continue_interrupted
+
         # setup output files
         #
         self.outfiles = []
@@ -117,9 +124,10 @@ class SomaticSNVCaller(object):
         else:
             self.vcf_n_rlx = self.outprefix + self.VCF_NORMAL_RLX_EXT + ".gz"
             self.vcf_n_rlx_log = self.outprefix + self.VCF_NORMAL_RLX_LOG_EXT
-            for f in [self.vcf_n_rlx, self.vcf_n_rlx_log]:
-                assert not os.path.exists(f), (
-                "Cowardly refusing to overwrite already existing file %s" % (f))
+            if not self.continue_interrupted:
+                for f in [self.vcf_n_rlx, self.vcf_n_rlx_log]:
+                    assert not os.path.exists(f), (
+                        "Cowardly refusing to overwrite already existing file %s" % (f))
 
         self.vcf_t_maperrprof = self.outprefix + self.VCF_TUMOR_MAPERRPROF_EXT
         self.vcf_t_rlx = self.outprefix + self.VCF_TUMOR_RLX_EXT + ".gz"
@@ -134,8 +142,9 @@ class SomaticSNVCaller(object):
                          self.vcf_som_fin, self.vcf_germl]
         # vcf_n already checked
         for f in self.outfiles:
-            assert not os.path.exists(f), (
-                "Cowardly refusing to overwrite already existing file %s" % f)
+            if not self.continue_interrupted:
+                assert not os.path.exists(f), (
+                    "Cowardly refusing to overwrite already existing file %s" % f)
 
         # other params
         self.alpha_n = self.DEFAULT_ALPHA_N
@@ -152,8 +161,9 @@ class SomaticSNVCaller(object):
         self.use_orphan = self.DEFAULT_USE_ORPHAN
         self.num_threads = self.DEFAULT_NUM_THREADS
         self.uniq_mtc_alpha = self.DEFAULT_UNIQ_MTC_ALPHA
+        
 
-
+        
     @staticmethod
     def subprocess_wrapper(cmd, close_tmp=True):
         """Wrapper for subprocess.check_call
@@ -199,11 +209,12 @@ class SomaticSNVCaller(object):
         """Relaxed call of variants on normal sample
         """
 
-        if os.path.exists(self.vcf_n_rlx):
+        if self.continue_interrupted and os.path.exists(self.vcf_n_rlx):
             LOG.info('Reusing %s' % self.vcf_n_rlx)
             return
-
-
+        else:
+            assert not os.path.exists(self.vcf_n_rlx)
+            
         # one could argue that BAQ (and MQ) should always be off for
         # normal, as it only every reduces the chance of calls. tests
         # on melanoma CHH930 50-50 g10ac045 orphan show that the ones
@@ -264,8 +275,14 @@ class SomaticSNVCaller(object):
             cmd.extend(['-m', "%d" % self.mq_filter_t])
             cmd.extend(['-o' , self.vcf_t_maperrprof])
             cmd.append(self.bam_t)
-            self.subprocess_wrapper(cmd)
+            
+            if self.continue_interrupted and os.path.exists(self.vcf_t_maperrprof):
+                LOG.info('Reusing %s' % self.vcf_t_maperrprof)
+            else:
+                assert not os.path.exists(self.vcf_t_maperrprof)
+                self.subprocess_wrapper(cmd)
 
+                
         if self.num_threads < 2:
             cmd = [self.LOFREQ, 'call']
         else:
@@ -300,19 +317,26 @@ class SomaticSNVCaller(object):
 
         #cmd = ['valgrind', '--tool=memcheck', '--leak-check=full'] + cmd
 
-        (o, e) = self.subprocess_wrapper(cmd, close_tmp=False)
-        fh = open(self.vcf_t_rlx_log, 'w')
-        fh.write('# %s\n' % ' '.join(cmd))
-        olines = o.readlines()
-        elines = e.readlines()
-        for l in elines:
-            fh.write("stderr: %s" % l)
-            LOG.info("cmd stderr: %s" % l.rstrip())
-        for l in olines:
-            fh.write("stdout: %s" % l)
-        fh.close()
-        o.close()
-        e.close()
+        if self.continue_interrupted and os.path.exists(self.vcf_t_rlx) and os.path.exists(self.vcf_t_rlx_log):
+            LOG.info('Reusing %s and %s' % (self.vcf_t_rlx, self.vcf_t_maperrprof))
+            fh = open(self.vcf_t_rlx_log, 'r')
+            elines = [l.replace("stderr: ", "") for l in fh.readlines()]
+            fh.close()
+            olines = []
+        else:
+            (o, e) = self.subprocess_wrapper(cmd, close_tmp=False)
+            fh = open(self.vcf_t_rlx_log, 'w')
+            fh.write('# %s\n' % ' '.join(cmd))
+            olines = o.readlines()
+            elines = e.readlines()
+            for l in elines:
+                fh.write("stderr: %s" % l)
+                LOG.info("cmd stderr: %s" % l.rstrip())
+            for l in olines:
+                fh.write("stdout: %s" % l)
+            fh.close()
+            o.close()
+            e.close()
 
         num_tests = -1
         for l in elines:
@@ -325,12 +349,14 @@ class SomaticSNVCaller(object):
             raise ValueError
 
         cmd = [self.LOFREQ, 'filter', '-i', self.vcf_t_rlx,
-               '--snv-qual', "%s" % self.mtc_t,
-               '--snv-qual-alpha', '%f' % self.mtc_alpha_t,
-               '--snv-qual-numtests', '%d' % num_tests,
-               '--pass-only', '-o', self.vcf_t_str]
-
-        self.subprocess_wrapper(cmd)
+               '--snvqual-mtc', "%s" % self.mtc_t,
+               '--snvqual-alpha', '%f' % self.mtc_alpha_t,
+               '--snvqual-ntests', '%d' % num_tests,
+               '--only-passed', '-o', self.vcf_t_str]
+        if self.continue_interrupted and os.path.exists(self.vcf_t_str):
+            LOG.info('Reusing %s' % (self.vcf_t_str))
+        else:
+            self.subprocess_wrapper(cmd)
 
 
     def call_germline(self):
@@ -355,7 +381,12 @@ class SomaticSNVCaller(object):
         Also adds SOMATIC tag
         """
 
-        assert not os.path.exists(self.vcf_som_raw)
+        if self.continue_interrupted and os.path.exists(self.vcf_som_raw):
+            LOG.info('Reusing %s' % self.vcf_som_raw)
+            return
+        else:
+            assert not os.path.exists(self.vcf_som_raw)
+            
         if self.vcf_som_raw[-3:] == ".gz":
             vcf_som_raw_fh = gzip.open(self.vcf_som_raw, 'w')
         else:
@@ -383,9 +414,15 @@ class SomaticSNVCaller(object):
         """Run LoFreq uniq as final check on somatic variants
         """
 
+        if self.continue_interrupted and os.path.exists(self.vcf_som_fin):
+            LOG.info('Reusing %s' % self.vcf_som_fin)
+            return
+        else:
+            assert not os.path.exists(self.vcf_som_fin)
+
         cmd = [self.LOFREQ, 'uniq',
                '--uni-freq', "0.5",
-               '--alpha', "%s" % self.uniq_mtc_alpha,
+               '-s', "%s" % self.uniq_mtc_alpha,
                '-v', self.vcf_som_raw,
                '-o', self.vcf_som_fin]
         if self.use_orphan:
@@ -461,7 +498,12 @@ def cmdline_parser():
                         help="Reference fasta file")
     parser.add_argument("-l", "--bed",
                         help="BED file listing regions to restrict analysis to")
-
+    parser.add_argument("--continue",
+                        dest="continue_interrupted",
+                        action="store_true",
+                        help="Expert only: continue interrupted run."
+                        " Will reuse existing files, assuming they are complete"
+                        " and created with identical options as this run!")
 
     default = 0.01
     parser.add_argument("--tumor-alpha",
@@ -594,7 +636,8 @@ def main():
         ref = args.ref,
         outprefix = args.outprefix,
         bed = args.bed,
-        reuse_normal_vcf = args.reuse_normal_vcf)
+        reuse_normal_vcf = args.reuse_normal_vcf,
+        continue_interrupted = args.continue_interrupted)
 
     somatic_snv_caller.alpha_n = args.normal_alpha
     somatic_snv_caller.alpha_t = args.tumor_alpha
