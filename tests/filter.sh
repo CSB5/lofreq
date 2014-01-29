@@ -37,12 +37,15 @@ for cor in "bonf" "holm-bonf" "fdr"; do
 done
 if [ $num_fail -eq 0 ]; then
     echook "snvqual (var alpha): all tests passed"
+else
+    echoerror "snvqual (var alpha): $num_fail tests failed"
 fi
 
 
 # snv quality with varying num_tests
 #
 # fixed alpha
+num_fail=0
 a=0.00000001
 for cor in "bonf" "holm-bonf" "fdr"; do
     last_no=0
@@ -50,7 +53,7 @@ for cor in "bonf" "holm-bonf" "fdr"; do
         #cmd="$base_cmd --snv-qual $cor --snv-qual-alpha $a --snv-qual-numtests $n"
         cmd="$base_cmd --snvqual-mtc $cor --snvqual-alpha $a --snvqual-ntests $n"
         #echodebug "cmd=$cmd"
-        new_no=$(eval $cmd | grep -c 'snvqual.*\(bonf\|fdr\)') || exit 1
+        new_no=$(eval $cmd | grep -c 'snvqual.*\(bonf\|fdr\)')
         #echodebug "$cor a=$a n=$n: new_no=$new_no last_no=$last_no";# cmd = $cmd"
         if [ $new_no -lt $last_no ]; then
             echoerror "snvqual: Got fewer SNVs when filtering with higher num-tests (cmd=$cmd)"
@@ -61,7 +64,10 @@ for cor in "bonf" "holm-bonf" "fdr"; do
 done
 if [ $num_fail -eq 0 ]; then
     echook "snvqual (var num_tests): all tests passed"
+else
+    echoerror "snvqual (var num_tests): $num_fail tests failed"
 fi
+
 
 
 # strandbias quality with varying alpha
@@ -73,7 +79,7 @@ for cor in "bonf" "holm-bonf"; do
         #cmd="$base_cmd --strandbias $cor --strandbias-alpha $a"
         cmd="$base_cmd --sb-mtc $cor --sb-alpha $a"
         #echodebug "cmd=$cmd"
-        new_no=$(eval $cmd | grep -c 'strandbias.*bonf') || exit 1
+        new_no=$(eval $cmd | grep -c 'sb_bonf')
         #echodebug "$cor a=$a: new_no=$new_no last_no=$last_no";# cmd = $cmd"
         if [ $new_no -gt $last_no ]; then
             echoerror "strandbias: Got more SNVs when filtering with higher alpha (cmd=$cmd)"
@@ -84,6 +90,8 @@ for cor in "bonf" "holm-bonf"; do
 done
 if [ $num_fail -eq 0 ]; then
     echook "strandbias: all tests passed"
+else
+    echoerror "strandbias: $num_fail tests failed"
 fi
 
 # window filter
@@ -110,3 +118,5 @@ fi
 #    echook "window: all tests passed"
 #fi
 #
+
+exit 0
