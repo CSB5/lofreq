@@ -26,12 +26,6 @@
 #endif
 
 
-#ifndef MIN
-#define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
-#endif
-#ifndef MAX
-#define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
-#endif
 
 #define LOGZERO -1e100 
 /* FIXME shouldn't we use something from float.h ? */
