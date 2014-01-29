@@ -34,6 +34,34 @@ fi
 rm $vcf_out
 
 
+
+
+# no indels!
+vcf_in=data/vcf/CTTGTA_2_remap_razers-i92_peakrem_corr_nodeff.vcf.gz
+bam=data/denv2-dpcr-validated/GGCTAC_2_remap_razers-i92_peakrem_corr.bam
+
+# in == out with detlim
+#
+num_in=$(zgrep -cv '^#' $vcf_in)
+cmd="$LOFREQ uniq -v $vcf_in $bam --use-det-lim -o -"
+num_out=$(eval $cmd | grep -vc '^#') || exit 1
+if [ "$num_in" -ne "$num_out" ]; then
+    echoerror "Expected same number of in and output vars when using --use-det-lim but go $num_in and $num_out resp. (cmd was $cmd)"
+fi
+
+# UQ= present even with --output-all
+cmd="$LOFREQ uniq -v $vcf_in $bam --output-all -o -"
+eval $cmd | grep -q 'UQ=' || echoerror "No UQ markup found"
+
+# in gt out in default mode
+num_in=$(zgrep -cv '^#' $vcf_in)
+cmd="$LOFREQ uniq -v $vcf_in $bam -o -"
+num_out=$(eval $cmd | grep -vc '^#') || exit 1
+if [ "$num_in" -le "$num_out" ]; then
+    echoerror "Expected fewer number of vars in default output due to filtering but got $num_in and $num_out resp. (cmd was $cmd)"
+fi
+
+
 vcf_in=data/somatic/hg19_chr22_true_snv.vcf.gz
 bam=data/somatic/CHH966-tumor-100x-10pur-hg19.chr22-bed-only.bam
 $LOFREQ uniq -v $vcf_in $bam -o $vcf_out || exit 1
