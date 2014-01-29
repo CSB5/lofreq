@@ -67,6 +67,7 @@ usage(const vcfset_conf_t* vcfset_conf)
 /*             "                        union = vcf1 OR vcf2.\n"*/
              "                        complement = vcf1 \\ vcf2.\n");
      fprintf(stderr, "       --use-bases      Use position and bases as key for storing and comparison. By default only position is used\n");
+     fprintf(stderr, "       --count-only     Don't print bases, just numbers\n");
      fprintf(stderr, "       --only-passed    Ignore variants marked as filtered\n");
      fprintf(stderr, "       --verbose        Be verbose\n");
      fprintf(stderr, "       --debug          Enable debugging\n");
@@ -88,6 +89,7 @@ main_vcfset(int argc, char *argv[])
      var_hash_t *var_hash_vcf2 = NULL; /* must be declared NULL ! */
      static int only_passed = 0;
      static int use_bases = 0;
+     static int count_only = 0;
 
      vcf_in1 = vcf_in2 = vcf_out = NULL;
      num_vars_vcf1 = num_vars_vcf2 = 0;
@@ -114,6 +116,7 @@ main_vcfset(int argc, char *argv[])
               {"debug", no_argument, &debug, 1},
               {"only-passed", no_argument, &only_passed, 1},
               {"use-bases", no_argument, &use_bases, 1},
+              {"count-only", no_argument, &count_only, 1},
 
               {"vcf1", required_argument, NULL, '1'},
               {"vcf2", required_argument, NULL, '2'},
@@ -240,11 +243,13 @@ main_vcfset(int argc, char *argv[])
          strcpy(vcf_out, "-");
     }
 
-    if (vcf_file_open(& vcfset_conf.vcf_out, vcf_out, 
-                      HAS_GZIP_EXT(vcf_out), 'w')) {
-         LOG_ERROR("Couldn't open %s\n", vcf_out);
-         free(vcf_in1); free(vcf_in2); free(vcf_out);
-         return 1;
+    if (! count_only) {
+         if (vcf_file_open(& vcfset_conf.vcf_out, vcf_out, 
+                           HAS_GZIP_EXT(vcf_out), 'w')) {
+              LOG_ERROR("Couldn't open %s\n", vcf_out);
+              free(vcf_in1); free(vcf_in2); free(vcf_out);
+              return 1;
+         }
     }
 
     free(vcf_in1);
@@ -270,8 +275,10 @@ main_vcfset(int argc, char *argv[])
               return -1;
          }
     } else {
-         /* vcf_write_header would write *default* header */
-         vcf_write_header(& vcfset_conf.vcf_out, vcf_header);
+         if (! count_only) {
+              /* vcf_write_header would write *default* header */
+              vcf_write_header(& vcfset_conf.vcf_out, vcf_header);
+         }
          free(vcf_header);
     }
 
@@ -361,8 +368,9 @@ main_vcfset(int argc, char *argv[])
               /* relative complement : elements in A but not B */
               if (NULL == var_2) {
                    num_vars_out += 1;
-                   vcf_write_var(& vcfset_conf.vcf_out, var_1);
-
+                   if (! count_only) {
+                        vcf_write_var(& vcfset_conf.vcf_out, var_1);
+                   }
               }
 #ifdef NOT_OKAY_IF_SIMPLE_KEY_AND_MULTIALLELIC_AND_ACTUALLY_NOT_NEEDED_AFTER_ALL
               else {
@@ -374,7 +382,9 @@ main_vcfset(int argc, char *argv[])
          } else if (vcfset_conf.vcf_setop == SETOP_INTERSECT) {
               if (NULL != var_2) {
                    num_vars_out += 1;
-                   vcf_write_var(& vcfset_conf.vcf_out, var_1);
+                   if (! count_only) {
+                        vcf_write_var(& vcfset_conf.vcf_out, var_1);
+                   }
               }
 
          } else {
@@ -391,11 +401,16 @@ main_vcfset(int argc, char *argv[])
                 num_vars_vcf1 + num_vars_vcf1_ign, num_vars_vcf1_ign);
     LOG_VERBOSE("Wrote %d variants to output\n", 
                 num_vars_out);
-    vcf_file_close(& vcfset_conf.vcf_out);
-
+    if (! count_only) {
+         vcf_file_close(& vcfset_conf.vcf_out);
+    }
     var_hash_free_table(var_hash_vcf2);
 
     if (0==rc) {
+         if (count_only) {
+              printf("%ld\n", num_vars_out);
+         }
+
          LOG_VERBOSE("%s\n", "Successful exit.");
     }
 
