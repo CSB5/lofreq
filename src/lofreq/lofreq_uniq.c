@@ -142,7 +142,7 @@ uniq_snv(const plp_col_t *p, void *confp)
      }
 
 
-    if (conf->use_det_lim) {
+     if (conf->use_det_lim) {
           /* given the current base counts and their error probs,
            * would we've been able to detect at given frequency.
            */
@@ -217,8 +217,7 @@ uniq_snv(const plp_col_t *p, void *confp)
                       conf->var->chrom, conf->var->pos+1, conf->var->ref, conf->var->alt, af,
                       is_uniq ? "unique" : "not necessarily unique", pvalue, conf->sig/(float)conf->bonf,
                       alt_count, p->coverage, alt_count/(float)p->coverage);
-
-     }
+    }
 
     if (is_uniq) {
          vcf_var_add_to_info(conf->var, uniq_str);
@@ -235,11 +234,10 @@ usage(const uniq_conf_t* uniq_conf)
      fprintf(stderr,
                   "\n%s: Checks whether variants predicted in one sample (listed in vcf input)" \
                   " are unique to this sample or if they were not called in other sample due" \
-                  " to coverage issues. This is done by either"                                   \
-                  " (1) using a Binomial test with alternate and reference counts from the BAM" \
-                  " and the variant frequency (testing freq. differences)." \
-                  " or"                                                      \
-                  " (2) checking whether the variant frequency would have been above LoFreq's" \
+                  " to coverage issues. This is done by  using a Binomial test with alternate"\
+                  " and reference counts from the BAM and the variant frequency (i.e it's testing"\
+                  " differences in frequencies. Alternatively, the logic can be changed to" \
+                  " check whether the variant frequency would have been above LoFreq's" \
                   " detection limit given the BAM coverage and base-qualities."\
                   "\n\n" \
                   "Assigns UNIQ tag to variants considered unique."\
