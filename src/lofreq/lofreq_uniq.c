@@ -67,7 +67,8 @@ typedef struct {
      vcf_file_t vcf_out;
      vcf_file_t vcf_in;
      long long int bonf;
-     int use_freq_diff;
+     int use_det_lim;
+     int output_all; /* catch! doesn't actually work if there's no coverage in BAM because mpileup will skip target function */
 
      /* changing per pos: the var to test */
      var_t *var;
@@ -78,9 +79,9 @@ typedef struct {
 /* used as pileup callback function which is not ideal since this can
  * only work on one position (has to be ensured by caller).
  *
- * No cov means I won't be called and no output will be generated.
- * Non-sig pv means I'm not sure and no ouput will be generated. Only
- * if pv is sig we will print the var
+ * No cov means I won't be called through mpileup and no output will
+ * be generated. Non-sig pv means I'm not sure and no ouput will be
+ * generated. Only if pv is sig we will print the var
  */
 void
 uniq_snv(const plp_col_t *p, void *confp)
@@ -89,6 +90,7 @@ uniq_snv(const plp_col_t *p, void *confp)
      char *af_char = NULL;
      float af;
      int is_uniq = 0;
+     char *uniq_str = "UNIQ";
 
      if (vcf_var_has_info_key(NULL, conf->var, "INDEL")) {
           LOG_WARN("uniq logic can't be applied to indels."
@@ -103,8 +105,11 @@ uniq_snv(const plp_col_t *p, void *confp)
           return;
      }
 
-     /* no coverage usually means I won't be called, but to be safe: */
+     /* no coverage usually means I won't be called, but just in case: */
      if (0 == p->coverage) {
+          if (conf->output_all) {
+               vcf_write_var(& conf->vcf_out, conf->var);
+          }
           return;
      }
 
@@ -130,13 +135,14 @@ uniq_snv(const plp_col_t *p, void *confp)
 #endif
                return;
           }
+
      } else {
           assert(conf->uni_freq <= 1.0);
           af = conf->uni_freq;
      }
 
 
-    if (! conf->use_freq_diff) {
+    if (conf->use_det_lim) {
           /* given the current base counts and their error probs,
            * would we've been able to detect at given frequency.
            */
@@ -188,6 +194,7 @@ uniq_snv(const plp_col_t *p, void *confp)
      } else {
           int alt_count = base_count(p, conf->var->alt);
           double pvalue;
+          char info_str[128];
 
 #ifdef DEBUG
           LOG_DEBUG("Now testing af=%f cov=%d alt_count=%d at %s %d for var:",
@@ -200,11 +207,11 @@ uniq_snv(const plp_col_t *p, void *confp)
                return;
           }
 
+          snprintf(info_str, 128, "UQ=%d", PROB_TO_PHREDQUAL(pvalue));
+          vcf_var_add_to_info(conf->var, info_str);
+
           if (pvalue < conf->sig/(float)conf->bonf) {
-               char info_str[128];
                is_uniq = 1;
-               snprintf(info_str, 128, "UQ=%d", PROB_TO_PHREDQUAL(pvalue));
-               vcf_var_add_to_info(conf->var, info_str);
           }
           LOG_VERBOSE("%s %d %c>%c AF=%f | %s (p-value=%g sig/bonf=%g) | BAM alt_count=%d cov=%d (freq=%f)\n",
                       conf->var->chrom, conf->var->pos+1, conf->var->ref, conf->var->alt, af,
@@ -214,6 +221,9 @@ uniq_snv(const plp_col_t *p, void *confp)
      }
 
     if (is_uniq) {
+         vcf_var_add_to_info(conf->var, uniq_str);
+    }
+    if (is_uniq || conf->output_all) {
         vcf_write_var(& conf->vcf_out, conf->var);
     }
 }
@@ -223,15 +233,17 @@ static void
 usage(const uniq_conf_t* uniq_conf)
 {
      fprintf(stderr,
-                  "%s: Checks whether variants predicted in one sample (listed in vcf input)" \
+                  "\n%s: Checks whether variants predicted in one sample (listed in vcf input)" \
                   " are unique to this sample or if they were not called in other sample due" \
-                  " to coverage issues. This is either done by" \
-                  " (1) checking whether the variant frequency would have been above LoFreq's" \
-                  " detection limit given the BAM coverage and base-qualities or" \
-                  " (2) using a Binomial the BAM alternate and reference counts and the variant frequency (more suited for testing freq differences)." \
+                  " to coverage issues. This is done by either"                                   \
+                  " (1) using a Binomial test with alternate and reference counts from the BAM" \
+                  " and the variant frequency (testing freq. differences)." \
+                  " or"                                                      \
+                  " (2) checking whether the variant frequency would have been above LoFreq's" \
+                  " detection limit given the BAM coverage and base-qualities."\
                   "\n\n" \
-                  "Will ignore filtered input variants as well as indels and will only" \
-                  " output variants considered unique.\n\n", MYNAME);
+                  "Assigns UNIQ tag to variants considered unique."\
+                  " Will ignore filtered input variants and will by default only report uniq variants.\n\n", MYNAME);
 
      fprintf(stderr,"Usage: %s [options] indexed-in.bam\n\n", MYNAME);
      fprintf(stderr,"Options:\n");
@@ -239,10 +251,11 @@ usage(const uniq_conf_t* uniq_conf)
      fprintf(stderr, "  -o | --vcf-out FILE      Output vcf file [- = stdout; gzip supported]\n");
      fprintf(stderr, "  -s | --sig               Significance threshold [%f]\n", uniq_conf->sig);
      fprintf(stderr, "  -f | --uni-freq          Assume variants have uniform test frequency of this value (unused if <=0) [%f]\n", uniq_conf->uni_freq);
-     fprintf(stderr, "       --use-freq-diff     Use binomial test to check for frequency differences\n");
-     fprintf(stderr, "                           (Probably not a good idea at high coverage positions)\n");
-     fprintf(stderr, "                           Default is to report variants if they are above implied detection limit\n");
-     fprintf(stderr, "       --use-orphan        Count anomalous read pairs\n");
+     fprintf(stderr, "       --output-all        Report all variants instead of only the ones, marked unique.\n");
+     fprintf(stderr, "                           Note, those with no coverage will nevertheless not be printed.\n");
+     fprintf(stderr, "       --use-det-lim       Report variants if they are above implied detection limit\n");
+     fprintf(stderr, "                           Default is to use binomial test to check for frequency differences\n");
+     fprintf(stderr, "       --use-orphan        Don't ignore anomalous read pairs / orphan reads\n");
      fprintf(stderr, "       --verbose           Be verbose\n");
      fprintf(stderr, "       --debug             Enable debugging\n");
 }
@@ -264,9 +277,9 @@ main_uniq(int argc, char *argv[])
      var_t **vars = NULL;
      int num_vars = 0;
      char *vcf_header = NULL;
-     static int use_freq_diff = 0;
+     static int use_det_lim = 0;
      static int use_orphan = 0;
-
+     static int output_all = 0;
      for (i=0; i<argc; i++) {
           LOG_DEBUG("arg %d: %s\n", i, argv[i]);
      }
@@ -277,7 +290,7 @@ main_uniq(int argc, char *argv[])
      uniq_conf.sig = DEFAULT_SIG;
      uniq_conf.uni_freq = DEFAULT_UNI_FREQ;
      uniq_conf.bonf = 1;
-     uniq_conf.use_freq_diff = 0;
+     uniq_conf.use_det_lim = 0;
 
      /* default pileup options */
      memset(&mplp_conf, 0, sizeof(mplp_conf_t));
@@ -300,9 +313,9 @@ main_uniq(int argc, char *argv[])
               {"help", no_argument, NULL, 'h'},
               {"verbose", no_argument, &verbose, 1},
               {"debug", no_argument, &debug, 1},
-              {"use-freq-diff", no_argument, &use_freq_diff, 1},
+              {"use-det-lim", no_argument, &use_det_lim, 1},
               {"use-orphan", no_argument, &use_orphan, 1},
-
+              {"output-all", no_argument, &output_all, 1},
               {"vcf-in", required_argument, NULL, 'v'},
               {"vcf-out", required_argument, NULL, 'o'},
               {"uni-freq", required_argument, NULL, 'f'},
@@ -380,8 +393,8 @@ main_uniq(int argc, char *argv[])
     if (debug) {
          dump_mplp_conf(& mplp_conf, stderr);
     }
-
-    uniq_conf.use_freq_diff = use_freq_diff;
+    uniq_conf.output_all = output_all;
+    uniq_conf.use_det_lim = use_det_lim;
 
     if (argc == 2) {
         fprintf(stderr, "\n");
@@ -426,7 +439,6 @@ main_uniq(int argc, char *argv[])
          return 1;
     }
 
-
     if (0 != vcf_parse_header(&vcf_header, & uniq_conf.vcf_in)) {
          LOG_WARN("%s\n", "vcf_parse_header() failed. trying to rewind to start...");
          if (vcf_file_seek(& uniq_conf.vcf_in, 0, SEEK_SET)) {
@@ -436,12 +448,12 @@ main_uniq(int argc, char *argv[])
          }
     } else {
          /*LOG_FIXME("header was: %s", vcf_header);*/
+         vcf_header_add(&vcf_header, "##INFO=<ID=UNIQ,Number=0,Type=Flag,Description=\"Unique, i.e. not detectable in paired sample\">\n");
          vcf_header_add(&vcf_header, "##INFO=<ID=UQ,Number=1,Type=Integer,Description=\"Phred-scaled uniq score at this position\">\n");
          vcf_write_header(& uniq_conf.vcf_out, vcf_header);
          /*LOG_FIXME("header now: %s", vcf_header);*/
          free(vcf_header);
     }
-
 
     if (-1 == (num_vars = vcf_parse_vars(&vars, & uniq_conf.vcf_in, 1))) {
          LOG_FATAL("%s\n", "vcf_parse_vars() failed");
@@ -465,18 +477,19 @@ main_uniq(int argc, char *argv[])
          LOG_DEBUG("pileup for var no %d at %s %d\n",
                    i+1, uniq_conf.var->chrom, uniq_conf.var->pos+1);
          if (vcf_var_has_info_key(NULL, uniq_conf.var, "INDEL")) {
-              LOG_VERBOSE("Skipping indel var at %s %d\n",
+              LOG_WARN("Skipping indel var at %s %d\n",
                        uniq_conf.var->chrom, uniq_conf.var->pos+1);
               free(mplp_conf.reg);
               mplp_conf.reg = NULL;
               continue;
-
+#if HANDLED_ABOVE_AT_PARSE_VARS
          } else if (vcf_var_filtered(uniq_conf.var)) {
               LOG_VERBOSE("Skipping filtered var at %s %d\n",
                        uniq_conf.var->chrom, uniq_conf.var->pos+1);
               free(mplp_conf.reg);
               mplp_conf.reg = NULL;
               continue;
+#endif
          }
 
          rc = mpileup(&mplp_conf, plp_proc_func, (void*)&uniq_conf,
