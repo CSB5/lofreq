@@ -81,8 +81,6 @@ class SomaticSNVCaller(object):
     DEFAULT_MIN_COV = 10
     DEFAULT_USE_ORPHAN = False
     DEFAULT_NUM_THREADS = 1
-    # FIXME we should use fdr here and it should become a user arg
-    DEFAULT_UNIQ_MTC_ALPHA = 1.0
 
     
     def __init__(self, bam_n=None, bam_t=None,
@@ -160,7 +158,6 @@ class SomaticSNVCaller(object):
         self.min_cov = self.DEFAULT_MIN_COV
         self.use_orphan = self.DEFAULT_USE_ORPHAN
         self.num_threads = self.DEFAULT_NUM_THREADS
-        self.uniq_mtc_alpha = self.DEFAULT_UNIQ_MTC_ALPHA
         
 
         
@@ -422,7 +419,8 @@ class SomaticSNVCaller(object):
 
         cmd = [self.LOFREQ, 'uniq',
                '--uni-freq', "0.5",
-               '-s', "%s" % self.uniq_mtc_alpha,
+               '--uniq-mtc', "fdr",
+               '--uniq-alpha', "0.001",
                '-v', self.vcf_som_raw,
                '-o', self.vcf_som_fin]
         if self.use_orphan:
