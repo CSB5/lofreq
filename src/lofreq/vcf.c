@@ -20,12 +20,14 @@
 #include "log.h"
 #include "utils.h"
 #include "vcf.h"
-
+#include "defaults.h"
 
 #define LINE_BUF_SIZE 1<<12
 
-/* this is the actual header. all the other stuff is actually called meta-info */
-const char *HEADER_LINE = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n";
+/* this is the actual header. all the other stuff is actually called meta-info 
+ * note, newline character is missing here
+ */
+const char *HEADER_LINE = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO";
 
 
 int warned_one_alt_base_support = 0;
@@ -417,7 +419,7 @@ void vcf_write_new_header(vcf_file_t *vcf_file, const char *src, const char *ref
      VCF_PRINTF(vcf_file, "##INFO=<ID=DP4,Number=4,Type=Integer,Description=\"Counts for ref-forward bases, ref-reverse, alt-forward and alt-reverse bases\">\n");
      VCF_PRINTF(vcf_file, "##INFO=<ID=INDEL,Number=0,Type=Flag,Description=\"Indicates that the variant is an INDEL.\">\n");
      VCF_PRINTF(vcf_file, "##INFO=<ID=CONSVAR,Number=0,Type=Flag,Description=\"Indicates that the variant is a consensus variant (as opposed to a low frequency variant).\">\n");
-     VCF_PRINTF(vcf_file, "%s", HEADER_LINE);
+     VCF_PRINTF(vcf_file, "%s\n", HEADER_LINE);
 }
 
 
@@ -441,8 +443,8 @@ int vcf_parse_header(char **header, vcf_file_t *vcf_file)
 #endif
           (*header) = realloc((*header), (strlen(*header) + strlen(line) + 1 /* '\0' */) * sizeof(char));
           (void) strcat((*header), line);
-          if (strlen(line) >= strlen(HEADER_LINE)-1) {
-               if (0 == strncmp(line, HEADER_LINE, strlen(HEADER_LINE)-1)) {
+          if (strlen(line) >= strlen(HEADER_LINE)) {
+               if (0 == strncmp(line, HEADER_LINE, strlen(HEADER_LINE))) {
                     return 0;
                }
           }
@@ -612,7 +614,8 @@ void vcf_header_add(char **header, const char *info)
 
      token = strstr(*header, HEADER_LINE);
      if (! token) {
-          LOG_WARN("%s\n", "Can't add info to empty header");
+          LOG_WARN("%s\n", "Can't add info to empty header, because header line is missing");
+          LOG_FIXME("%s\n", *header);
           return;
      }
      pos = (int)(token - (*header));
@@ -627,6 +630,7 @@ void vcf_header_add(char **header, const char *info)
      (*header)[pos] = '\0'; /* can't just: token[0] = '\0'; since that would work on a copy?! */
      (void) strcat(*header, info);
      (void) strcat(*header, HEADER_LINE);
+     (void) strcat(*header, "\n");
      return;
 }
 
