@@ -135,18 +135,19 @@ usage(const filter_conf_t* filter_conf)
      fprintf(stderr, "  -c | --sb-alpha FLOAT       Multiple testing correcion pvalue threshold\n");
 
      fprintf(stderr, "  SNV Quality:\n");
-     fprintf(stderr, "  -Q  | --snvqual-thresh INT  Maximum phred-value allowed. Conflicts with -q\n");
-     fprintf(stderr, "  -q  | --snvqual-mtc STRING  Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -Q\n");
-     fprintf(stderr, "  -r  | --snvqual-alpha FLOAT Multiple testing correcion pvalue threshold\n");
-     fprintf(stderr, "  -s  | --snvqual-ntests INT  Multiple testing correcion pvalue threshold\n");
+     fprintf(stderr, "  -Q | --snvqual-thresh INT   Maximum phred-value allowed. Conflicts with -q\n");
+     fprintf(stderr, "  -q | --snvqual-mtc STRING   Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -Q\n");
+     fprintf(stderr, "  -r | --snvqual-alpha FLOAT  Multiple testing correcion pvalue threshold\n");
+     fprintf(stderr, "  -s | --snvqual-ntests INT   Multiple testing correcion pvalue threshold\n");
 #ifdef ENABLE_INDELS
      fprintf(stderr, "  Indels:\n");
-     fprintf(stderr, "  -K  | --indel-thresh INT  Maximum phred-value allowed. Conflicts with -q\n");
-     fprintf(stderr, "  -k  | --indel-mtc STRING  Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -Q\n");
-     fprintf(stderr, "  -l  | --indel-alpha FLOAT Multiple testing correcion pvalue threshold\n");
-     fprintf(stderr, "  -m  | --indel-ntests INT  Multiple testing correcion pvalue threshold\n");
+     fprintf(stderr, "  -K | --indel-thresh INT     Maximum phred-value allowed. Conflicts with -q\n");
+     fprintf(stderr, "  -k | --indel-mtc STRING     Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -Q\n");
+     fprintf(stderr, "  -l | --indel-alpha FLOAT    Multiple testing correcion pvalue threshold\n");
+     fprintf(stderr, "  -m | --indel-ntests INT     Multiple testing correcion pvalue threshold\n");
 #endif
      fprintf(stderr, "  Misc.:\n");
+     fprintf(stderr, "       --no-defaults          Remove all default filter settings\n");
      fprintf(stderr, "       --verbose              Be verbose\n");
      fprintf(stderr, "       --debug                Enable debugging\n");
      fprintf(stderr, "       --only-passed          Only output passed variants\n");
