@@ -6,30 +6,24 @@
 source lib.sh || exit 1
 
 
-echo "NEED TEST DATA WITH MULTIPLE SQs (only get first 1k for each)" 1>&2
 
-basedir=data/denv2-pseudoclonal
-bam=$basedir/denv2-pseudoclonal.bam
-reffa=$basedir/denv2-pseudoclonal_cons.fa
-bed=$basedir/denv2-pseudoclonal_incl.bed
-#truesnv=$basedir/denv2-pseudoclonal_true-snp.vcf
+BAM=data/dream-icgc-tcga-first10kperchrom-synthetic.challenge.set1.normal.v2.bam
+# don't bloody gzip your reference even though samtools happily indexes it
+REFFA=data/Homo_sapiens_assembly19.fasta
 
-basedir=data/somatic
-bam=$basedir/CHH966-tumor-100x-10pur-hg19.chr22-bed-only.bam
-reffa=$basedir/hg19_chr22.fa.gz
-bed=$basedir/SeqCap_EZ_Exome_v3_primary_lib_extend_no_overlap_minus300.chr22.bed
-
+KEEP_TMP=1
+NUM_THREADS=4
+DEBUG=0
+SIMULATE=0
 
 outdir=$(mktemp -d -t $(basename $0).XXXXXX)
 outraw_parallel=$outdir/raw_parallel.vcf
 outraw_single=$outdir/raw_single.vcf
 log=$outdir/log.txt
 
-KEEP_TMP=0
-NUM_THREADS=4
-DEBUG=0
 
-cmd="/usr/bin/time $LOFREQ call -f $reffa -l $bed -o $outraw_single --verbose $bam"
+cmd="/usr/bin/time -p $LOFREQ call -f $REFFA -o $outraw_single --verbose $BAM"
+test $SIMULATE -eq 1 && cmd="echo $cmd"
 test $DEBUG -eq 1 && echo "DEBUG: cmd=$cmd" 1>&2
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
@@ -37,21 +31,24 @@ if ! eval $cmd >> $log 2>&1; then
 fi
 
 LOFREQ_PARALLEL="$(dirname $LOFREQ)/../lofreq_python/scripts/lofreq2_call_pparallel.py"
-cmd="/usr/bin/time -p $LOFREQ_PARALLEL --pp-threads $NUM_THREADS -f $reffa -l $bed -o $outraw_parallel --verbose $bam"
+cmd="/usr/bin/time -p $LOFREQ_PARALLEL --pp-threads $NUM_THREADS -f $REFFA -o $outraw_parallel --verbose $BAM"
+test $SIMULATE -eq 1 && cmd="echo $cmd"
 test $DEBUG -eq 1 && echo "DEBUG: cmd=$cmd" 1>&2
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
 fi
 
-
-ndiff=$($LOFREQ vcfset -a complement -1 $outraw_parallel -2 $outraw_single  | grep -c '^[^#]')
+if [ $SIMULATE -eq 1 ]; then
+    ndiff=0
+else
+    ndiff=$($LOFREQ vcfset -a complement -1 $outraw_parallel -2 $outraw_single  | grep -c '^[^#]')
+fi
 if [ $ndiff -ne 0 ]; then
     echoerror "Observed some difference between parallel and single results. Check $outraw_parallel and $outraw_single"
     exit 1
 else
     echook "Parallel and single run give identical results."
-    echodebug "EXIT without deleting $outdir"; exit 1
 fi
 
 
