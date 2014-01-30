@@ -518,7 +518,7 @@ def main():
     # same as in lofreq_snpcaller.c and used by lofreq2_somatic.py
     sys.stderr.write("Number of substitution tests performed: %d\n" % num_tests)
 
-    cmd = ['lofreq2_filter.py', '-p', '-i', vcf_concat, '-o', final_vcf_out]
+    cmd = ['lofreq', 'filter', '--only-passed', '-i', vcf_concat, '-o', final_vcf_out]
     if no_default_filter:
         cmd.append('--no-defaults')
 
@@ -526,7 +526,7 @@ def main():
         # if bonf was computed dynamically, use bonf sum
         bonf = num_tests
         phredqual = prob_to_phredqual(sig_opt/float(bonf))
-        cmd.extend(['--snv-qual', "%s" % phredqual])
+        cmd.extend(['--snvqual-thresh', "%s" % phredqual])
 
     elif bonf_opt == 'auto':
         raise NotImplementedError
