@@ -42,10 +42,14 @@ fi
 if [ $SIMULATE -eq 1 ]; then
     ndiff=0
 else
-    ndiff=$($LOFREQ vcfset -a complement -1 $outraw_parallel -2 $outraw_single  | grep -c '^[^#]')
+    ndiff=$($LOFREQ vcfset -a complement -1 $outraw_parallel -2 $outraw_single --count-only)
 fi
 if [ $ndiff -ne 0 ]; then
     echoerror "Observed some difference between parallel and single results. Check $outraw_parallel and $outraw_single"
+    n_parallel=$(grep -vc '^#' $outraw_parallel)
+    n_single=$(grep -vc '^#' $outraw_single)
+    n_overlap=$($LOFREQ vcfset -a intersect -1 $outraw_parallel -2 $outraw_single --count-only)
+    echoerror "$outraw_parallel has $n_parallel and $outraw_single has $n_single SNVS. Both overlap by $n_overlap"
     exit 1
 else
     echook "Parallel and single run give identical results."
