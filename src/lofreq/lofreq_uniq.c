@@ -354,7 +354,7 @@ usage(const uniq_conf_t* uniq_conf)
      fprintf(stderr, "  -a | --uniq-alpha FLOAT Uniq Multiple testing correction p-value threshold (default=%f)\n", uniq_conf->uniq_filter.alpha); 
      fprintf(stderr, "  -n | --uniq-ntests INT  Uniq multiple testing correction p-value threshold (default=#vars)\n");
      fprintf(stderr, "       --output-all       Report all variants instead of only the ones, marked unique.\n");
-     fprintf(stderr, "                          Note, those with no coverage will nevertheless not be printed.\n");
+     fprintf(stderr, "                          Note, that variants already filtered in input will not be printed.\n");
      fprintf(stderr, "       --use-det-lim      Report variants if they are above implied detection limit\n");
      fprintf(stderr, "                          Default is to use binomial test to check for frequency differences\n");
      fprintf(stderr, "       --use-orphan       Don't ignore anomalous read pairs / orphan reads\n");
