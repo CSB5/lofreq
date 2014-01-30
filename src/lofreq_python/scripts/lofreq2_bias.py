@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""FIXME proof of concept implementation for MQ-bias filter
+"""Experimental implementation of various bias filters
 """
 
 __author__ = "Andreas Wilm"
@@ -15,13 +15,14 @@ import logging
 import os
 import argparse
 import gzip
+from math import log
 
 #--- third-party imports
 #
 # FIXME get rid of deps
 import pysam
 from scipy.stats import mannwhitneyu
-
+from scipy.stats import chi2
 
 #--- project specific imports
 #
@@ -43,6 +44,27 @@ logging.basicConfig(level=logging.WARN,
 
 
 ALPHA = 0.05
+
+
+def fisher_comb(pv1, pv2):
+    """
+    Fisher's method for combining p-values
+    
+    See for example
+    http://en.wikipedia.org/wiki/Fisher's_method
+    and
+    breseq-0.18b:polymorphism_statistics.r
+    """
+    
+    if pv1==0 or pv2==0:
+        # not sure if this is correct.
+        # see also http://stats.stackexchange.com/questions/58537/fishers-method-when-p-value-0
+        return 0.0
+    
+    comb_log = -2.0 * (log(pv1) + log(pv2))
+    # http://stackoverflow.com/questions/11725115/p-value-from-chi-sq-test-statistic-in-python
+    comb_pv = 1.0 - chi2.cdf(comb_log, 4)    
+    return comb_pv
 
 
 
@@ -74,7 +96,7 @@ def cmdline_parser():
                         type=int,
                         default=default,
                         help="Ignore reads with mapping quality below this value (default=%d)" % default)
-    default = 13
+    default = 6
     parser.add_argument("--bq-filter",
                         dest="min_bq",
                         type=int,
@@ -131,6 +153,10 @@ def main():
     if args.vcfout == '-':
         fh_out = sys.stdout
     else:
+        if os.path.exists(args.vcfout):
+            LOG.fatal("Cowardly refusing to overwrite already existing file %s" % (args.vcfout))
+            sys.exit(1)
+            
         if args.vcfout[-3:] == '.gz':
             fh_out = gzip.open(args.vcfout, 'w')
         else:
@@ -153,8 +179,8 @@ def main():
         ref_bquals = []
         alt_bquals = []
         # only for PE
-        ref_isize = []
-        alt_isize = []
+        #ref_isize = []
+        #alt_isize = []
         # following two meant to test
         #alt_vpos = [] 
         #rlens = []
@@ -196,13 +222,13 @@ def main():
             if b.upper() == var.REF[0].upper():
                 ref_mquals.append(mq)
                 ref_bquals.append(bq)
-                if not args.use_orphan:
-                    ref_isize.append(abs(r.tlen))
+                #if not args.use_orphan:
+                #    ref_isize.append(abs(r.tlen))
             elif b.upper() == var.ALT[0].upper():
                 alt_mquals.append(mq)
                 alt_bquals.append(bq)
-                if not args.use_orphan:
-                    alt_isize.append(abs(r.tlen))
+                #if not args.use_orphan:
+                #    alt_isize.append(abs(r.tlen))
             else:            
                 LOG.debug("Skipping non-ref-alt base %s at %s:%d" % (b, var.CHROM, var.POS))
                 continue
@@ -211,40 +237,47 @@ def main():
             var.CHROM, var.POS, len(ref_mquals), len(alt_mquals)))
         
         # mannwhitneyu fails if all values the same
-        if len(set(ref_mquals).union(alt_mquals))==1:
-            m_pv = 1
+        if len(set(ref_mquals).union(alt_mquals))==1 or len(ref_mquals)==0 or len(alt_mquals)==0:
+            m_pv = 1.0
         else:
             ustat = mannwhitneyu(ref_mquals, alt_mquals)
             m_pv = ustat[1]
             
         # same for bqs
-        if len(set(ref_bquals).union(alt_bquals))==1:
-            b_pv = 1
+        if len(set(ref_bquals).union(alt_bquals))==1 or len(ref_bquals)==0 or len(alt_bquals)==0:
+            b_pv = 1.0
         else:
             ustat = mannwhitneyu(ref_bquals, alt_bquals)
             b_pv = ustat[1]
 
-        # same for bqs
-        if len(ref_isize) and len(alt_isize):
-            if len(set(ref_isize).union(alt_isize))==1:
-                i_pv = 1
-            else:
-                ustat = mannwhitneyu(ref_isize, alt_isize)
-                i_pv = ustat[1]
-        else:
-            i_pv = 1
+        # same for isize-qs
+        #if len(ref_isize) and len(alt_isize):
+        #    if len(set(ref_isize).union(alt_isize))==1:
+        #        i_pv = 1
+        #    else:
+        #        ustat = mannwhitneyu(ref_isize, alt_isize)
+        #        i_pv = ustat[1]
+        #else:
+        #    i_pv = 1
+        
+        c_pv = fisher_comb(m_pv, b_pv)
             
         #import pdb; pdb.set_trace()
-        LOG.info("%s %d: %f %f" % (var.CHROM, var.POS, m_pv, b_pv))
+        LOG.info("%s %d: mb %f bb %f cb %f" % (var.CHROM, var.POS, m_pv, b_pv, c_pv))
 
         var.INFO['MB'] = prob_to_phredqual(m_pv)
         var.INFO['BB'] = prob_to_phredqual(b_pv)
-        var.INFO['IB'] = prob_to_phredqual(i_pv)
-
+        #var.INFO['IB'] = prob_to_phredqual(i_pv)
+        var.INFO['CB'] = prob_to_phredqual(c_pv)
+        
         keep = True
 
         #import pdb; pdb.set_trace()
-        for (pv, ftag) in [(m_pv, 'MB'), (b_pv, 'BB'), (i_pv, 'IB')]:
+        for (pv, ftag) in [(m_pv, 'MB'), 
+                           (b_pv, 'BB'),
+                           (c_pv, 'CB'),
+                           #(i_pv, 'IB')
+                           ]:
             if pv*bonf < ALPHA:
                 if var.FILTER == '.' or var.FILTER == 'PASS':
                     var = var._replace(FILTER=ftag)
