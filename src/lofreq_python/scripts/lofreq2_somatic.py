@@ -206,7 +206,7 @@ class SomaticSNVCaller(object):
         """Relaxed call of variants on normal sample
         """
 
-        if self.continue_interrupted and os.path.exists(self.vcf_n_rlx):
+        if self.continue_interrupted or os.path.exists(self.vcf_n_rlx):
             LOG.info('Reusing %s' % self.vcf_n_rlx)
             return
         else:
