@@ -32,18 +32,24 @@ try:
     import lofreq2_local
 except ImportError:
     pass
-from lofreq_star.utils import prob_to_phredqual
+from lofreq_star.utils import prob_to_phredqual, phredqual_to_prob
 from lofreq_star import vcf
+from lofreq_star import multiple_testing
+from lofreq_star import fdr
 
 
 #global logger
 # http://docs.python.org/library/logging.html
 LOG = logging.getLogger("")
 logging.basicConfig(level=logging.WARN,
-                                        format='%(levelname)s [%(asctime)s]: %(message)s')
+                    format='%(levelname)s [%(asctime)s]: %(message)s')
 
 
-ALPHA = 0.05
+DEFAULT_MTC = 'fdr'
+#DEFAULT_MTC = 'bonf'
+#DEFAULT_MTC = 'holmbonf'
+DEFAULT_MTC_ALPHA = 0.001
+DEFAULT_TAG_TO_FILTER = 'MB'
 
 
 def fisher_comb(pv1, pv2):
@@ -56,7 +62,7 @@ def fisher_comb(pv1, pv2):
     breseq-0.18b:polymorphism_statistics.r
     """
     
-    if pv1==0 or pv2==0:
+    if pv1 == 0 or pv2 == 0:
         # not sure if this is correct.
         # see also http://stats.stackexchange.com/questions/58537/fishers-method-when-p-value-0
         return 0.0
@@ -90,7 +96,19 @@ def cmdline_parser():
     parser.add_argument("-o", "--vcfout",
                         default = "-",
                         help="Output VCF")
-    default = 13
+    parser.add_argument("-m", "--mtc",
+                        choices=['bonf', 'holmbonf', 'fdr', 'None'],
+                        default = DEFAULT_MTC,
+                        help="Multiple Testing correction method (default: %s)" % DEFAULT_MTC)
+    parser.add_argument("--mtc-alpha",
+                        type=float,
+                        default = DEFAULT_MTC_ALPHA,
+                        help="Multiple Testing correction alpha (default: %s)" % DEFAULT_MTC_ALPHA)
+    parser.add_argument("-t", "--mtc-tag",
+                        choices=['BB', 'MB', 'CB'],
+                        default = DEFAULT_TAG_TO_FILTER,
+                        help="Which tag to apply multiple testing to (default: %s)" % DEFAULT_TAG_TO_FILTER)
+    default = 1
     parser.add_argument("--mq-filter",
                         dest="min_mq",
                         type=int,
@@ -122,17 +140,11 @@ def main():
     if args.verbose:
         LOG.setLevel(logging.INFO)
     if args.debug:
-        LOG.setLevel(logging.DEBUG)
-        import pdb
-        from IPython.core import ultratb
-        sys.excepthook = ultratb.FormattedTB(mode='Verbose',
-                                             color_scheme='Linux', call_pdb=1)
-        
+        LOG.setLevel(logging.DEBUG)        
     
     assert os.path.exists(args.bam), (
         "BAM file %s does not exist" % args.bam)
     samfh = pysam.Samfile(args.bam)
-
 
     # setup vcf_reader
     # 
@@ -145,9 +157,14 @@ def main():
             vcf_reader = vcf.VCFReader(open(args.vcfin))
             
     variants = [r for r in vcf_reader]
-    LOG.info("Loaded %d variants. Will use this for Bonferroni correction" % len(variants))
-    bonf = len(variants)
+    LOG.info("Loaded %d variants" % len(variants))
     
+    if args.mtc.lower() != 'None':
+        LOG.info("Will use %s for MTC on %s with alpha %f" % (
+            args.mtc, args.mtc_tag, args.mtc_alpha))
+    else:
+        LOG.info("No multiple testing correction will be done")
+        
     # setup vcf_writer
     #
     if args.vcfout == '-':
@@ -163,15 +180,15 @@ def main():
             fh_out = open(args.vcfout, 'w')
     vcf_writer = vcf.VCFWriter(fh_out)
     vcf_writer.meta_from_reader(vcf_reader)
-
-    outvars = []
+                                       
+    pvalues = []
     for var in variants:
         if var.INFO.has_key('INDEL'):
             LOG.warn("Skipping unsupported indel variant %s:%d" % (var.CHROM, var.POS))
             
         reads = list(samfh.fetch(reference=var.CHROM,
                                  start=var.POS-1, end=var.POS))
-        LOG.info("%s %d: %d (unfiltered) reads covering position" % (
+        LOG.debug("%s %d: %d (unfiltered) reads covering position" % (
            var.CHROM, var.POS, len(reads)))
 
         ref_mquals = []
@@ -237,14 +254,18 @@ def main():
             var.CHROM, var.POS, len(ref_mquals), len(alt_mquals)))
         
         # mannwhitneyu fails if all values the same
-        if len(set(ref_mquals).union(alt_mquals))==1 or len(ref_mquals)==0 or len(alt_mquals)==0:
+        if len(set(ref_mquals).union(alt_mquals))==1:
+            m_pv = 1.0
+        elif len(ref_mquals)==0 or len(alt_mquals)==0:
             m_pv = 1.0
         else:
             ustat = mannwhitneyu(ref_mquals, alt_mquals)
             m_pv = ustat[1]
             
         # same for bqs
-        if len(set(ref_bquals).union(alt_bquals))==1 or len(ref_bquals)==0 or len(alt_bquals)==0:
+        if len(set(ref_bquals).union(alt_bquals))==1:
+            b_pv = 1.0
+        elif len(ref_bquals)==0 or len(alt_bquals)==0:
             b_pv = 1.0
         else:
             ustat = mannwhitneyu(ref_bquals, alt_bquals)
@@ -263,37 +284,52 @@ def main():
         c_pv = fisher_comb(m_pv, b_pv)
             
         #import pdb; pdb.set_trace()
-        LOG.info("%s %d: mb %f bb %f cb %f" % (var.CHROM, var.POS, m_pv, b_pv, c_pv))
+        LOG.debug("%s %d: mb %f bb %f cb %f" % (var.CHROM, var.POS, m_pv, b_pv, c_pv))
 
         var.INFO['MB'] = prob_to_phredqual(m_pv)
         var.INFO['BB'] = prob_to_phredqual(b_pv)
         #var.INFO['IB'] = prob_to_phredqual(i_pv)
         var.INFO['CB'] = prob_to_phredqual(c_pv)
+
+        if args.mtc.lower() != 'none':
+            pvalues.append(phredqual_to_prob(int(var.INFO[args.mtc_tag])))
+                       
+
+    if args.mtc.lower() != 'none':
+    
+        ftag = "%s<%f" % (args.mtc, args.mtc_alpha)
+        rej_idxs = []
+        if args.mtc == 'bonf':
+            rej_idxs = [i for (i, p) in
+                       enumerate(multiple_testing.Bonferroni(pvalues).corrected_pvals) 
+                       if p<args.mtc_alpha]
+            
+        elif args.mtc == 'holmbonf':
+            rej_idxs = [i for (i, p) in
+                       enumerate(multiple_testing.Bonferroni(pvalues).corrected_pvals) 
+                       if p<args.mtc_alpha]
+                    
+        elif args.mtc == 'fdr':
+            rej_idxs = fdr.fdr(pvalues, a=args.mtc_alpha)
+    
+        else:
+            raise ValueError(), ("unknown MTC method %s" % args.mtc)
+    
+        for i in rej_idxs:
+            if variants[i].FILTER in [".", "PASS"]:
+                new_f = ftag
+            else:
+                new_f = "%s;%s" % (variants[i].FILTER, ftag)
+            variants[i] = variants[i]._replace(FILTER=new_f)
+    
+        LOG.info("%d of %d variants didn't pass filter (printing anyway)" % (
+            len(rej_idxs), len(variants)))
         
-        keep = True
-
-        #import pdb; pdb.set_trace()
-        for (pv, ftag) in [(m_pv, 'MB'), 
-                           (b_pv, 'BB'),
-                           (c_pv, 'CB'),
-                           #(i_pv, 'IB')
-                           ]:
-            if pv*bonf < ALPHA:
-                if var.FILTER == '.' or var.FILTER == 'PASS':
-                    var = var._replace(FILTER=ftag)
-                else:
-                    var = var._replace(FILTER="%s;%s" % (var.FILTER, ftag))
-                if args.pass_only:
-                    keep = False
-        if keep:
-            outvars.append(var)
-
-        #    LOG.info("Filtered: %s %d:\t%.8f\t%.8f" % (var.CHROM, var.POS, m_pv, b_pv))
-        #else:
-        #    LOG.info("Keeping: %s %d:\t%.8f\t%.8f" % (var.CHROM, var.POS, m_pv, b_pv))
-        
-
-    vcf_writer.write(outvars)
+    vcf_writer.write_metainfo()
+    vcf_writer.write_header()
+    for var in variants:
+        vcf_writer.write_rec(var)     
+    
     if fh_out != sys.stdout:
         fh_out.close()
                         
