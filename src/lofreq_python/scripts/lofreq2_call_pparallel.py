@@ -225,12 +225,11 @@ def sq_list_from_bam(bam):
 
 
 def lofreq_cmd_per_sq(bam, lofreq_call_args, tmp_dir):
-    """Order in sq_list should be the same as in BAM file1
-
-    Returns in addition length, number of mapped reads as separate
-    lists
+    """Returns argument for one lofreq call per chromosome. Commands
+    will be inversely sorted by number of mapped reads, if index
+    supports idxstats otherwise by length. Output vcf file names are
+    in order of chromosome.
     """
-
 
     # FIXME: this can be improved a lot. When asked for x threads we
     # should simply bin the BAM file such that we get exactly x
@@ -264,13 +263,14 @@ def lofreq_cmd_per_sq(bam, lofreq_call_args, tmp_dir):
     else:
         # only have two elements and 2nd is chrom length
         sort_idx = 1
-    # sort list, but keep original index
-    enum_sq_list = sorted(enumerate(sq_list), key=lambda x:x[1][sort_idx], reverse=True)
-    # remove unnecessary info
+    # sort list by sort_idx and prepend original index, which is used
+    # for vcf file naming to create the same order as in the bam
+    enum_sq_list = sorted(enumerate(sq_list), key=lambda x: x[1][sort_idx], reverse=True)
+    # keep only original index and sq name
     enum_sq_list = [(x[0], x[1][0]) for x in enum_sq_list]
     #import pdb; pdb.set_trace()
-
-    # if all the above is too compliated just use  enumerate(sq_list) below
+    #from IPython import embed; embed()
+    # if all the above is too compliated just use enumerate(sq_list) below
 
     for (i, sq) in enum_sq_list:
         # maintain region order by using index
@@ -484,7 +484,6 @@ def main():
     if any(results):
         #for (res) in results:
         #    LOG.fatal("At least one process reported: %s", res)
-
         for (res, cmd) in zip(results, cmd_list):
             if res != 0:
                 LOG.fatal("The following command failed"
