@@ -478,10 +478,8 @@ def main():
         LOG.critical("dryrun ending here")
         sys.exit(1)
 
-    results = []
     pool = multiprocessing.Pool(processes=num_threads)
-    p = pool.map_async(work, cmd_list, callback=results.extend)
-    p.wait()
+    results = pool.map(work, cmd_list, chunksize=1)
     # report failures and exit if found
     if any(results):
         #for (res) in results:
