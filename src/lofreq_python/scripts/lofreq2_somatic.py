@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python
 """LoFreq* Somatic SNV Caller.
 """
@@ -315,7 +316,7 @@ class SomaticSNVCaller(object):
         #cmd = ['valgrind', '--tool=memcheck', '--leak-check=full'] + cmd
 
         if self.continue_interrupted and os.path.exists(self.vcf_t_rlx) and os.path.exists(self.vcf_t_rlx_log):
-            LOG.info('Reusing %s and %s' % (self.vcf_t_rlx, self.vcf_t_maperrprof))
+            LOG.info('Reusing %s and %s' % (self.vcf_t_rlx, self.vcf_t_rlx_log))
             fh = open(self.vcf_t_rlx_log, 'r')
             elines = [l.replace("stderr: ", "") for l in fh.readlines()]
             fh.close()
