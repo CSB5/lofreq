@@ -20,13 +20,13 @@
 typedef struct {
      double p;
      long int i;
-} ixp; /* indexed p-value */
+} ixp_t; /* indexed p-value */
 
 int
 ixp_dbl_cmp(const void *a, const void *b)
 {
-     const ixp *ia = (const ixp *)a;
-     const ixp *ib = (const ixp *)b;
+     const ixp_t *ia = (const ixp_t *)a;
+     const ixp_t *ib = (const ixp_t *)b;
      return dbl_cmp(&ia->p, &ib->p);
 }
 
@@ -65,12 +65,14 @@ bonf_corr(double data[], long int size, long int num_tests)
 void
 holm_bonf_corr(double data[], long int size, double alpha, long int num_tests)
 {
-     ixp iarr[size];
      long int i;
      long int lp = size;
      double tp;
      double pp;
+     ixp_t *iarr;
 
+     iarr = malloc(size * sizeof(ixp_t));
+     
      if (num_tests<1) {
           lp = size;
      } else {
@@ -82,7 +84,7 @@ holm_bonf_corr(double data[], long int size, double alpha, long int num_tests)
           iarr[i].i = i;
           iarr[i].p = data[i];
      }
-     qsort(iarr, size, sizeof(ixp), ixp_dbl_cmp);
+     qsort(iarr, size, sizeof(ixp_t), ixp_dbl_cmp);
 
      pp = iarr[0].p;
      for (i = 0; i < size; i++) {
@@ -106,6 +108,7 @@ holm_bonf_corr(double data[], long int size, double alpha, long int num_tests)
                data[iarr[i].i] = iarr[i].p * lp;
           }
      }
+     free(iarr);
 }
 
 
@@ -120,11 +123,12 @@ long int
 fdr(double data[], long int size, double alpha, long int num_tests, long int **irejected)
 {
 
-     ixp iarr[size];
+     ixp_t *iarr;
      long int i;
      long int nrejected = 0;
      long int n;
 
+     iarr = malloc(size * sizeof(ixp_t));
      if (num_tests<1) {
           n = size;
      } else {
@@ -135,7 +139,7 @@ fdr(double data[], long int size, double alpha, long int num_tests, long int **i
           iarr[i].i = i;
           iarr[i].p = data[i];
      }
-     qsort(iarr, size, sizeof(ixp), ixp_dbl_cmp);
+     qsort(iarr, size, sizeof(ixp_t), ixp_dbl_cmp);
 
      /* starting from the largest rank, evaluate p(m) < alpha * (m/M) where m is the
       * rank and M is the total number of pvalues. If true, reject pvals 1..m */
@@ -152,8 +156,9 @@ fdr(double data[], long int size, double alpha, long int num_tests, long int **i
           /* printf("%d\t%f\t%d\n", iarr[i].i, iarr[i].p); */
           (*irejected)[i] = iarr[i].i;
      }
-     return nrejected;
 
+     free(iarr);
+     return nrejected;
 }
 
 int
