@@ -125,7 +125,7 @@ def cmdline_parser():
                         help="Don't ignore orphan-reads / anomalous read-pairs")
     parser.add_argument("-p", "--pass-only",
                         action="store_true",
-                        help="Don't print variants filtered here")
+                        help="Don't print filtered variants")
 
     return parser
 
@@ -182,7 +182,10 @@ def main():
     vcf_writer.meta_from_reader(vcf_reader)
                                        
     pvalues = []
-    for var in variants:
+    for (var_no, var) in enumerate(variants):
+        if var_no%500==1:
+            LOG.info("Computing bias for var %d of %d" % (var_no, len(variants)))
+            
         if var.INFO.has_key('INDEL'):
             LOG.warn("Skipping unsupported indel variant %s:%d" % (var.CHROM, var.POS))
             
@@ -314,7 +317,8 @@ def main():
     
         else:
             raise ValueError(), ("unknown MTC method %s" % args.mtc)
-    
+
+        # FIXME this might break with the new PyVCF (empty list?)
         for i in rej_idxs:
             if variants[i].FILTER in [".", "PASS"]:
                 new_f = ftag
@@ -322,13 +326,16 @@ def main():
                 new_f = "%s;%s" % (variants[i].FILTER, ftag)
             variants[i] = variants[i]._replace(FILTER=new_f)
     
-        LOG.info("%d of %d variants didn't pass filter (printing anyway)" % (
+        LOG.info("%d of %d variants didn't pass filter" % (
             len(rej_idxs), len(variants)))
         
     vcf_writer.write_metainfo()
     vcf_writer.write_header()
     for var in variants:
-        vcf_writer.write_rec(var)     
+        filtered = len(var.FILTER)>0 and var.FILTER not in [".", "PASS"]
+        if args.pass_only and filtered:
+            continue
+        vcf_writer.write_rec(var)
     
     if fh_out != sys.stdout:
         fh_out.close()
