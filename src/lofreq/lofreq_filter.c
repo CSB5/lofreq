@@ -268,15 +268,15 @@ void apply_sb_threshold(var_t *var, sb_filter_t *sb_filter)
  * Very similar to apply_sb_filter_mtc, but reverse testing logic and only looking at non consvars
  *
  */
-int apply_snvqual_filter_mtc(snvqual_filter_t *snvqual_filter, var_t **vars, const int num_vars)
+int apply_snvqual_filter_mtc(snvqual_filter_t *snvqual_filter, var_t **vars, const long int num_vars)
 {
      /* can only apply this logic to variants that are not consensus
       * variants, i.e those that actually have a quality. therefore
       * keep track of non cons var indeces */
-     int *orig_idx = NULL; /* of size num_noncons_vars */
+     long int *orig_idx = NULL; /* of size num_noncons_vars */
      double *noncons_errprobs = NULL;
-     int num_noncons_vars = 0;
-     int i;
+     long int num_noncons_vars = 0;
+     long int i;
 
      if (snvqual_filter->ntests && num_vars > snvqual_filter->ntests) {
          LOG_WARN("%s\n", "Number of predefined tests for SB filter larger than number of variants! Are you sure that makes sense?");
@@ -327,15 +327,14 @@ int apply_snvqual_filter_mtc(snvqual_filter_t *snvqual_filter, var_t **vars, con
                          snvqual_filter->alpha, snvqual_filter->ntests);
           
      } else if (snvqual_filter->mtc_type == MTC_FDR) {
-          int num_rej = 0;
+          long int num_rej = 0;
           long int *idx_rej; /* indices of rejected i.e. significant values */
-          int i;
           
           num_rej = fdr(noncons_errprobs, num_noncons_vars, 
                         snvqual_filter->alpha, snvqual_filter->ntests, 
                         &idx_rej);
           for (i=0; i<num_rej; i++) {
-               int idx = idx_rej[i];
+               long int idx = idx_rej[i];
                noncons_errprobs[idx] = -1;
           }
           free(idx_rej);
@@ -364,10 +363,10 @@ int apply_snvqual_filter_mtc(snvqual_filter_t *snvqual_filter, var_t **vars, con
  *
  * very similar to in apply_snvqual_filter_mtc, but reverse logic and looking at all vars
  */
-int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const int num_vars)
+int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const long int num_vars)
 {
      double *sb_probs = NULL;
-     int i;
+     long int i;
 
      if (sb_filter->ntests && num_vars > sb_filter->ntests) {
          LOG_WARN("%s\n", "Number of predefined tests for SB filter larger than number of variants! Are you sure that makes sense?");
@@ -407,15 +406,14 @@ int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const int num_vars
                          sb_filter->alpha, sb_filter->ntests);
           
      } else if (sb_filter->mtc_type == MTC_FDR) {
-          int num_rej = 0;
+          long int num_rej = 0;
           long int *idx_rej; /* indices of rejected i.e. significant values */
-          int i;
           
           num_rej = fdr(sb_probs, num_vars, 
                         sb_filter->alpha, sb_filter->ntests, 
                         &idx_rej);
           for (i=0; i<num_rej; i++) {
-               int idx = idx_rej[i];
+               long int idx = idx_rej[i];
                sb_probs[idx] = -1;
           }
           free(idx_rej);
