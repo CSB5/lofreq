@@ -62,8 +62,8 @@ logging.basicConfig(level=logging.WARN,
 def key_for_var(var):
     """FIXME:add-doc"""
 
-    return "%s %d %s %s" % (var.CHROM, var.POS, 
-                            var.REF, ''.join(var.ALT))
+    return "%s %d %s %s %s" % (var.CHROM, var.POS, 
+                            var.REF, ''.join(var.ALT), "INDEL" if var.INFO.has_key('INDEL') else "SNV")
 
 
 def get_vcfreader(vcffile):
@@ -192,10 +192,10 @@ def main():
             "Can't handle more then one alt base" 
             " (doesn't look like this file came from LoFreq)"
             " and therefore can't process: %s" % str(var))
-        if var.INFO.has_key('INDEL'):
-            assert not var.INFO['INDEL'], (
-                "Can't handle indels and therefore can't process"
-                " : %s" % str(var))
+        #if var.INFO.has_key('INDEL'):
+        #    assert not var.INFO['INDEL'], (
+        #        "Can't handle indels and therefore can't process"
+        #        " : %s" % str(var))
         
         k = key_for_var(var)
         assert not snvs2.has_key(k), (
