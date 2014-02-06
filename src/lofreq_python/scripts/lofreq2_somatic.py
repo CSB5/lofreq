@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python
 """LoFreq* Somatic SNV Caller.
 """
@@ -27,6 +26,7 @@ import gzip
 #
 # sets PATH so that local scripts/binary is used if present, i.e.
 # stuff can be run without installing it
+#
 try:
     import lofreq2_local
 except ImportError:
@@ -58,13 +58,16 @@ class SomaticSNVCaller(object):
 
     VCF_NORMAL_RLX_EXT = "normal_relaxed.vcf"
     VCF_NORMAL_RLX_LOG_EXT = "normal_relaxed.log"
-    VCF_TUMOR_MAPERRPROF_EXT = "maperrprof.txt"
+    VCF_NORMAL_STR_EXT = "normal_relaxed.vcf"
+    #
+    #VCF_TUMOR_MAPERRPROF_EXT = "maperrprof.txt"
     VCF_TUMOR_RLX_EXT = "tumor_relaxed.vcf"
     VCF_TUMOR_RLX_LOG_EXT = "tumor_relaxed.log"
     VCF_TUMOR_STR_EXT = "tumor_stringent.vcf"
+    #
     VCF_SOMATIC_RAW_EXT = "somatic_raw.vcf"
     VCF_SOMATIC_FINAL_EXT = "somatic_final.vcf"
-
+    #
     VCF_GERMLINE_EXT = "germline.vcf"
 
     LOFREQ = 'lofreq'
@@ -72,29 +75,28 @@ class SomaticSNVCaller(object):
     DEFAULT_ALPHA_N = 0.01;# i.e. qual
     DEFAULT_ALPHA_T = 0.01;# i.e. qual
     DEFAULT_MTC_T = 'bonf'
-    DEFAULT_MTC_ALPHA_T = 1
+    DEFAULT_MTC_ALPHA_T = 10
     DEFAULT_MQ_FILTER_T = 13
+    DEFAULT_MQ_FILTER_N = 1
     DEFAULT_BAQ_OFF = False
     DEFAULT_MQ_OFF = False
     DEFAULT_SRC_QUAL_ON = False
     DEFAULT_SRC_QUAL_IGN_VCF = None
-    DEFAULT_ALN_ERR_PROF_ON = False
+    #DEFAULT_ALN_ERR_PROF_ON = False
     DEFAULT_MIN_COV = 10
     DEFAULT_USE_ORPHAN = False
     DEFAULT_NUM_THREADS = 1
 
-    
-    def __init__(self, bam_n=None, bam_t=None,
-                 ref=None, outprefix=None,
-                 bed=None, reuse_normal_vcf=None,
-                 continue_interrupted=False):
+
+    def __init__(self, bam_n, bam_t, ref, outprefix,
+                 bed=None, continue_interrupted=False):
         """init function
         """
 
         assert all([bam_n, bam_t, ref, outprefix]), (
             "Missing mandatory arguments")
 
-        # make sure infiles exist and save them
+        # make sure infiles exist
         #
         infiles = [bam_n, bam_t, ref]
         if bed:
@@ -116,32 +118,31 @@ class SomaticSNVCaller(object):
 
         # setup output files
         #
-        self.outfiles = []
-        if reuse_normal_vcf:
-            assert os.path.exists(reuse_normal_vcf)
-            self.vcf_n_rlx = reuse_normal_vcf
-        else:
-            self.vcf_n_rlx = self.outprefix + self.VCF_NORMAL_RLX_EXT + ".gz"
-            self.vcf_n_rlx_log = self.outprefix + self.VCF_NORMAL_RLX_LOG_EXT
-            if not self.continue_interrupted:
-                for f in [self.vcf_n_rlx, self.vcf_n_rlx_log]:
-                    assert not os.path.exists(f), (
-                        "Cowardly refusing to overwrite already existing file %s" % (f))
-
-        self.vcf_t_maperrprof = self.outprefix + self.VCF_TUMOR_MAPERRPROF_EXT
+        self.vcf_n_rlx = self.outprefix + self.VCF_NORMAL_RLX_EXT + ".gz"
+        self.vcf_n_rlx_log = self.outprefix + self.VCF_NORMAL_RLX_LOG_EXT
+        self.vcf_n_str = self.outprefix + self.VCF_NORMAL_STR_EXT + ".gz"
+        #self.vcf_t_maperrprof = self.outprefix + self.VCF_TUMOR_MAPERRPROF_EXT
+        #
         self.vcf_t_rlx = self.outprefix + self.VCF_TUMOR_RLX_EXT + ".gz"
         self.vcf_t_rlx_log = self.outprefix + self.VCF_TUMOR_RLX_LOG_EXT
         self.vcf_t_str = self.outprefix + self.VCF_TUMOR_STR_EXT + ".gz"
+        #
         self.vcf_som_raw = self.outprefix + self.VCF_SOMATIC_RAW_EXT + ".gz"
         self.vcf_som_fin = self.outprefix + self.VCF_SOMATIC_FINAL_EXT
+        #
         self.vcf_germl = self.outprefix + self.VCF_GERMLINE_EXT + ".gz"
 
-        self.outfiles = [self.vcf_t_maperrprof, self.vcf_t_rlx,
-                         self.vcf_t_str, self.vcf_som_raw,
-                         self.vcf_som_fin, self.vcf_germl]
-        # vcf_n already checked
-        for f in self.outfiles:
-            if not self.continue_interrupted:
+        # make sure output files don't exist if we are not in
+        # 'continue' mode
+        #
+        self.outfiles = []
+        self.outfiles = [self.vcf_n_rlx, self.vcf_n_rlx_log, self.vcf_n_str,
+                        #self.vcf_t_maperrprof,
+                        self.vcf_t_rlx, self.vcf_t_rlx_log, self.vcf_t_str,
+                        self.vcf_som_raw, self.vcf_som_fin,
+                        self.vcf_germl]
+        if not self.continue_interrupted:
+            for f in self.outfiles:
                 assert not os.path.exists(f), (
                     "Cowardly refusing to overwrite already existing file %s" % f)
 
@@ -151,17 +152,18 @@ class SomaticSNVCaller(object):
         self.mtc_t = self.DEFAULT_MTC_T
         self.mtc_alpha_t = self.DEFAULT_MTC_ALPHA_T
         self.mq_filter_t = self.DEFAULT_MQ_FILTER_T
+        self.mq_filter_n = self.DEFAULT_MQ_FILTER_N
         self.baq_off = self.DEFAULT_BAQ_OFF
         self.mq_off = self.DEFAULT_MQ_OFF
         self.src_qual_on = self.DEFAULT_SRC_QUAL_ON
-        self.aln_err_prof_on = self.DEFAULT_ALN_ERR_PROF_ON
+        #self.aln_err_prof_on = self.DEFAULT_ALN_ERR_PROF_ON
         self.src_qual_ign_vcf = self.DEFAULT_SRC_QUAL_IGN_VCF
         self.min_cov = self.DEFAULT_MIN_COV
         self.use_orphan = self.DEFAULT_USE_ORPHAN
         self.num_threads = self.DEFAULT_NUM_THREADS
-        
 
-        
+
+
     @staticmethod
     def subprocess_wrapper(cmd, close_tmp=True):
         """Wrapper for subprocess.check_call
@@ -203,8 +205,117 @@ class SomaticSNVCaller(object):
             return (fh_stdout, fh_stderr)
 
 
-    def call_normal(self):
-        """Relaxed call of variants on normal sample
+    def call_rlx(self, sample_type):
+        """FIXME
+        """
+
+        assert sample_type in ['normal', 'tumor']
+
+
+        # setup base arguments for call
+        #
+        if self.num_threads < 2:
+            cmd = [self.LOFREQ, 'call']
+        else:
+            cmd = [self.LOFREQ, 'call-parallel', '--pp-threads', "%d" % self.num_threads]
+        cmd.extend(['-f', self.ref])
+        if self.bed:
+            cmd.extend(['-l', self.bed])
+        if self.use_orphan:
+            cmd.append('--use-orphan')
+        cmd.append('--no-default-filter')# no default filtering wanted
+        cmd.append('--verbose')
+
+
+        # add sample specific arguments
+        #
+        if sample_type == "normal":
+            cmd.extend(['-m', "%d" % self.mq_filter_n])
+            cmd.extend(['-b', "%d" % 1, '-s', "%f" % self.alpha_n])
+            out_vcf = self.vcf_n_rlx
+            out_log = self.vcf_n_rlx_log
+        elif sample_type == "tumor":
+            cmd.extend(['-m', "%d" % self.mq_filter_t])
+            cmd.extend(['-b', "%d" % 1, '-s', "%f" % self.alpha_t])
+            out_vcf = self.vcf_t_rlx
+            out_log = self.vcf_t_rlx_log
+        else:
+            raise ValueError(sample_type)
+
+        if self.baq_off or sample_type == "normal":
+            cmd.append('-B')
+        if self.mq_off or sample_type == "normal":
+            cmd.append('-J')
+
+        if sample_type == "tumor":
+            # FIXME if aln_err_prof...
+            cmd.extend(['-C', "%d" % self.min_cov])
+            if self.src_qual_on:
+                cmd.append('-S')
+            if self.src_qual_ign_vcf:
+                cmd.extend(['-V', self.src_qual_ign_vcf])
+
+        if sample_type == "tumor":
+            cmd.append(self.bam_t)
+        else:
+            cmd.append(self.bam_n)
+
+
+        # before we actually do anything check existance of output
+        # files and whether we should reuse them
+        #
+        if self.continue_interrupted:
+            if os.path.exists(out_vcf) and os.path.exists(out_log):
+                LOG.info("Skipping rlx call on %s" % sample_type)
+
+                num_tests = -1
+                fh = open(out_log, 'r')
+                elines = [l.replace("stderr: ", "") for l in fh.readlines()]
+                fh.close()
+                for l in elines:
+                    if l.startswith('Number of substitution tests performed'):
+                        num_tests = int(l.split(':')[1])
+                        break
+                if num_tests == -1:
+                    LOG.error("Couldn't parse number of tests from reused %s" % out_log)
+                    raise ValueError
+
+            else:
+                assert not os.path.exists(out_vcf)
+                assert not os.path.exists(out_log)
+        cmd.extend(['-o', out_vcf])
+
+        (o, e) = self.subprocess_wrapper(cmd, close_tmp=False)
+        fh = open(self.vcf_n_rlx_log, 'w')
+        fh.write('# %s\n' % ' '.join(cmd))
+        olines = o.readlines()
+        elines = e.readlines()
+        for l in elines:
+            fh.write("stderr: %s" % l)
+            LOG.info("cmd stderr: %s" % l.rstrip())
+        for l in olines:
+            fh.write("stdout: %s" % l)
+        fh.close()
+        o.close()
+        e.close()
+
+        num_tests = -1
+        for l in elines:
+            if l.startswith('Number of substitution tests performed'):
+                num_tests = int(l.split(':')[1])
+                break
+        if num_tests == -1:
+            LOG.error("Couldn't parse number of tests from lofreq call output"
+                      " (which was: %s)" % (elines))
+            raise ValueError
+
+        return num_tests
+
+
+    def ___call_normal(self):
+        """Call variants on normal sample
+
+        FIXME code dplication with call_tumor
         """
 
         if self.continue_interrupted or os.path.exists(self.vcf_n_rlx):
@@ -212,13 +323,6 @@ class SomaticSNVCaller(object):
             return
         else:
             assert not os.path.exists(self.vcf_n_rlx)
-            
-        # one could argue that BAQ (and MQ) should always be off for
-        # normal, as it only every reduces the chance of calls. tests
-        # on melanoma CHH930 50-50 g10ac045 orphan show that the ones
-        # called extra, do not overlap with any of the somatic_raw
-        # files. therefore we switched the behaviour back to the
-        # previous default which was to use the same as in tumor
 
         # FIXME aln_err_prof?
 
@@ -227,9 +331,7 @@ class SomaticSNVCaller(object):
         else:
             cmd = [self.LOFREQ, 'call-parallel', '--pp-threads', "%d" % self.num_threads]
         cmd.extend(['-f', self.ref])
-        if self.baq_off:
-            cmd.append('-B')
-        #if self.mq_off:
+        cmd.append('-B')
         cmd.append('-J')
         if self.use_orphan:
             cmd.append('--use-orphan')
@@ -239,7 +341,7 @@ class SomaticSNVCaller(object):
             cmd.extend(['-l', self.bed])
         cmd.append('--no-default-filter')# no filtering wanted
         cmd.extend(['-b', "%d" % 1, '-s', "%f" % self.alpha_n])
-        cmd.extend(['-m', "%d" % self.mq_filter_t])
+        cmd.extend(['-m', "%d" % self.mq_filter_n])
         cmd.extend(['-o', self.vcf_n_rlx])
         cmd.append(self.bam_n)
 
@@ -259,28 +361,70 @@ class SomaticSNVCaller(object):
         o.close()
         e.close()
 
+        num_tests = -1
+        for l in elines:
+            if l.startswith('Number of substitution tests performed'):
+                num_tests = int(l.split(':')[1])
+                break
+        if num_tests == -1:
+            LOG.error("Couldn't parse number of tests from lofreq call output"
+                      " (which was: %s)" % (elines))
+            raise ValueError
 
-    def call_tumor(self):
-        """Variant call on tumor sample
+
+    def rlx_to_str(self, sample_type, num_tests):
+        """Using tumor filtering settings to create stringent calls
+        from relaxed calls
         """
 
-        if self.aln_err_prof_on:
-            cmd = [self.LOFREQ, 'bamstats']
-            cmd.extend(['-f', self.ref])
-            if self.bed:
-                cmd.extend(['-l', self.bed])
-            # -q ?
-            cmd.extend(['-m', "%d" % self.mq_filter_t])
-            cmd.extend(['-o' , self.vcf_t_maperrprof])
-            cmd.append(self.bam_t)
-            
-            if self.continue_interrupted and os.path.exists(self.vcf_t_maperrprof):
-                LOG.info('Reusing %s' % self.vcf_t_maperrprof)
-            else:
-                assert not os.path.exists(self.vcf_t_maperrprof)
-                self.subprocess_wrapper(cmd)
+        # FIXME rename all t_str option incl mtc to str_
 
-                
+        assert sample_type in ['normal', 'tumor']
+
+        # filtering stringently using tumor stringent settings
+        if sample_type == "normal":
+            vcf_rlx = self.vcf_n_rlx
+            vcf_str = self.vcf_n_str
+        elif sample_type == "tumor":
+            vcf_rlx = self.vcf_t_rlx
+            vcf_str = self.vcf_n_str
+        else:
+            raise ValueError(sample_type)
+
+        cmd = [self.LOFREQ, 'filter', '-i', vcf_rlx,
+               '--snvqual-mtc', "%s" % self.mtc_t,
+               '--snvqual-alpha', '%f' % self.mtc_alpha_t,
+               '--snvqual-ntests', '%d' % num_tests,
+               '--only-passed', '-o', vcf_str]
+
+        if self.continue_interrupted and os.path.exists(vcf_str):
+            LOG.info('Reusing %s' % (vcf_str))
+        else:
+            self.subprocess_wrapper(cmd)
+
+
+
+    def ___call_tumor(self):
+        """Variant call on tumor sample
+
+        FIXME code dplication with call_normal
+        """
+
+        #if self.aln_err_prof_on:
+        #    cmd = [self.LOFREQ, 'bamstats']
+        #    cmd.extend(['-f', self.ref])
+        #    if self.bed:
+        #        cmd.extend(['-l', self.bed])
+        #    cmd.extend(['-m', "%d" % self.mq_filter_t])
+        #    cmd.extend(['-o' , self.vcf_t_maperrprof])
+        #    cmd.append(self.bam_t)
+        #
+        #    if self.continue_interrupted and os.path.exists(self.vcf_t_maperrprof):
+        #        LOG.info('Reusing %s' % self.vcf_t_maperrprof)
+        #    else:
+        #        assert not os.path.exists(self.vcf_t_maperrprof)
+        #        self.subprocess_wrapper(cmd)
+
         if self.num_threads < 2:
             cmd = [self.LOFREQ, 'call']
         else:
@@ -302,10 +446,11 @@ class SomaticSNVCaller(object):
         cmd.extend(['-o', self.vcf_t_rlx])
 
         # coverage is filtered later anyway, but ignoring it during call
-        # makes things faster and avoids trouble if user forgots to give
-        # bed-file etc
-        if self.aln_err_prof_on:
-            cmd.extend(['-A' , self.vcf_t_maperrprof])
+        # makes things faster and avoids trouble if user forgot to give
+        # bed-file etc.
+
+        #if self.aln_err_prof_on:
+        #    cmd.extend(['-A' , self.vcf_t_maperrprof])
         cmd.extend(['-C', "%d" % self.min_cov])
         if self.src_qual_on:
             cmd.append('-S')
@@ -384,12 +529,12 @@ class SomaticSNVCaller(object):
             return
         else:
             assert not os.path.exists(self.vcf_som_raw)
-            
+
         if self.vcf_som_raw[-3:] == ".gz":
             vcf_som_raw_fh = gzip.open(self.vcf_som_raw, 'w')
         else:
             vcf_som_raw_fh = open(self.vcf_som_raw, 'w')
-            
+
         cmd = [self.LOFREQ, 'vcfset', '-1', self.vcf_t_str,
                '-2', self.vcf_n_rlx,
                '-a', 'complement', '-o', '-']
@@ -457,8 +602,12 @@ class SomaticSNVCaller(object):
             LOG.fatal("ign-vcf file was provided, but src-qual is off")
             sys.exit(1)
         try:
-            self.call_normal()
-            self.call_tumor()
+            num_tests = self.call_rlx("normal")
+            self.rlx_to_str("normal", num_tests)
+
+            num_tests = self.call_rlx("tumor")
+            self.rlx_to_str("normal", num_tests)
+
             self.complement()
             self.uniq()
             self.call_germline()
@@ -509,7 +658,7 @@ def cmdline_parser():
                         #required=True,
                         default=default,
                         type=float,
-                        help="Advanced: Significance threshold (alpha)"
+                        help="Significance threshold (alpha)"
                         " for SNV pvalues in (relaxed) tumor vcf"
                         " (default: %f)" % default)
 
@@ -518,7 +667,7 @@ def cmdline_parser():
                         #required=True,
                         default=default,
                         type=float,
-                        help="Advanced: Significance threshold (alpha) for SNV pvalues"
+                        help="Significance threshold (alpha) for SNV pvalues"
                         "  in (relaxed) normal vcf (default: %f)" % default)
 
     default = 'bonf'
@@ -539,46 +688,51 @@ def cmdline_parser():
                         " (default: %f)" % default)
 
     default = 13
-    parser.add_argument("-m,", "--mq-filter",
+    parser.add_argument("--tumor-mq-filter",
                         type=int,
                         default=default,
-                        help="Ignore reads with mapping quality below this value (default=%d)" % default)
+                        help="Ignore reads in tumor sample with mapping quality below this value (default=%d)" % default)
+    default = 1
+    parser.add_argument("--normal-mq-filter",
+                        type=int,
+                        default=default,
+                        help="Ignore any reads in normal sample with mapping quality below this value (default=%d)" % default)
 
     parser.add_argument("-B", "--baq-off",
                         action="store_true",
-                        help="Disable BAQ computation in tumor")
+                        help="Disable BAQ computation everywhere")
 
     parser.add_argument("-J", "--mq-off",
                         action="store_true",
-                        help="Disable use of mapping quality in LoFreq's model")
+                        help="Disable use of mapping quality in LoFreq's model everywhere")
 
-    parser.add_argument("-A", "--aln-err-prof",
-                        action="store_true",
-                        help="Advanced: Use alignment error profile")
+    #parser.add_argument("-A", "--aln-err-prof",
+    #                    action="store_true",
+    #                    help="Advanced: Use alignment error profile")
 
     parser.add_argument("-S", "--src-qual",
                         action="store_true",
-                        help="Advanced: Enable use of source quality in tumor (see also -V)")
+                        help="Enable use of source quality in tumor (see also -V)")
     default = "normal"
     parser.add_argument("-V", "--ign-vcf",
                         default = default,
                         help="Ignore variants in this vcf-file for"
                         " source quality computation in tumor (only used if -S was given)."
                         " Use 'None' for NA and 'normal' for predictions"
-                        " in normal sample (default = %s)" % default)
+                        " in (stringently called) normal sample (default = %s)" % default)
 
     parser.add_argument("--reuse-normal-vcf",
-                        help="Advanced: reuse already computed"
-                        " vcf for normal sample")
+                        help="Reuse already computed"
+                        " vcf for normal sample (only use if you know exactly what you are doing)")
 
     parser.add_argument("--use-orphan",
                         action="store_true",
-                        help="Advanced: use orphaned/anomalous reads from read pairs")
+                        help="Use orphaned/anomalous reads from read pairs")
 
     parser.add_argument("--threads",
                         type=int,
                         dest="num_threads",
-                        help="Advanced: use this many threads for each call")
+                        help="Use this many threads for each call")
 
     return parser
 
@@ -595,11 +749,6 @@ def main():
         LOG.setLevel(logging.INFO)
     if args.debug:
         LOG.setLevel(logging.DEBUG)
-        import pdb
-        from IPython.core import ultratb
-        sys.excepthook = ultratb.FormattedTB(mode='Verbose',
-                                             color_scheme='Linux', call_pdb=1)
-
 
     for (in_file, descr) in [(args.normal, "BAM file for normal tissue"),
                              (args.tumor, "BAM file for tumor tissue")]:
@@ -643,22 +792,22 @@ def main():
     somatic_snv_caller.mtc_t = args.tumor_mtc
     somatic_snv_caller.mtc_alpha_t = args.tumor_mtc_alpha
     somatic_snv_caller.num_threads = args.num_threads
-    if args.mq_filter:
-        somatic_snv_caller.mq_filter_t = args.mq_filter
+    somatic_snv_caller.mq_filter_t = args.normal_mq_filter
+    somatic_snv_caller.mq_filter_n = args.normal_mq_filter
     if args.baq_off:
         somatic_snv_caller.baq_off = True
-        
+
     if args.src_qual:
         somatic_snv_caller.src_qual_on = True
         if args.ign_vcf:
             if args.ign_vcf.lower() not in ["none", "na"]:
                 if args.ign_vcf == "normal":
-                    somatic_snv_caller.src_qual_ign_vcf = somatic_snv_caller.vcf_n_rlx
+                    somatic_snv_caller.src_qual_ign_vcf = somatic_snv_caller.vcf_n_str
                 else:
                     somatic_snv_caller.src_qual_ign_vcf = args.ign_vcf
-        
-    if args.aln_err_prof:
-        somatic_snv_caller.aln_err_prof_on = True
+
+    #if args.aln_err_prof:
+    #    somatic_snv_caller.aln_err_prof_on = True
     if args.use_orphan:
         somatic_snv_caller.use_orphan = True
 
