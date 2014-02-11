@@ -303,7 +303,7 @@ int apply_snvqual_filter_mtc(snvqual_filter_t *snvqual_filter, var_t **vars, con
 
      /* collect values from noncons vars only and keep track of their indeces
       */
-     orig_idx = malloc(num_vars * sizeof(int));
+     orig_idx = malloc(num_vars * sizeof(long int));
      if ( ! orig_idx) {
           LOG_FATAL("%s\n", "out of memory");
           return -1;
@@ -326,7 +326,7 @@ int apply_snvqual_filter_mtc(snvqual_filter_t *snvqual_filter, var_t **vars, con
           free(orig_idx);
           return 0;
      }
-     orig_idx = realloc(orig_idx, (num_noncons_vars * sizeof(int)));
+     orig_idx = realloc(orig_idx, (num_noncons_vars * sizeof(long int)));
      noncons_errprobs = realloc(noncons_errprobs, (num_noncons_vars * sizeof(double)));
 
      /* only now we can set the number of tests (if it wasn't set by
@@ -403,7 +403,7 @@ int apply_indelqual_filter_mtc(indelqual_filter_t *indelqual_filter, var_t **var
 
      /* collect values from noncons vars only and keep track of their indeces
       */
-     orig_idx = malloc(num_vars * sizeof(int));
+     orig_idx = malloc(num_vars * sizeof(long int));
      if ( ! orig_idx) {
           LOG_FATAL("%s\n", "out of memory");
           return -1;
@@ -426,7 +426,7 @@ int apply_indelqual_filter_mtc(indelqual_filter_t *indelqual_filter, var_t **var
           free(orig_idx);
           return 0;
      }
-     orig_idx = realloc(orig_idx, (num_noncons_vars * sizeof(int)));
+     orig_idx = realloc(orig_idx, (num_noncons_vars * sizeof(long int)));
      noncons_errprobs = realloc(noncons_errprobs, (num_noncons_vars * sizeof(double)));
 
      /* only now we can set the number of tests (if it wasn't set by
