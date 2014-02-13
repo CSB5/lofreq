@@ -276,13 +276,11 @@ var_in_ign_list(var_t *var) {
 }
 
 
-
 void
 source_qual_free_ign_vars()
 {
      var_hash_free_table(source_qual_ign_vars_hash);
 }
-
 
 
 int
@@ -504,7 +502,8 @@ free_and_exit:
 
      free(err_probs);
 
-     /* if we wanted to use softening from precomputed stats then add all non-matches up instead of using the matches */
+     /* if we wanted to use softening from precomputed stats then add
+      * all non-matches up instead of using the matches */
 #ifdef TRACE
      LOG_DEBUG("returning src_qual=%d (orig prob = %g) for cigar=%s num_err_probs=%d num_non_matches=%d(%d) @%d\n", 
                src_qual, src_prob, cigar_str_from_bam(b), num_err_probs, num_non_matches, orig_num_non_matches, b->core.pos);
