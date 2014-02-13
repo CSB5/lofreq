@@ -547,7 +547,9 @@ def cmdline_parser():
     parser.add_argument("--no-src-qual",
                         action="store_true",
                         help="Disable use of source quality in tumor (see also -V)")
+    default = "normal"
     parser.add_argument("-V", "--ign-vcf",
+                        default = default,
                         help="Ignore variants in this vcf-file for"
                         " source quality computation in tumor (collides with --no-src-qual)."
                         " Default is to use predictions in (stringently called) normal sample")
