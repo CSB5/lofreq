@@ -32,7 +32,7 @@
 #define MYNAME PACKAGE
 #endif
 
-#define DEFAULT_ALPHA 0.05
+#define DEFAULT_ALPHA 0.01
 
 #define FILTER_ID_STRSIZE 64
 #define FILTER_STRSIZE 128
@@ -68,6 +68,14 @@ typedef struct {
 } snvqual_filter_t;
 
 typedef struct {
+     int thresh;/* use if > 0; otherwise use multiple testing correction that's if >0 */
+     int mtc_type;/* holm; holmbonf; fdr; none */
+     double alpha;
+     long int ntests;
+     char id[FILTER_ID_STRSIZE];
+} indelqual_filter_t;
+
+typedef struct {
      vcf_file_t vcf_in;
      vcf_file_t vcf_out;
      int print_only_passed;
@@ -77,9 +85,7 @@ typedef struct {
      af_filter_t af_filter;
      sb_filter_t sb_filter;
      snvqual_filter_t snvqual_filter;
-#ifdef ENABLE_INDELS
-FIXME: add indel specific filter structs
-#endif
+     indelqual_filter_t indelqual_filter;
 } filter_conf_t;
 
 
@@ -104,9 +110,9 @@ dump_filter_conf(filter_conf_t *cfg)
      fprintf(stderr, "  snvqual_filter thresh=%d mtc_type=%d|%s alpha=%f ntests=%ld\n",
              cfg->snvqual_filter.thresh, cfg->snvqual_filter.mtc_type, mtc_type_str[cfg->snvqual_filter.mtc_type],
              cfg->snvqual_filter.alpha, cfg->snvqual_filter.ntests);
-#ifdef ENABLE_INDELS
-FIXME:output indel specific settings
-#endif
+     fprintf(stderr, "  indelqual_filter thresh=%d mtc_type=%d|%s alpha=%f ntests=%ld\n",
+             cfg->indelqual_filter.thresh, cfg->indelqual_filter.mtc_type, mtc_type_str[cfg->indelqual_filter.mtc_type],
+             cfg->indelqual_filter.alpha, cfg->indelqual_filter.ntests);
 }
 
 
@@ -139,13 +145,13 @@ usage(const filter_conf_t* filter_conf)
      fprintf(stderr, "  -q | --snvqual-mtc STRING   Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -Q\n");
      fprintf(stderr, "  -r | --snvqual-alpha FLOAT  Multiple testing correcion pvalue threshold\n");
      fprintf(stderr, "  -s | --snvqual-ntests INT   Multiple testing correcion pvalue threshold\n");
-#ifdef ENABLE_INDELS
+
      fprintf(stderr, "  Indels:\n");
-     fprintf(stderr, "  -K | --indel-thresh INT     Maximum phred-value allowed. Conflicts with -q\n");
-     fprintf(stderr, "  -k | --indel-mtc STRING     Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -Q\n");
-     fprintf(stderr, "  -l | --indel-alpha FLOAT    Multiple testing correcion pvalue threshold\n");
-     fprintf(stderr, "  -m | --indel-ntests INT     Multiple testing correcion pvalue threshold\n");
-#endif
+     fprintf(stderr, "  -K | --indelqual-thresh INT     Maximum phred-value allowed. Conflicts with -q\n");
+     fprintf(stderr, "  -k | --indelqual-mtc STRING     Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -Q\n");
+     fprintf(stderr, "  -l | --indelqual-alpha FLOAT    Multiple testing correcion pvalue threshold\n");
+     fprintf(stderr, "  -m | --indelqual-ntests INT     Multiple testing correcion pvalue threshold\n");
+
      fprintf(stderr, "  Misc.:\n");
      fprintf(stderr, "       --no-defaults          Remove all default filter settings\n");
      fprintf(stderr, "       --verbose              Be verbose\n");
@@ -222,12 +228,24 @@ void apply_dp_filter(var_t *var, dp_filter_t *dp_filter)
 
 void apply_snvqual_threshold(var_t *var, snvqual_filter_t *snvqual_filter)
 {
+     assert (! vcf_var_has_info_key(NULL, var, "INDEL"));
      if (! snvqual_filter->thresh) {
           return;
      }
-
      if (var->qual < snvqual_filter->thresh) {
           vcf_var_add_to_filter(var, snvqual_filter->id);
+     }
+}
+
+
+void apply_indelqual_threshold(var_t *var, indelqual_filter_t *indelqual_filter)
+{
+     assert (vcf_var_has_info_key(NULL, var, "INDEL"));
+     if (! indelqual_filter->thresh) {
+          return;
+     }
+     if (var->qual < indelqual_filter->thresh) {
+          vcf_var_add_to_filter(var, indelqual_filter->id);
      }
 }
 
@@ -267,6 +285,7 @@ void apply_sb_threshold(var_t *var, sb_filter_t *sb_filter)
  * 
  * Very similar to apply_sb_filter_mtc, but reverse testing logic and only looking at non consvars
  *
+ * Will ignore indels
  */
 int apply_snvqual_filter_mtc(snvqual_filter_t *snvqual_filter, var_t **vars, const long int num_vars)
 {
@@ -279,12 +298,12 @@ int apply_snvqual_filter_mtc(snvqual_filter_t *snvqual_filter, var_t **vars, con
      long int i;
 
      if (snvqual_filter->ntests && num_vars > snvqual_filter->ntests) {
-         LOG_WARN("%s\n", "Number of predefined tests for SB filter larger than number of variants! Are you sure that makes sense?");
+         LOG_WARN("%s\n", "Number of predefined tests for snvqual filter larger than number of variants! Are you sure that makes sense?");
      }
 
      /* collect values from noncons vars only and keep track of their indeces
       */
-     orig_idx = malloc(num_vars * sizeof(int));
+     orig_idx = malloc(num_vars * sizeof(long int));
      if ( ! orig_idx) {
           LOG_FATAL("%s\n", "out of memory");
           return -1;
@@ -296,7 +315,7 @@ int apply_snvqual_filter_mtc(snvqual_filter_t *snvqual_filter, var_t **vars, con
      }
      num_noncons_vars = 0;
      for (i=0; i<num_vars; i++) {
-          if (vars[i]->qual>0) {
+          if (vars[i]->qual>0 && ! vcf_var_has_info_key(NULL, vars[i], "INDEL")) {
                noncons_errprobs[num_noncons_vars] = PHREDQUAL_TO_PROB(vars[i]->qual);
                orig_idx[num_noncons_vars] = i;
                num_noncons_vars += 1;
@@ -307,7 +326,7 @@ int apply_snvqual_filter_mtc(snvqual_filter_t *snvqual_filter, var_t **vars, con
           free(orig_idx);
           return 0;
      }
-     orig_idx = realloc(orig_idx, (num_noncons_vars * sizeof(int)));
+     orig_idx = realloc(orig_idx, (num_noncons_vars * sizeof(long int)));
      noncons_errprobs = realloc(noncons_errprobs, (num_noncons_vars * sizeof(double)));
 
      /* only now we can set the number of tests (if it wasn't set by
@@ -347,6 +366,106 @@ int apply_snvqual_filter_mtc(snvqual_filter_t *snvqual_filter, var_t **vars, con
      for (i=0; i<num_noncons_vars; i++) {
           if (noncons_errprobs[i] > snvqual_filter->alpha) {
                vcf_var_add_to_filter(vars[orig_idx[i]], snvqual_filter->id);
+          }
+     }
+
+     free(orig_idx);
+     free(noncons_errprobs);
+
+     return 0;
+}
+
+
+
+/* returns -1 on error 
+ *
+ * filter everything that's not significant
+ * 
+ * Very similar to apply_sb_filter_mtc, but reverse testing logic and only looking at non consvars
+ *
+ */
+int apply_indelqual_filter_mtc(indelqual_filter_t *indelqual_filter, var_t **vars, const long int num_vars)
+{
+     /* can only apply this logic to variants that are not consensus
+      * variants, i.e those that actually have a quality. therefore
+      * keep track of non cons var indeces */
+     long int *orig_idx = NULL; /* of size num_noncons_vars */
+     double *noncons_errprobs = NULL;
+     long int num_noncons_vars = 0;
+     long int i;
+
+     LOG_FIXME("%s\n", "almost identical to apply_indelqual_filter_mtc just different filter can be easily merged by accepted both types of variants");
+
+
+     if (indelqual_filter->ntests && num_vars > indelqual_filter->ntests) {
+         LOG_WARN("%s\n", "Number of predefined tests for indelqual filter larger than number of variants! Are you sure that makes sense?");
+     }
+
+     /* collect values from noncons vars only and keep track of their indeces
+      */
+     orig_idx = malloc(num_vars * sizeof(long int));
+     if ( ! orig_idx) {
+          LOG_FATAL("%s\n", "out of memory");
+          return -1;
+     }
+     noncons_errprobs = malloc(num_vars * sizeof(double));
+     if ( ! noncons_errprobs) {
+          LOG_FATAL("%s\n", "out of memory");
+          return -1;
+     }
+     num_noncons_vars = 0;
+     for (i=0; i<num_vars; i++) {
+          if (vars[i]->qual>0 && vcf_var_has_info_key(NULL, vars[i], "INDEL")) {
+               noncons_errprobs[num_noncons_vars] = PHREDQUAL_TO_PROB(vars[i]->qual);
+               orig_idx[num_noncons_vars] = i;
+               num_noncons_vars += 1;
+          }
+     }
+     if (! num_noncons_vars) {
+          free(noncons_errprobs);
+          free(orig_idx);
+          return 0;
+     }
+     orig_idx = realloc(orig_idx, (num_noncons_vars * sizeof(long int)));
+     noncons_errprobs = realloc(noncons_errprobs, (num_noncons_vars * sizeof(double)));
+
+     /* only now we can set the number of tests (if it wasn't set by
+      * caller) */
+     if (! indelqual_filter->ntests) {
+          indelqual_filter->ntests = num_noncons_vars;
+     }
+
+     /* multiple testing correction
+      */
+     if (indelqual_filter->mtc_type == MTC_BONF) {
+          bonf_corr(noncons_errprobs, num_noncons_vars, 
+                    indelqual_filter->ntests);
+          
+     } else if (indelqual_filter->mtc_type == MTC_HOLMBONF) {
+          holm_bonf_corr(noncons_errprobs, num_noncons_vars, 
+                         indelqual_filter->alpha, indelqual_filter->ntests);
+          
+     } else if (indelqual_filter->mtc_type == MTC_FDR) {
+          long int num_rej = 0;
+          long int *idx_rej; /* indices of rejected i.e. significant values */
+          
+          num_rej = fdr(noncons_errprobs, num_noncons_vars, 
+                        indelqual_filter->alpha, indelqual_filter->ntests, 
+                        &idx_rej);
+          for (i=0; i<num_rej; i++) {
+               long int idx = idx_rej[i];
+               noncons_errprobs[idx] = -1;
+          }
+          free(idx_rej);
+          
+     } else {
+          LOG_FATAL("Internal error: unknown MTC type %d\n", indelqual_filter->mtc_type);
+          return -1;
+     }
+     
+     for (i=0; i<num_noncons_vars; i++) {
+          if (noncons_errprobs[i] > indelqual_filter->alpha) {
+               vcf_var_add_to_filter(vars[orig_idx[i]], indelqual_filter->id);
           }
      }
 
@@ -511,6 +630,24 @@ void cfg_filter_to_vcf_header(filter_conf_t *cfg, char **header)
                    cfg->snvqual_filter.id, buf, cfg->snvqual_filter.alpha);
           vcf_header_add(header, full_filter_str);
      }
+
+     assert (! (cfg->indelqual_filter.thresh > 0 && cfg->indelqual_filter.mtc_type != MTC_NONE));
+     if (cfg->indelqual_filter.thresh > 0) {
+          snprintf(cfg->indelqual_filter.id, FILTER_ID_STRSIZE, "min_indelqual_%d", cfg->indelqual_filter.thresh);
+          snprintf(full_filter_str, FILTER_STRSIZE,
+               "##FILTER=<ID=%s,Description=\"Minimum Indel Quality (Phred) %d\">\n",
+               cfg->indelqual_filter.id, cfg->indelqual_filter.thresh);
+          vcf_header_add(header, full_filter_str);
+          
+     } else if (cfg->indelqual_filter.mtc_type != MTC_NONE) {
+          char buf[64];
+          mtc_str(buf, cfg->indelqual_filter.mtc_type);
+          snprintf(cfg->indelqual_filter.id, FILTER_ID_STRSIZE, "indelqual_%s", buf);
+          snprintf(full_filter_str, FILTER_STRSIZE,
+               "##FILTER=<ID=%s,Description=\"Indel Quality Multiple Testing Correction: %s corr. pvalue < %f\">\n",
+                   cfg->indelqual_filter.id, buf, cfg->indelqual_filter.alpha);
+          vcf_header_add(header, full_filter_str);
+     }
 }
 
 
@@ -533,6 +670,7 @@ main_filter(int argc, char *argv[])
      cfg.af_filter.min = cfg.af_filter.max = -1;
      cfg.sb_filter.alpha = DEFAULT_ALPHA;
      cfg.snvqual_filter.alpha = DEFAULT_ALPHA;
+     cfg.indelqual_filter.alpha = DEFAULT_ALPHA;
 
 
     /* keep in sync with long_opts_str and usage
@@ -567,12 +705,12 @@ main_filter(int argc, char *argv[])
               {"snvqual-mtc", required_argument, NULL, 'q'},
               {"snvqual-alpha", required_argument, NULL, 'r'},
               {"snvqual-ntests", required_argument, NULL, 's'},
-#ifdef ENABLE_INDELS
-              {"indel-thresh", required_argument, NULL, 'K'},
-              {"indel-mtc", required_argument, NULL, 'k'},
-              {"indel-alpha", required_argument, NULL, 'l'},
-              {"indel-ntests", required_argument, NULL, 'm'},
-#endif
+
+              {"indelqual-thresh", required_argument, NULL, 'K'},
+              {"indelqual-mtc", required_argument, NULL, 'k'},
+              {"indelqual-alpha", required_argument, NULL, 'l'},
+              {"indelqual-ntests", required_argument, NULL, 'm'},
+
               {0, 0, 0, 0} /* sentinel */
          };
 
@@ -687,6 +825,35 @@ main_filter(int argc, char *argv[])
               cfg.snvqual_filter.ntests = atol(optarg);
               break;
 
+         case 'K':
+              if (! isdigit(optarg[0])) {
+                   LOG_FATAL("Non-numeric argument provided: %s\n", optarg);
+                   return -1;
+              }
+              cfg.indelqual_filter.thresh = atoi(optarg);
+              break;
+         case 'k':
+              cfg.indelqual_filter.mtc_type = mtc_str_to_type(optarg);
+              if (-1 == cfg.indelqual_filter.mtc_type) {
+                   LOG_FATAL("Unknown multiple testing correction type '%s' for snv quality filtering\n", optarg);
+                   return -1;
+              }
+              break;
+         case 'l':
+              if (! isdigit(optarg[0])) {
+                   LOG_FATAL("Non-numeric argument provided: %s\n", optarg);
+                   return -1;
+              }
+              cfg.indelqual_filter.alpha = strtof(optarg, NULL);
+              break;
+         case 'm':
+              if (! isdigit(optarg[0])) {
+                   LOG_FATAL("Non-numeric argument provided: %s\n", optarg);
+                   return -1;
+              }
+              cfg.indelqual_filter.ntests = atol(optarg);
+              break;
+
          case '?':
               LOG_FATAL("%s\n", "Unrecognized argument found. Exiting...\n");
               return 1;
@@ -733,6 +900,10 @@ main_filter(int argc, char *argv[])
     }
     if (cfg.snvqual_filter.thresh && cfg.snvqual_filter.mtc_type != MTC_NONE) {
          LOG_FATAL("%s\n", "Can't use fixed SNV quality threshold *and* multiple testing correction.");
+         return 1;
+    }
+    if (cfg.indelqual_filter.thresh && cfg.indelqual_filter.mtc_type != MTC_NONE) {
+         LOG_FATAL("%s\n", "Can't use fixed indel quality threshold *and* multiple testing correction.");
          return 1;
     }
 
@@ -823,12 +994,15 @@ main_filter(int argc, char *argv[])
          }
 
          is_indel = vcf_var_has_info_key(NULL, var, "INDEL");
+
 #ifndef ENABLE_INDELS
          if (is_indel) {
-              LOG_WARN("%s\n", "Skipping INDEL variants for now\n");
+              LOG_WARN("%s\n", "Skipping INDEL variants for now");
               free(var);
               continue;
          }
+#else
+         LOG_WARN("%s\n", "indel support enabled but untested");
 #endif
 
          /* read all in, no matter if already filtered. we keep adding filters */
@@ -853,7 +1027,7 @@ main_filter(int argc, char *argv[])
          apply_af_filter(var, & cfg.af_filter);
          apply_dp_filter(var, & cfg.dp_filter);
 
-         /* filters depending on type of variant
+         /* filter depend on type of variant
           */
          if (! is_indel) {
               if (cfg.snvqual_filter.thresh) {
@@ -861,19 +1035,17 @@ main_filter(int argc, char *argv[])
                    apply_snvqual_threshold(var, & cfg.snvqual_filter);
               }
 
+              /* FIXME SB on indel doesn't make sense, right? */
               if (cfg.sb_filter.thresh) {
                    assert(cfg.sb_filter.mtc_type == MTC_NONE);
                    apply_sb_threshold(var, & cfg.sb_filter);
               }
-         } 
-#ifdef ENABLE_INDELS
-           else {
-              if (cfg.indel_filter.thresh)) {
-                   assert(cfg.indel_filter.mtc_type == MTC_NONE);
-                   apply_indel_threshold(var, cfg.indel_filter.thresh);
-              } FIXME:implement-and-continue
+         } else {
+              if (cfg.indelqual_filter.thresh) {
+                   assert(cfg.indelqual_filter.mtc_type == MTC_NONE);
+                   apply_indelqual_threshold(var, & cfg.indelqual_filter);
+              }
          }
-#endif
     }
 
     if (num_vars) {
@@ -893,6 +1065,13 @@ main_filter(int argc, char *argv[])
     if (cfg.snvqual_filter.mtc_type != MTC_NONE) {
          if (apply_snvqual_filter_mtc(& cfg.snvqual_filter, vars, num_vars)) {
               LOG_FATAL("%s\n", "Multiple testing correction on SNV qualities failed");
+              return -1;
+         }
+    }
+
+    if (cfg.indelqual_filter.mtc_type != MTC_NONE) {
+         if (apply_indelqual_filter_mtc(& cfg.indelqual_filter, vars, num_vars)) {
+              LOG_FATAL("%s\n", "Multiple testing correction on Indel qualities failed");
               return -1;
          }
     }
