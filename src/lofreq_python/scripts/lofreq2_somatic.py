@@ -58,7 +58,7 @@ class SomaticSNVCaller(object):
 
     VCF_NORMAL_RLX_EXT = "normal_relaxed.vcf"
     VCF_NORMAL_RLX_LOG_EXT = "normal_relaxed.log"
-    VCF_NORMAL_STR_EXT = "normal_relaxed.vcf"
+    VCF_NORMAL_STR_EXT = "normal_stringent.vcf"
     #
     VCF_TUMOR_RLX_EXT = "tumor_relaxed.vcf"
     VCF_TUMOR_RLX_LOG_EXT = "tumor_relaxed.log"
@@ -235,6 +235,7 @@ class SomaticSNVCaller(object):
             out_log = self.vcf_t_rlx_log
         else:
             raise ValueError(sample_type)
+        cmd.extend(['-o', out_vcf])
 
         if self.baq_off or sample_type == "normal":
             cmd.append('-B')
@@ -248,10 +249,12 @@ class SomaticSNVCaller(object):
             if self.src_qual_ign_vcf:
                 cmd.extend(['-V', self.src_qual_ign_vcf])
 
-        if sample_type == "tumor":
+        if sample_type == "normal":
+            cmd.append(self.bam_n)
+        elif sample_type == "tumor":
             cmd.append(self.bam_t)
         else:
-            cmd.append(self.bam_n)
+            raise ValueError(sample_type)            
 
 
         # before we actually do anything check existance of output
@@ -272,11 +275,11 @@ class SomaticSNVCaller(object):
                 if num_tests == -1:
                     LOG.error("Couldn't parse number of tests from reused %s" % out_log)
                     raise ValueError
-
+                return num_tests
+            
             else:
                 assert not os.path.exists(out_vcf)
                 assert not os.path.exists(out_log)
-        cmd.extend(['-o', out_vcf])
 
         (o, e) = self.subprocess_wrapper(cmd, close_tmp=False)
         fh = open(self.vcf_n_rlx_log, 'w')
@@ -320,7 +323,7 @@ class SomaticSNVCaller(object):
             vcf_str = self.vcf_n_str
         elif sample_type == "tumor":
             vcf_rlx = self.vcf_t_rlx
-            vcf_str = self.vcf_n_str
+            vcf_str = self.vcf_t_str
         else:
             raise ValueError(sample_type)
 
@@ -330,6 +333,7 @@ class SomaticSNVCaller(object):
                '--snvqual-ntests', '%d' % num_tests,
                '--only-passed', '-o', vcf_str]
 
+        #import pdb; pdb.set_trace()
         if self.continue_interrupted and os.path.exists(vcf_str):
             LOG.info('Reusing %s' % (vcf_str))
         else:
@@ -440,7 +444,7 @@ class SomaticSNVCaller(object):
             self.rlx_to_str("normal", num_tests)
 
             num_tests = self.call_rlx("tumor")
-            self.rlx_to_str("normal", num_tests)
+            self.rlx_to_str("tumor", num_tests)
 
             self.complement()
             self.uniq()
@@ -548,10 +552,6 @@ def cmdline_parser():
                         " source quality computation in tumor (collides with --no-src-qual)."
                         " Default is to use predictions in (stringently called) normal sample")
 
-    parser.add_argument("--reuse-normal-vcf",
-                        help="Reuse already computed"
-                        " vcf for normal sample (only use if you know exactly what you are doing)")
-
     parser.add_argument("--use-orphan",
                         action="store_true",
                         help="Use orphaned/anomalous reads from read pairs")
@@ -588,12 +588,6 @@ def main():
             #parser.print_help()
             sys.exit(1)
 
-    if args.reuse_normal_vcf:
-        if not os.path.exists(args.reuse_normal_vcf):
-            LOG.error("file '%s' does not exist.\n" % (
-                args.reuse_normal_vcf))
-            sys.exit(1)
-
     LOG.debug("args = %s" % args)
 
     # check if outdir exists
@@ -611,7 +605,6 @@ def main():
         ref = args.ref,
         outprefix = args.outprefix,
         bed = args.bed,
-        reuse_normal_vcf = args.reuse_normal_vcf,
         continue_interrupted = args.continue_interrupted)
 
     somatic_snv_caller.alpha_n = args.normal_alpha
