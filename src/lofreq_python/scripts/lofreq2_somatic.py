@@ -76,7 +76,7 @@ class SomaticSNVCaller(object):
     DEFAULT_MTC_T = 'bonf'
     DEFAULT_MTC_ALPHA_T = 10
     DEFAULT_MQ_FILTER_T = 13
-    DEFAULT_MQ_FILTER_N = 1
+    DEFAULT_MQ_FILTER_N = 0
     DEFAULT_BAQ_OFF = False
     DEFAULT_MQ_OFF = False
     DEFAULT_SRC_QUAL_ON = True
@@ -530,7 +530,7 @@ def cmdline_parser():
                         type=int,
                         default=default,
                         help="Ignore reads in tumor sample with mapping quality below this value (default=%d)" % default)
-    default = 1
+    default = 0
     parser.add_argument("--normal-mq-filter",
                         type=int,
                         default=default,
