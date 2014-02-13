@@ -612,8 +612,8 @@ def main():
     somatic_snv_caller.mtc_t = args.tumor_mtc
     somatic_snv_caller.mtc_alpha_t = args.tumor_mtc_alpha
     somatic_snv_caller.num_threads = args.num_threads
-    somatic_snv_caller.mq_filter_t = args.normal_mq_filter
     somatic_snv_caller.mq_filter_n = args.normal_mq_filter
+    somatic_snv_caller.mq_filter_t = args.tumor_mq_filter
     if args.baq_off:
          somatic_snv_caller.baq_off = True
     else:
