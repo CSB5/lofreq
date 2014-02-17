@@ -112,10 +112,10 @@ done
 # SNV qual threshold filtering
 #
 Q=40
-num_exp=$(zcat $VCF | awk -v q=$Q '/^[^#]/ {if ($6!="." && $6>=q) {s+=1}} END {print s}')
+num_exp=$(zcat $VCF | awk -v q=$Q '/^[^#]/ {if ($6=="." || $6>=q) {s+=1}} END {print s}')
 num_out=$($FILTER -i $VCF --no-defaults  --snvqual-thresh $Q --only-passed | grep -vc '^#')
 if [ $num_exp -ne $num_out ]; then
-    echoerror "SNV quality threshold filtering failed"
+    echoerror "SNV quality threshold filtering failed: expected $num_exp but got $num_out"
     let num_fails=num_fails+1
 fi
 
