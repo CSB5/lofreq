@@ -86,6 +86,8 @@ merge_srcq_baseq_mapq_and_alnq(const int sq, const int bq, const int mq, const i
 
      if (-1 == mq) {
           mp = 0.0;
+     } else if (0 == mq) {
+          mp = 0.5;
      } else {
           mp = PHREDQUAL_TO_PROB(mq);
      }
@@ -146,6 +148,8 @@ merge_srcq_baseq_and_mapq(const int sq, const int bq, const int mq)
 
      if (-1 == mq) {
           mp = 0.0;
+     } else if (0 == mq) {
+          mp = 0.5;
      } else {
           mp = PHREDQUAL_TO_PROB(mq);
      }
@@ -178,16 +182,19 @@ merge_baseq_and_mapq(const int bq, const int mq)
           return bp;
      }
 
+     if (0 == mq) {
+          mp = 0.5;
+     } else {
 #ifdef SCALE_MQ
-     mp = PHREDQUAL_TO_PROB(254/60.0*mq * pow(mq, SCALE_MQ_FAC)/pow(60, SCALE_MQ_FAC));
+          mp = PHREDQUAL_TO_PROB(254/60.0*mq * pow(mq, SCALE_MQ_FAC)/pow(60, SCALE_MQ_FAC));
+#elif defined(TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL)
+          assert(mq <= 60);
+          mp = PHREDQUAL_TO_PROB(MQ_TRANS_TABLE[mq]); 
 #else
-     mp = PHREDQUAL_TO_PROB(mq);
+          mp = PHREDQUAL_TO_PROB(mq);
 #endif
-      
-#ifdef TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
-     assert(mq <= 60);
-     mp = PHREDQUAL_TO_PROB(MQ_TRANS_TABLE[mq]); 
-#endif
+     }
+
      /* No need to do computation in phred-space as
       * numbers won't get small enough.
       */

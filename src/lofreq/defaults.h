@@ -11,7 +11,7 @@
  * this is a mapper dependent value
  * in case of BWA it's also dependent on the alignment command used.
  */
-#define DEFAULT_MIN_MQ 13
+#define DEFAULT_MIN_MQ 0
 #define DEFAULT_MAX_MQ 255
 
 /* minimum base quality of any base. note: GATK doesn't recalibrate BQ <=5 */
