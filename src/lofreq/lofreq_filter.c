@@ -232,7 +232,7 @@ void apply_snvqual_threshold(var_t *var, snvqual_filter_t *snvqual_filter)
      if (! snvqual_filter->thresh) {
           return;
      }
-     if (var->qual!=-1 && var->qual<snvqual_filter->thresh) {
+     if (var->qual>0 && var->qual<snvqual_filter->thresh) {
           vcf_var_add_to_filter(var, snvqual_filter->id);
      }
 }
@@ -244,7 +244,7 @@ void apply_indelqual_threshold(var_t *var, indelqual_filter_t *indelqual_filter)
      if (! indelqual_filter->thresh) {
           return;
      }
-     if (var->qual!=-1 && var->qual<indelqual_filter->thresh) {
+     if (var->qual>0 && var->qual<indelqual_filter->thresh) {
           vcf_var_add_to_filter(var, indelqual_filter->id);
      }
 }
