@@ -959,12 +959,12 @@ main_filter(int argc, char *argv[])
                         " after header parsing failed");
               return -1;
          }
+    } else {
+         cfg_filter_to_vcf_header(& cfg, &vcf_header);
+         vcf_write_header(& cfg.vcf_out, vcf_header);
+         free(vcf_header);
     }
 
-    cfg_filter_to_vcf_header(& cfg, &vcf_header);
-
-    vcf_write_header(& cfg.vcf_out, vcf_header);
-    free(vcf_header);
 
     /* read in variants. since many filters perform multiple testing
      * correction and therefore need to look at all variants we keep
