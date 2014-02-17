@@ -1081,6 +1081,7 @@ for cov in coverage_range:
               rc = 1;
               
          } else {
+              /*if (! debug)*/
               (void) unlink(vcf_tmp_out);
          }
     }
