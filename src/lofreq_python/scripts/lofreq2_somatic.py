@@ -75,7 +75,7 @@ class SomaticSNVCaller(object):
     DEFAULT_ALPHA_T = 0.01;# i.e. qual
     DEFAULT_MTC_T = 'bonf'
     DEFAULT_MTC_ALPHA_T = 10
-    DEFAULT_MQ_FILTER_T = 13
+    DEFAULT_MQ_FILTER_T = 0
     DEFAULT_MQ_FILTER_N = 0
     DEFAULT_BAQ_OFF = False
     DEFAULT_MQ_OFF = False
@@ -525,7 +525,7 @@ def cmdline_parser():
                         help="Multiple testing correction alpha for tumor"
                         " (default: %f)" % default)
 
-    default = 13
+    default = 0
     parser.add_argument("--tumor-mq-filter",
                         type=int,
                         default=default,

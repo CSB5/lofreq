@@ -71,9 +71,8 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #define SCALE_MQ_FAC  1.3134658329243962
 
 /* filled in missing values with the min of the two neighbouring values */
-#if 0
 #define TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
-#endif
+#undef TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
 #ifdef TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
 const int MQ_TRANS_TABLE[61] = {
 1,
@@ -525,9 +524,9 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -E | --baq                   Enable (extended) per-base alignment quality (BAQ) computation (reduces false positive calls if indels are expected; recommended for WGS)\n");
 #endif
      fprintf(stderr, "- Mapping quality\n");                                
-     fprintf(stderr, "       -m | --min-mq INT            Skip alignments with mapQ smaller than INT [%d]\n", mplp_conf->min_mq);
+     fprintf(stderr, "       -m | --min-mq INT            Skip alignments with mapping quality smaller than INT [%d]\n", mplp_conf->min_mq);
      fprintf(stderr, "       -M | --max-mq INT            Cap mapping quality at INT [%d]\n", mplp_conf->max_mq);
-     fprintf(stderr, "       -J | --no-mq                 Don't use mapQ\n");
+     fprintf(stderr, "       -J | --no-mq                 Don't merge mapping quality in LoFreq's model\n");
 #ifdef USE_SOURCEQUAL                                     
      fprintf(stderr, "- Source quality\n");                                
      fprintf(stderr, "       -S | --source-qual           Enable computation of source quality for reads\n");
@@ -601,8 +600,7 @@ for cov in coverage_range:
 
 #ifdef SCALE_MQ
      LOG_WARN("%s\n", "MQ scaling switched on!");
-#endif
-#ifdef TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
+#elif defined TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
      LOG_WARN("%s\n", "MQ translation switched on!");
 #endif
      for (i=0; i<argc; i++) {
@@ -868,7 +866,7 @@ for cov in coverage_range:
         return 1;
     }
     bam_file = (argv + optind + 1)[0];
-    if (0 == strcmp(bam_file, "-")) {
+        if (0 == strcmp(bam_file, "-")) {
          if (mplp_conf.reg) {
               LOG_FATAL("%s\n", "Need index if region was given and"
                         " index file can't be provided when using stdin mode.");
