@@ -428,6 +428,11 @@ main_bamstats(int argc, char *argv[])
      if (bedfile) {
           LOG_VERBOSE("%s\n", "NOTE: bed routines don't make use of indexing and are therefore as slow as reading the whole BAM file."); /* FIXME */
           bamstats_conf.bed = bed_read(bedfile);
+          if (! bamstats_conf.bed) {
+               LOG_FATAL("BAM file %s does not exist.\n\n", bedfile);
+               rc = 1;
+               goto free_and_exit;
+          }
      }
 
 

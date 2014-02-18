@@ -955,6 +955,10 @@ for cov in coverage_range:
 
     if (bed_file) {
          mplp_conf.bed = bed_read(bed_file);
+         if (! mplp_conf.bed) {
+              LOG_ERROR("Couldn't read %s\n", bed_file);
+              return 1;
+         }
     }
 
 
