@@ -26,6 +26,11 @@
 #endif
 
 
+/* median number of best hits in bwa for one WGS sample: 3. for one
+ * exome sample it's 2. conservative choice is 3. FIXME make user
+ * choice 
+*/
+#define MQ0_ERRPROB 0.66
 
 #define LOGZERO -1e100 
 /* FIXME shouldn't we use something from float.h ? */
@@ -87,7 +92,7 @@ merge_srcq_baseq_mapq_and_alnq(const int sq, const int bq, const int mq, const i
      if (-1 == mq) {
           mp = 0.0;
      } else if (0 == mq) {
-          mp = 0.5;
+          mp = MQ0_ERRPROB;
      } else {
           mp = PHREDQUAL_TO_PROB(mq);
      }
@@ -149,7 +154,7 @@ merge_srcq_baseq_and_mapq(const int sq, const int bq, const int mq)
      if (-1 == mq) {
           mp = 0.0;
      } else if (0 == mq) {
-          mp = 0.5;
+          mp = MQ0_ERRPROB;
      } else {
           mp = PHREDQUAL_TO_PROB(mq);
      }
@@ -183,7 +188,7 @@ merge_baseq_and_mapq(const int bq, const int mq)
      }
 
      if (0 == mq) {
-          mp = 0.5;
+          mp = MQ0_ERRPROB;
      } else {
 #ifdef SCALE_MQ
           mp = PHREDQUAL_TO_PROB(254/60.0*mq * pow(mq, SCALE_MQ_FAC)/pow(60, SCALE_MQ_FAC));
