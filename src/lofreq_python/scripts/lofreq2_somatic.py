@@ -215,8 +215,6 @@ class SomaticSNVCaller(object):
         cmd.extend(['-f', self.ref])
         if self.bed:
             cmd.extend(['-l', self.bed])
-        if self.use_orphan:
-            cmd.append('--use-orphan')
         cmd.append('--no-default-filter')# no default filtering wanted
         cmd.append('--verbose')
 
@@ -226,9 +224,12 @@ class SomaticSNVCaller(object):
         if sample_type == "normal":
             cmd.extend(['-m', "%d" % self.mq_filter_n])
             cmd.extend(['-b', "%d" % 1, '-s', "%f" % self.alpha_n])
+            cmd.append('--use-orphan')
             out_vcf = self.vcf_n_rlx
             out_log = self.vcf_n_rlx_log
         elif sample_type == "tumor":
+            if self.use_orphan:
+                cmd.append('--use-orphan')
             cmd.extend(['-m', "%d" % self.mq_filter_t])
             cmd.extend(['-b', "%d" % 1, '-s', "%f" % self.alpha_t])
             out_vcf = self.vcf_t_rlx
