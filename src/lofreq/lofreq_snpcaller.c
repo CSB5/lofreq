@@ -439,7 +439,11 @@ call_snvs(const plp_col_t *p, void *confp)
                num_err_probs, alt_counts[0], alt_counts[1], alt_counts[2]);
  
      if (conf->bonf_dynamic) {
-          conf->bonf += NUM_NONCONS_BASES; /* will do one test per non-cons nuc */
+          if (1 == conf->bonf) {
+               conf->bonf = NUM_NONCONS_BASES; /* otherwise we start with 1+NUM_NONCONS_BASES */
+          } else {
+               conf->bonf += NUM_NONCONS_BASES; /* will do one test per non-cons nuc */
+          }
      }
      num_tests += NUM_NONCONS_BASES;
 
@@ -489,7 +493,7 @@ call_snvs(const plp_col_t *p, void *confp)
                          /* counts-raw */ alt_raw_count, p->coverage, alt_raw_count/(float)p->coverage,
                          /* counts-filt */ alt_count, num_err_probs, alt_count/(float)num_err_probs);
           }
-#if DEBUG
+#if 0
           else {
                LOG_DEBUG("non sig: pvalue=%g * (double)conf->bonf=%lld < conf->sig=%f\n", pvalue, conf->bonf, conf->sig);
           }
@@ -798,7 +802,7 @@ for cov in coverage_range:
               } else if (0 == strncmp(optarg, "dynamic", 7)) {
                    snvcall_conf.bonf_dynamic = 1;
                    bonf_auto = 0;
-
+                   
               } else {
                    bonf_auto = 0;
                    snvcall_conf.bonf_dynamic = 0;
