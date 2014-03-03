@@ -213,14 +213,6 @@ def sq_list_from_bam(bam):
         if sq != '*':
             sq_list.append((sq, sqlen, n_mapped))
 
-    if len(sq_list) == 0:
-        LOG.error("No mapping reads in index for %s found."
-                  " Reindexing should solve this. Trying samtools instead" % (bam))
-        sq_list = sq_list_from_bam_samtools(bam)
-        if len(sq_list) == 0:
-            LOG.fatal("samtools failed as well :(")
-            sys.exit(1)
-
     return sq_list
 
 
@@ -260,9 +252,21 @@ def lofreq_cmd_per_sq(bam, lofreq_call_args, tmp_dir):
         sort_idx = 2
         # remove those with no reads mapped
         sq_list = [x for x in sq_list if x[2] > 0]
-    else:
-        # only have two elements and 2nd is chrom length
+
+        if len(sq_list) == 0:
+            LOG.warning("Looks like the index for %s is a bit old"
+                        " (idxstats reports no reads mapped). Reindexing"
+                        " should solve this. Can continue without problem,"
+                        " so no need to worry for now though." % (bam))
+            sq_list = sq_list_from_bam_samtools(bam)
+            if len(sq_list) == 0:
+                LOG.fatal("Sorry, fallback solution failed as well :(")
+                sys.exit(1)
+            
+    if len(sq_list[0])!=3:
+        # only have two elements and 2nd is chrom length or fallback
         sort_idx = 1
+        
     # sort list by sort_idx and prepend original index, which is used
     # for vcf file naming to create the same order as in the bam
     enum_sq_list = sorted(enumerate(sq_list), key=lambda x: x[1][sort_idx], reverse=True)
@@ -272,6 +276,8 @@ def lofreq_cmd_per_sq(bam, lofreq_call_args, tmp_dir):
     #from IPython import embed; embed()
     # if all the above is too compliated just use enumerate(sq_list) below
 
+    #import pdb; pdb.set_trace()
+    
     for (i, sq) in enum_sq_list:
         # maintain region order by using index
         reg_str = "%s" % sq
@@ -469,7 +475,7 @@ def main():
 
     cmd_list = list(lofreq_cmd_per_sq(bam, lofreq_call_args, tmp_dir))
     assert len(cmd_list)>1, (
-        "Oops...got only one command for BAM: %s" % (bam))
+        "Oops...did get %d instead of multiple commands to run on BAM: %s" % (len(cmd_list), bam))
     LOG.info("Adding %d commands to mp-pool" % len(cmd_list))
     LOG.debug("cmd_list = %s" % cmd_list)
     if dryrun:
