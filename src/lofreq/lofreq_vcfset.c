@@ -310,6 +310,13 @@ main_vcfset(int argc, char *argv[])
 
          if (! vcfset_conf.only_passed || VCF_VAR_PASSES(var)) {
               vcfset_conf.use_bases ? vcf_var_key(&key, var) : vcf_var_key_simple(&key, var);
+
+              /* since we only need the key and no other info we can delete
+               * a lot of var members to save memory. simplest and with
+               * biggest effect is info (for dbsnp). format and samples
+               * would be further candidates */
+              free(var->info); var->info = NULL;
+
               var_hash_add(& var_hash_vcf2, key, var);
 #ifdef TRACE
               fprintf(stderr, "var_2 pass: "); vcf_write_var(stderr, var);
