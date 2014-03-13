@@ -310,6 +310,7 @@ source_qual_load_ign_vcf(const char *vcf_path, void *bed)
          char *key;
          int rc;
          var_hash_t *match = NULL;
+         int i;
 
          vcf_new_var(&var);
          rc = vcf_parse_var(& vcf_file, var);
@@ -348,9 +349,14 @@ source_qual_load_ign_vcf(const char *vcf_path, void *bed)
 #endif
          /* since we only need the key and no other info we can delete
           * a lot of var members to save memory. simplest and with
-          * biggest effect is info (for dbsnp). format and samples
-          * would be further candidates */
+          * biggest effect is info. format and samples are further
+          * candidates */
          free(var->info); var->info = NULL;
+         free(var->format); var->format = NULL;
+         for (i=0; i<var->num_samples; i++) {
+              free(var->samples[i]);
+         }
+         free(var->samples); var->samples = NULL;
 
          var_hash_add(& source_qual_ign_vars_hash, key, var);
     }
