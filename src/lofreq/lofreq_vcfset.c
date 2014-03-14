@@ -309,7 +309,6 @@ main_vcfset(int argc, char *argv[])
          }
 
          if (! vcfset_conf.only_passed || VCF_VAR_PASSES(var)) {
-              int i;
               var_hash_t *match = NULL;
 
               vcfset_conf.use_bases ? vcf_var_key(&key, var) : vcf_var_key_simple(&key, var);
@@ -320,24 +319,15 @@ main_vcfset(int argc, char *argv[])
                    vcf_free_var(&var);
                    continue;
               }
-
-              /* since we only need the key and no other info we can delete
-               * a lot of var members to save memory. simplest and with
-               * biggest effect is info. format and samples are further
-               * candidates */
-              free(var->info); var->info = NULL;
-              free(var->format); var->format = NULL;
-              for (i=0; i<var->num_samples; i++) {
-                   free(var->samples[i]);
-              }
-              free(var->samples); var->samples = NULL;
-              
-              var_hash_add(& var_hash_vcf2, key, var);
+              /* since we only need the key and no other info we do
+               * not need to save the var (and save NULL instead) */
+              var_hash_add(& var_hash_vcf2, key, NULL);         
 
          } else {
               num_vars_vcf2_ign += 1;
-              vcf_free_var(& var);
          }
+         vcf_free_var(& var);
+
 #ifdef TRACE
          LOG_DEBUG("Adding %s\n", key);
 #endif
