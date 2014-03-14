@@ -75,7 +75,7 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #undef TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
 #ifdef TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
 const int MQ_TRANS_TABLE[61] = {
-1,
+0, /* actually 1 but 0 should stay 0 */
 1,
 3,
 4,
