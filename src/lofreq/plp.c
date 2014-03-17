@@ -309,40 +309,47 @@ source_qual_load_ign_vcf(const char *vcf_path, void *bed)
          var_t *var;
          char *key;
          int rc;
+         var_hash_t *match = NULL;
+
          vcf_new_var(&var);
          rc = vcf_parse_var(& vcf_file, var);
+
          if (-1 == rc) {
               LOG_FATAL("%s\n", "Parsing error while parsing 2nd vcf-file");
               exit(1);
          }
          if (1 == rc) {/* EOF */
-              free(var);
+              vcf_free_var(&var);
               break;
          }
          num_total_vars += 1;
 
-         if (! read_only_passed || VCF_VAR_PASSES(var)) {
-              var_hash_t *match = NULL;
-
-              if (bed && ! bed_overlap(bed, var->chrom, var->pos, var->pos+1)) {
-                   continue;
-              }
-              /* using key_simple i.e. chrom and pos only */
-              vcf_var_key_simple(&key, var);
-
-              HASH_FIND_STR(source_qual_ign_vars_hash, key, match);
-              if (match) {
-                   LOG_DEBUG("Already got a variant match for key '%s'. Will keep the old one.\n", key);
-                   free(var);
-                   continue;
-              }
-
-              var_hash_add(& source_qual_ign_vars_hash, key, var);
+         if (read_only_passed && ! VCF_VAR_PASSES(var)) {
+              vcf_free_var(&var);
+              continue;
          }
 
+         if (bed && ! bed_overlap(bed, var->chrom, var->pos, var->pos+1)) {
+              vcf_free_var(&var);
+              continue;
+         }
+
+         /* using key_simple i.e. chrom and pos only */
+         vcf_var_key_simple(&key, var);
+
+         HASH_FIND_STR(source_qual_ign_vars_hash, key, match);
+         if (match) {
+              LOG_DEBUG("Already got a variant match for key '%s'. Will keep the old one.\n", key);
+              vcf_free_var(&var);
+              continue;
+         }
 #ifdef TRACE
          LOG_DEBUG("Adding %s\n", key);
 #endif
+         /* since we only need the key and no other info we do
+          * not need to save the var (and save NULL instead) */
+         vcf_free_var(&var);
+         var_hash_add(& source_qual_ign_vars_hash, key, NULL);
     }
 
     num_kept_vars = HASH_COUNT(source_qual_ign_vars_hash);

@@ -56,88 +56,6 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #define BUF_SIZE 1<<16
 
 
-/* scale 0-60 to from 0-254 and shrink
- * Y = 254.0/60.0 * MQ * (MQ**X)/(60**X)
- *
- * if 20 should stay 20
- * 20 = 254/60.0 * 20 * (20**X)/(60**X) 
- * 60/254.0 = (20**X)/(60**X)
- * (20/60.0)**X = 60/254.0
- * since a**x = y equals log_a(y) = x
- * x = log_a(60/254.0); a=20/60.0;
- * x = 1.3134658329243962 
- */
-#undef SCALE_MQ
-#define SCALE_MQ_FAC  1.3134658329243962
-
-/* filled in missing values with the min of the two neighbouring values */
-#define TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
-#undef TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
-#ifdef TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
-const int MQ_TRANS_TABLE[61] = {
-1,
-1,
-3,
-4,
-5,
-5,
-8,
-9,
-4,
-8,
-14,
-17,
-22,
-25,
-25,
-29,
-32,
-33,
-34,
-34, /* NA */
-34,
-34, /* NA */
-34, /* NA */
-34,
-34, /* NA */
-34, /* NA */
-34, /* NA */
-34, /* NA */
-34, /* NA */
-41,
-41, /* NA */
-41, /* NA */
-41, /* NA */
-41, /* NA */
-41, /* NA */
-41, /* NA */
-41, /* NA */
-41, /* NA */
-50,
-46, /* NA */
-46, /* NA */
-46, /* NA */
-46, /* NA */
-46, /* NA */
-46, /* NA */
-46, /* NA */
-46, /* NA */
-46, /* NA */
-46, /* NA */
-46, /* NA */
-46, /* NA */
-46,
-46, /* NA */
-46, /* NA */
-54,
-37,
-37, /* NA */
-45,
-45, /* NA */
-45, /* NA */
-67};
-#endif
-
 
 /* number of tests performed (CONSVAR doesn't count). for downstream
  * multiple testing correction. corresponds to bonf if bonf_dynamic is
@@ -157,7 +75,6 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char ref,
      dp4_counts_t dp4;
      double sb_left_pv, sb_right_pv, sb_two_pv;
      int sb_qual;
-     long int i;
      int *ref_mq = NULL, *alt_mq = NULL;
      long int num_ref;
      long int num_alt;
@@ -602,15 +519,9 @@ for cov in coverage_range:
 */
 
 
-#ifdef SCALE_MQ
-     LOG_WARN("%s\n", "MQ scaling switched on!");
-#elif defined TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
-     LOG_WARN("%s\n", "MQ translation switched on!");
-#endif
      for (i=0; i<argc; i++) {
           LOG_DEBUG("arg %d: %s\n", i, argv[i]);
      }
-
 
      /* default pileup options */
      init_mplp_conf(& mplp_conf);

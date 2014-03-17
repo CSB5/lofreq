@@ -269,6 +269,11 @@ void vcf_new_var(var_t **var)
 void vcf_free_var(var_t **var)
 {
      int i;
+
+     if (NULL == (*var)) {
+          return;
+     }
+
      free((*var)->chrom);
      free((*var)->id);
      free((*var)->filter);

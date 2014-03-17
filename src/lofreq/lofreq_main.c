@@ -114,7 +114,7 @@ static void usage(const char *myname)
      fprintf(stderr, "Usage: %s <command> [options]\n\n", myname);
      fprintf(stderr, "  Main Commands:\n");
      fprintf(stderr, "    call          : Call variants\n");
-     fprintf(stderr, "    call-parallel : Call variants\n");
+     fprintf(stderr, "    call-parallel : Call variants in parallel\n");
      fprintf(stderr, "    somatic       : Call somatic variants\n");
      fprintf(stderr, "\n");
      fprintf(stderr, "  Other Commands:\n");

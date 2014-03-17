@@ -283,7 +283,7 @@ class SomaticSNVCaller(object):
                 assert not os.path.exists(out_log)
 
         (o, e) = self.subprocess_wrapper(cmd, close_tmp=False)
-        fh = open(self.vcf_n_rlx_log, 'w')
+        fh = open(out_log, 'w')
         fh.write('# %s\n' % ' '.join(cmd))
         olines = o.readlines()
         elines = e.readlines()
@@ -632,6 +632,7 @@ def main():
         somatic_snv_caller.src_qual_on = True
         if args.ign_vcf:
             if args.ign_vcf == "normal":
+                # using normal rlx is too relaxed (according to dream syn 1)
                 somatic_snv_caller.src_qual_ign_vcf = somatic_snv_caller.vcf_n_str
             else:
                 somatic_snv_caller.src_qual_ign_vcf = args.ign_vcf
