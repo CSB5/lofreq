@@ -348,9 +348,9 @@ class SomaticSNVCaller(object):
         FIXME this is ad-hoc
         """
 
-        cmd = [self.LOFREQ, 'vcfset', '-1', self.vcf_n_rlx,
-               '-2', self.vcf_t_str,
-               '-a', 'intersect',
+        cmd = [self.LOFREQ, 'vcfset',
+               '-a', 'intersect', '--use-bases',        
+               '-1', self.vcf_n_rlx, '-2', self.vcf_t_str,
                '-o', self.vcf_germl]
         # FIXME no further filtering and using vcf_n_rlx entries
         self.subprocess_wrapper(cmd)
