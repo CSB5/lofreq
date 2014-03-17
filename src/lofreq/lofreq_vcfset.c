@@ -309,15 +309,25 @@ main_vcfset(int argc, char *argv[])
          }
 
          if (! vcfset_conf.only_passed || VCF_VAR_PASSES(var)) {
+              var_hash_t *match = NULL;
+
               vcfset_conf.use_bases ? vcf_var_key(&key, var) : vcf_var_key_simple(&key, var);
-              var_hash_add(& var_hash_vcf2, key, var);
-#ifdef TRACE
-              fprintf(stderr, "var_2 pass: "); vcf_write_var(stderr, var);
-#endif
+
+              HASH_FIND_STR(var_hash_vcf2, key, match);
+              if (match) {
+                   LOG_DEBUG("Already got a variant match for key '%s'. Will keep the old one.\n", key);
+                   vcf_free_var(&var);
+                   continue;
+              }
+              /* since we only need the key and no other info we do
+               * not need to save the var (and save NULL instead) */
+              var_hash_add(& var_hash_vcf2, key, NULL);         
+
          } else {
               num_vars_vcf2_ign += 1;
-              vcf_free_var(& var);
          }
+         vcf_free_var(& var);
+
 #ifdef TRACE
          LOG_DEBUG("Adding %s\n", key);
 #endif

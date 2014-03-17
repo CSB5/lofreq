@@ -48,6 +48,93 @@
 #define NAIVE
 #endif
 
+/* scale 0-60 to from 0-254 and shrink
+ * Y = 254.0/60.0 * MQ * (MQ**X)/(60**X)
+ *
+ * if 20 should stay 20
+ * 20 = 254/60.0 * 20 * (20**X)/(60**X) 
+ * 60/254.0 = (20**X)/(60**X)
+ * (20/60.0)**X = 60/254.0
+ * since a**x = y equals log_a(y) = x
+ * x = log_a(60/254.0); a=20/60.0;
+ * x = 1.3134658329243962 
+ */
+#if 0
+#define SCALE_MQ 1
+#endif
+#define SCALE_MQ_FAC  1.3134658329243962
+
+#if 0
+#define TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL 1
+#endif
+#ifdef TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
+/* filled in missing values with the min of the two neighbouring values */
+const int MQ_TRANS_TABLE[61] = {
+0, /* actually 1 but 0 should stay 0 */
+1,
+3,
+4,
+5,
+5,
+8,
+9,
+4,
+8,
+14,
+17,
+22,
+25,
+25,
+29,
+32,
+33,
+34,
+34, /* NA */
+34,
+34, /* NA */
+34, /* NA */
+34,
+34, /* NA */
+34, /* NA */
+34, /* NA */
+34, /* NA */
+34, /* NA */
+41,
+41, /* NA */
+41, /* NA */
+41, /* NA */
+41, /* NA */
+41, /* NA */
+41, /* NA */
+41, /* NA */
+41, /* NA */
+50,
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46, /* NA */
+46,
+46, /* NA */
+46, /* NA */
+54,
+37,
+37, /* NA */
+45,
+45, /* NA */
+45, /* NA */
+67};
+#endif
+
+
+
 
 double log_sum(double log_a, double log_b);
 double log_diff(double log_a, double log_b);
@@ -190,14 +277,7 @@ merge_baseq_and_mapq(const int bq, const int mq)
      if (0 == mq) {
           mp = MQ0_ERRPROB;
      } else {
-#ifdef SCALE_MQ
-          mp = PHREDQUAL_TO_PROB(254/60.0*mq * pow(mq, SCALE_MQ_FAC)/pow(60, SCALE_MQ_FAC));
-#elif defined(TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL)
-          assert(mq <= 60);
-          mp = PHREDQUAL_TO_PROB(MQ_TRANS_TABLE[mq]); 
-#else
           mp = PHREDQUAL_TO_PROB(mq);
-#endif
      }
 
      /* No need to do computation in phred-space as
@@ -301,6 +381,12 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                     if (mq == 255) {
                          mq = -1;
                     }
+#ifdef SCALE_MQ
+                    mq = 254/60.0*mq * pow(mq, SCALE_MQ_FAC)/pow(60, SCALE_MQ_FAC);
+#elif defined(TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL)
+                    assert(mq <= 60);
+                    mq = MQ_TRANS_TABLE[mq]; 
+#endif
                }
 
 #ifdef USE_SOURCEQUAL
@@ -395,6 +481,11 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
      fprintf(stream, "  flag & SNVCALL_USE_MQ      = %d\n", c->flag&SNVCALL_USE_MQ?1:0);
      fprintf(stream, "  flag & SNVCALL_USE_SQ      = %d\n", c->flag&SNVCALL_USE_SQ?1:0);
      fprintf(stream, "  flag & SNVCALL_CONS_AS_REF = %d\n", c->flag&SNVCALL_CONS_AS_REF?1:0);
+#ifdef SCALE_MQ
+     LOG_WARN("%s\n", "MQ scaling switched on!");
+#elif defined TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
+     LOG_WARN("%s\n", "MQ translation switched on!");
+#endif
 }
 
 

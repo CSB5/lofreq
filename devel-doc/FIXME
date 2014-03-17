@@ -2,30 +2,27 @@ Todos:
 
 High Prio:
 ==========
-- finalize somatic
+- new release
 - predict indels
-- maperrprof handling for indels in plp.c
+- new uniq logic
 
 Med Prio:
 =========
-- filter to c
-- pseudo parallel: iterating over regions given in bed (if given) or over chroms (if (len(chroms)>1))
+
 
 Low Prio:
 =========
-- put external licenses into sep folder (incl zlib)
-- add zlib to src?
-- remove tail dist and it's deps if not needed
-- uniq should add uniq filter and set columns accordingly (and also add dp4n for normal sample values)
+
+- split var info field with hash
+- memory saving loading of ignore vcf per chrom
+- put external licenses into sep folder (incl zlib) for binary release
 - enable pthreads in libbam:
     --- enable at compile time (http://stackoverflow.com/questions/1699113/autoconf-with-pthread)
     --- how to set num_threads (only exposed to command line in view?)
     --- test!
 - add internal sens test as in original version
-- split lofreq_snpcaller cmd parsing: plp, snv, others (do they change argv?) 
+- split lofreq_snpcaller cmd parsing: plp, snv, others (do they change argv?)
 - Implement test against old SNV caller
-- Test actual SNV and SB values for both types of SNVs
-- check for diffs between -l bed, -r region and none, all with and without BAQ
-- Check what happens if fai or bai don't exist
-- merge lofreq_core and core into one lib?
+- check diffs between -l bed, -r region and none, all with and without BAQ
 - get rid of PATH etc once python dep is killed
+- get rid of all FIXME's
