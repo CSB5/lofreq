@@ -33,6 +33,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 # only for boxplots
 from scipy.stats import gaussian_kde
 
+import vcf
 
 #--- project specific imports
 #
@@ -41,13 +42,13 @@ try:
 except ImportError:
     pass
 
-try:
-    from lofreq_star import vcf
-except ImportError:
-    sys.stderr.write("FATAL(%s): Couldn't find LoFreq's vcf module."
-                     " Are you sure your PYTHONPATH is set correctly (= %s)?\n" % (
-                         (sys.argv[0], os.environ['PYTHONPATH'])))
-    sys.exit(1)
+#try:
+#    #from lofreq_star import vcf
+#except ImportError:
+#    sys.stderr.write("FATAL(%s): Couldn't find LoFreq's vcf module."
+#                     " Are you sure your PYTHONPATH is set correctly (= %s)?\n" % (
+#                         (sys.argv[0], os.environ['PYTHONPATH'])))
+#    sys.exit(1)
 from lofreq_star.utils import complement, now
 
 
@@ -71,7 +72,7 @@ COLORS = ["b", "g", "r", "c", "m", "y", "k"]
 
 def r_ify(axes):
     '''FIXME:unused
-    
+
     source:
     http://stackoverflow.com/questions/14349055/making-matplotlib-graphs-look-like-r-by-default
     ttp://messymind.net/2012/07/making-matplotlib-look-like-ggplot/
@@ -107,9 +108,9 @@ def r_ify(axes):
 
 
 def subst_type_str(ref, alt, strand_specific=False):
+    """FIXME:add-doc
     """
-    """
-    
+
     # in case we get a list
     assert len(ref)==1 and len(alt)==1
     ref = ref[0]
@@ -122,14 +123,14 @@ def subst_type_str(ref, alt, strand_specific=False):
         c = complement(s)
         return '|'.join(sorted([s, c]))
 
-    
+
 def subst_perc(ax, subst_type_counts):
     """
     subst_type_counts should be list of array with type as 1st element and count as 2nd
     """
 
     # FIXME sort by transition/transversion type. Add Ts/Tv ratio to plot
-    
+
     #colors = [cm.jet(1.*i/len(subst_type_counts)) for i in xrange(len(subst_type_counts))]
     colors = [COLORS[i % len(COLORS)] for i in xrange(len(subst_type_counts))]
 
@@ -146,15 +147,15 @@ def subst_perc(ax, subst_type_counts):
     # FIXME ticks as string won't work
     ax.set_ylabel('[%]')
     ax.set_xlabel('Type')
-    
+
     # prevent clipping of tick-labels
     #plt.subplots_adjust(bottom=0.15)
     plt.tight_layout()
 
-    
 
-def calc_dist(variants): 
-    """Calculated distance to next variant. 
+
+def calc_dist(variants):
+    """Calculated distance to next variant.
 
     If a chromosome only contains a single SNV, -1 will be stored as
     dist as we can't use 0 which would mean multi-allelic position.
@@ -209,12 +210,12 @@ def calc_dist(variants):
 
     assert len(dists) == len(variants)
     #print "end at %s" % now()
-    
+
     return dists
 
 
-    
-    
+
+
 def violin_plot(ax, data):
     '''
     Create violin plots on an axis
@@ -223,7 +224,7 @@ def violin_plot(ax, data):
     '''
 
     # FIXME possible that this needs values between 0 and 1?
-    
+
     w = min(0.15, 0.5)
     k = gaussian_kde(data) # calculates the kernel density
     m = k.dataset.min() #lower bound of violin
@@ -253,21 +254,21 @@ def print_overview(ax, text_list):
     # options:
     # - annotate () or text()
     # - tex or text
-    
+
     # See http://jakevdp.github.io/mpl_tutorial/tutorial_pages/tut4.html
-    
+
     #matplotlib.rc('text', usetex=True)
     #table = r'\begin{table} \begin{tabular}{|l|l|l|}  \hline  $\alpha$      & $\beta$        & $\gamma$      \\ \hline   32     & $\alpha$ & 123    \\ \hline   200 & 321    & 50 \\  \hline  \end{tabular} \end{table}'
 
-    ax.axis('off')     
+    ax.axis('off')
     ax.text(0, 0.8, '\n'.join(text_list), size=14, ha='left', va="top")#, va='center')#, size=50)
-    
+
     # relative to invisible axes
     #ax.annotate('\n'.join(text_list), (0, 1), textcoords='data', size=14)# ha='left', va='center')#, size=50)
 
     #matplotlib.rc('text', usetex=False)
 
-    
+
 def cmdline_parser():
     """
     creates an OptionParser instance
@@ -295,6 +296,9 @@ def cmdline_parser():
                       dest="outplot",
                       required=True,
                       help="Output plot (pdf) filename")
+    parser.add_argument("--summary-only",
+                      action="store_true",
+                      help="Don't plot; summarize only")
     return parser
 
 
@@ -319,7 +323,10 @@ def main():
                 "file '%s' does not exist.\n" % in_file)
             sys.exit(1)
 
-    for (out_file, descr) in [(args.outplot, "plot")]:
+    out_files_and_descr = []
+    if not args.summary_only:
+        out_files_and_descr = (args.outplot, "plot")
+    for (out_file, descr) in []:
         if not out_file:
             parser.error("%s output file argument missing." % descr)
             sys.exit(1)
@@ -329,24 +336,17 @@ def main():
                 " output file '%s'.\n" % out_file)
             sys.exit(1)
 
-            # FIXME example input
-    #vcf_fh = open("./Q25/NCOV_30_TCOV500_GC95/lofreq-uniq-relax_bed/normal.vcf")
-    #vcf_fh = gzip.open("/Users/wilma/Desktop//mutascope/test_files/dbsnp_135_chr22.vcf.gz")# no LoFreq markup
-    #vcf_fh = gzip.open("/Users/wilma/GIS/lofreq//lofreq2-test-data/vcf/WHH021_WHH022_stringent.vcf.gz")# too big
-    #vcf_fh = open("/Users/wilma/Desktop/projects/bertrandd/lofreq/CML/lofreq-64420af/WHH019-WHH020/lofreq-64420af_def_somatic_final.vcf")
-    #vcf_fh = open("/Users/wilma/scratch/cml/outdat_pass.unique.vcf")
-    #vcf_fh = open("/Users/wilma/scratch/cml/lofreq_95727fb_a10-SV_somatic_final.uniq.vcf")
-    #vcf_fh = open("/Users/wilma/scratch/cml/lofreq_95727fb_a10_somatic_final.uniq.vcf")
 
     if args.vcf[-3:] == '.gz':
         vcf_fh = gzip.open(args.vcf)
     else:
         vcf_fh = open(args.vcf)
     vcfreader = vcf.VCFReader(vcf_fh)
-    vars = [v for v in vcfreader if v.FILTER in ['PASS', '.']]
+    # v.FILTER is empty if not set in pyvcf. LoFreq's vcf.py clone set it to PASS or .
+    vars = [v for v in vcfreader if not v.FILTER or v.FILTER in ['PASS', '.']]
     vcf_fh.close()
 
-        
+
     summary_txt = []
     summary_txt.append("Reading vars from %s" % args.vcf)
     LOG.info(summary_txt[-1])
@@ -364,16 +364,16 @@ def main():
             filtered_vars = [v for v in filtered_vars if f(v)]
         except:
             LOG.fatal("Filter %s failed" % n)
-            raise 
+            raise
         n_out = len(filtered_vars)
         summary_txt.append("Filter '%s' removed %d (more) vars" % (n, n_in-n_out))
         LOG.info(summary_txt[-1])
-        
+
     summary_txt.append("%d vars left after filtering" % (len(filtered_vars)))
     LOG.info(summary_txt[-1])
 
     vars = filtered_vars
-        
+
     summary_txt.append("#SNVs = %d (%d CONSVARs and %d INDELs)" % (
         len(vars),
         sum([1 for v in vars if v.INFO.has_key('CONSVAR')]),
@@ -383,7 +383,7 @@ def main():
     # np.histogram([v.INFO['DP'] for v in vars if v.INFO['DP']<1000], bins=20)
 
 
-    
+
     # setup props we want to check in all possible combinations
     #
     props = dict()
@@ -394,22 +394,36 @@ def main():
             LOG.critical("Couldn't find %s info tag in all variants"
             " (is %s a LoFreq file?). Won't plot..." % (t, args.vcf))
     props['Distance (log10)'] = [np.log10(d) if d>0 else -1 for d in calc_dist(vars)]
-    
 
+
+    if args.summary_only:
+        for p in [p for p in props.keys()]:
+            x = np.array(props[p])
+            for (name, val) in [("minimum", np.min(x)),
+                                ("1st %ile", np.percentile(x, 1)),
+                                ("25th %ile", np.percentile(x, 25)),
+                                ("median", np.percentile(x, 50)),
+                                ("75th %ile", np.percentile(x, 75)),
+                                ("99th %ile", np.percentile(x, 99)),
+                                ("maximum", np.max(x))]:
+                print "%s\t%s\t%f" % (p, name, val)
+            print "%s\trange-min\trange-max\tcount" % (p)
+            (hist, bin_edges) = np.histogram(x)
+            for (i, val) in enumerate(hist):
+                print "%f\t%f\t%d" % (bin_edges[i], bin_edges[i+1], val)
+        return
     
     pp = PdfPages(args.outplot)
-        
 
     # create a summary table
-    # 
+    #
     #matplotlib.rc('text', usetex=False)
     fig = plt.figure()
-    ax = plt.subplot(1,1,1)    
+    ax = plt.subplot(1,1,1)
     print_overview(ax, summary_txt)
     plt.title('Overview')
     pp.savefig()
     plt.close()
-
 
 
     # boxplots and histograms first
@@ -426,7 +440,7 @@ def main():
         plt.title('%s Boxplot' % p)
         pp.savefig()
         plt.close()
-        
+
         # histogram
         fig = plt.figure()
         ax = plt.subplot(1, 1, 1)
@@ -437,7 +451,7 @@ def main():
         ax.set_xlabel(p)
         plt.title('%s Histogram' % p)
         pp.savefig()
-        plt.close()        
+        plt.close()
 
         # scatter plot per positions. assuming snvs are sorted by position!
         fig = plt.figure()
@@ -449,7 +463,7 @@ def main():
         ax.set_xlabel("Neighbourhood")
         #plt.title('%s Histogram' % p)
         pp.savefig()
-        plt.close()        
+        plt.close()
 
 
     # heatmaps of all combinations
@@ -458,11 +472,11 @@ def main():
         fig = plt.figure()
         ax = plt.subplot(1, 1, 1)
 
-        p = plt.hist2d(props[x], props[y], bins=20)    
+        p = plt.hist2d(props[x], props[y], bins=20)
         ax.set_ylim([0, plt.ylim()[1]])
         ax.set_xlim([0, plt.xlim()[1]])
         plt.colorbar()
-    
+
         ax.set_xlabel(x)
         ax.set_ylabel(y)
         plt.title('%s vs. %s' % (x, y))
@@ -489,12 +503,12 @@ def main():
     pp.savefig()
     plt.close()
 
-    
+
     # FIXME Put related plots together. See http://blog.marmakoide.org/?p=94"
-    
+
     pp.close()
 
-    
+
 if __name__ == "__main__":
     main()
     LOG.info("Successful program exit")

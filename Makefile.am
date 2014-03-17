@@ -5,7 +5,15 @@
 # we do not use GNU-style files: NEWS README AUTHORS ChangeLog
 # AUTOMAKE_OPTIONS = foreign
 
-SUBDIRS = src/cdflib90 src/helper_scripts src/libbam src/lofreq src/lofreq_python src/uthash
+if ENABLE_HELPER
+HELPER = src/helper_scripts
+endif
+
+if ENABLE_TOOLS
+TOOLS = src/tools
+endif
+
+SUBDIRS = src/cdflib90 $(HELPER) src/libbam src/lofreq src/scripts $(TOOLS) src/uthash
 bug-tests: all
 	cd tests && $(SHELL) run_all.sh;
 

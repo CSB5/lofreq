@@ -117,10 +117,6 @@ static void usage(const char *myname)
      fprintf(stderr, "    call-parallel : Call variants in parallel\n");
      fprintf(stderr, "    somatic       : Call somatic variants\n");
      fprintf(stderr, "\n");
-     fprintf(stderr, "  Samtools Clones:\n");
-     fprintf(stderr, "    index         : Create index for BAM file\n");
-     fprintf(stderr, "    idxstats      : Print stats for indexed BAM file\n");
-     fprintf(stderr, "\n");
      fprintf(stderr, "  Other Commands:\n");
      fprintf(stderr, "    filter        : Filter variants in VCF file\n");
      fprintf(stderr, "    uniq          : Test whether variants predicted in only one sample really are unique\n");
@@ -129,13 +125,18 @@ static void usage(const char *myname)
      fprintf(stderr, "    bamstats      : Collect BAM statistics\n");
 #endif
      fprintf(stderr, "    vcfset        : VCF set operations\n");
+     fprintf(stderr, "    version       : Print version info\n");
+     fprintf(stderr, "  Extra Tools (if installed):\n");
      fprintf(stderr, "    vcfplot       : Plot VCF statistics\n");
      fprintf(stderr, "    cluster       : Cluster variants in VCF file (supports legacy SNP format)\n");
 #ifdef FIXME_NOT_IMPLEMENTED
      fprintf(stderr, "    peek          : Check properties of BAM file\n");
 #endif
+     fprintf(stderr, "  Samtools Clones:\n");
+     fprintf(stderr, "    index         : Create index for BAM file\n");
+     fprintf(stderr, "    idxstats      : Print stats for indexed BAM file\n");
+     fprintf(stderr, "\n");
 
-     fprintf(stderr, "    version       : Print version info\n");
      fprintf(stderr, "\n");
 }
 
