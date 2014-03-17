@@ -1,2 +1,2 @@
-dist_bin_SCRIPTS = lofreq2_somatic.py
+dist_bin_SCRIPTS = lofreq2_somatic.py lofreq2_call_pparallel.py
 

@@ -33,7 +33,6 @@ try:
     import lofreq2_local
 except ImportError:
     pass
-from lofreq_star.utils import prob_to_phredqual
 
 # invocation of ipython on exceptions
 #import sys, pdb
@@ -51,6 +50,28 @@ logging.basicConfig(level=logging.WARN,
 
 
 
+def prob_to_phredqual(prob):
+    """WARNING: copy from utils.py
+    Turns an error probability into a phred value
+    
+    >>> prob_to_phredqual(0.01)
+    20
+    """
+
+    from math import log10
+    MAX_INT = 2147483647
+    # instead of sys.maxint
+    
+    assert prob >= 0.0, (
+        "Probability can't be smaller than 0 but got %f" % prob)
+    try:
+        return int(round(-10.0 * log10(prob)))
+    except ValueError:
+        # prob is zero
+        #return sys.maxint
+        return MAX_INT
+
+                                
 def total_num_tests_from_logs(log_files):
     """FIXME:add-doc
     """
