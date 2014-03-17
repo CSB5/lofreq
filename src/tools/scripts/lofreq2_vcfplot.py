@@ -297,6 +297,7 @@ def cmdline_parser():
                       required=True,
                       help="Output plot (pdf) filename")
     parser.add_argument("--summary-only",
+                      action="store_true",
                       help="Don't plot; summarize only")
     return parser
 
@@ -341,7 +342,6 @@ def main():
     else:
         vcf_fh = open(args.vcf)
     vcfreader = vcf.VCFReader(vcf_fh)
-    import pdb; pdb.set_trace()
     # v.FILTER is empty if not set in pyvcf. LoFreq's vcf.py clone set it to PASS or .
     vars = [v for v in vcfreader if not v.FILTER or v.FILTER in ['PASS', '.']]
     vcf_fh.close()
@@ -397,13 +397,22 @@ def main():
 
 
     if args.summary_only:
-        LOG.warn("see hist.py for how to print if args.summary_only")
-        # FIXME
-        #for p in [p for p in props.keys()]:
-        #    x = props[p]
+        for p in [p for p in props.keys()]:
+            x = np.array(props[p])
+            for (name, val) in [("minimum", np.min(x)),
+                                ("1st %ile", np.percentile(x, 1)),
+                                ("25th %ile", np.percentile(x, 25)),
+                                ("median", np.percentile(x, 50)),
+                                ("75th %ile", np.percentile(x, 75)),
+                                ("99th %ile", np.percentile(x, 99)),
+                                ("maximum", np.max(x))]:
+                print "%s\t%s\t%f" % (p, name, val)
+            print "%s\trange-min\trange-max\tcount" % (p)
+            (hist, bin_edges) = np.histogram(x)
+            for (i, val) in enumerate(hist):
+                print "%f\t%f\t%d" % (bin_edges[i], bin_edges[i+1], val)
         return
-
-
+    
     pp = PdfPages(args.outplot)
 
     # create a summary table
