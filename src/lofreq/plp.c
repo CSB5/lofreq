@@ -315,7 +315,7 @@ source_qual_load_ign_vcf(const char *vcf_path, void *bed)
          rc = vcf_parse_var(& vcf_file, var);
 
          if (-1 == rc) {
-              LOG_FATAL("%s\n", "Parsing error while parsing 2nd vcf-file");
+              LOG_FATAL("%s\n", "Parsing error while parsing ignore-vcf-file");
               exit(1);
          }
          if (1 == rc) {/* EOF */
