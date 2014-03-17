@@ -36,7 +36,8 @@ except ImportError:
 HAVE_VCF_MODULE = False
 try:
     import lofreq2_local
-    from lofreq_star import vcf
+    #from lofreq_star import vcf
+    import vcf
     HAVE_VCF_MODULE = True
 except ImportError:
     pass    
@@ -97,8 +98,12 @@ class MetaVar(object):
     def add_vcf_var(self, vcf_var):
         """Add variant in vcf format
         """
+
+        # pyvcf keeps ALT as _Substitution, not string as LoFreq's vcf clone
+        # therefore won't work','.join(vcf_var.ALT),
         self.repr = "%s %d %c>%c %f" % (vcf_var.CHROM, vcf_var.POS,
-                                        vcf_var.REF, ','.join(vcf_var.ALT),
+                                        vcf_var.REF, 
+                                        ','.join(["%s" % x for x in vcf_var.ALT]),
                                         vcf_var.INFO['AF'])
         self.coverage = vcf_var.INFO['DP']
         self.freq = vcf_var.INFO['AF']
@@ -230,10 +235,9 @@ def main():
                         for r in vcf_reader]
             is_vcf = True
         except:
-            pass
+            raise
         if vcf_fh != sys.stdin:
             vcf_fh.close()
-
     is_snp = False
     if not is_vcf and HAVE_SNP_MODULE:
         try:

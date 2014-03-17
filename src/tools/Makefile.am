@@ -12,12 +12,10 @@
 EXTRA_DIST = setup.py \
 	lofreq_star/__init__.py \
 	lofreq_star/multiple_testing.py \
-	lofreq_star/vcf.py \
 	lofreq_star/fdr.py \
 	lofreq_star/utils.py \
 	scripts/lofreq2_cluster.py \
 	scripts/lofreq2_local.py \
-	scripts/lofreq2_somatic.py \
 	scripts/lofreq2_vcfplot.py \
 	setup_conf.py.in
 

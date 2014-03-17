@@ -19,10 +19,10 @@ from math import log
 
 #--- third-party imports
 #
-# FIXME get rid of deps
 import pysam
 from scipy.stats import mannwhitneyu
 from scipy.stats import chi2
+import vcf
 
 #--- project specific imports
 #
@@ -33,7 +33,7 @@ try:
 except ImportError:
     pass
 from lofreq_star.utils import prob_to_phredqual, phredqual_to_prob
-from lofreq_star import vcf
+#from lofreq_star import vcf
 from lofreq_star import multiple_testing
 from lofreq_star import fdr
 
@@ -178,8 +178,10 @@ def main():
             fh_out = gzip.open(args.vcfout, 'w')
         else:
             fh_out = open(args.vcfout, 'w')
-    vcf_writer = vcf.VCFWriter(fh_out)
-    vcf_writer.meta_from_reader(vcf_reader)
+    # pyvcf needs template as arg to VCFWriter, whereas LoFreq's vcf clone didn't
+    vcf_writer = vcf.VCFWriter(fh_out, vcf_reader)
+    #vcf_writer = vcf.VCFWriter(fh_out)
+    #vcf_writer.meta_from_reader(vcf_reader)
                                        
     pvalues = []
     for (var_no, var) in enumerate(variants):
@@ -188,7 +190,8 @@ def main():
             
         if var.INFO.has_key('INDEL'):
             LOG.warn("Skipping unsupported indel variant %s:%d" % (var.CHROM, var.POS))
-            
+            continue
+        
         reads = list(samfh.fetch(reference=var.CHROM,
                                  start=var.POS-1, end=var.POS))
         LOG.debug("%s %d: %d (unfiltered) reads covering position" % (
@@ -244,7 +247,7 @@ def main():
                 ref_bquals.append(bq)
                 #if not args.use_orphan:
                 #    ref_isize.append(abs(r.tlen))
-            elif b.upper() == var.ALT[0].upper():
+            elif b.upper() == str(var.ALT[0]).upper():
                 alt_mquals.append(mq)
                 alt_bquals.append(bq)
                 #if not args.use_orphan:
@@ -328,14 +331,16 @@ def main():
     
         LOG.info("%d of %d variants didn't pass filter" % (
             len(rej_idxs), len(variants)))
-        
-    vcf_writer.write_metainfo()
-    vcf_writer.write_header()
+
+    # pyvcf doesn't need write_metainfo or write_header
+    #vcf_writer.write_metainfo()
+    #vcf_writer.write_header()
     for var in variants:
         filtered = len(var.FILTER)>0 and var.FILTER not in [".", "PASS"]
         if args.pass_only and filtered:
             continue
-        vcf_writer.write_rec(var)
+        # LoFreq's vcf clone called this write_rec()
+        vcf_writer.write_record(var)
     
     if fh_out != sys.stdout:
         fh_out.close()
