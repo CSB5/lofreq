@@ -157,6 +157,13 @@ AC_CHECK_LIB(z, gzread,, AC_MSG_ERROR([Could not find libz]))
 AM_PATH_PYTHON([2.7])
 # argparse and a lot of other stuff is not available in 2.7
 
+AC_ARG_ENABLE([helper],
+    AS_HELP_STRING([--enable-helper], [Enable helper scripts]))
+AM_CONDITIONAL(ENABLE_HELPER, [test "x$enable_helper" = "xyes"])
+
+AC_ARG_ENABLE([tools],
+    AS_HELP_STRING([--enable-tools], [Enable tools]))
+AM_CONDITIONAL(ENABLE_TOOLS, [test "x$enable_tools" = "xyes"])
 
 # ---   debugging
 #
@@ -191,20 +198,21 @@ AC_SUBST([AM_CFLAGS])
 AC_SUBST([AM_LDFLAGS])
 
 AC_DEFINE([_USE_KNETFILE], [1], [KNETFILE for samtools])
-
 AC_DEFINE([USE_SOURCEQUAL], [1], [support source quality in LoFreq])
 
-AC_ARG_ENABLE([alnerrprof],
-        [AS_HELP_STRING([--enable-alnerrprof], [Enable use of alignment/mapping error profile (default=no)])],
-        AC_DEFINE([USE_ALNERRPROF], [1], [support mapping error profile in LoFreq]))
+#AC_ARG_ENABLE([alnerrprof],
+#        [AS_HELP_STRING([--enable-alnerrprof], [Enable use of alignment/mapping error profile (default=no)])],
+#        AC_DEFINE([USE_ALNERRPROF], [1], [support mapping error profile in LoFreq]))
 
-#        src/cdflib90/Makefile
+
 AC_CONFIG_FILES(Makefile
         src/cdflib90/Makefile   
         src/helper_scripts/Makefile
         src/libbam/Makefile
         src/lofreq/Makefile
-        src/lofreq_python/setup_conf.py        
-        src/lofreq_python/Makefile
-        src/uthash/Makefile)
+        src/uthash/Makefile
+        src/scripts/Makefile        
+        src/tools/setup_conf.py        
+        src/tools/Makefile
+        )
 AC_OUTPUT
