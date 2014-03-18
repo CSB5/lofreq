@@ -49,7 +49,12 @@ except ImportError:
 #                     " Are you sure your PYTHONPATH is set correctly (= %s)?\n" % (
 #                         (sys.argv[0], os.environ['PYTHONPATH'])))
 #    sys.exit(1)
-from lofreq_star.utils import complement, now
+try:
+    from lofreq_star.utils import complement, now
+except ImportError:
+    sys.stderr.write("FATAL(%s): Couldn't find LoFreq modules."
+                     " Are you sure your PYTHONPATH is set correctly?")
+    sys.exit(1)
 
 
 # invocation of ipython on exceptions
