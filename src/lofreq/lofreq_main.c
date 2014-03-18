@@ -29,81 +29,114 @@
 __DATE__ = "NA";
 #endif
 
+
+static void prepend_dir_to_path(const char *dir_to_add)
+{
+     char *old_path = NULL;
+     char *new_path;
+     const char *PATH_NAME = "PATH";
+
+     old_path = getenv(PATH_NAME);
+     if (NULL == old_path) {
+          setenv(PATH_NAME, dir_to_add, 1);
+          return;
+     }
+
+     new_path = malloc((strlen(dir_to_add) + 1 + strlen(old_path) + 1) * sizeof(char));
+     sprintf(new_path, "%s:%s", dir_to_add, old_path);
+#if 0
+     LOG_WARN("old path: %s\n", old_path);
+     LOG_WARN("new path: %s\n", new_path);
+#endif
+     setenv(PATH_NAME, new_path, 1);
+     free(new_path);
+}
+
+
+
 /* prepend dirname(argv0) and python source dir to PATH. This way we
  * make sure that package works even without properly installing it
  * and that the binary can repeatedly can call itself it necessary
  */
 void 
 add_local_dir_to_path(char *argv0) {
-     const char *PATH_NAME = "PATH";
-     char *path_var = NULL;
-     char *old_path = NULL;
-     char *argv0_cp = NULL;
+     char argv0_resolved[PATH_MAX];
      char *dirname_argv0 = NULL;
-     char lofreq_script_rel[] = "../lofreq_python/scripts/lofreq2_somatic.py";
      char *lofreq_script_abs = NULL;
+     char *lofreq_tools_abs = NULL;
+     char lofreq_script_rel[] = "../scripts/lofreq2_somatic.py";
+     char lofreq_tools_rel[] ="../tools/scripts/lofreq2_vcfplot.py";
+     char *add_dir = NULL;
 
-     argv0_cp = resolved_path(argv0);
-     if (NULL == (dirname_argv0 = strdup(dirname(argv0_cp)))) {
-          free(argv0_cp);
-          return;
+     /* add lofreq dir 
+      */
+     if (NULL == realpath(argv0, argv0_resolved)) {
+          return;          
      }
+     if (NULL == (dirname_argv0 = strdup(dirname(argv0_resolved)))) {
+          return;
+     }     
+     prepend_dir_to_path(dirname_argv0);
 
+
+     /* add local script dir if present
+      */
      if (NULL == (lofreq_script_abs = strdup(dirname_argv0))) {
           free(dirname_argv0);
-          free(argv0_cp);
           return;
      }
-
      if (NULL == join_paths(&lofreq_script_abs, lofreq_script_rel)) {
 #if 0
           LOG_WARN("join_paths %s and %s failed\n", lofreq_script_abs, lofreq_script_rel);
 #endif
           free(lofreq_script_abs);
           free(dirname_argv0);
-          free(argv0_cp);
           return;          
      }
-     /* check also done by realpath in join_path but doesn't hurt to
-      * check again */
      if (! file_exists(lofreq_script_abs)) {
 #if 0
           LOG_WARN("%s doesnt' exist\n", lofreq_script_abs);
 #endif
           free(lofreq_script_abs);
           free(dirname_argv0);
-          free(argv0_cp);
           return;
      }
-
-     path_var = strdup(dirname(lofreq_script_abs));
-     path_var = realloc(path_var, (strlen(path_var) + 1 + strlen(dirname_argv0) + 1) * sizeof(char));
-     /* if sprintf(path_var, "%s:%s", dirname_argv0, path_var); then valgrind says source and destination overlap in memcpy */
-     strcat(path_var, ":");
-     strcat(path_var, dirname_argv0);
-
-
-#if 0
-     LOG_WARN("dirname_argv0 = %s\n", dirname_argv0);
-     LOG_WARN("Adding local source directory %s to PATH\n", path_var);
-#endif
-
-     old_path = getenv(PATH_NAME);
-     if (NULL == old_path) {
-          setenv(PATH_NAME, path_var, 1);
-     } else {
-          path_var = realloc(
-               path_var, (strlen(path_var) + 1 + strlen(old_path) + 1) * sizeof(char));
-          (void) strcat(path_var, ":");
-          (void) strcat(path_var, old_path);
-          setenv(PATH_NAME, path_var, 1);
-     }
-
-     free(path_var);
+     add_dir = strdup(dirname(lofreq_script_abs));
+     prepend_dir_to_path(add_dir);
      free(lofreq_script_abs);
+     free(add_dir);
+
+
+     /* add local tools dir if present
+      */
+     if (NULL == (lofreq_tools_abs = strdup(dirname_argv0))) {
+          free(dirname_argv0);
+          return;
+     }
+     if (NULL == join_paths(&lofreq_tools_abs, lofreq_tools_rel)) {
+#if 0
+          LOG_WARN("join_paths %s and %s failed\n", lofreq_tools_abs, lofreq_tools_rel);
+#endif
+          free(lofreq_tools_abs);
+          free(dirname_argv0);
+          return;          
+     }
+     if (! file_exists(lofreq_tools_abs)) {
+#if 0
+          LOG_WARN("%s doesnt' exist\n", lofreq_tools_abs);
+#endif
+          free(lofreq_tools_abs);
+          free(dirname_argv0);
+          return;
+     }
+     add_dir = strdup(dirname(lofreq_tools_abs));
+     prepend_dir_to_path(add_dir);
+     free(lofreq_tools_abs);
+     free(add_dir);
+
      free(dirname_argv0);
-     free(argv0_cp);
 }
+
 
 
 static void usage(const char *myname)
@@ -126,12 +159,14 @@ static void usage(const char *myname)
 #endif
      fprintf(stderr, "    vcfset        : VCF set operations\n");
      fprintf(stderr, "    version       : Print version info\n");
+     fprintf(stderr, "\n");
      fprintf(stderr, "  Extra Tools (if installed):\n");
      fprintf(stderr, "    vcfplot       : Plot VCF statistics\n");
      fprintf(stderr, "    cluster       : Cluster variants in VCF file (supports legacy SNP format)\n");
 #ifdef FIXME_NOT_IMPLEMENTED
      fprintf(stderr, "    peek          : Check properties of BAM file\n");
 #endif
+     fprintf(stderr, "\n");
      fprintf(stderr, "  Samtools Clones:\n");
      fprintf(stderr, "    index         : Create index for BAM file\n");
      fprintf(stderr, "    idxstats      : Print stats for indexed BAM file\n");
