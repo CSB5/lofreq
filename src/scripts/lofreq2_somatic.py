@@ -426,7 +426,7 @@ class SomaticSNVCaller(object):
         if not bam_index_exists(self.bam_n):
             LOG.fatal("Normal BAM file is not indexed."
                       " Please create the index first"
-                      " with e.g. samtools index %s" % (self.bam_n))
+                      " with e.g. samtools index %s (or use lofreq)" % (self.bam_n))
             return False
 
 
