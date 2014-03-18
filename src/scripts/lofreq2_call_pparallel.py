@@ -27,8 +27,8 @@ import gzip
 
 #--- project specific imports
 #
-# sets PATH so that local scripts/binary is used if present, i.e.
-# stuff can be run without installing it
+# sets PATH so that scripts/binary presentin src dir are used first if
+# present, i.e. stuff can be run without installing it
 try:
     import lofreq2_local
 except ImportError:
@@ -51,7 +51,8 @@ logging.basicConfig(level=logging.WARN,
 
 
 def prob_to_phredqual(prob):
-    """WARNING: copy from utils.py
+    """WARNING: copy from utils.py. copied here to make script independent
+    
     Turns an error probability into a phred value
     
     >>> prob_to_phredqual(0.01)
