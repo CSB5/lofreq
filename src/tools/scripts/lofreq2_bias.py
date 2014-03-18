@@ -32,10 +32,15 @@ try:
     import lofreq2_local
 except ImportError:
     pass
-from lofreq_star.utils import prob_to_phredqual, phredqual_to_prob
-#from lofreq_star import vcf
-from lofreq_star import multiple_testing
-from lofreq_star import fdr
+try:
+    from lofreq_star.utils import prob_to_phredqual, phredqual_to_prob
+    #from lofreq_star import vcf
+    from lofreq_star import multiple_testing
+    from lofreq_star import fdr
+except ImportError:
+    sys.stderr.write("FATAL(%s): Couldn't find LoFreq modules."
+                     " Are you sure your PYTHONPATH is set correctly?")
+    sys.exit(1)
 
 
 #global logger
