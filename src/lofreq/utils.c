@@ -345,7 +345,7 @@ readlink_malloc(const char *filename)
 }
 
 
-/* follows symlinks until resolved and returns realtpath. returns NULL
+/* follows symlinks until resolved and returns realpath. returns NULL
  * on error, otherwise true path. caller has to free
  */
 char *
