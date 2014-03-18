@@ -326,13 +326,14 @@ def main():
         else:
             raise ValueError(), ("unknown MTC method %s" % args.mtc)
 
-        # FIXME this might break with the new PyVCF (empty list?)
         for i in rej_idxs:
-            if variants[i].FILTER in [".", "PASS"]:
-                new_f = ftag
-            else:
-                new_f = "%s;%s" % (variants[i].FILTER, ftag)
-            variants[i] = variants[i]._replace(FILTER=new_f)
+            # pyvcf filter is empty if not set. lofreq's vcf clone was . or PASS
+            #if not variants[i].FILTER or variants[i].FILTER in [".", "PASS"]:
+            #    new_f = [ftag]
+            #else:
+            #    new_f = "%s;%s" % (variants[i].FILTER, ftag)
+            #variants[i] = variants[i]._replace(FILTER=new_f)
+            variants[i].FILTER.append(ftag)
     
         LOG.info("%d of %d variants didn't pass filter" % (
             len(rej_idxs), len(variants)))

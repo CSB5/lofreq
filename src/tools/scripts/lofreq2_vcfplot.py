@@ -299,7 +299,7 @@ def cmdline_parser():
                       help="Maximum DP")
     parser.add_argument("-o", "--outplot",
                       dest="outplot",
-                      required=True,
+                      #required=True, not needed if summary only and otherwise tested separately 
                       help="Output plot (pdf) filename")
     parser.add_argument("--summary-only",
                       action="store_true",
@@ -344,9 +344,11 @@ def main():
 
     if args.vcf[-3:] == '.gz':
         vcf_fh = gzip.open(args.vcf)
+        compressed = True
     else:
         vcf_fh = open(args.vcf)
-    vcfreader = vcf.VCFReader(vcf_fh)
+        compressed = False
+    vcfreader = vcf.VCFReader(vcf_fh, compressed)
     # v.FILTER is empty if not set in pyvcf. LoFreq's vcf.py clone set it to PASS or .
     vars = [v for v in vcfreader if not v.FILTER or v.FILTER in ['PASS', '.']]
     vcf_fh.close()
@@ -517,3 +519,4 @@ def main():
 if __name__ == "__main__":
     main()
     LOG.info("Successful program exit")
+    LOG.warn("FIXME missing QUAL summary")
