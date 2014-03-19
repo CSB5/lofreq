@@ -22,8 +22,8 @@ typedef struct {
      char *chrom;
      long int pos; /* zero offset */
      char *id;
-     char ref;
-     char alt;
+     char *ref;
+     char *alt;
      int qual;
      char *filter;
      char *info;
