@@ -12,10 +12,8 @@ non-commerical use. External libraries used in the core are
 - uthash (see uthash/LICENSE)
 
 2. a set of Python scripts and modules, which are released under the
-GPL2, which the exception of the two third party modules. See
-lofreq_python/lofreq_star/vcf.py.README and
-lofreq_python/lofreq_star/multiple_testing.py.README for info on
-licenses and authors.
+GPL2, which the exception of one third party modules. See
+multiple_testing.py.README for info on licenses and authors.
 
 
 
