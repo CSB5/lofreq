@@ -260,8 +260,8 @@ main_vcfset(int argc, char *argv[])
     /* recipe: read B into memory and parse from A one by one
      * ======================================================
      *
-     * things can be done a lot more efficient if both input files are
-     * sorted, but let's assume they are not.
+     * FIXME things can be done a lot more efficient if both input
+     * files are sorted. assuming here they are not
      *
      */
 
@@ -309,10 +309,34 @@ main_vcfset(int argc, char *argv[])
          }
 
          if (! vcfset_conf.only_passed || VCF_VAR_PASSES(var)) {
-              vcfset_conf.use_bases ? vcf_var_key(&key, var) : vcf_var_key_simple(&key, var);
-              /* since we only need the key and no other info we do
-               * not need to save the var (and save NULL instead) */
-              var_hash_add(& var_hash_vcf2, key, NULL);         
+              /* if allele-aware then also deal with multi-allelic sites */
+              if (vcfset_conf.use_bases) {
+                   const char field_delimiter[] = ",";
+                   char *token;
+                   char *alt_cp;
+                   char *ptr;
+                   var_t *var_cp;
+
+                   alt_cp = strdup(var->alt);
+                   ptr = alt_cp;
+                   vcf_cp_var(&var_cp, var);
+                   /* strsep modifies first arg */
+                   while (NULL != (token = strsep(&ptr, field_delimiter))) {
+                        strcpy(var_cp->alt, token);
+                        vcf_var_key(&key, var_cp);
+                        /* since we only need the key and no other info we do
+                         * not need to save the var (and save NULL instead) */
+                        var_hash_add(& var_hash_vcf2, key, NULL);         
+                   }
+
+                   free(alt_cp);
+                   vcf_free_var(& var_cp);
+              } else {
+                   vcf_var_key_pos_only(&key, var);
+                   /* since we only need the key and no other info we do
+                    * not need to save the var (and save NULL instead) */
+                   var_hash_add(& var_hash_vcf2, key, NULL);         
+              }
 
          } else {
               num_vars_vcf2_ign += 1;
@@ -328,7 +352,6 @@ main_vcfset(int argc, char *argv[])
     num_vars_vcf2 = HASH_COUNT(var_hash_vcf2);
     LOG_VERBOSE("Parsed %d variants from 2nd vcf file (ignoring %d non-passed of those)\n", 
                 num_vars_vcf2 + num_vars_vcf2_ign, num_vars_vcf2_ign);
-
 
     /* now parse first vcf file and decide what to do
      */
@@ -349,6 +372,10 @@ main_vcfset(int argc, char *argv[])
               break;
          }
 
+         if (vcfset_conf.use_bases && NULL != strchr(var_1->alt, ',')) {
+              LOG_FATAL("%s\n", "No support for multi-allelic SNVs in vcf1");
+              exit(1);
+         }
          if (vcfset_conf.only_passed && ! VCF_VAR_PASSES(var_1)) {
               num_vars_vcf1_ign += 1;
               vcf_free_var(& var_1);
@@ -358,7 +385,7 @@ main_vcfset(int argc, char *argv[])
          fprintf(stderr, "var_1 pass: "); vcf_write_var(stderr, var_1);
 #endif
          num_vars_vcf1 += 1;
-         vcfset_conf.use_bases ? vcf_var_key(&key, var_1) : vcf_var_key_simple(&key, var_1);
+         vcfset_conf.use_bases ? vcf_var_key(&key, var_1) : vcf_var_key_pos_only(&key, var_1);
          HASH_FIND_STR(var_hash_vcf2, key, var_2);
 #ifdef TRACE
          LOG_DEBUG("var with key %s in 2: %s\n", key, var_2? "found" : "not found");
