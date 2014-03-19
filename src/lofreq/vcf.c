@@ -33,6 +33,7 @@ const char *HEADER_LINE = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO";
 int warned_one_alt_base_support = 0;
 int warned_one_ref_base_support = 0;
 
+
 void 
 var_hash_free_table(var_hash_t *var_hash)
 {
@@ -58,6 +59,7 @@ var_hash_free_elem(var_hash_t *hash_elem_ptr)
      free(hash_elem_ptr);
 }
 
+
 /* key and var will not be copied ! */
 void
 var_hash_add(var_hash_t **var_hash, char *key, var_t *var)
@@ -69,7 +71,6 @@ var_hash_add(var_hash_t **var_hash, char *key, var_t *var)
 
     HASH_ADD_KEYPTR(hh, (*var_hash), vh_elem->key, strlen(vh_elem->key), vh_elem);
 }
-
 
 
 /* key is allocated here and has to be freed by called */
@@ -94,7 +95,6 @@ vcf_var_key_simple(char **key, var_t *var)
 }
 
 
-
 int
 vcf_file_seek(vcf_file_t *f, long int offset, int whence) 
 {
@@ -110,10 +110,8 @@ vcf_file_seek(vcf_file_t *f, long int offset, int whence)
 int
 vcf_file_open(vcf_file_t *f, const char *path, const int gzip, char mode) 
 {
-     /* 1. gzip in/out should be mode b, right? if not, the code can be
-      * simplified 
-      *
-      * 2. FIXME handle stdin and stdout
+     /* gzip in/out should be mode b, right? if not, the code can be
+      * simplified
       */
 
      if (mode!='r' && mode!='w') {
@@ -170,8 +168,6 @@ vcf_file_open(vcf_file_t *f, const char *path, const int gzip, char mode)
 int
 vcf_file_close(vcf_file_t *f) 
 {
-     /* FIXME handle stdin and stdout */
-
      if (f->gz) {          
           return gzclose(f->fh_gz);
      } else {
@@ -183,6 +179,7 @@ vcf_file_close(vcf_file_t *f)
      }
 }
 
+
 char *
 vcf_file_gets(vcf_file_t *f, int len, char *line) 
 {
@@ -193,7 +190,6 @@ vcf_file_gets(vcf_file_t *f, int len, char *line)
           return fgets(line, len, f->fh);
      }
 }
-
 
 
 int vcf_var_filtered(const var_t *var)
@@ -208,6 +204,7 @@ int vcf_var_filtered(const var_t *var)
           return 1;
      }
 }
+
 
 /* value for key will be stored in value if not NULL. value will NULL
  * if not found. Otherwise its allocated here and caller must free.
@@ -397,6 +394,7 @@ void vcf_write_header(vcf_file_t *vcf_file, const char *header)
      VCF_PRINTF(vcf_file, "%s", header);
 }
 
+
 /* src can either be the program or the command. that's at least what
  * the vcftools folks do as well.
  */
@@ -426,7 +424,6 @@ void vcf_write_new_header(vcf_file_t *vcf_file, const char *src, const char *ref
      VCF_PRINTF(vcf_file, "##INFO=<ID=CONSVAR,Number=0,Type=Flag,Description=\"Indicates that the variant is a consensus variant (as opposed to a low frequency variant).\">\n");
      VCF_PRINTF(vcf_file, "%s\n", HEADER_LINE);
 }
-
 
 
 /* parse header, i.e. meta info until and including header from vcf
@@ -475,7 +472,6 @@ int vcf_skip_header(vcf_file_t *vcf_file)
      }
      return 0;
 }
-
 
 
 /* parse one variant from stream. returns +1 on EOF and -1 on error
@@ -608,7 +604,6 @@ int vcf_parse_vars(var_t ***vars, vcf_file_t *vcf_file, int only_passed)
 }
 
 
-
 /* info needs to be terminated with a newline character */
 void vcf_header_add(char **header, const char *info)
 {
@@ -642,7 +637,6 @@ void vcf_header_add(char **header, const char *info)
 
 
 #ifdef VCF_MAIN
-
 
 /*
 gcc  -Wall -g -std=gnu99 -O2 -DVCF_MAIN -o vcf_main vcf.c utils.c log.c -lz
