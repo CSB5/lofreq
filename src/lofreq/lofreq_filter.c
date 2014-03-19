@@ -23,7 +23,7 @@
 #include "log.h"
 #include "utils.h"
 #include "multtest.h"
-
+#include "defaults.h"
 
 
 #if 1
@@ -57,6 +57,7 @@ typedef struct {
      double alpha;
      long int ntests;
      char id[FILTER_ID_STRSIZE];
+     int no_compound; /* otherwise 90% of var bases have to be on one strand as well */
 } sb_filter_t;
 
 typedef struct {
@@ -91,6 +92,7 @@ typedef struct {
 
 static int af_missing_warning_printed = 0;
 static int dp_missing_warning_printed = 0;
+static int dp4_missing_warning_printed = 0;
 static int sb_missing_warning_printed = 0;
 
 
@@ -104,9 +106,9 @@ dump_filter_conf(filter_conf_t *cfg)
              cfg->dp_filter.min, cfg->dp_filter.max);
      fprintf(stderr, "  af_filter min=%f max=%f\n",
              cfg->af_filter.min, cfg->af_filter.max);
-     fprintf(stderr, "  sb_filter thresh=%d mtc_type=%d|%s alpha=%f ntests=%ld\n",
+     fprintf(stderr, "  sb_filter thresh=%d mtc_type=%d|%s alpha=%f ntests=%ld no_compound=%d\n",
              cfg->sb_filter.thresh, cfg->sb_filter.mtc_type, mtc_type_str[cfg->sb_filter.mtc_type],
-             cfg->sb_filter.alpha, cfg->sb_filter.ntests);
+             cfg->sb_filter.alpha, cfg->sb_filter.ntests, cfg->sb_filter.no_compound);
      fprintf(stderr, "  snvqual_filter thresh=%d mtc_type=%d|%s alpha=%f ntests=%ld\n",
              cfg->snvqual_filter.thresh, cfg->snvqual_filter.mtc_type, mtc_type_str[cfg->snvqual_filter.mtc_type],
              cfg->snvqual_filter.alpha, cfg->snvqual_filter.ntests);
@@ -135,23 +137,30 @@ usage(const filter_conf_t* filter_conf)
      fprintf(stderr, "  -a | --af-min FLOAT         Maximum allele freq allowed (<1=off)\n");
      fprintf(stderr, "  -A | --af-max FLOAT         Minimum allele freq allowed (<1=off)\n");
 
+     fprintf(stderr, "\n");
      fprintf(stderr, "  Strand Bias (SB):\n");
+     fprintf(stderr, "  Note, variants are only filtered if their SB pvalue is below the threshold\n");
+     fprintf(stderr, "  AND 90%% of variant bases are on one strand (toggled with --sb-no-compound).\n");
      fprintf(stderr, "  -B | --sb-thresh INT        Maximum phred-value allowed. Conflicts with -b.\n");
      fprintf(stderr, "  -b | --sb-mtc STRING        Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -B\n");
      fprintf(stderr, "  -c | --sb-alpha FLOAT       Multiple testing correcion pvalue threshold\n");
+     fprintf(stderr, "       --sb-no-compound          Don't use compound filter\n");
 
+     fprintf(stderr, "\n");
      fprintf(stderr, "  SNV Quality:\n");
      fprintf(stderr, "  -Q | --snvqual-thresh INT   Maximum phred-value allowed. Conflicts with -q\n");
      fprintf(stderr, "  -q | --snvqual-mtc STRING   Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -Q\n");
      fprintf(stderr, "  -r | --snvqual-alpha FLOAT  Multiple testing correcion pvalue threshold\n");
      fprintf(stderr, "  -s | --snvqual-ntests INT   Multiple testing correcion pvalue threshold\n");
 
+     fprintf(stderr, "\n");
      fprintf(stderr, "  Indels:\n");
      fprintf(stderr, "  -K | --indelqual-thresh INT     Maximum phred-value allowed. Conflicts with -q\n");
      fprintf(stderr, "  -k | --indelqual-mtc STRING     Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -Q\n");
      fprintf(stderr, "  -l | --indelqual-alpha FLOAT    Multiple testing correcion pvalue threshold\n");
      fprintf(stderr, "  -m | --indelqual-ntests INT     Multiple testing correcion pvalue threshold\n");
 
+     fprintf(stderr, "\n");
      fprintf(stderr, "  Misc.:\n");
      fprintf(stderr, "       --no-defaults          Remove all default filter settings\n");
      fprintf(stderr, "       --verbose              Be verbose\n");
@@ -159,6 +168,33 @@ usage(const filter_conf_t* filter_conf)
      fprintf(stderr, "       --only-passed          Only output passed variants\n");
 }
 /* usage() */
+
+
+
+int alt_mostly_on_one_strand(var_t *var)
+{
+     dp4_counts_t dp4;
+     const float thresh = 0.9;
+     float ratio = 0.0;
+
+     if (vcf_get_dp4(&dp4, var)) {
+          if (! dp4_missing_warning_printed) {
+               LOG_WARN("%s\n", "DP4 info missing. Compound SB filter won't work");
+               dp4_missing_warning_printed = 1;
+          }
+          return 0;
+     }          
+     
+     ratio = MAX(dp4.alt_fw, dp4.alt_rv)/(float)(dp4.alt_fw + dp4.alt_rv);
+#if 0
+     LOG_DEBUG("ratio for %s %d = %f\n", var->chrom, var->pos, ratio);
+#endif
+     if (ratio > thresh) {
+          return 1;
+     } else {
+          return 0;
+     }
+}
 
 
 void apply_af_filter(var_t *var, af_filter_t *af_filter)
@@ -217,6 +253,7 @@ void apply_dp_filter(var_t *var, dp_filter_t *dp_filter)
           free(dp_char);
 
           if (dp_filter->min > 0 && cov < dp_filter->min) {
+
                vcf_var_add_to_filter(var, dp_filter->id_min);
           }
           if (dp_filter->max > 0 && cov > dp_filter->max) {
@@ -274,7 +311,9 @@ void apply_sb_threshold(var_t *var, sb_filter_t *sb_filter)
      free(sb_char);
 
      if (sb > sb_filter->thresh) {
-          vcf_var_add_to_filter(var, sb_filter->id);
+          if (sb_filter->no_compound || alt_mostly_on_one_strand(var)) {
+               vcf_var_add_to_filter(var, sb_filter->id);
+          }
      }
 }
 
@@ -395,7 +434,6 @@ int apply_indelqual_filter_mtc(indelqual_filter_t *indelqual_filter, var_t **var
      long int i;
 
      LOG_FIXME("%s\n", "almost identical to apply_indelqual_filter_mtc just different filter can be easily merged by accepted both types of variants");
-
 
      if (indelqual_filter->ntests && num_vars > indelqual_filter->ntests) {
          LOG_WARN("%s\n", "Number of predefined tests for indelqual filter larger than number of variants! Are you sure that makes sense?");
@@ -544,7 +582,9 @@ int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const long int num
      
      for (i=0; i<num_vars; i++) {
           if (sb_probs[i] < sb_filter->alpha) {
-               vcf_var_add_to_filter(vars[i], sb_filter->id);
+               if (sb_filter->no_compound || alt_mostly_on_one_strand(vars[i])) {
+                    vcf_var_add_to_filter(vars[i], sb_filter->id);
+               }
           }
      }
 
@@ -657,6 +697,7 @@ main_filter(int argc, char *argv[])
      filter_conf_t cfg;
      char *vcf_in = NULL, *vcf_out = NULL;
      static int print_only_passed = 0;
+     static int no_compound_sb_filter = 0;
      char *vcf_header = NULL;
      var_t **vars = NULL;
      long int num_vars = 0; /* isn't long overkill here ? */
@@ -700,6 +741,7 @@ main_filter(int argc, char *argv[])
               {"sb-thresh", required_argument, NULL, 'B'},
               {"sb-mtc", required_argument, NULL, 'b'},
               {"sb-alpha", required_argument, NULL, 'c'},
+              {"sb-no-compound", no_argument, &no_compound_sb_filter, 1},
 
               {"snvqual-thresh", required_argument, NULL, 'Q'},
               {"snvqual-mtc", required_argument, NULL, 'q'},
@@ -863,6 +905,7 @@ main_filter(int argc, char *argv[])
          }
     }
     cfg.print_only_passed = print_only_passed;
+    cfg.sb_filter.no_compound = no_compound_sb_filter;
 
     if (! no_defaults) {
          if (cfg.sb_filter.mtc_type==MTC_NONE && ! cfg.sb_filter.thresh) {
