@@ -263,12 +263,12 @@ var_in_ign_list(var_t *var) {
      char *key = NULL;
      var_hash_t *match = NULL;
 
-     /* using key_simple i.e. chrom and pos only 
+     /* using key_pos_only i.e. chrom and pos only 
       *
       * NOTE: source quality will pass down fake vars without ref and
-      * alt so only vcf_var_key_simple will work!
+      * alt so only vcf_var_key_pos_only will work!
       */
-     vcf_var_key_simple(&key, var);
+     vcf_var_key_pos_only(&key, var);
      HASH_FIND_STR(source_qual_ign_vars_hash, key, match);
      free(key);
 
@@ -337,8 +337,8 @@ source_qual_load_ign_vcf(const char *vcf_path, void *bed)
               continue;
          }
 
-         /* using key_simple i.e. chrom and pos only */
-         vcf_var_key_simple(&key, var);
+         /* using key_pos_only i.e. chrom and pos only */
+         vcf_var_key_pos_only(&key, var);
          /* since we only need the key and no other info we do
           * not need to save the var (and save NULL instead) */
          vcf_free_var(&var);
