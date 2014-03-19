@@ -52,8 +52,8 @@ except ImportError:
 try:
     from lofreq_star.utils import complement, now
 except ImportError:
-    sys.stderr.write("FATAL(%s): Couldn't find LoFreq modules."
-                     " Are you sure your PYTHONPATH is set correctly?")
+    sys.stderr.write("FATAL: Couldn't find LoFreq modules."
+                     " Are you sure your PYTHONPATH is set correctly?\n")
     sys.exit(1)
 
 
