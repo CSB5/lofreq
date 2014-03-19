@@ -92,7 +92,7 @@ vcf_var_key(char **key, var_t *var)
 
 /* as above but only using chrom and pos */
 void
-vcf_var_key_simple(char **key, var_t *var)
+vcf_var_key_pos_only(char **key, var_t *var)
 {
      int bufsize = strlen(var->chrom)+16;
      (*key) = malloc(bufsize *sizeof(char));
@@ -231,8 +231,9 @@ vcf_var_has_info_key(char **value, const var_t *var, const char *key) {
           return 0;
      }
 
-     info = strdup(var->info); /* strsep modifies string */
+     info = strdup(var->info);
      info_ptr = info;
+     /* note: strsep modifies ptr */
      while (NULL != (token = strsep(&info_ptr, field_delimiter))) {
           if (0 == strncasecmp(key, token, strlen(key))) {
                if (value) {
@@ -245,8 +246,8 @@ vcf_var_has_info_key(char **value, const var_t *var, const char *key) {
                return 1;
           }
      }
-     free(info);
 
+     free(info);
      return 0;
 }
 
@@ -293,6 +294,39 @@ void vcf_free_var(var_t **var)
      free(*var);
 }
 
+void vcf_cp_var(var_t **dest, var_t *src)
+{
+     int i;
+     vcf_new_var(dest);
+     (*dest)->chrom = strdup(src->chrom);
+     (*dest)->pos = src->pos;
+     if (src->id) {
+          (*dest)->id = strdup(src->id);
+     }
+     if (src->ref) {
+          (*dest)->ref = strdup(src->ref);
+     }
+     if (src->alt) {
+          (*dest)->alt = strdup(src->alt);
+     }
+     (*dest)->qual = src->qual;
+     if (src->filter) {
+          (*dest)->filter = strdup(src->filter);
+     }
+     if (src->info) {
+          (*dest)->info = strdup(src->info);
+     }
+     if (src->format) {
+          (*dest)->format = strdup(src->format);
+     }
+     (*dest)->num_samples = src->num_samples;
+     if (src->num_samples>0) {
+          (*dest)->samples = malloc(src->num_samples * sizeof(char*));
+          for (i=0; i<src->num_samples; i++) {
+               (*dest)->samples[i] = strdup(src->samples[i]);
+          }
+     }
+}
 
 void vcf_write_var(vcf_file_t *vcf_file, const var_t *var)
 {
@@ -392,6 +426,7 @@ int vcf_get_dp4(dp4_counts_t *dp4, var_t *var)
      dp4_char = dp4_char_cp;
 
      i = 0;
+     /* note: strsep modifies ptr */
      while (NULL != (token = strsep(& dp4_char, delimiter))) {
           int val = strtol(token, (char **) NULL, 10); /* = atoi */
           if (i==0) {
@@ -522,7 +557,8 @@ int vcf_skip_header(vcf_file_t *vcf_file)
 }
 
 
-/* parse one variant from stream. returns +1 on EOF and -1 on error
+/* parse one variant from stream. returns +1 on EOF and -1 on error.
+ * note, multi-allelic entries are not treated specially
  */
 int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
 {
@@ -550,6 +586,7 @@ int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
 
           } else if (2 == field_no) {
                var->pos = atol(token)-1;
+
           } else if (3 == field_no) {
                var->id = strdup(token);
 

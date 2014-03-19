@@ -86,9 +86,10 @@ int vcf_get_dp4(dp4_counts_t *dp4, var_t *var);
 
 void vcf_new_var(var_t **var);
 void vcf_free_var(var_t **var);
+void vcf_cp_var(var_t **dest, var_t *src);
 
 void vcf_var_key(char **key, var_t *var);
-void vcf_var_key_simple(char **key, var_t *var);
+void vcf_var_key_pos_only(char **key, var_t *var);
 
 int vcf_parse_header(char **header, vcf_file_t *vcf_file);
 int vcf_skip_header(vcf_file_t *vcf_file);
