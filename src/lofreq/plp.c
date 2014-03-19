@@ -263,7 +263,11 @@ var_in_ign_list(var_t *var) {
      char *key = NULL;
      var_hash_t *match = NULL;
 
-     /* using key_simple i.e. chrom and pos only */
+     /* using key_simple i.e. chrom and pos only 
+      *
+      * NOTE: source quality will pass down fake vars without ref and
+      * alt so only vcf_var_key_simple will work!
+      */
      vcf_var_key_simple(&key, var);
      HASH_FIND_STR(source_qual_ign_vars_hash, key, match);
      free(key);
@@ -309,7 +313,6 @@ source_qual_load_ign_vcf(const char *vcf_path, void *bed)
          var_t *var;
          char *key;
          int rc;
-         var_hash_t *match = NULL;
 
          vcf_new_var(&var);
          rc = vcf_parse_var(& vcf_file, var);
@@ -336,16 +339,6 @@ source_qual_load_ign_vcf(const char *vcf_path, void *bed)
 
          /* using key_simple i.e. chrom and pos only */
          vcf_var_key_simple(&key, var);
-
-         HASH_FIND_STR(source_qual_ign_vars_hash, key, match);
-         if (match) {
-              LOG_DEBUG("Already got a variant match for key '%s'. Will keep the old one.\n", key);
-              vcf_free_var(&var);
-              continue;
-         }
-#ifdef TRACE
-         LOG_DEBUG("Adding %s\n", key);
-#endif
          /* since we only need the key and no other info we do
           * not need to save the var (and save NULL instead) */
          vcf_free_var(&var);
