@@ -3,6 +3,8 @@ Todos:
 High Prio:
 ==========
 - new release
+  - fix license info in sourc
+  - add external licenses for binary release
 - predict indels
 - new uniq logic
 
