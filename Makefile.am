@@ -13,6 +13,8 @@ if ENABLE_TOOLS
 TOOLS = src/tools
 endif
 
+EXTRA_DIST = binary_installer.sh
+
 SUBDIRS = src/cdflib90 $(HELPER) src/libbam src/lofreq src/scripts $(TOOLS) src/uthash
 bug-tests: all
 	cd tests && $(SHELL) run_all.sh;
