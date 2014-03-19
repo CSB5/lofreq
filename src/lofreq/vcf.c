@@ -365,6 +365,45 @@ void vcf_var_add_to_filter(var_t *var, const char *filter_name)
      (void) strcat(var->filter, filter_name);
 }
 
+int vcf_get_dp4(dp4_counts_t *dp4, var_t *var)
+{
+     const char delimiter[] = ",";
+     char *token;
+     char *dp4_char = NULL;
+     char *dp4_char_cp;
+     int i = 0;
+
+     if ( ! vcf_var_has_info_key(&dp4_char, var, "DP4")) {
+          memset(dp4, -1, sizeof(dp4_counts_t)); /* -1 = error */
+          return 1;
+     }
+     /* note: strsep modifies ptr */
+     dp4_char_cp = strdup(dp4_char);
+     free(dp4_char);
+     dp4_char = dp4_char_cp;
+
+     i = 0;
+     while (NULL != (token = strsep(& dp4_char, delimiter))) {
+          int val = strtol(token, (char **) NULL, 10); /* = atoi */
+          if (i==0) {
+               dp4->ref_fw = val;
+          } else if (i==1) {
+               dp4->ref_rv = val;
+          } else if (i==2) {
+               dp4->alt_fw = val;
+          } else if (i==3) {
+               dp4->alt_rv = val;
+          }
+          i += 1;
+     }
+     free(dp4_char_cp);
+     if (i != 4) {
+          memset(dp4, -1, sizeof(dp4_counts_t)); /* -1 = error */
+          return 1;
+     }
+     return 0;
+}
+
 
 /* var->info allocated here. caller has to free */
 void vcf_var_sprintf_info(var_t *var,

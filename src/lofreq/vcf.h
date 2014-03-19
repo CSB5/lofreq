@@ -82,6 +82,7 @@ char *
 vcf_file_gets(vcf_file_t *f, int len, char *line);
 
 
+int vcf_get_dp4(dp4_counts_t *dp4, var_t *var);
 
 void vcf_new_var(var_t **var);
 void vcf_free_var(var_t **var);
