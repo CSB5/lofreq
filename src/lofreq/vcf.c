@@ -30,9 +30,6 @@
 const char *HEADER_LINE = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO";
 
 
-int warned_one_alt_base_support = 0;
-int warned_one_ref_base_support = 0;
-
 
 void 
 var_hash_free_table(var_hash_t *var_hash)
@@ -65,10 +62,18 @@ void
 var_hash_add(var_hash_t **var_hash, char *key, var_t *var)
 {
     var_hash_t *vh_elem = NULL;
+    var_hash_t *match = NULL;
+
+    HASH_FIND_STR((*var_hash), key, match);
+    if (match) {
+         LOG_DEBUG("Already got a variant match for key '%s'. Will keep the old one.\n", key);
+         return;
+    }
+
     vh_elem = (var_hash_t *) malloc(sizeof(var_hash_t));
     vh_elem->key = key;
     vh_elem->var = var;
-
+    /* FIXME should we test for existance first? */
     HASH_ADD_KEYPTR(hh, (*var_hash), vh_elem->key, strlen(vh_elem->key), vh_elem);
 }
 
@@ -78,8 +83,9 @@ void
 vcf_var_key(char **key, var_t *var)
 {
      int bufsize = strlen(var->chrom)+16;
+     assert(var->ref && var->alt);
      (*key) = malloc(bufsize *sizeof(char));
-     snprintf(*key, bufsize, "%s %ld %c %c", var->chrom, var->pos+1, 
+     snprintf(*key, bufsize, "%s %ld %s %s", var->chrom, var->pos+1, 
               var->ref, var->alt);
      /* pos+1 make terminal output easier */
 }
@@ -251,8 +257,8 @@ void vcf_new_var(var_t **var)
      (*var)->chrom = NULL;
      (*var)->pos = -1;
      (*var)->id = NULL;
-     (*var)->ref = VCF_MISSING_VAL_CHAR;
-     (*var)->alt = VCF_MISSING_VAL_CHAR;
+     (*var)->ref = NULL;
+     (*var)->alt = NULL;
      (*var)->qual = -1; /* -1 == missing */
      (*var)->filter = NULL;
      (*var)->info = NULL;
@@ -273,6 +279,8 @@ void vcf_free_var(var_t **var)
 
      free((*var)->chrom);
      free((*var)->id);
+     free((*var)->ref);
+     free((*var)->alt);
      free((*var)->filter);
      free((*var)->info);
 
@@ -290,7 +298,7 @@ void vcf_write_var(vcf_file_t *vcf_file, const var_t *var)
 {
      /* in theory all values are optional */
 
-     VCF_PRINTF(vcf_file, "%s\t%ld\t%s\t%c\t%c\t",
+     VCF_PRINTF(vcf_file, "%s\t%ld\t%s\t%s\t%s\t",
              NULL == var->chrom ? VCF_MISSING_VAL_STR : var->chrom,
              var->pos + 1,
              NULL == var->id ? VCF_MISSING_VAL_STR : var->id,
@@ -364,6 +372,7 @@ void vcf_var_add_to_filter(var_t *var, const char *filter_name)
      }
      (void) strcat(var->filter, filter_name);
 }
+
 
 int vcf_get_dp4(dp4_counts_t *dp4, var_t *var)
 {
@@ -545,18 +554,10 @@ int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
                var->id = strdup(token);
 
           } else if (4 == field_no) {
-               if (! warned_one_ref_base_support && strlen(token)>1) {
-                    LOG_WARN("%s\n", "Only supporting one reference base in vcf");
-                    warned_one_ref_base_support = 1;
-               }
-               var->ref = token[0];
+               var->ref = strdup(token);
 
           } else if (5 == field_no) {
-               if (! warned_one_alt_base_support && strlen(token)>1) {
-                    LOG_WARN("%s\n", "Only supporting one alt base in vcf");
-                    warned_one_alt_base_support = 1;
-               }
-               var->alt = token[0];
+               var->alt = strdup(token);
 
           } else if (6 == field_no) {
                if (token[0]==VCF_MISSING_VAL_CHAR) {
