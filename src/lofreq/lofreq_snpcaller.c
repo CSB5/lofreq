@@ -85,8 +85,10 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char ref,
      var->chrom = strdup(p->target);
      var->pos = p->pos;
      /* var->id = NA */
-     var->ref = ref;
-     var->alt = alt;
+     var->ref = calloc(2, sizeof(char)); 
+     var->ref[0] = ref;
+     var->alt = calloc(2, sizeof(char)); 
+     var->alt[0] = alt;
      if (qual>-1) {
           var->qual = qual;
      }

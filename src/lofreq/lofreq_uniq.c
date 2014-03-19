@@ -303,7 +303,8 @@ uniq_snv(const plp_col_t *p, void *confp)
           free(err_probs);
           
      } else {
-          int alt_count = base_count(p, conf->var->alt);
+          /* FIXME no support for indels! */
+          int alt_count = base_count(p, conf->var->alt[0]);
           double pvalue;
           char info_str[128];
 
