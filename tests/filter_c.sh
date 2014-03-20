@@ -7,7 +7,7 @@ source lib.sh || exit 1
 
 VCF=data/vcf/filter_test.vcf.gz
 
-FILTER="$LOFREQ filter"
+FILTER="$LOFREQ filter --sb-no-compound"
 #FILTER=../src/lofreq/lofreq_filter
 
 # must be ordered
