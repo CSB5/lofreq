@@ -38,6 +38,12 @@ typedef struct {
 } snvcall_conf_t;
 
 
+double
+merge_srcq_baseq_and_mapq(const int sq, const int bq, const int mq);
+
+double
+merge_srcq_baseq_mapq_and_alnq(const int sq, const int bq, const int mq, const int aq);
+
 void
 plp_to_errprobs(double **err_probs, int *num_err_probs, 
                 int *alt_bases, int *alt_counts, int *alt_raw_counts,
