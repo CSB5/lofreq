@@ -59,6 +59,29 @@ def now():
     return strftime("%Y-%m-%d %H:%M:%S")
 
 
+
+def fisher_comb(pv1, pv2):
+    """
+    Fisher's method for combining p-values
+    
+    See for example
+    http://en.wikipedia.org/wiki/Fisher's_method
+    and
+    breseq-0.18b:polymorphism_statistics.r
+    """
+    
+    if pv1 == 0 or pv2 == 0:
+        # not sure if this is correct.
+        # see also http://stats.stackexchange.com/questions/58537/fishers-method-when-p-value-0
+        return 0.0
+    
+    comb_log = -2.0 * (log(pv1) + log(pv2))
+    # http://stackoverflow.com/questions/11725115/p-value-from-chi-sq-test-statistic-in-python
+    comb_pv = 1.0 - chi2.cdf(comb_log, 4)    
+    return comb_pv
+
+
+
 def complement(strand, na_type='DNA'):
     """return complement of nucleic acid seqeunce
 
@@ -75,7 +98,6 @@ def complement(strand, na_type='DNA'):
     else:
         raise ValueError, ("Unknown NA type %s" % na_type)
     return strand.translate(tr)
-
 
 
 
