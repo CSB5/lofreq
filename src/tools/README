@@ -1,2 +1,2 @@
 Directory for all non-essential utility scripts installed via Python's setup
-tools
+tools that depend on project specific or third party modules
