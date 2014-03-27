@@ -115,6 +115,22 @@ def cmdline_parser():
     return parser
 
 
+def skip_read(r):
+    """Decide whether to skip a read
+
+    FIXME identical copy in mutect_alt_allele_in_normal.py
+    """
+    
+    skip_flags = [0x4, 0x100, 0x200, 0x400]
+    skip = False
+    # FIXME combine
+    for f in skip_flags:
+        if r.flag & f:
+            return True
+    return False
+
+
+
 def main():
     """The main function
     """
@@ -195,11 +211,8 @@ def main():
         
         for r in reads:
 
-            skip_flags = [0x4, 0x100, 0x200, 0x400]
-            # FIXME combine
-            for f in skip_flags:
-                if r.flag & f:
-                    continue
+            if skip_read(r):
+                continue
                 
             orphan = (r.flag & 0x1) and not (r.flag & 0x2)
             if orphan and not args.use_orphan:
