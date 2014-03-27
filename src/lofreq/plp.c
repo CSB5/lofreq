@@ -19,6 +19,7 @@
 #include "snpcaller.h"
 
 
+
 /* from bedidx.c */
 void *bed_read(const char *fn);
 void bed_destroy(void *_h);
@@ -287,6 +288,7 @@ source_qual_free_ign_vars()
 }
 
 
+/* FIXME ignore variants outside given region (on top of bed as well) */
 int
 source_qual_load_ign_vcf(const char *vcf_path, void *bed)
 {
@@ -649,7 +651,9 @@ void compile_plp_col(plp_col_t *plp_col,
           int nt4;
           int mq, bq; /* phred scores */
           int base_skip = 0; /* boolean */
-
+#ifdef USE_ALNERRPROF
+          int aq = 0;
+#endif
           /* GATKs BI & BD: "are per-base quantities which estimate
            * the probability that the next base in the read was
            * mis-incorporated or mis-deleted (due to slippage, for
@@ -709,7 +713,6 @@ void compile_plp_col(plp_col_t *plp_col,
                     bq = 93; /* Sanger/Phred max */
                }
 
-               base_counts[nt4] += (1.0 - PHREDQUAL_TO_PROB(bq));
 
                /* no need for check if mq is within user defined
                 * limits. check was done in mplp_func */
@@ -734,15 +737,30 @@ void compile_plp_col(plp_col_t *plp_col,
                     int tid = p->b->core.tid;
                     assert(tid < alnerrprof->num_targets);
                     if (alnerrprof->prop_len[tid] > p->qpos) {
-                         int q;
-                         q = PROB_TO_PHREDQUAL(alnerrprof->props[tid][p->qpos]);
-                         PLP_COL_ADD_QUAL(& plp_col->alnerr_qual[nt4], q);
+                         aq = PROB_TO_PHREDQUAL(alnerrprof->props[tid][p->qpos]);
+                         PLP_COL_ADD_QUAL(& plp_col->alnerr_qual[nt4], aq);
                     } else {
                          LOG_ERROR("alnerror for tid=%d too small for qpos=%d. Setting to 0\n", tid, p->qpos+1);
                          PLP_COL_ADD_QUAL(& plp_col->alnerr_qual[nt4], PROB_TO_PHREDQUAL(0.0));
                     }
                }
                /* don't add anything. keep empty */
+#endif
+
+#if 0
+#define MERGEQ_FOR_CONS_CALL 
+#endif
+#ifdef MERGEQ_FOR_CONS_CALL
+
+#ifdef USE_ALNERRPROF
+               base_counts[nt4] += (1.0 - merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq));
+#else
+               base_counts[nt4] += (1.0 - merge_srcq_baseq_and_mapq(sq, bq, mq));
+               /* LOG_FIXME("Adding 1-%f (sq=%d bq=%d mq=%d) to %c\n", merge_srcq_baseq_and_mapq(sq, bq, mq), sq, bq, mq, bam_nt4_rev_table[nt4]); */
+#endif
+
+#else
+               base_counts[nt4] += (1.0 - PHREDQUAL_TO_PROB(bq));
 #endif
                if (bam1_strand(p->b)) {
                     plp_col->rv_counts[nt4] += 1;
