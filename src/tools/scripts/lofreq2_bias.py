@@ -33,7 +33,7 @@ try:
 except ImportError:
     pass
 try:
-    from lofreq_star.utils import prob_to_phredqual, phredqual_to_prob
+    from lofreq_star.utils import prob_to_phredqual, phredqual_to_prob, fisher_comb
     #from lofreq_star import vcf
     from lofreq_star import multiple_testing
     from lofreq_star import fdr
@@ -56,26 +56,6 @@ DEFAULT_MTC = 'fdr'
 DEFAULT_MTC_ALPHA = 0.001
 DEFAULT_TAG_TO_FILTER = 'MB'
 
-
-def fisher_comb(pv1, pv2):
-    """
-    Fisher's method for combining p-values
-    
-    See for example
-    http://en.wikipedia.org/wiki/Fisher's_method
-    and
-    breseq-0.18b:polymorphism_statistics.r
-    """
-    
-    if pv1 == 0 or pv2 == 0:
-        # not sure if this is correct.
-        # see also http://stats.stackexchange.com/questions/58537/fishers-method-when-p-value-0
-        return 0.0
-    
-    comb_log = -2.0 * (log(pv1) + log(pv2))
-    # http://stackoverflow.com/questions/11725115/p-value-from-chi-sq-test-statistic-in-python
-    comb_pv = 1.0 - chi2.cdf(comb_log, 4)    
-    return comb_pv
 
 
 
