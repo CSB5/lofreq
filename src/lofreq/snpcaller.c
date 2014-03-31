@@ -288,10 +288,10 @@ merge_baseq_and_mapq(const int bq, const int mq)
      jp = mp + (1.0 - mp) * bp;
 #ifdef DEBUG
      LOG_DEBUG("P_M + (1-P_M) P_B:   %g + (1.0 - %g) * %g = %g  ==  Q%d + (1.0 - Q%d) * Q%d  =  Q%d\n",
-               mp, mp, bp, jp, mq, mq, bq, PROB_TO_PHREDQUAL(jp));
+               mp, mp, bp, jp, mq, mq, bq, PROB_TO_PHREDQUAL_SAFE(jp));
 #endif
 #if 0
-     LOG_DEBUG("BQ %d after merging with MQ %d = %d\n", bq, mq, PROB_TO_PHREDQUAL(jp));
+     LOG_DEBUG("BQ %d after merging with MQ %d = %d\n", bq, mq, PROB_TO_PHREDQUAL_SAFE(jp));
 #endif
 
      return jp;
@@ -415,10 +415,10 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                     alt_raw_counts[alt_idx] += 1;
 
 #if 0
-                    LOG_FIXME("alt_base %d: bq=%d merged q=%d p=%f\n", alt_idx, bq, PROB_TO_PHREDQUAL(final_err_prob), final_err_prob);
+                    LOG_FIXME("alt_base %d: bq=%d merged q=%d p=%f\n", alt_idx, bq, PROB_TO_PHREDQUAL_SAFE(final_err_prob), final_err_prob);
 #endif
                     /* ignore if below bq or merged threshold */
-                    if (bq < conf->min_altbq || PROB_TO_PHREDQUAL(final_err_prob) < DEFAULT_MIN_ALT_MERGEDQ) {
+                    if (bq < conf->min_altbq || PROB_TO_PHREDQUAL_SAFE(final_err_prob) < DEFAULT_MIN_ALT_MERGEDQ) {
                          continue; 
                     }
                     alt_counts[alt_idx] += 1;
@@ -439,7 +439,7 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                }
 
 #if 0
-               LOG_FIXME("%s:%d %c bq=%d mq=%d finalq=%d is_alt_base=%d\n", p->target, p->pos+1, nt, bq, mq, PROB_TO_PHREDQUAL(final_err_prob), is_alt_base);
+               LOG_FIXME("%s:%d %c bq=%d mq=%d finalq=%d is_alt_base=%d\n", p->target, p->pos+1, nt, bq, mq, PROB_TO_PHREDQUAL_SAFE(final_err_prob), is_alt_base);
 #endif
 
                (*err_probs)[(*num_err_probs)++] = final_err_prob;

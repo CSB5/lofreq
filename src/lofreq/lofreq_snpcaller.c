@@ -113,7 +113,7 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char ref,
      (void) kt_fisher_exact(dp4.ref_fw, dp4.ref_rv, 
                             dp4.alt_fw, dp4.alt_rv,
                             &sb_left_pv, &sb_right_pv, &sb_two_pv);
-     sb_qual = PROB_TO_PHREDQUAL(sb_two_pv);
+     sb_qual = PROB_TO_PHREDQUAL_SAFE(sb_two_pv);
 
      /* mq bias
       */
