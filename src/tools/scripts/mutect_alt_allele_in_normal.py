@@ -207,10 +207,14 @@ def main():
         num_alt = len(alt_bquals)
         num_ref = len(ref_bquals)
         num_both = num_alt+num_ref
-        if (num_alt>=2 or num_alt/float(num_both)>=0.03) and sum(alt_bquals)>20:
-            var.FILTER.append(FILTER_TAG)
-            if args.pass_only:
-                print_this_var = False
+        if num_both==0:
+            LOG.warn("No alt or ref bases for var %s" % var)
+            print_this_var = True
+        else:
+            if (num_alt>=2 or num_alt/float(num_both)>=0.03) and sum(alt_bquals)>20:
+                var.FILTER.append(FILTER_TAG)
+                if args.pass_only:
+                    print_this_var = False
         if print_this_var:
             # LoFreq's vcf clone called this write_rec()
             vcf_writer.write_record(var)
