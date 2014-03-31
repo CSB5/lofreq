@@ -405,9 +405,9 @@ source_qual(const bam1_t *b, const char *ref, const int nonmatch_qual, char *tar
      int **op_quals = NULL;
 
      double *probvec = NULL;
-     int num_non_matches; /* incl indels */
+     int num_non_matches = -1; /* non-matching operations */
      int orig_num_non_matches = -1;
-     double *err_probs = NULL; /* error probs (qualities) passed down to snpcaller */
+     double *err_probs = NULL; /* error probs (qualities) passed down to snpcaller. one for each op, no matter if matching or not */
      int num_err_probs; /* #elements in err_probs */
 
      double unused_pval;
@@ -453,20 +453,20 @@ source_qual(const bam1_t *b, const char *ref, const int nonmatch_qual, char *tar
      num_non_matches = 0;
      err_prob_idx = 0;
      for (i=0; i<NUM_OP_CATS; i++) {
-         if (i != OP_MATCH) {
-             num_non_matches += op_counts[i];
-         }
-         for (j=0; j<op_counts[i]; j++) {
-              int qual;
-              if (nonmatch_qual >= 0) {
-                   qual = nonmatch_qual;
-              } else {
-                   qual = op_quals[i][j];
-              }
-              err_probs[err_prob_idx] = PHREDQUAL_TO_PROB(qual);
-              /*LOG_FIXME("err_probs[%d] = %f (nonmatch_qual=%d op_quals[i=%d][j=%d]=%d)\n", err_prob_idx, err_probs[err_prob_idx], nonmatch_qual, i, j, op_quals[i][j]);*/
-              err_prob_idx += 1;
-         }
+          if (i!=OP_MATCH && i!=OP_INS && i!=OP_DEL) {/* ignore indels. FIXME should probably collapse consecutive indels into one, but what about returned qual then? */
+               num_non_matches += op_counts[i];
+          }
+          for (j=0; j<op_counts[i]; j++) {
+               int qual;
+               if (nonmatch_qual >= 0) {
+                    qual = nonmatch_qual;
+               } else {
+                    qual = op_quals[i][j];
+               }
+               err_probs[err_prob_idx] = PHREDQUAL_TO_PROB(qual);
+               /*LOG_FIXME("err_probs[%d] = %f (nonmatch_qual=%d op_quals[i=%d][j=%d]=%d)\n", err_prob_idx, err_probs[err_prob_idx], nonmatch_qual, i, j, op_quals[i][j]);*/
+               err_prob_idx += 1;
+          }
      }
      assert(err_prob_idx == num_err_probs);
 
@@ -506,6 +506,9 @@ free_and_exit:
 
      /* if we wanted to use softening from precomputed stats then add
       * all non-matches up instead of using the matches */
+#if 1
+#define TRACE
+#endif
 #ifdef TRACE
      LOG_DEBUG("returning src_qual=%d (orig prob = %g) for cigar=%s num_err_probs=%d num_non_matches=%d(%d) @%d\n", 
                src_qual, src_prob, cigar_str_from_bam(b), num_err_probs, num_non_matches, orig_num_non_matches, b->core.pos);
@@ -680,6 +683,8 @@ void compile_plp_col(plp_col_t *plp_col,
 #endif
 
           if (! p->is_del) {
+               double count_incr;
+
                if (p->is_head) {
                     plp_col->num_heads += 1;
                }
@@ -753,15 +758,22 @@ void compile_plp_col(plp_col_t *plp_col,
 #ifdef MERGEQ_FOR_CONS_CALL
 
 #ifdef USE_ALNERRPROF
-               base_counts[nt4] += (1.0 - merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq));
+               count_incr = 1.0 - merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
 #else
-               base_counts[nt4] += (1.0 - merge_srcq_baseq_and_mapq(sq, bq, mq));
-               /* LOG_FIXME("Adding 1-%f (sq=%d bq=%d mq=%d) to %c\n", merge_srcq_baseq_and_mapq(sq, bq, mq), sq, bq, mq, bam_nt4_rev_table[nt4]); */
+               count_incr = 1.0 - merge_srcq_baseq_and_mapq(sq, bq, mq);
+               LOG_FIXME("Adding 1-%f (sq=%d bq=%d mq=%d) to %c\n", merge_srcq_baseq_and_mapq(sq, bq, mq), sq, bq, mq, bam_nt4_rev_table[nt4]); 
 #endif
 
 #else
-               base_counts[nt4] += (1.0 - PHREDQUAL_TO_PROB(bq));
+               count_incr = 1.0 - PHREDQUAL_TO_PROB(bq);
 #endif
+
+               /* FIXME is this the proper way to handle cases where count_incr = 0.0 because one of the values is 0? */
+               if (count_incr == 0.0/* nearly */) {
+                    count_incr = DBL_MIN;
+               }
+
+               base_counts[nt4] += count_incr;
                if (bam1_strand(p->b)) {
                     plp_col->rv_counts[nt4] += 1;
                } else {
