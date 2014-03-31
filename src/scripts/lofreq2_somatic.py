@@ -84,6 +84,7 @@ class SomaticSNVCaller(object):
     DEFAULT_MIN_COV = 10
     DEFAULT_USE_ORPHAN = False
     DEFAULT_NUM_THREADS = 1
+    DEFAULT_DO_GERMLINE = False
 
 
     def __init__(self, bam_n, bam_t, ref, outprefix,
@@ -156,6 +157,7 @@ class SomaticSNVCaller(object):
         self.min_cov = self.DEFAULT_MIN_COV
         self.use_orphan = self.DEFAULT_USE_ORPHAN
         self.num_threads = self.DEFAULT_NUM_THREADS
+        self.do_germline = self.DEFAULT_DO_GERMLINE
 
 
 
@@ -449,7 +451,8 @@ class SomaticSNVCaller(object):
 
             self.complement()
             self.uniq()
-            self.call_germline()
+            if self.do_germline:
+                self.call_germline()
         except:
             return False
 
@@ -544,6 +547,10 @@ def cmdline_parser():
     parser.add_argument("-J", "--mq-off",
                         action="store_true",
                         help="Disable use of mapping quality in LoFreq's model everywhere")
+    
+    parser.add_argument("--germline",
+                        action="store_true",
+                        help="Also list germline calls in separate file")
 
     parser.add_argument("--no-src-qual",
                         action="store_true",
@@ -636,6 +643,8 @@ def main():
                 somatic_snv_caller.src_qual_ign_vcf = somatic_snv_caller.vcf_n_str
             else:
                 somatic_snv_caller.src_qual_ign_vcf = args.ign_vcf
+
+    somatic_snv_caller.do_germline = args.germline
 
     if not somatic_snv_caller.run():
         LOG.fatal("Somatic SNV caller failed. Exiting")
