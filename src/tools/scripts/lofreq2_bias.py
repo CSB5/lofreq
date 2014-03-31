@@ -15,13 +15,11 @@ import logging
 import os
 import argparse
 import gzip
-from math import log
 
 #--- third-party imports
 #
 import pysam
 from scipy.stats import mannwhitneyu
-from scipy.stats import chi2
 import vcf
 
 #--- project specific imports
@@ -152,10 +150,7 @@ def main():
     if args.vcfin == '-':
         vcf_reader = vcf.VCFReader(sys.stdin)
     else:
-        if args.vcfin[-3:] == '.gz':
-            vcf_reader = vcf.VCFReader(gzip.open(args.vcfin))
-        else:
-            vcf_reader = vcf.VCFReader(open(args.vcfin))
+        vcf_reader = vcf.VCFReader(filename=args.vcfin)
             
     variants = [r for r in vcf_reader]
     LOG.info("Loaded %d variants" % len(variants))
