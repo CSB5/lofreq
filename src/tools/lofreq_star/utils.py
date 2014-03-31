@@ -12,7 +12,7 @@ __license__ = "GPL2"
 
 #--- standard library imports
 #
-from math import log10
+from math import log10, log
 import sys
 from time import strftime
 import string
@@ -22,7 +22,7 @@ MAX_INT = 2147483647
 
 #--- third-party imports
 #
-# /
+from scipy.stats import chi2
 
 
 #--- project specific imports

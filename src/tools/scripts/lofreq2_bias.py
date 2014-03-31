@@ -15,13 +15,11 @@ import logging
 import os
 import argparse
 import gzip
-from math import log
 
 #--- third-party imports
 #
 import pysam
 from scipy.stats import mannwhitneyu
-from scipy.stats import chi2
 import vcf
 
 #--- project specific imports
@@ -115,6 +113,22 @@ def cmdline_parser():
     return parser
 
 
+def skip_read(r):
+    """Decide whether to skip a read
+
+    FIXME identical copy in mutect_alt_allele_in_normal.py
+    """
+    
+    skip_flags = [0x4, 0x100, 0x200, 0x400]
+    skip = False
+    # FIXME combine
+    for f in skip_flags:
+        if r.flag & f:
+            return True
+    return False
+
+
+
 def main():
     """The main function
     """
@@ -136,10 +150,7 @@ def main():
     if args.vcfin == '-':
         vcf_reader = vcf.VCFReader(sys.stdin)
     else:
-        if args.vcfin[-3:] == '.gz':
-            vcf_reader = vcf.VCFReader(gzip.open(args.vcfin))
-        else:
-            vcf_reader = vcf.VCFReader(open(args.vcfin))
+        vcf_reader = vcf.VCFReader(filename=args.vcfin)
             
     variants = [r for r in vcf_reader]
     LOG.info("Loaded %d variants" % len(variants))
@@ -195,11 +206,8 @@ def main():
         
         for r in reads:
 
-            skip_flags = [0x4, 0x100, 0x200, 0x400]
-            # FIXME combine
-            for f in skip_flags:
-                if r.flag & f:
-                    continue
+            if skip_read(r):
+                continue
                 
             orphan = (r.flag & 0x1) and not (r.flag & 0x2)
             if orphan and not args.use_orphan:

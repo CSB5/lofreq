@@ -19,6 +19,7 @@
 #include "snpcaller.h"
 
 
+
 /* from bedidx.c */
 void *bed_read(const char *fn);
 void bed_destroy(void *_h);
@@ -287,6 +288,7 @@ source_qual_free_ign_vars()
 }
 
 
+/* FIXME ignore variants outside given region (on top of bed as well) */
 int
 source_qual_load_ign_vcf(const char *vcf_path, void *bed)
 {
@@ -403,9 +405,9 @@ source_qual(const bam1_t *b, const char *ref, const int nonmatch_qual, char *tar
      int **op_quals = NULL;
 
      double *probvec = NULL;
-     int num_non_matches; /* incl indels */
+     int num_non_matches = -1; /* non-matching operations */
      int orig_num_non_matches = -1;
-     double *err_probs = NULL; /* error probs (qualities) passed down to snpcaller */
+     double *err_probs = NULL; /* error probs (qualities) passed down to snpcaller. one for each op, no matter if matching or not */
      int num_err_probs; /* #elements in err_probs */
 
      double unused_pval;
@@ -451,20 +453,20 @@ source_qual(const bam1_t *b, const char *ref, const int nonmatch_qual, char *tar
      num_non_matches = 0;
      err_prob_idx = 0;
      for (i=0; i<NUM_OP_CATS; i++) {
-         if (i != OP_MATCH) {
-             num_non_matches += op_counts[i];
-         }
-         for (j=0; j<op_counts[i]; j++) {
-              int qual;
-              if (nonmatch_qual >= 0) {
-                   qual = nonmatch_qual;
-              } else {
-                   qual = op_quals[i][j];
-              }
-              err_probs[err_prob_idx] = PHREDQUAL_TO_PROB(qual);
-              /*LOG_FIXME("err_probs[%d] = %f (nonmatch_qual=%d op_quals[i=%d][j=%d]=%d)\n", err_prob_idx, err_probs[err_prob_idx], nonmatch_qual, i, j, op_quals[i][j]);*/
-              err_prob_idx += 1;
-         }
+          if (i!=OP_MATCH && i!=OP_INS && i!=OP_DEL) {/* ignore indels. FIXME should probably collapse consecutive indels into one, but what about returned qual then? */
+               num_non_matches += op_counts[i];
+          }
+          for (j=0; j<op_counts[i]; j++) {
+               int qual;
+               if (nonmatch_qual >= 0) {
+                    qual = nonmatch_qual;
+               } else {
+                    qual = op_quals[i][j];
+               }
+               err_probs[err_prob_idx] = PHREDQUAL_TO_PROB(qual);
+               /*LOG_FIXME("err_probs[%d] = %f (nonmatch_qual=%d op_quals[i=%d][j=%d]=%d)\n", err_prob_idx, err_probs[err_prob_idx], nonmatch_qual, i, j, op_quals[i][j]);*/
+               err_prob_idx += 1;
+          }
      }
      assert(err_prob_idx == num_err_probs);
 
@@ -504,6 +506,9 @@ free_and_exit:
 
      /* if we wanted to use softening from precomputed stats then add
       * all non-matches up instead of using the matches */
+#if 1
+#define TRACE
+#endif
 #ifdef TRACE
      LOG_DEBUG("returning src_qual=%d (orig prob = %g) for cigar=%s num_err_probs=%d num_non_matches=%d(%d) @%d\n", 
                src_qual, src_prob, cigar_str_from_bam(b), num_err_probs, num_non_matches, orig_num_non_matches, b->core.pos);
@@ -649,7 +654,9 @@ void compile_plp_col(plp_col_t *plp_col,
           int nt4;
           int mq, bq; /* phred scores */
           int base_skip = 0; /* boolean */
-
+#ifdef USE_ALNERRPROF
+          int aq = 0;
+#endif
           /* GATKs BI & BD: "are per-base quantities which estimate
            * the probability that the next base in the read was
            * mis-incorporated or mis-deleted (due to slippage, for
@@ -676,6 +683,8 @@ void compile_plp_col(plp_col_t *plp_col,
 #endif
 
           if (! p->is_del) {
+               double count_incr;
+
                if (p->is_head) {
                     plp_col->num_heads += 1;
                }
@@ -709,7 +718,6 @@ void compile_plp_col(plp_col_t *plp_col,
                     bq = 93; /* Sanger/Phred max */
                }
 
-               base_counts[nt4] += (1.0 - PHREDQUAL_TO_PROB(bq));
 
                /* no need for check if mq is within user defined
                 * limits. check was done in mplp_func */
@@ -734,9 +742,8 @@ void compile_plp_col(plp_col_t *plp_col,
                     int tid = p->b->core.tid;
                     assert(tid < alnerrprof->num_targets);
                     if (alnerrprof->prop_len[tid] > p->qpos) {
-                         int q;
-                         q = PROB_TO_PHREDQUAL_SAFE(alnerrprof->props[tid][p->qpos]);
-                         PLP_COL_ADD_QUAL(& plp_col->alnerr_qual[nt4], q);
+                         aq = PROB_TO_PHREDQUAL_SAFE(alnerrprof->props[tid][p->qpos]);
+                         PLP_COL_ADD_QUAL(& plp_col->alnerr_qual[nt4], aq);
                     } else {
                          LOG_ERROR("alnerror for tid=%d too small for qpos=%d. Setting to 0\n", tid, p->qpos+1);
                          PLP_COL_ADD_QUAL(& plp_col->alnerr_qual[nt4], PROB_TO_PHREDQUAL_SAFE(0.0));
@@ -744,6 +751,29 @@ void compile_plp_col(plp_col_t *plp_col,
                }
                /* don't add anything. keep empty */
 #endif
+
+#if 0
+#define MERGEQ_FOR_CONS_CALL 
+#endif
+#ifdef MERGEQ_FOR_CONS_CALL
+
+#ifdef USE_ALNERRPROF
+               count_incr = 1.0 - merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
+#else
+               count_incr = 1.0 - merge_srcq_baseq_and_mapq(sq, bq, mq);
+               LOG_FIXME("Adding 1-%f (sq=%d bq=%d mq=%d) to %c\n", merge_srcq_baseq_and_mapq(sq, bq, mq), sq, bq, mq, bam_nt4_rev_table[nt4]); 
+#endif
+
+#else
+               count_incr = 1.0 - PHREDQUAL_TO_PROB(bq);
+#endif
+
+               /* FIXME is this the proper way to handle cases where count_incr = 0.0 because one of the values is 0? */
+               if (count_incr == 0.0/* nearly */) {
+                    count_incr = DBL_MIN;
+               }
+
+               base_counts[nt4] += count_incr;
                if (bam1_strand(p->b)) {
                     plp_col->rv_counts[nt4] += 1;
                } else {
