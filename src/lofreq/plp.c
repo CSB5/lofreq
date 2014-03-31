@@ -474,7 +474,7 @@ source_qual(const bam1_t *b, const char *ref, const int nonmatch_qual, char *tar
           num_non_matches -= 1;
      }
      if (0 == num_non_matches) {
-          src_qual = PROB_TO_PHREDQUAL(0.0);
+          src_qual = PROB_TO_PHREDQUAL_SAFE(0.0);
           goto free_and_exit;
      }
 
@@ -735,11 +735,11 @@ void compile_plp_col(plp_col_t *plp_col,
                     assert(tid < alnerrprof->num_targets);
                     if (alnerrprof->prop_len[tid] > p->qpos) {
                          int q;
-                         q = PROB_TO_PHREDQUAL(alnerrprof->props[tid][p->qpos]);
+                         q = PROB_TO_PHREDQUAL_SAFE(alnerrprof->props[tid][p->qpos]);
                          PLP_COL_ADD_QUAL(& plp_col->alnerr_qual[nt4], q);
                     } else {
                          LOG_ERROR("alnerror for tid=%d too small for qpos=%d. Setting to 0\n", tid, p->qpos+1);
-                         PLP_COL_ADD_QUAL(& plp_col->alnerr_qual[nt4], PROB_TO_PHREDQUAL(0.0));
+                         PLP_COL_ADD_QUAL(& plp_col->alnerr_qual[nt4], PROB_TO_PHREDQUAL_SAFE(0.0));
                     }
                }
                /* don't add anything. keep empty */
