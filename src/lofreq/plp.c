@@ -761,7 +761,6 @@ void compile_plp_col(plp_col_t *plp_col,
                count_incr = 1.0 - merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
 #else
                count_incr = 1.0 - merge_srcq_baseq_and_mapq(sq, bq, mq);
-               LOG_FIXME("Adding 1-%f (sq=%d bq=%d mq=%d) to %c\n", merge_srcq_baseq_and_mapq(sq, bq, mq), sq, bq, mq, bam_nt4_rev_table[nt4]); 
 #endif
 
 #else
