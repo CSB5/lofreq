@@ -17,7 +17,6 @@ import sys
 import os
 import argparse
 import logging
-import gzip
 from collections import Counter, deque
 import itertools
 
@@ -342,16 +341,12 @@ def main():
             sys.exit(1)
 
 
-    if args.vcf[-3:] == '.gz':
-        vcf_fh = gzip.open(args.vcf)
-        compressed = True
+    if args.vcf == '-':
+        vcfreader = vcf.VCFReader(sys.stdin)
     else:
-        vcf_fh = open(args.vcf)
-        compressed = False
-    vcfreader = vcf.VCFReader(vcf_fh, compressed)
+        vcfreader = vcf.VCFReader(filename=args.vcf)
     # v.FILTER is empty if not set in pyvcf. LoFreq's vcf.py clone set it to PASS or .
     vars = [v for v in vcfreader if not v.FILTER or v.FILTER in ['PASS', '.']]
-    vcf_fh.close()
 
 
     summary_txt = []

@@ -62,7 +62,7 @@ def cmdline_parser():
     parser.add_argument("-b", "--bam",
                         required=True,
                         help="Normal BAM file")
-    parser.add_argument("-v", "--vcf",
+    parser.add_argument("-v", "--vcfin",
                         required=True,
                         help="VCF file containing somatic variant"
                         " candidates to filter")
@@ -74,6 +74,21 @@ def cmdline_parser():
                         help="Don't print filtered variants")
 
     return parser
+
+
+def skip_read(r):
+    """Decide whether to skip a read
+
+    FIXME identical copy in lofreq2_bias.py
+    """
+    
+    skip_flags = [0x4, 0x100, 0x200, 0x400]
+    skip = False
+    # FIXME combine
+    for f in skip_flags:
+        if r.flag & f:
+            return True
+    return False
 
 
 def main():
@@ -94,13 +109,17 @@ def main():
 
     # setup vcf_reader
     #
-    if args.vcfin == '-':
-        vcf_reader = vcf.VCFReader(sys.stdin)
+    if args.vcfin[-3:] == '.gz':
+        fh_in = gzip.open(args.vcfin)
+        compressed = True
     else:
-        if args.vcfin[-3:] == '.gz':
-            vcf_reader = vcf.VCFReader(gzip.open(args.vcfin))
+        compressed = False
+        if args.vcfin == '-':
+            fh_in = sys.stdin
         else:
-            vcf_reader = vcf.VCFReader(open(args.vcfin))
+            fh_in = open(args.vcfin)
+    vcf_reader = vcf.VCFReader(fh_in, compressed)
+
 
     # setup vcf_writer
     #
@@ -131,7 +150,7 @@ def main():
         if var.INFO.has_key('INDEL'):
             LOG.warn("Skipping indel %s:%d" % (var.CHROM, var.POS))
             continue
-        if len(var.REF)==1 and len(var.ALT)==1:
+        if len(var.REF)>1 or len(var.ALT)>1:
             LOG.warn("Skipping indel (not tagged as such) %s:%d" % (
                 var.CHROM, var.POS))
             continue
@@ -148,18 +167,19 @@ def main():
         # FIXME huge code overlap with lofreq2_bias.py
         for r in reads:
 
-            skip_flags = [0x4, 0x100, 0x200, 0x400]
-            # FIXME combine
-            for f in skip_flags:
-                if r.flag & f:
-                    continue
-
+            if skip_read(r):
+                continue
+            
             # determine position on read for variant to then determine
             # the current base and its basequal
-
+            #
             vpos_on_read = [vpos_on_read
                             for (vpos_on_read, vpos_on_ref) in r.aligned_pairs
                             if vpos_on_ref==var.POS-1]
+            #if False:
+            #    if len(vpos_on_read)!=1:
+            #        #import pdb; pdb.set_trace()
+            #        from IPython import embed; embed()
             assert len(vpos_on_read)==1
             vpos_on_read = vpos_on_read[0]
             if vpos_on_read == None:# skip deletions
@@ -179,19 +199,28 @@ def main():
                 continue
 
         # " A candidate is rejected if, in the control data, there are
-        # (i) ≥ 2 observations of the alternate allele or they represent
-        # ≥ 3% of the reads; and (ii) their sum of quality scores is >
+        # (i) >= 2 observations of the alternate allele or they represent
+        # >= 3% of the reads; and (ii) their sum of quality scores is >=
         # 20."
         # FIXME set filter var.INFO['AN'] = True
         print_this_var = True
-        if len(alt_bquals)>=2 and sum(alt_bquals)>20:
-            var.FILTER.append(FILTER_TAG)
-            if args.pass_only:
-                print_this_var = False
+        num_alt = len(alt_bquals)
+        num_ref = len(ref_bquals)
+        num_both = num_alt+num_ref
+        if num_both==0:
+            LOG.warn("No alt or ref bases for var %s" % var)
+            print_this_var = True
+        else:
+            if (num_alt>=2 or num_alt/float(num_both)>=0.03) and sum(alt_bquals)>20:
+                var.FILTER.append(FILTER_TAG)
+                if args.pass_only:
+                    print_this_var = False
         if print_this_var:
             # LoFreq's vcf clone called this write_rec()
             vcf_writer.write_record(var)
 
+    if fh_in != sys.stdout:
+        fh_in.close()
     if fh_out != sys.stdout:
         fh_out.close()
 

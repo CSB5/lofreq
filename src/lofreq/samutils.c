@@ -399,8 +399,8 @@ cigar_str_from_bam(const bam1_t *b)
  * Returns the total number of operations counted (excl clips or
  * bases<mq) or -1 on error
  *
- * WARNING code duplication with count_cigar_ops but merging the two
- * functions was too complicated
+ * WARNING code duplication with calc_read_alnerrprof but merging the
+ * two functions was too complicated
  */
 int
 count_cigar_ops(int *counts, int **quals,
@@ -498,7 +498,7 @@ count_cigar_ops(int *counts, int **quals,
                     if (target) {
                          var_t fake_var;
                          fake_var.chrom = target;
-                         fake_var.pos = i; /* FIXME does i make sense here, i.e. matches dbSNP entry? */
+                         fake_var.pos = pos-1; /* FIXME check that pos-1 really matches dbSNP entry (see also below) */
                          if (var_in_ign_list(&fake_var)) {
                               qpos += 1;
                               continue;
@@ -528,7 +528,7 @@ count_cigar_ops(int *counts, int **quals,
                          if (target) {
                               var_t fake_var;
                               fake_var.chrom = target;
-                              fake_var.pos = i; /* FIXME does i make sense here, i.e. matches dbSNP entry? */
+                              fake_var.pos = pos-1; /* FIXME check that pos-1 really matches dbSNP entry (see also above)? */
                               if (var_in_ign_list(&fake_var)) {
                                    continue;
                               }
