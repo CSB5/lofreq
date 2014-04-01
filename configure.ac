@@ -158,12 +158,14 @@ AM_PATH_PYTHON([2.7])
 # argparse and a lot of other stuff is not available in 2.7
 
 AC_ARG_ENABLE([helper],
-    AS_HELP_STRING([--enable-helper], [Enable helper scripts]))
+    AS_HELP_STRING([--enable-helper], [Enable installation of helper scripts]))
 AM_CONDITIONAL(ENABLE_HELPER, [test "x$enable_helper" = "xyes"])
 
+
+# on by default
 AC_ARG_ENABLE([tools],
-    AS_HELP_STRING([--enable-tools], [Enable tools]))
-AM_CONDITIONAL(ENABLE_TOOLS, [test "x$enable_tools" = "xyes"])
+    AS_HELP_STRING([--disable-tools], [Disable installation of tools]))
+AM_CONDITIONAL(ENABLE_TOOLS, [test "x$enable_tools" != "xno"])
 
 # ---   debugging
 #
