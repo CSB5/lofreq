@@ -30,6 +30,11 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
  * matter if we overwrite an existing tag. */
 #define SRC_QUAL_TAG "ZG"
 
+/* results on icga dream syn1.2 suggest that somatic calls made extra
+ * with this settings are likely fp whereas the ones missing a likely
+ * tp, therefore disabled */
+#undef MERGEQ_FOR_CONS_CALL 
+
 const char *bam_nt4_rev_table = "ACGTN";
 
 const unsigned char bam_nt4_table[256] = {
@@ -204,7 +209,6 @@ plp_col_mpileup_print(const plp_col_t *p, FILE *stream)
           p->num_dels, p->num_dels ? p->sum_dels/(float)p->num_dels : 0);
 }
 /* plp_col_mpileup_print() */
-
 
 
 
@@ -752,17 +756,13 @@ void compile_plp_col(plp_col_t *plp_col,
                /* don't add anything. keep empty */
 #endif
 
-#if 0
-#define MERGEQ_FOR_CONS_CALL 
-#endif
-#ifdef MERGEQ_FOR_CONS_CALL
 
+#ifdef MERGEQ_FOR_CONS_CALL
 #ifdef USE_ALNERRPROF
                count_incr = 1.0 - merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
 #else
                count_incr = 1.0 - merge_srcq_baseq_and_mapq(sq, bq, mq);
 #endif
-
 #else
                count_incr = 1.0 - PHREDQUAL_TO_PROB(bq);
 #endif
