@@ -67,9 +67,9 @@
 #if 0
 #define TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL 1
 #endif
-#ifdef TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
+
 /* filled in missing values with the min of the two neighbouring values */
-const int MQ_TRANS_TABLE[61] = {
+static int MQ_TRANS_TABLE[61] = {
 0, /* actually 1 but 0 should stay 0 */
 1,
 3,
@@ -131,8 +131,6 @@ const int MQ_TRANS_TABLE[61] = {
 45, /* NA */
 45, /* NA */
 67};
-#endif
-
 
 
 
@@ -145,7 +143,16 @@ double *pruned_calc_prob_dist(const double *err_probs, int N, int K,
                       long long int bonf_factor, double sig_level);
 
 
-
+int mq_trans(int mq) {
+     if (mq<=60 && mq>=0) {
+          return MQ_TRANS_TABLE[mq]; 
+     } else if (mq==255) {
+          return mq;
+     }
+     /* http://stackoverflow.com/questions/2891766/how-to-throw-an-exception-in-c */
+     LOG_FATAL("received invalid mq of %d\n", mq);
+     exit(1);
+}
 
 /* J = PM  +  (1-PM) * PS  +  (1-PM) * (1-PS) * PA + (1-PM) * (1-PS) * (1-PA) * PB, where
    PJ = joined error probability
@@ -384,8 +391,7 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
 #ifdef SCALE_MQ
                     mq = 254/60.0*mq * pow(mq, SCALE_MQ_FAC)/pow(60, SCALE_MQ_FAC);
 #elif defined(TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL)
-                    assert(mq <= 60);
-                    mq = MQ_TRANS_TABLE[mq]; 
+                    mq = mq_trans(mq); 
 #endif
                }
 
