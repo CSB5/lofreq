@@ -1,90 +1,21 @@
-LoFreq-Star: A sequence-quality aware, ultra-sensitive variant caller
+LoFreq*: A sequence-quality aware, ultra-sensitive variant caller
 for high-throughput sequencing data
 
-INSTALLING THE PRECOMPILED PACKAGE
-==================================
+See https://sourceforge.net/p/lofreq/wiki/LoFreq-Star/ for more information
 
-We assume you have downloaded the (precompiled) package of LoFreq-Star
-and have a working Python 2.7 interpreter installed on your system.
+Installation instructions for the impatient
+-------------------------------------------
 
-Unpack the tarball, cd into the newly created directory and run
-binary_installer.sh. This will copy all necessary files to /usr/local
-by default or a directory of your choice (see --prefix option). Note
-that you might have to change your PYTHONPATH environment variable as
-indicated by the script.
+Installation from source:
+   $ ./configure [--prefix instdir]
+   $ make install
 
-Alternatively you can simply copy the directory as it is somewhere
-else (do not change the directory structure). To call LoFreq you can
-then either use the full path to the directory in which the lofreq
-binary resides (./src/lofreq/lofreq) or add that directory to your
-PATH environment variable so that you only have to type 'lofreq' to
-execute it.
+Binary installation
+    $ binary_installer.sh [--prefix instdir]
 
+Both might need adjustments in your PATH (and PYTHONPATH) environment
+variable.
 
-USAGE
-=====
-
-The main command is called 'lofreq', which has several sub-commands.
-
-Simply typing
-
+After that simply type 
     $ lofreq
-
-will display a list of available commands:
-
-Usage: lofreq <command> [options]
-
-  Main Commands:
-    call          : Call variants
-    call-parallel : Call variants in parallel
-    somatic       : Call somatic variants
-
-  Other Commands:
-    filter        : Filter variants in VCF file
-    uniq          : Test whether variants predicted in only one sample really are unique
-    plpsummary    : Print pileup summary per position
-    vcfset        : VCF set operations
-    version       : Print version info
-
-  Extra Tools (if installed):
-    vcfplot       : Plot VCF statistics
-    cluster       : Cluster variants in VCF file (supports legacy SNP format)
-
-  Samtools Clones:
-    index         : Create index for BAM file
-    idxstats      : Print stats for indexed BAM file
-
-You can simply call lofreq with one of the commands and its usage
-information will be displayed.
-
-The two most important commands are
-
-- 'call' (to call variants)
-
-and
-
-- 'somatic' (to call somatic variants)
-
-Note that predicted variants are already filtered using default
-parameters (which include coverage, strandbias, snv-call quality etc)
-
-
-
-LICENSE
-=======
-
-See the file called LICENSE
-
-
-
-VERSION HISTORY
-===============
-
-LoFreq-Star 2.0.0-beta-3 was released on 2013-11-26.
-LoFreq-Star 2.0.0-beta-2 was released on 2013-11-25.
-LoFreq-Star 2.0.0-beta was released on 2013-09-03.
-
-LoFreq-Star is partially based on LoFreq (see
-https://sourceforge.net/p/lofreq/ and
-www.ncbi.nlm.nih.gov/pubmed/23066108)
-
+to get more help
