@@ -142,7 +142,7 @@ apply_uniq_filter_mtc(uniq_filter_t *uniq_filter, var_t **vars, const int num_va
      uniq_probs = malloc(num_vars * sizeof(double));
      if ( ! uniq_probs) {
           LOG_FATAL("%s\n", "out of memory");
-          return -1;
+          exit(1);
      }
      for (i=0; i<num_vars; i++) {
           uniq_probs[i] = PHREDQUAL_TO_PROB(uniq_phred_from_var(vars[i]));
