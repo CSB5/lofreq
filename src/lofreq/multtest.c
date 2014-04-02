@@ -114,8 +114,8 @@ holm_bonf_corr(double data[], long int size, double alpha, long int num_tests)
 
 /* will use size instead of num_tests if num_tests>0.
  *
- * irejected is a 1D-array of indices of rejected (i..e significant
- * values). It is allocated here, i.e. user has to free.
+ * irejected is a pointer to a 1D-array of indices of rejected (i..e
+ * significant values). It is allocated here, i.e. user has to free.
  *
  * content of data will not be overwritten
  */
@@ -151,6 +151,7 @@ fdr(double data[], long int size, double alpha, long int num_tests, long int **i
      }
 
      /* return data of indices to rejected pvalues */
+     *irejected = NULL;
      if (nrejected) {
           (*irejected) = (long int*) malloc(nrejected * sizeof(long int));
           for (i = 0; i < nrejected; i++) {
