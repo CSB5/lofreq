@@ -138,7 +138,7 @@ def main():
 
     # pyvcf needs template as arg to VCFWriter, whereas LoFreq's vcf
     # clone didn't
-    vcf_writer = vcf.VCFWriter(fh_out, vcf_reader)
+    vcf_writer = vcf.VCFWriter(fh_out, vcf_reader, lineterminator=os.linesep)
     #vcf_writer = vcf.VCFWriter(fh_out)
     #vcf_writer.meta_from_reader(vcf_reader)
     # FIXME should add filter description to header
