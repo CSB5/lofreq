@@ -632,10 +632,17 @@ int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
                var->samples[var->num_samples-1] = strdup(token);
           }
      }
-
-     if (field_no<8) {
-          LOG_WARN("Parsing of variant incomplete. Only got %d fields. Need at least 8\n", field_no);
+     if (field_no<5) {
+          LOG_WARN("Parsing of variant incomplete. Only got %d fields. Need at least 5\n", field_no);
           return -1;
+     }
+     /* allow lenient parsing and fill in missing values*/
+     if (field_no<8) {
+          /* 6-8: qual, filter, info with qual already set */
+          var->filter = calloc(2, sizeof(char));
+          var->filter[0] = VCF_MISSING_VAL_CHAR;
+          var->info = calloc(2, sizeof(char));
+          var->info[0] = VCF_MISSING_VAL_CHAR;
      }
 
      return 0;
