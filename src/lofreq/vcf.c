@@ -202,7 +202,7 @@ int vcf_var_filtered(const var_t *var)
 {
      if (! var->filter) {
           return 0;
-     } else if (0 == strcmp(var->filter, ".")) {
+     } else if (0 == strcmp(var->filter, VCF_MISSING_VAL_STR)) {
           return 0;
      } else if (strlen(var->filter)>=4 && 0 == strcmp(var->filter, "PASS")) {
           return 0;
@@ -372,14 +372,18 @@ vcf_var_add_to_info(var_t *var, const char *info_str)
           return NULL;
      }
      if (strlen(var->info)) {
-          (void) strcat(var->info, ";");
+          if (0 == strcmp(var->info, VCF_MISSING_VAL_STR)) {
+               var->info[0] = '\0';
+          } else {
+               (void) strcat(var->info, ";");
+          }
      }
      (void) strcat(var->info, info_str);
-      return var->info;
+     return var->info;
 }
 
-
-void vcf_var_add_to_filter(var_t *var, const char *filter_name)
+char *
+vcf_var_add_to_filter(var_t *var, const char *filter_name)
 {
      if (var->filter) {
           /* clear field, if PASSED or missing  */
@@ -403,9 +407,10 @@ void vcf_var_add_to_filter(var_t *var, const char *filter_name)
                                 + 1/*;*/ + 1/*\0*/) * sizeof(char));
      }
 
-     if (var->filter==NULL) {
+     if (! var->filter) {
           fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
                   __FILE__, __FUNCTION__, __LINE__);
+          return NULL;
      }
 
      /* add */
@@ -413,6 +418,7 @@ void vcf_var_add_to_filter(var_t *var, const char *filter_name)
           (void) strcat(var->filter, ";");
      }
      (void) strcat(var->filter, filter_name);
+     return var->filter;
 }
 
 
