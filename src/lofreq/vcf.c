@@ -359,15 +359,23 @@ void vcf_write_var(vcf_file_t *vcf_file, const var_t *var)
 }
 
 
-void vcf_var_add_to_info(var_t *var, const char *info_str)
+char *
+vcf_var_add_to_info(var_t *var, const char *info_str)
 {
+     if (!var || !info_str) {
+          return NULL;
+     }
      var->info = realloc(var->info,
                          (strlen(var->info) + strlen(info_str)
                           + 1/*;*/ + 1/*\0*/) * sizeof(char));
+     if (!var->info) {
+          return NULL;
+     }
      if (strlen(var->info)) {
           (void) strcat(var->info, ";");
      }
      (void) strcat(var->info, info_str);
+      return var->info;
 }
 
 
@@ -608,7 +616,6 @@ int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
 
           } else if (8 == field_no) {
                var->info = strdup(token);
-
           } else if (9 == field_no) {
                var->format = strdup(token);
 
@@ -621,8 +628,7 @@ int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
      }
 
      if (field_no<8) {
-          LOG_WARN("Parsing of variant incomplete. Only got %d fields. Need at least 8\n",
-                   field_no);
+          LOG_WARN("Parsing of variant incomplete. Only got %d fields. Need at least 8\n", field_no);
           return -1;
      }
 
@@ -692,7 +698,6 @@ void vcf_header_add(char **header, const char *info)
      token = strstr(*header, HEADER_LINE);
      if (! token) {
           LOG_WARN("%s\n", "Can't add info to empty header, because header line is missing");
-          LOG_FIXME("%s\n", *header);
           return;
      }
      pos = (int)(token - (*header));
@@ -745,7 +750,7 @@ int main(int argc, char *argv[]) {
      } else {
           gzip_in = 0;
      }
-     LOG_FIXME("Using %s (%s gzipped)\n", path_in, gzip_in ? "is" : "not");
+     LOG_INFO("Using %s (%s gzipped)\n", path_in, gzip_in ? "is" : "not");
      if (vcf_file_open(& vcf_file_in, path_in, gzip_in, 'r')) {
           LOG_FATAL("%s\n", "vcf_file_open() failed");
           exit(1);
@@ -756,7 +761,7 @@ int main(int argc, char *argv[]) {
      } else {
           gzip_out = 0;
      }
-     LOG_FIXME("Using %s (%s gzipped)\n", path_out, gzip_out ? "is" : "not");
+     LOG_INFO("Using %s (%s gzipped)\n", path_out, gzip_out ? "is" : "not");
      if (vcf_file_open(& vcf_file_out, path_out, gzip_out, 'w')) {
           LOG_FATAL("%s\n", "vcf_file_open() failed");
           exit(1);

@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <libgen.h>
+#include <ctype.h>
 
 #include "log.h"
 #include "utils.h"
@@ -310,14 +311,6 @@ join_paths(char **p1, const char *p2) {
 }
 
 
-void chomp(char *s)
-{
-     int end = strlen(s)-1;
-     if (end >= 0 && s[end]=='\n') {
-          s[end]='\0';
-     }
-}
-
 
 /* taken from
  * http://www.delorie.com/gnu/docs/glibc/libc_279.html
@@ -467,6 +460,47 @@ dbl_median(double data[], int size)
      free(sdata);
      return ret;
 }
+
+
+void chomp(char *s)
+{
+     if (!s) {
+          return;
+     }
+     int end = strlen(s)-1;
+     while (end >= 0 && (s[end]=='\n' || s[end]=='\r')) {
+          s[end]='\0';
+          end = end-1;
+     }
+}
+
+
+
+void
+strstrip(char *str)
+{
+     size_t size;
+
+     fprintf(stderr, "FIXME untested function\n"); exit(1);
+     if (! str) {
+          return;
+     }
+
+     size = strlen(str);
+     if (!size) {
+          return;
+     }
+
+     /* rstrip */
+     while (size>0 && isspace(str[size-1])) {
+          str[--size] = 0;
+     }
+     /* lstrip */
+     while (*str && isspace(*str)) {
+          str++;
+     }
+}
+
 
 #ifdef MAIN
 /* gcc -o utils utils.c log.c -DMAIN -Wall -ansi -pedantic  */
