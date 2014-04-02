@@ -143,15 +143,19 @@ double *pruned_calc_prob_dist(const double *err_probs, int N, int K,
                       long long int bonf_factor, double sig_level);
 
 
+static int mq_trans_range_violation_printed = 0;
+
 int mq_trans(int mq) {
      if (mq<=60 && mq>=0) {
           return MQ_TRANS_TABLE[mq]; 
-     } else if (mq==255) {
-          return mq;
+
+     } else if (mq!=255) {
+          if (! mq_trans_range_violation_printed) {
+               LOG_WARN("MQ value %d is outside of valid range defined in translation table\n", mq);
+               mq_trans_range_violation_printed = 1;
+          }
      }
-     /* http://stackoverflow.com/questions/2891766/how-to-throw-an-exception-in-c */
-     LOG_FATAL("received invalid mq of %d\n", mq);
-     exit(1);
+     return mq;
 }
 
 /* J = PM  +  (1-PM) * PS  +  (1-PM) * (1-PS) * PA + (1-PM) * (1-PS) * (1-PA) * PB, where
