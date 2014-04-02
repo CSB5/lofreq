@@ -227,13 +227,15 @@ uniq_snv(const plp_col_t *p, void *confp)
 
      if (conf->uni_freq <= 0.0) {
           if (! vcf_var_has_info_key(&af_char, conf->var, "AF")) {
-               LOG_ERROR("%s\n", "Couldn't parse AF (key not found) from variant");
-               return;
+               LOG_FATAL("%s\n", "Couldn't parse AF (key not found) from variant");
+               /* hard to catch error later */
+               exit(1);
           }
           af = strtof(af_char, (char **)NULL); /* atof */
           free(af_char);
           if (af < 0.0 || af > 1.0) {
-               LOG_ERROR("%s\n", "Couldn't parse AF (value out of bound) from variant");
+               /* hard to catch error later */
+               LOG_FATAL("%s\n", "Couldn't parse AF (value out of bound) from variant");
                return;
           }
 
