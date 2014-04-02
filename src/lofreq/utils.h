@@ -63,5 +63,7 @@ dbl_median(double data[], int size);
 
 int
 int_median(int data[], int size);
+void
+strstrip(char *str);
 
 #endif
