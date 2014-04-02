@@ -123,39 +123,40 @@ def concat_vcf_files(vcf_files, vcf_concat, source=None):
 
 
 
-def read_bed_coords(fbed):
-    """Reads coordinates from bed file and returns them as list of
-    tuples (chrom, start, end). Start and end pos are 0-based;
-    half-open just like bed and python ranges
-
-    Based on lofreq 0.6.0
-    """
-
-    with open(fbed, 'r') as fh:
-        for line in fh:
-            if line.startswith('#'):
-                continue
-            if len(line.strip()) == 0:
-                continue
-            try:
-                (chrom, start, end) = line.split("\t")[0:3]
-            except IndexError:
-                LOG.fatal(
-                "FATAL: Failed to parse bed line: %s\n" % (line))
-                raise ValueError
-
-            # http://genome.ucsc.edu/FAQ/FAQformat.html#format1
-            # 4: name, score, strand...
-            start = int(float(start))
-            end = int(float(end))
-            # stupid float is necessary for scientific notation, e.g. 1.25e+08
-            # the only alternative is to use Decimal
-            if end <= start :
-                LOG.fatal("Start value (%d) not lower end value (%d)."
-                " Parsed from file %s" % (
-                    start, end, fbed))
-                raise ValueError
-            yield (chrom, start, end)
+#def read_bed_coords(fbed):
+#    """Reads coordinates from bed file and returns them as list of
+#    tuples (chrom, start, end). Start and end pos are 0-based;
+#    half-open just like bed and python ranges
+#
+#    Based on lofreq 0.6.0
+#    """
+#
+#    with open(fbed, 'r') as fh:
+#        for line in fh:
+#            if line.startswith('#'):
+#                continue
+#            if len(line.strip()) == 0:
+#                continue
+#            try:
+#                (chrom, start, end) = line.split("\t")[0:3]
+#            except IndexError:
+#                LOG.fatal(
+#                "FATAL: Failed to parse bed line: %s\n" % (line))
+#                raise ValueError
+#
+#            # http://genome.ucsc.edu/FAQ/FAQformat.html#format1
+#            # 4: name, score, strand...
+#            start = int(float(start))
+#            end = int(float(end))
+#            # stupid float is necessary for scientific notation, e.g. 1.25e+08
+#            # the only alternative is to use Decimal
+#            if end <= start :
+#                LOG.fatal("Start value (%d) not lower end value (%d)."
+#                " Parsed from file %s" % (
+#                    start, end, fbed))
+#                raise ValueError
+#            yield (chrom, start, end)
+#
 
 
 def sq_list_from_bam_samtools(bam):
@@ -248,11 +249,9 @@ def lofreq_cmd_per_sq(bam, lofreq_call_args, tmp_dir):
     # FIXME: this can be improved a lot. When asked for x threads we
     # should simply bin the BAM file such that we get exactly x
     # threads. The number of mapped reads per sq should be taken into
-    # account for the binning process (and to make it even more
+    # account for the binning process and to make it even more
     # complicated the regions in the optional bed file could be taken
-    # into account as well). problem with using regions on WGS is that
-    # we will get boundary effects when using BAM.
-    #
+    # into account as well. 
 
     sq_list = sq_list_from_bam(bam)
     if len(sq_list) < 2:
