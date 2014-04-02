@@ -151,12 +151,13 @@ fdr(double data[], long int size, double alpha, long int num_tests, long int **i
      }
 
      /* return data of indices to rejected pvalues */
-     (*irejected) = (long int*) malloc(nrejected * sizeof(long int));
-     for (i = 0; i < nrejected; i++) {
-          /* printf("%d\t%f\t%d\n", iarr[i].i, iarr[i].p); */
-          (*irejected)[i] = iarr[i].i;
+     if (nrejected) {
+          (*irejected) = (long int*) malloc(nrejected * sizeof(long int));
+          for (i = 0; i < nrejected; i++) {
+               /* printf("%d\t%f\t%d\n", iarr[i].i, iarr[i].p); */
+               (*irejected)[i] = iarr[i].i;
+          }
      }
-
      free(iarr);
      return nrejected;
 }
