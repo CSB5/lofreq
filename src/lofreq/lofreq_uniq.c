@@ -295,6 +295,7 @@ uniq_snv(const plp_col_t *p, void *confp)
                * No point in adding this as phred qual because it
                * means the opposite of UQ
                */
+
                vcf_var_add_to_info(conf->var, uniq_flag);
           }
 
@@ -319,7 +320,7 @@ uniq_snv(const plp_col_t *p, void *confp)
                return;
           }
 
-          snprintf(info_str, 128, "%s=%d", uniq_phred_tag, PROB_TO_PHREDQUAL(pvalue));
+          snprintf(info_str, 128, "%s=%d", uniq_phred_tag, PROB_TO_PHREDQUAL_SAFE(pvalue));
           vcf_var_add_to_info(conf->var, info_str);
 
           LOG_DEBUG("%s %d %c>%c AF=%f | %s (p-value=%g) | BAM alt_count=%d cov=%d (freq=%f)\n",
