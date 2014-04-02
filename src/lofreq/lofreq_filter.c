@@ -498,6 +498,8 @@ int apply_indelqual_filter_mtc(indelqual_filter_t *indelqual_filter, var_t **var
           
      } else {
           LOG_FATAL("Internal error: unknown MTC type %d\n", indelqual_filter->mtc_type);
+          free(orig_idx);
+          free(noncons_errprobs);
           return -1;
      }
      
@@ -546,7 +548,7 @@ int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const long int num
                LOG_WARN("%s\n", "Requested SB filtering failed since SB tag is missing in variant");
                sb_missing_warning_printed = 1;
                free(sb_probs);
-               break;
+               return -1;
           }
           sb_probs[i] = PHREDQUAL_TO_PROB(atoi(sb_char));
           free(sb_char);
@@ -1052,7 +1054,7 @@ main_filter(int argc, char *argv[])
          num_vars +=1;
          if (num_vars >= vars_size) {
               const long incr = 128;
-              vars = realloc(vars, (vars_size+incr) * sizeof(var_t**));
+              vars = realloc(vars, (vars_size+incr) * sizeof(var_t*));
               vars_size += incr;
          }
          vars[num_vars-1] = var;
@@ -1092,7 +1094,7 @@ main_filter(int argc, char *argv[])
     }
 
     if (num_vars) {
-         vars = realloc(vars, (num_vars * sizeof(var_t**)));
+         vars = realloc(vars, (num_vars * sizeof(var_t*)));
     }
     vcf_file_close(& cfg.vcf_in);
     LOG_VERBOSE("Parsed %d variants\n", num_vars);

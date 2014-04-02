@@ -120,13 +120,13 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char ref,
      assert (p->map_quals[ref_nt4].n == p->base_quals[ref_nt4].n);
      assert (p->map_quals[alt_nt4].n == p->base_quals[alt_nt4].n);
      /* FIXME intro of n_alt and n_ref would make things easier here */
-     if (NULL == (ref_mq = malloc(num_ref * sizeof(double)))) {
+     if (NULL == (ref_mq = malloc(num_ref * sizeof(int)))) {
           /* coverage = base-count after read level filtering */
           fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
                   __FILE__, __FUNCTION__, __LINE__);
           return;
      }
-     if (NULL == (alt_mq = malloc(num_alt * sizeof(double)))) {
+     if (NULL == (alt_mq = malloc(num_alt * sizeof(int)))) {
           /* coverage = base-count after read level filtering */
           fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
                   __FILE__, __FUNCTION__, __LINE__);

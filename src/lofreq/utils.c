@@ -414,12 +414,12 @@ int
 int_median(int data[], int size)
 {
      int ret;
-     int *sdata = malloc(sizeof(int) * size);
+     int *sdata;
 
      if (size==0) {
           return 0;
      }
-
+     sdata = malloc(sizeof(int) * size);
      memcpy(sdata, data, sizeof(int) * size);
      qsort(sdata, size, sizeof(int), int_cmp);
      if (size%2 == 0) {
@@ -442,12 +442,12 @@ double
 dbl_median(double data[], int size)
 {
      double ret;
-     double *sdata = malloc(sizeof(double) * size);
+     double *sdata;
 
      if (size==0) {
           return 0.0;
      }
-
+     sdata =  malloc(sizeof(double) * size);
      memcpy(sdata, data, sizeof(double) * size);
      qsort(sdata, size, sizeof(double), dbl_cmp);
      if (size%2 == 0) {
