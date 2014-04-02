@@ -100,7 +100,7 @@ int vcf_var_has_info_key(char **value, const var_t *var, const char *key);
 int vcf_var_filtered(const var_t *var);
 
 void vcf_var_add_to_filter(var_t *var, const char *filter_name);
-void vcf_var_add_to_info(var_t *var, const char *info_str);
+char *vcf_var_add_to_info(var_t *var, const char *info_str);
 void vcf_var_sprintf_info(var_t *var,
                           const int *dp, const float *af, const int *sb,
                           const dp4_counts_t *dp4,
