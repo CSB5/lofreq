@@ -45,6 +45,21 @@ struct __faidx_t {
 #define kroundup32(x) (--(x), (x)|=(x)>>1, (x)|=(x)>>2, (x)|=(x)>>4, (x)|=(x)>>8, (x)|=(x)>>16, ++(x))
 #endif
 
+
+/* LoFreq Extension */
+int fai_seq_len(const faidx_t *fai, int tid)
+{
+     khint_t k;
+     faidx1_t x;
+     if (!fai || tid<0) {
+             return -1;
+     }
+     k = kh_get(s, fai->hash, fai->name[tid]);
+     x = kh_value(fai->hash, k);
+     return (int)x.len;
+}
+
+
 static inline void fai_insert_index(faidx_t *idx, const char *name, int len, int line_len, int line_blen, uint64_t offset)
 {
 	khint_t k;

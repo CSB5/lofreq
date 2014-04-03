@@ -19,7 +19,6 @@
 #include "snpcaller.h"
 
 
-
 /* from bedidx.c */
 void *bed_read(const char *fn);
 void bed_destroy(void *_h);
@@ -93,7 +92,6 @@ void init_mplp_conf(mplp_conf_t *c)
      c->flag = MPLP_NO_ORPHAN;
 #endif
 }
-
 
 
 
@@ -292,7 +290,8 @@ source_qual_free_ign_vars()
 }
 
 
-/* FIXME ignore variants outside given region (on top of bed as well) */
+/* FIXME ignore variants outside given region (on top of bed as well)
+ * and use tabix API if indexed */
 int
 source_qual_load_ign_vcf(const char *vcf_path, void *bed)
 {
@@ -907,6 +906,7 @@ void compile_plp_col(plp_col_t *plp_col,
 
 
 
+
 int
 mpileup(const mplp_conf_t *mplp_conf, 
         void (*plp_proc_func)(const plp_col_t*, void*),
@@ -988,10 +988,26 @@ mpileup(const mplp_conf_t *mplp_conf,
         }
     }
     LOG_DEBUG("%s\n", "BAM header initialized");
+    for (i=0; i < h->n_targets; i++) {
+         int fai_len = -1;
+         if (mplp_conf->fai) {
+              fai_seq_len(mplp_conf->fai, 0);
+         }
+         LOG_DEBUG("BAM header target #%d: name=%s len=%d faidx len=%d\n", i, h->target_name[i], h->target_len[i], fai_len);
+    }    
 
-    
     if (tid0 >= 0 && mplp_conf->fai) { /* region is set */
-        ref = faidx_fetch_seq(mplp_conf->fai, h->target_name[tid0], 0, 0x7fffffff, &ref_len);
+         ref_len = fai_seq_len(mplp_conf->fai, tid0);
+         if (h->target_len[tid0] != ref_len && ref_len!=-1) {
+              LOG_FATAL("Length mismatch between %s in BAM and reference fasta file: %d!=%d\n", h->target_name[tid0], h->target_len[tid0], ref_len);
+              return -1;
+         }
+         ref_len = -1;
+         ref = faidx_fetch_seq(mplp_conf->fai, h->target_name[tid0], 0, 0x7fffffff, &ref_len);
+         if (NULL == ref || h->target_len[tid0] != ref_len) {
+              LOG_FATAL("%s\n", "Reference fasta file doesn't seem to contain the right sequence(s) for this BAM file. (mismatch for seq %s listed in BAM header).", h->target_name[tid0]);
+              return -1;
+         }
         LOG_DEBUG("%s\n", "sequence fetched");
         ref_tid = tid0;
         for (i = 0; i < n; ++i) data[i]->ref = ref, data[i]->ref_id = tid0;
@@ -1032,11 +1048,18 @@ mpileup(const mplp_conf_t *mplp_conf,
         if (tid != ref_tid) {
             free(ref); ref = 0;
             if (mplp_conf->fai) {
-                 ref = faidx_fetch_seq(mplp_conf->fai, h->target_name[tid], 0, 0x7fffffff, &ref_len);
-                 if (NULL == ref) {
-                      LOG_FATAL("%s\n", "Given reference fasta file doesn't seem to contain the right sequence(s).");
+                 ref_len = fai_seq_len(mplp_conf->fai, 0);
+                 if (h->target_len[tid] != ref_len && ref_len!=-1) {
+                      LOG_FATAL("Length mismatch between %s in BAM and reference fasta file: %d!=%d\n", h->target_name[tid], h->target_len[tid], ref_len);
                       return -1;
                  }
+                 ref_len = -1;
+                 ref = faidx_fetch_seq(mplp_conf->fai, h->target_name[tid], 0, 0x7fffffff, &ref_len);
+                 if (NULL == ref || h->target_len[tid] != ref_len) {
+                      LOG_FATAL("%s\n", "Reference fasta file doesn't seem to contain the right sequence(s) for this BAM file. (mismatch for seq %s listed in BAM header).", h->target_name[tid]);
+                      return -1;
+                 }
+                 LOG_DEBUG("%s\n", "sequence fetched");
             }
             for (i = 0; i < n; ++i) 
                  data[i]->ref = ref, data[i]->ref_id = tid;
