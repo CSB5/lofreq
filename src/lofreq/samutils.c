@@ -25,7 +25,7 @@
 extern void bam_init_header_hash(bam_header_t *header);
 extern void bam_destroy_header_hash(bam_header_t *header);
 
-#define INDEL_QUAL_DEFAULT 40
+#define INDEL_QUAL_DEFAULT 45
 
 #define BUF_SIZE 1024
 
@@ -362,10 +362,12 @@ calc_read_alnerrprof(double *alnerrprof, unsigned long int *used_pos,
 
 
 
+/* from char *bam_format1_core(const bam_header_t *header, const
+ * bam1_t *b, int of) 
+ */
 char *
 cigar_str_from_bam(const bam1_t *b)
 {
-     /* from char *bam_format1_core(const bam_header_t *header, const bam1_t *b, int of) */
      const bam1_core_t *c = &b->core;
      kstring_t str;
      int i;
@@ -382,38 +384,40 @@ cigar_str_from_bam(const bam1_t *b)
 
 /* Count matches (OP_MATCH), mismatches (OP_MISMATCH), insertions
  * (OP_INS) and deletions (OP_DEL) for an aligned read. Written to
- * (preallocated, size 4) counts at indices given above. Returns non-0
- * on error. will ignore all non-del bases if their bq is below
- * min_bq.
+ * (preallocated, size 4) counts at indices given above. Will ignore
+ * all mis-/match bases if their bq is below min_bq.
+ *
+ * Returns the total number of operations counted (excl. clipped bases
+ * or those with bq<min_bq) or -1 on error. Consecutive indels are
+ * counted as one operation, using INDEL_QUAL_DEFAULT, which is
+ * suboptimal.
  *
  * If quals is not NULL it will be used as a two dim array (has to be
  * preallocated) with OPs as first dim (len NUM_OP_CATS) and the
  * qualities of the bases as second dim. NOTE/FIXME: this uses bq for
- * mis/matches and INDEL_QUAL_DEFAULT for now in case of indels . The
+ * mis/matches and INDEL_QUAL_DEFAULT for now in case of indels. The
  * number of elements corresponds to the count entry and can be at max
  * readlen.
  * 
  * If target is non-NULL will ignore preloaded variant positions via
  * var_in_ign_list
- * 
- * Returns the total number of operations counted (excl clips or
- * bases<mq) or -1 on error
  *
  * WARNING code duplication with calc_read_alnerrprof but merging the
- * two functions was too complicated
+ * two functions was too complicated (and the latter is unused anyway)
  */
 int
 count_cigar_ops(int *counts, int **quals,
                 const bam1_t *b, const char *ref, int min_bq,
                 char *target)
 {
+#undef TRACE
      int num_ops = 0;
      /* modelled after bam.c:bam_calend(), bam_format1_core() and
       * pysam's aligned_pairs (./pysam/csamtools.pyx)
       */
      uint32_t *cigar = bam1_cigar(b);
      const bam1_core_t *c = &b->core;
-     uint32_t pos = c->pos; /* pos on genome */
+     uint32_t tpos = c->pos; /* pos on genome */
      uint32_t qpos = 0; /* pos on read/query */
      uint32_t k, i;
 #if 0
@@ -421,11 +425,14 @@ count_cigar_ops(int *counts, int **quals,
 #else
      int qlen = b->core.l_qseq; /* read length */
 #endif
-     if (NULL==ref) {
+
+     if (! ref) {
+          return -1;
+     }
+     if (! counts) {
           return -1;
      }
 
-     assert(NULL != counts);
      memset(counts, 0, NUM_OP_CATS*sizeof(int));
 
      /* loop over cigar to get aligned bases
@@ -437,45 +444,55 @@ count_cigar_ops(int *counts, int **quals,
           uint32_t l = cigar[k] >> BAM_CIGAR_SHIFT;
 
           /* following conditionals could be collapsed to much shorter
-           * code, but we keep them as they were in pysam's
-           * aligned_pairs to make later handling of indels easier
+           * code, but we keep them roughly as they were in pysam's
+           * aligned_pairs to make later comparison and handling of
+           * indels easier
            */
           if (op == BAM_CMATCH || op == BAM_CDIFF) {
-               for (i=pos; i<pos+l; i++) {                             
+               for (i=tpos; i<tpos+l; i++) {                             
                     int actual_op;
                     assert(qpos < qlen);
                     /* case agnostic */
                     char ref_nt = toupper(ref[i]);
                     char read_nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(b), qpos)];
                     int bq = bam1_qual(b)[qpos];
-#if 0
-                    printf("[M]MATCH qpos,i,ref,read = %d,%d,%c,%c\n", qpos, i, ref_nt, read_nt);
-#endif                    
 
-                    if (bq<min_bq) {
-                         /* fprintf(stderr, "M: ignoring because of bq=%d at %d (qpos %d)\n", bq, pos, qpos); */
-                         qpos += 1;
-                         continue;
-                    }
-#ifdef USE_SOURCEQUAL
-                    if (target) {
-                         var_t fake_var;
-                         memset(&fake_var, 0, sizeof(var_t));
-                         fake_var.chrom = target;
-                         fake_var.pos = i;
-                         /* FIXME evil, evil hack. only works as long as var_in_ign_list only uses chrom and pos */
-                         if (var_in_ign_list(&fake_var)) {
-                              qpos += 1;
-                              continue;
-                         } 
-                    }
-#endif 
                     if (ref_nt != read_nt || op == BAM_CDIFF) {
                          actual_op = OP_MISMATCH;
                     } else {
                          actual_op = OP_MATCH;
                     }
 
+                    /* ignoring base if below min_bq, independent of type */
+                    if (bq<min_bq) {
+#ifdef TRACE
+                         fprintf(stderr, "TRACE(%s): [M]MATCH ignoring base because of bq=%d at %d (qpos %d)\n", bam1_qname(b), bq, i, qpos);
+#endif
+                         qpos += 1;
+                         continue;
+                    }
+
+#ifdef USE_SOURCEQUAL
+                    /* for mismatches only */
+                    if (target && actual_op == OP_MISMATCH) {
+                         var_t fake_var;
+                         memset(&fake_var, 0, sizeof(var_t));
+                         fake_var.chrom = target;
+                         fake_var.pos = i;
+                         /* FIXME evil, evil hack. only works as long as var_in_ign_list only uses chrom and pos */
+                         if (var_in_ign_list(&fake_var)) {
+#ifdef TRACE
+                              fprintf(stderr, "TRACE(%s): MM: ignoring because in ign list at %d (qpos %d)\n", bam1_qname(b), i, qpos);
+#endif
+                              qpos += 1;
+                              continue;
+                         } 
+                    }
+#endif 
+
+#ifdef TRACE
+                    fprintf(stderr, "TRACE(%s): adding [M]MATCH qpos,tpos,ref,read,bq = %d,%d,%c,%c,%d\n", bam1_qname(b), qpos, tpos, ref_nt, read_nt, bq);
+#endif                    
                     counts[actual_op] += 1;
                     if (quals) {
                          quals[actual_op][counts[actual_op]-1] = bq;
@@ -483,65 +500,59 @@ count_cigar_ops(int *counts, int **quals,
 
                     qpos += 1;
                }
-               pos += l;
+               tpos += l;
 
-          } else if (op == BAM_CINS) {
-               for (i=pos; i<pos+l; i++) {
-                    assert(qpos < qlen);
-                    int bq = bam1_qual(b)[qpos];
-                    if (bq<min_bq) {
-                         /* fprintf(stderr, "I: ignoring because of bq=%d at %d (qpos %d)\n", bq, pos, qpos); */
-                         qpos += 1;
+          } else if (op == BAM_CINS || op == BAM_CDEL) {
+
+#ifdef USE_SOURCEQUAL
+               if (target) {
+                    /* vcf: 
+                     * indel at tpos 1 means, that qpos 2 is an insertion  (e.g. A to AT)
+                     * del at tpos 1 means, that qpos 2 is missing (e.g. AT to A)
+                     */
+                    var_t fake_var;
+                    fake_var.chrom = target;
+                    fake_var.pos = tpos;
+                    if (op==BAM_CINS) {
+                         fake_var.pos -= 1;
+                    }
+                    if (var_in_ign_list(&fake_var)) {
+                         if (op == BAM_CINS) {
+                              qpos += l;
+                         }
+#ifdef TRACE
+                         fprintf(stderr, "TRACE(%s): %c: ignoring because in ign list at tpos %d (qpos %d)\n", bam1_qname(b), op == BAM_CINS? 'I':'D', tpos, qpos);
+#endif
                          continue;
                     }
-#ifdef USE_SOURCEQUAL
-                    if (target) {
-                         var_t fake_var;
-                         fake_var.chrom = target;
-                         fake_var.pos = pos-1; /* FIXME check that pos-1 really matches dbSNP entry (see also below) */
-                         if (var_in_ign_list(&fake_var)) {
-                              qpos += 1;
-                              continue;
-                         }
-                    }
+               }
 #endif
 
-#if 0
-                    printf("INS qpos,i = %d,None\n", qpos);
-#endif
-                    counts[OP_INS] += 1;
+#ifdef TRACE
+               fprintf(stderr, "TRACE(%s): adding %c qpos,tpos = %d,%d\n", bam1_qname(b), op==BAM_CINS?'I':'D', qpos, tpos);
+#endif                    
+
+               if (op == BAM_CINS) {
+                    counts[OP_INS] += 1; /* counts indel as 1 operation only */
                     if (quals) {
                          quals[OP_INS][counts[OP_INS]-1] = INDEL_QUAL_DEFAULT; /* FIXME use iq */
                     }
+                    qpos += l;/* forward query pos by length of operation */
 
-                    qpos += 1;
-               }
-               
-          } else if (op == BAM_CDEL || op == BAM_CREF_SKIP) {
-               for (i=pos; i<pos+l; i++) {
-#if 0
-                    printf("DEL qpos,i = None,%d\n", i);
-#endif
-
-                    if (op == BAM_CDEL) {
-#ifdef USE_SOURCEQUAL
-                         if (target) {
-                              var_t fake_var;
-                              fake_var.chrom = target;
-                              fake_var.pos = pos-1; /* FIXME check that pos-1 really matches dbSNP entry (see also above)? */
-                              if (var_in_ign_list(&fake_var)) {
-                                   continue;
-                              }
-                         }
-#endif
-                        counts[OP_DEL] += 1;
-                        if (quals) {
-                             quals[OP_DEL][counts[OP_DEL]-1] = INDEL_QUAL_DEFAULT; /* FIXME use dq */
-                        }
+               } else if (op == BAM_CDEL) {
+                    counts[OP_DEL] += 1; /* counts indel as 1 operation only */
+                    if (quals) {
+                         quals[OP_DEL][counts[OP_DEL]-1] = INDEL_QUAL_DEFAULT; /* FIXME use dq */
                     }
+                    tpos += l; /* forward genome pos by length of operation */
+
+               } else {
+                    LOG_FATAL("%s\n", "INTERNAL ERROR: should never get here");
+                    exit(1);
                }
-               pos += l;
-               /* deletion: don't increase qpos */
+
+          } else if (op == BAM_CREF_SKIP) {
+               tpos += l;
 
           } else if (op == BAM_CSOFT_CLIP) {
 #if 0
@@ -550,21 +561,29 @@ count_cigar_ops(int *counts, int **quals,
                qpos += l;
 
           } else if (op != BAM_CHARD_CLIP) {
-               LOG_WARN("Unknown op %d in cigar %s\n", op, cigar_str_from_bam(b));
-
+               LOG_WARN("Untested op %d in cigar %s\n", op, cigar_str_from_bam(b));
+               /* don't think we need to do anything here */
           }
      } /* for k */
+
      assert(pos == bam_calend(&b->core, bam1_cigar(b))); /* FIXME correct assert? what if hard clipped? */
      if (qpos != qlen) {
-               LOG_FIXME("got qpos=%d and qlen=%d for cigar %s l_qseq %d\n", qpos, qlen, cigar_str_from_bam(b), b->core.l_qseq);
+          LOG_FIXME("got qpos=%d and qlen=%d for cigar %s l_qseq %d\n", qpos, qlen, cigar_str_from_bam(b), b->core.l_qseq);
      }
      assert(qpos == qlen); /* FIXME correct assert? What if hard clipped? */
 
      num_ops = 0;
      for (i=0; i<NUM_OP_CATS; i++) {
           num_ops += counts[i];
+#ifdef TRACE
+          int j;
+          for (j=0; j<counts[i]; j++) {
+               fprintf(stderr, "TRACE(%s) op %s #%d: %d\n", bam1_qname(b), op_cat_str[i], j, quals[i][j]);
+          }
+#endif
      }
      return num_ops;
 }
 /* count_cigar_ops() */
+#undef TRACE
 

@@ -219,6 +219,21 @@ plp_summary(const plp_col_t *plp_col, void* confp)
 }
 
 
+void
+warn_old_fai(const char *fa)
+{
+     char *fai;
+     if (!fa || fa[0]=='\0') {
+          return;
+     }
+
+     fai = (char*) calloc(strlen(fa) + 5, 1);
+     sprintf(fai, "%s.fai", fa);
+     if (is_newer(fa, fai)==1) {
+          LOG_WARN("Index for fasta file (%s) is older than fasta file! You should reindex (using faidx)!\n", fai);
+     }
+     free(fai);
+}
 
 
 /* low-freq vars always called against cons_base, which might be
@@ -618,6 +633,7 @@ for cov in coverage_range:
                    free(mplp_conf.fa);
                    return 1;
               }
+              warn_old_fai(mplp_conf.fa);
               break;
 
          case 'c': 

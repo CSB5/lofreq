@@ -24,10 +24,11 @@ void *bed_read(const char *fn);
 void bed_destroy(void *_h);
 int bed_overlap(const void *_h, const char *chr, int beg, int end);
 
-/* Using XS, XG and ZS already used by others. So use ZG for
- * source qual. Not modyfying BAM anyway, so it wouldn't
- * matter if we overwrite an existing tag. */
-#define SRC_QUAL_TAG "ZG"
+/* From the SAM spec: "tags starting with `X', `Y' and `Z' or tags
+ * containing lowercase letters in either position are reserved for
+ * local use". 
+*/
+#define SRC_QUAL_TAG "sq"
 
 /* results on icga dream syn1.2 suggest that somatic calls made extra
  * with this settings are likely fp whereas the ones missing a likely
@@ -402,7 +403,8 @@ source_qual_load_ign_vcf(const char *vcf_path, void *bed)
  *
  */
 int
-source_qual(const bam1_t *b, const char *ref, const int nonmatch_qual, char *target)
+source_qual(const bam1_t *b, const char *ref,
+            const int nonmatch_qual, char *target, int min_bq)
 {
      int op_counts[NUM_OP_CATS];
      int **op_quals = NULL;
@@ -438,7 +440,7 @@ source_qual(const bam1_t *b, const char *ref, const int nonmatch_qual, char *tar
      /* count match operations and get qualities for them
       */
      /* LOG_FIXME("%s\n", "Don't know ref name in count_cigar_ops which would be needed as hash key");*/
-     num_err_probs = count_cigar_ops(op_counts, op_quals, b, ref, -1, target);
+     num_err_probs = count_cigar_ops(op_counts, op_quals, b, ref, min_bq, target);
      if (-1 == num_err_probs) {
           LOG_WARN("%s\n", "count_cigar_ops failed on read"); /* FIXME print read */
           src_qual = -1;
@@ -456,7 +458,7 @@ source_qual(const bam1_t *b, const char *ref, const int nonmatch_qual, char *tar
      num_non_matches = 0;
      err_prob_idx = 0;
      for (i=0; i<NUM_OP_CATS; i++) {
-          if (i!=OP_MATCH && i!=OP_INS && i!=OP_DEL) {/* ignore indels. FIXME should probably collapse consecutive indels into one, but what about returned qual then? */
+          if (i!=OP_MATCH) {/* && i!=OP_INS && i!=OP_DEL) {/@ ignore indels. FIXME should probably collapse consecutive indels into one, but what about returned qual then? */
                num_non_matches += op_counts[i];
           }
           for (j=0; j<op_counts[i]; j++) {
@@ -509,7 +511,7 @@ free_and_exit:
 
      /* if we wanted to use softening from precomputed stats then add
       * all non-matches up instead of using the matches */
-#if 1
+#if 0
 #define TRACE
 #endif
 #ifdef TRACE
@@ -531,6 +533,7 @@ mplp_func(void *data, bam1_t *b)
     extern int bam_cap_mapQ(bam1_t *b, char *ref, int thres);
     mplp_aux_t *ma = (mplp_aux_t*)data;
     int ret, skip = 0;
+
     do {
         int has_ref;
         ret = ma->iter? bam_iter_read(ma->fp, ma->iter, b) : bam_read1(ma->fp, b);
@@ -556,6 +559,22 @@ mplp_func(void *data, bam1_t *b)
                 qual[i] = qual[i] > 31? qual[i] - 31 : 0;
         }
         has_ref = (ma->ref && ma->ref_id == b->core.tid)? 1 : 0;
+
+        /* lofreq fix to original samtools routines which ensures that
+         * the reads mapping to first position have a reference
+         * attached as well and therefore baq, sq etc can be
+         * applied */
+        if (!has_ref) {
+             int ref_len = -1;
+             ma->ref = faidx_fetch_seq(ma->conf->fai, ma->h->target_name[b->core.tid], 0, 0x7fffffff, &ref_len);
+             if (!ma->ref) {
+                  has_ref = 0;
+             } else {
+                  ma->ref_id = b->core.tid;
+                  has_ref = 1;
+             }
+        }
+
         skip = 0;
         if (has_ref && (ma->conf->flag & MPLP_REALN)) {
              bam_prob_realn_core(b, ma->ref, (ma->conf->flag & MPLP_REDO_BAQ)? 7 : 3);
@@ -581,9 +600,14 @@ mplp_func(void *data, bam1_t *b)
     } while (skip);
 
 #ifdef USE_SOURCEQUAL
-    /* compute source qual if requested and have ref and attach as aux to bam */
+    /* compute source qual if requested and have ref and attach as aux to bam.
+     * only disadvantage of doing this here is that we only have the ref but not the cons base.
+     */
+
+    
     if (ma->ref && ma->ref_id == b->core.tid && ma->conf->flag & MPLP_USE_SQ) {
-         int sq = source_qual(b, ma->ref, ma->conf->def_nm_q, ma->h->target_name[b->core.tid]);
+         int sq = source_qual(b, ma->ref, ma->conf->def_nm_q,
+                              ma->h->target_name[b->core.tid], ma->conf->min_bq);
           /* see bam_md.c for examples of bam_aux_append()
           * FIXME only allows us to store values as uint8_t i.e. a byte, i.e. 255 is max (that's also why len 4)
           */
@@ -594,7 +618,7 @@ mplp_func(void *data, bam1_t *b)
     }
 #endif
     return ret;
-}
+} 
 
 
 
@@ -1061,8 +1085,9 @@ mpileup(const mplp_conf_t *mplp_conf,
                  }
                  LOG_DEBUG("%s\n", "sequence fetched");
             }
-            for (i = 0; i < n; ++i) 
+            for (i = 0; i < n; ++i)  {
                  data[i]->ref = ref, data[i]->ref_id = tid;
+            }
             ref_tid = tid;
         }
         i=0; /* i is 1 for first pos which is a bug due to the removal
