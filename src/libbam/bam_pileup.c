@@ -386,8 +386,15 @@ bam_mplp_t bam_mplp_init(int n, bam_plp_auto_f func, void **data)
 	iter = calloc(1, sizeof(struct __bam_mplp_t));
 	iter->pos = calloc(n, 8);
 	iter->n_plp = calloc(n, sizeof(int));
+/* lofreq fix to shut clang up */
+#if 0
 	iter->plp = calloc(n, sizeof(void*));
 	iter->iter = calloc(n, sizeof(void*));
+#else
+	iter->plp = calloc(n, sizeof(const bam_pileup1_t *));
+	iter->iter = calloc(n, sizeof(bam_plp_t));
+
+#endif
 	iter->n = n;
 	iter->min = (uint64_t)-1;
 	for (i = 0; i < n; ++i) {

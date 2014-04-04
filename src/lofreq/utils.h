@@ -65,5 +65,7 @@ int
 int_median(int data[], int size);
 void
 strstrip(char *str);
+int
+is_newer(const char *p1, const char *p2);
 
 #endif
