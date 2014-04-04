@@ -564,7 +564,7 @@ mplp_func(void *data, bam1_t *b)
          * the reads mapping to first position have a reference
          * attached as well and therefore baq, sq etc can be
          * applied */
-        if (!has_ref) {
+        if (!has_ref && ma->conf->fai) {
              int ref_len = -1;
              ma->ref = faidx_fetch_seq(ma->conf->fai, ma->h->target_name[b->core.tid], 0, 0x7fffffff, &ref_len);
              if (!ma->ref) {
@@ -1015,11 +1015,10 @@ mpileup(const mplp_conf_t *mplp_conf,
     for (i=0; i < h->n_targets; i++) {
          int fai_len = -1;
          if (mplp_conf->fai) {
-              fai_seq_len(mplp_conf->fai, 0);
+              fai_len = fai_seq_len(mplp_conf->fai, 0);
          }
          LOG_DEBUG("BAM header target #%d: name=%s len=%d faidx len=%d\n", i, h->target_name[i], h->target_len[i], fai_len);
     }    
-
     if (tid0 >= 0 && mplp_conf->fai) { /* region is set */
          ref_len = fai_seq_len(mplp_conf->fai, tid0);
          if (h->target_len[tid0] != ref_len && ref_len!=-1) {
@@ -1032,9 +1031,9 @@ mpileup(const mplp_conf_t *mplp_conf,
               LOG_FATAL("%s\n", "Reference fasta file doesn't seem to contain the right sequence(s) for this BAM file. (mismatch for seq %s listed in BAM header).", h->target_name[tid0]);
               return -1;
          }
-        LOG_DEBUG("%s\n", "sequence fetched");
-        ref_tid = tid0;
-        for (i = 0; i < n; ++i) data[i]->ref = ref, data[i]->ref_id = tid0;
+         LOG_DEBUG("%s\n", "sequence fetched");
+         ref_tid = tid0;
+         for (i = 0; i < n; ++i) data[i]->ref = ref, data[i]->ref_id = tid0;
     } else {
          ref_tid = -1;
          ref = 0;
@@ -1064,7 +1063,6 @@ mpileup(const mplp_conf_t *mplp_conf,
     while (bam_mplp_auto(iter, &tid, &pos, n_plp, plp) > 0) {
         plp_col_t plp_col;
         int i=0; /* NOTE: mpileup originally iterated over n */
-
         if (mplp_conf->reg && (pos < beg0 || pos >= end0))
              continue; /* out of the region requested */
         if (mplp_conf->bed && tid >= 0 && !bed_overlap(mplp_conf->bed, h->target_name[tid], pos, pos+1)) 
