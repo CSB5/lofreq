@@ -502,8 +502,41 @@ strstrip(char *str)
 }
 
 
-#ifdef MAIN
-/* gcc -o utils utils.c log.c -DMAIN -Wall -ansi -pedantic  */
+/* check if first file is newer (mtime) than second. returns 1 if yes,
+ * 0 if not and -1 on error */
+int
+is_newer(const char *p1, const char *p2)
+{
+     struct stat s1;
+     struct stat s2;
+     int res;
+
+     if (!p1 || !p2) {
+          return -1;
+     }
+     res = stat(p1, &s1);
+     if (res == 0 && !S_ISREG(s1.st_mode)) {
+          /* exists but not regular file */
+          return -1;
+     } else if (res != 0) {
+          return -1;
+     }
+
+     res = stat(p2, &s2);
+     if (res == 0 && !S_ISREG(s2.st_mode)) {
+          /* exists but not regular file */
+          return -1;
+     } else if (res != 0) {
+          /* stat failed */
+          return -1;
+     }
+
+     return s1.st_mtime > s2.st_mtime;
+}
+
+
+/* gcc -o utils utils.c log.c -DXMAIN -Wall -ansi -pedantic  */
+#ifdef MEDIAN_MAIN
 int main(int argc, char **argv)
 {
      int i;
@@ -516,6 +549,14 @@ int main(int argc, char **argv)
      }
      printf("median = %f\n", dbl_median(data, argc-1));
      free(data);
+     return 0;
+}
+#endif
+
+#ifdef  NEWER_MAIN
+int main(int argc, char **argv)
+{
+    printf("is_newer %s %s = %d\n", argv[1], argv[2], is_newer(argv[1], argv[2]));
      return 0;
 }
 #endif
