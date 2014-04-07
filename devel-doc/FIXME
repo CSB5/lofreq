@@ -16,7 +16,10 @@ Low Prio:
 =========
 
 - keep var info field with hash
-- memory saving loading of ignore vcf per chrom (tabix)
+- use samtools hash functions instead of uhash?
+- memory saving loading of ignore vcf for source qual per chrom (tabix)
+- support of indels during ignore vcf loading and source qual computation
+- make source quality allele aware once we can handle (multi character) indels
 - allow multiple ign vcf input
 - put external licenses into sep folder (incl zlib) for binary release
 - enable pthreads in libbam:
