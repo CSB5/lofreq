@@ -1078,6 +1078,7 @@ mpileup(const mplp_conf_t *mplp_conf,
                  ref_len = -1;
                  ref = faidx_fetch_seq(mplp_conf->fai, h->target_name[tid], 0, 0x7fffffff, &ref_len);
                  if (NULL == ref || h->target_len[tid] != ref_len) {
+                      LOG_DEBUG("ref %s at %p h->target_len[tid]=%d ref_len=%d\n", h->target_name[tid], ref, h->target_name[tid], ref_len)
                       LOG_FATAL("%s\n", "Reference fasta file doesn't seem to contain the right sequence(s) for this BAM file. (mismatch for seq %s listed in BAM header).", h->target_name[tid]);
                       return -1;
                  }
