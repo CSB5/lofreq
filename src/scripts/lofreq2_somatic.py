@@ -71,10 +71,10 @@ class SomaticSNVCaller(object):
 
     LOFREQ = 'lofreq'
 
-    DEFAULT_ALPHA_N = 0.01;# i.e. qual
-    DEFAULT_ALPHA_T = 0.01;# i.e. qual
+    DEFAULT_ALPHA_N = 0.03;# input for call -s
+    DEFAULT_ALPHA_T = 0.01;# input for call -s
     DEFAULT_MTC_T = 'bonf'
-    DEFAULT_MTC_ALPHA_T = 10
+    DEFAULT_MTC_ALPHA_T = 10;# input for filter
     DEFAULT_MQ_FILTER_T = 0
     DEFAULT_MQ_FILTER_N = 0
     DEFAULT_BAQ_OFF = False
