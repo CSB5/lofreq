@@ -3,7 +3,7 @@ Todos:
 High Prio:
 ==========
 - new release
-  - fix license info in sourc
+  - fix license info in source
   - add external licenses for binary release
 
 Med Prio:
@@ -11,11 +11,16 @@ Med Prio:
 
 - new uniq logic
 - what to do at high coverages? replace already read values randomly if above cap?
+- parallel based on region bins instead of sequences so that this works in
+  parallel per sequence as well (e.g. one chrom). beware of border effects.
+  see also strelka's approach. 
 
 Low Prio:
 =========
 
 - keep var info field with hash
+- add normal and tumor plp info to somatic calls
+- memory saving loading of ignore vcf per chrom (tabix)
 - use samtools hash functions instead of uhash?
 - memory saving loading of ignore vcf for source qual per chrom (tabix)
 - support of indels during ignore vcf loading and source qual computation
@@ -30,5 +35,5 @@ Low Prio:
 - split lofreq_snpcaller cmd parsing: plp, snv, others (do they change argv?)
 - Implement test against old SNV caller
 - check diffs between -l bed, -r region and none, all with and without BAQ
-- get rid of PATH etc once python dep is killed
 - get rid of all FIXME's
+- gui?
