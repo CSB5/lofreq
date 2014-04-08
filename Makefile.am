@@ -13,7 +13,8 @@ if ENABLE_TOOLS
 TOOLS = src/tools
 endif
 
-EXTRA_DIST = binary_installer.sh LICENSE
+LICENSES = LICENSE src/cdflib90.README src/zlib.LICENSE src/libbam/AUTHORS src/libbam/COPYING src/uthash/LICENSE
+EXTRA_DIST = binary_installer.sh $(LICENSES)
 
 SUBDIRS = src/cdflib90 $(HELPER) src/libbam src/lofreq src/scripts $(TOOLS) src/uthash
 bug-tests: all
