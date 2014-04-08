@@ -11,13 +11,10 @@ To create a new distribution:
   - ./configure --enable-static
   - make
   - compile against static libz if necessary, check with ldd ./src/lofreq/lofreq (or otool -L)
-  - mv src/ lofreq_star-VERSION
-  - cd lofreq_star-VERSION
-    find src -name \*.[choa] -or -name Makefile\*  | xargs rm;
-    rm -rf src//tools/build/
-    find src -name .deps | xargs rm -rf;
-    find src -name .libs | xargs rm -rf;
-    find . -name setup*py\* | xargs rm;
+  - find src -name \*.[choa] -or -name Makefile\*  | xargs rm;
+  -  rm -rf src//tools/build/
+  -  find src -name .deps | xargs rm -rf;
+  -  find src -name .libs | xargs rm -rf;
   - cd .. and pack
 - Commit your changes
 - Tag this version
