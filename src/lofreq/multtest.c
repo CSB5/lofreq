@@ -189,14 +189,88 @@ mtc_str(char *buf, int mtc_type) {
 }
 
 
+/*
+R:
+> p = c(2.354054e-07,2.101590e-05,2.576842e-05,9.814783e-05,1.052610e-04,1.241481e-04,1.325988e-04,1.568503e-04,2.254557e-04,3.795380e-04,6.114943e-04,1.613954e-03,3.302430e-03,3.538342e-03,5.236997e-03,6.831909e-03,7.059226e-03,8.805129e-03,9.401040e-03,1.129798e-02,2.115017e-02,4.922736e-02,6.053298e-02,6.262239e-02,7.395153e-02,8.281103e-02,8.633331e-02,1.190654e-01,1.890796e-01,2.058494e-01,2.209214e-01,2.856000e-01,3.048895e-01,4.660682e-01,4.830809e-01,4.921755e-01,5.319453e-01,5.751550e-01,5.783195e-01,6.185894e-01,6.363620e-01,6.448587e-01,6.558414e-01,6.885884e-01,7.189864e-01,8.179539e-01,8.274487e-01,8.971300e-01,9.118680e-01,9.437890e-01)
+> sum(p < 0.05)
+[1] 22
+> sum(p.adjust(p, "BH") < 0.05)
+[1] 20
+> sum(p.adjust(p, "BH", 1000) < 0.05)
+[1] 10
+> sum(p.adjust(p, "BH", 100) < 0.001)
+[1] 3
+sum(p.adjust(p, "BH", 10000) < 1)
+[1] 11
+
+ps="2.354054e-07 2.101590e-05 2.576842e-05 9.814783e-05 1.052610e-04  1.241481e-04 1.325988e-04 1.568503e-04 2.254557e-04 3.795380e-04 6.114943e-04 1.613954e-03 3.302430e-03 3.538342e-03 5.236997e-03 6.831909e-03 7.059226e-03 8.805129e-03 9.401040e-03 1.129798e-02 2.115017e-02 4.922736e-02 6.053298e-02 6.262239e-02 7.395153e-02 8.281103e-02 8.633331e-02 1.190654e-01 1.890796e-01 2.058494e-01 2.209214e-01 2.856000e-01 3.048895e-01 4.660682e-01 4.830809e-01 4.921755e-01 5.319453e-01 5.751550e-01 5.783195e-01 6.185894e-01 6.363620e-01 6.448587e-01 6.558414e-01 6.885884e-01 7.189864e-01 8.179539e-01 8.274487e-01 8.971300e-01 9.118680e-01 9.437890e-01"
+$./multtest 50 0.05 $psntests=50
+ 20 rejected with alpha 0.050000 and 50 tests
+$ ./multtest 1000 0.05 $ps
+ 10 rejected with alpha 0.050000 and 1000 tests
+$ ./multtest 100 0.001 $ps
+ 3 rejected with alpha 0.001000 and 100 tests
+$ ./multtest 10000 1 $ps
+ 11 rejected with alpha 1.000000 and 10000 tests
+
+
+ gcc -o multtest multtest.c utils.c log.c -ansi -Wall -DMULTTEST_MAIN 
+*/
+#ifdef MULTTEST_MAIN2
+int main(int argc, char *argv[])
+{
+     int i;
+     int ntests;
+     float alpha;
+     double *data;
+     int data_size;
+     int nrejected;
+     long int *irejected;/* indices of rejected i.e. significant values */
+
+
+     if (argc<4) {
+          fprintf(stderr, "Usage: %s numtests alpha p1 ... pn\n", argv[0]);
+          exit(1);
+     }
+     /*fprintf(stderr, "argc=%d\n", argc);*/
+     ntests = atoi(argv[1]);
+     alpha = atof(argv[2]);
+     fprintf(stderr, "ntests=%d alpha=%f\n", ntests, alpha);
+     data_size = argc-3;
+     if (ntests<data_size) {
+          fprintf(stderr, "FATAL: ntests=%d < data_size=%d\n", ntests, data_size);
+          exit(1);
+     }
+     data = malloc((data_size) * sizeof(double));
+     for (i=0; i<data_size; i++) {
+          data[i] = atof(argv[i+3]);
+          fprintf(stderr, "DEBUG data[%d]=%f\n", i, data[i]);
+     }
+
+     nrejected = fdr(data, data_size, alpha, ntests, &irejected);
+     
+     printf ("%d rejected with alpha %f and %d tests: ", nrejected, alpha, ntests);
+     if (nrejected) {
+          for (i = 0; i < nrejected; i++) {
+               printf("%f, ", data[irejected[i]]);
+          }
+     } else {
+          printf("None");
+     }
+     printf ("\n\n");
+     
+     free(data);
+     free(irejected);
+     exit(0);
+}
+#endif
+
 /* gcc -o multtest multtest.c utils.c log.c -ansi -Wall -DMULTTEST_MAIN */
 #ifdef MULTTEST_MAIN
 int main()
 {
      int i;
      int ntests;
-
-     fprintf(stderr, "WARN %s\n", "test holm bonf one last time then upload");
 
      /* output values according to python implementation 
       *
@@ -291,7 +365,7 @@ int main()
 #endif
 
           int nrejected;
-          int* irejected;/* indices of rejected i.e. significant values */
+          long int* irejected;/* indices of rejected i.e. significant values */
 
           printf("Testing fdr with ntests=%d alpha=%f...\n", ntests, alpha);
 
