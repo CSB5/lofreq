@@ -1015,7 +1015,7 @@ mpileup(const mplp_conf_t *mplp_conf,
     for (i=0; i < h->n_targets; i++) {
          int fai_len = -1;
          if (mplp_conf->fai) {
-              fai_len = fai_seq_len(mplp_conf->fai, 0);
+              fai_len = fai_seq_len(mplp_conf->fai, i);
          }
          LOG_DEBUG("BAM header target #%d: name=%s len=%d faidx len=%d\n", i, h->target_name[i], h->target_len[i], fai_len);
     }    
@@ -1070,7 +1070,7 @@ mpileup(const mplp_conf_t *mplp_conf,
         if (tid != ref_tid) {
             free(ref); ref = 0;
             if (mplp_conf->fai) {
-                 ref_len = fai_seq_len(mplp_conf->fai, 0);
+                 ref_len = fai_seq_len(mplp_conf->fai, tid);
                  if (h->target_len[tid] != ref_len && ref_len!=-1) {
                       LOG_FATAL("Length mismatch between %s in BAM and reference fasta file: %d!=%d\n", h->target_name[tid], h->target_len[tid], ref_len);
                       return -1;
