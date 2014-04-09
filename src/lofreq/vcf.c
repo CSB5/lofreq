@@ -24,10 +24,11 @@
 
 #define LINE_BUF_SIZE 1<<12
 
+
 /* this is the actual header. all the other stuff is actually called meta-info 
  * note, newline character is missing here
  */
-const char *HEADER_LINE = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO";
+const char *VCF_HEADER = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO";
 
 
 
@@ -385,6 +386,9 @@ vcf_var_add_to_info(var_t *var, const char *info_str)
 char *
 vcf_var_add_to_filter(var_t *var, const char *filter_name)
 {
+     if (! filter_name || ! var) {
+          return NULL;
+     }
      if (var->filter) {
           /* clear field, if PASSED or missing  */
           if ((strlen(var->filter)>=4 && 0 == strcmp(var->filter, "PASS"))
@@ -406,7 +410,6 @@ vcf_var_add_to_filter(var_t *var, const char *filter_name)
                                 (strlen(var->filter) + strlen(filter_name)
                                 + 1/*;*/ + 1/*\0*/) * sizeof(char));
      }
-
      if (! var->filter) {
           fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
                   __FILE__, __FUNCTION__, __LINE__);
@@ -418,6 +421,7 @@ vcf_var_add_to_filter(var_t *var, const char *filter_name)
           (void) strcat(var->filter, ";");
      }
      (void) strcat(var->filter, filter_name);
+
      return var->filter;
 }
 
@@ -519,13 +523,14 @@ void vcf_write_new_header(vcf_file_t *vcf_file, const char *src, const char *ref
      VCF_PRINTF(vcf_file, "##INFO=<ID=DP4,Number=4,Type=Integer,Description=\"Counts for ref-forward bases, ref-reverse, alt-forward and alt-reverse bases\">\n");
      VCF_PRINTF(vcf_file, "##INFO=<ID=INDEL,Number=0,Type=Flag,Description=\"Indicates that the variant is an INDEL.\">\n");
      VCF_PRINTF(vcf_file, "##INFO=<ID=CONSVAR,Number=0,Type=Flag,Description=\"Indicates that the variant is a consensus variant (as opposed to a low frequency variant).\">\n");
-     VCF_PRINTF(vcf_file, "%s\n", HEADER_LINE);
+     VCF_PRINTF(vcf_file, "%s\n", VCF_HEADER);
 }
 
 
 /* parse header, i.e. meta info until and including header from vcf
  * file. will allocate memory for header. caller has to free. returns
- * 0 on success.
+ * 0 on success. -1 on failure on which a minimal header is set anyway
+ * and you should rewind.
  */
 int vcf_parse_header(char **header, vcf_file_t *vcf_file)
 {
@@ -542,15 +547,18 @@ int vcf_parse_header(char **header, vcf_file_t *vcf_file)
 #endif
           (*header) = realloc((*header), (strlen(*header) + strlen(line) + 1 /* '\0' */) * sizeof(char));
           (void) strcat((*header), line);
-          if (strlen(line) >= strlen(HEADER_LINE)) {
-               if (0 == strncmp(line, HEADER_LINE, strlen(HEADER_LINE))) {
+          if (strlen(line) >= strlen(VCF_HEADER)) {
+               if (0 == strncmp(line, VCF_HEADER, strlen(VCF_HEADER))) {
                     return 0;
                }
           }
      }
 
-     free(*header);
-     LOG_WARN("%s\n", "Missing header line in vcf file.");
+     /* failed. set default header */
+     (*header) = realloc((*header), (strlen(VCF_HEADER) + 1 + 1 /* \n+\0 */) * sizeof(char));
+     (void) strcpy(*header, VCF_HEADER);
+     (void) strcat(*header, "\n");
+
      return -1;
 }
 
@@ -706,9 +714,9 @@ void vcf_header_add(char **header, const char *info)
      char *token;
      int pos;
 
-     /* make sure to insert before HEADER_LINE */
+     /* make sure to insert before VCF_HEADER */
 
-     token = strstr(*header, HEADER_LINE);
+     token = strstr(*header, VCF_HEADER);
      if (! token) {
           LOG_WARN("%s\n", "Can't add info to empty header, because header line is missing");
           return;
@@ -724,7 +732,7 @@ void vcf_header_add(char **header, const char *info)
 
      (*header)[pos] = '\0'; /* can't just: token[0] = '\0'; since that would work on a copy?! */
      (void) strcat(*header, info);
-     (void) strcat(*header, HEADER_LINE);
+     (void) strcat(*header, VCF_HEADER);
      (void) strcat(*header, "\n");
      return;
 }
