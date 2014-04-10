@@ -257,7 +257,7 @@ class SomaticSNVCaller(object):
         elif sample_type == "tumor":
             cmd.append(self.bam_t)
         else:
-            raise ValueError(sample_type)            
+            raise ValueError(sample_type)
 
 
         # before we actually do anything check existance of output
@@ -279,7 +279,7 @@ class SomaticSNVCaller(object):
                     LOG.error("Couldn't parse number of tests from reused %s" % out_log)
                     raise ValueError
                 return num_tests
-            
+
             else:
                 assert not os.path.exists(out_vcf)
                 assert not os.path.exists(out_log)
@@ -351,7 +351,7 @@ class SomaticSNVCaller(object):
         """
 
         cmd = [self.LOFREQ, 'vcfset',
-               '-a', 'intersect', '--use-bases',        
+               '-a', 'intersect', '--use-bases',
                '-1', self.vcf_n_rlx, '-2', self.vcf_t_str,
                '-o', self.vcf_germl]
         # FIXME no further filtering and using vcf_n_rlx entries
@@ -495,7 +495,7 @@ def cmdline_parser():
                         " Will reuse existing files, assuming they are complete"
                         " and created with identical options as this run!")
 
-    default = 0.01
+    default = SomaticSNVCaller.DEFAULT_ALPHA_T
     parser.add_argument("--tumor-alpha",
                         #required=True,
                         default=default,
@@ -504,7 +504,7 @@ def cmdline_parser():
                         " for SNV pvalues in (relaxed) tumor vcf"
                         " (default: %f)" % default)
 
-    default = 0.01
+    default = SomaticSNVCaller.DEFAULT_ALPHA_N
     parser.add_argument("--normal-alpha",
                         #required=True,
                         default=default,
@@ -512,16 +512,16 @@ def cmdline_parser():
                         help="Significance threshold (alpha) for SNV pvalues"
                         "  in (relaxed) normal vcf (default: %f)" % default)
 
-    default = 'bonf'
+    default = SomaticSNVCaller.DEFAULT_MTC_T
     choices = ['bonf', 'holm-bonf', 'fdr']
     parser.add_argument("--tumor-mtc",
                         #required=True,
                         default=default,
-                        choices = choices,
+                        choices=choices,
                         help="Type of multiple testing correction for tumor"
                         " (default: %s)" % default)
 
-    default = 10
+    default = SomaticSNVCaller.DEFAULT_MTC_ALPHA_T
     parser.add_argument("--tumor-mtc-alpha",
                         #required=True,
                         default=default,
@@ -529,12 +529,12 @@ def cmdline_parser():
                         help="Multiple testing correction alpha for tumor"
                         " (default: %f)" % default)
 
-    default = 0
+    default = SomaticSNVCaller.DEFAULT_MQ_FILTER_T
     parser.add_argument("--tumor-mq-filter",
                         type=int,
                         default=default,
                         help="Ignore reads in tumor sample with mapping quality below this value (default=%d)" % default)
-    default = 0
+    default = SomaticSNVCaller.DEFAULT_MQ_FILTER_N
     parser.add_argument("--normal-mq-filter",
                         type=int,
                         default=default,
@@ -547,7 +547,7 @@ def cmdline_parser():
     parser.add_argument("-J", "--mq-off",
                         action="store_true",
                         help="Disable use of mapping quality in LoFreq's model everywhere")
-    
+
     parser.add_argument("--germline",
                         action="store_true",
                         help="Also list germline calls in separate file")
@@ -557,17 +557,20 @@ def cmdline_parser():
                         help="Disable use of source quality in tumor (see also -V)")
     default = "normal"
     parser.add_argument("-V", "--ign-vcf",
-                        default = default,
-                        help="Ignore variants in this vcf-file for"
-                        " source quality computation in tumor (collides with --no-src-qual)."
-                        " Default is to use predictions in (stringently called) normal sample")
+                        default=default,
+                        help="Ignore variants in this vcf-file for source"
+                        " quality computation in tumor (collides with "
+                        " --no-src-qual). Default is to use predictions in"
+                        " (stringently called) normal sample")
 
     parser.add_argument("--use-orphan",
                         action="store_true",
                         help="Use orphaned/anomalous reads from read pairs")
 
+    default = SomaticSNVCaller.DEFAULT_NUM_THREADS
     parser.add_argument("--threads",
                         type=int,
+                        default=default,
                         dest="num_threads",
                         help="Use this many threads for each call")
 
@@ -610,12 +613,12 @@ def main():
 
 
     somatic_snv_caller = SomaticSNVCaller(
-        bam_n = args.normal,
-        bam_t = args.tumor,
-        ref = args.ref,
-        outprefix = args.outprefix,
-        bed = args.bed,
-        continue_interrupted = args.continue_interrupted)
+        bam_n=args.normal,
+        bam_t=args.tumor,
+        ref=args.ref,
+        outprefix=args.outprefix,
+        bed=args.bed,
+        continue_interrupted=args.continue_interrupted)
 
     somatic_snv_caller.alpha_n = args.normal_alpha
     somatic_snv_caller.alpha_t = args.tumor_alpha
@@ -625,14 +628,14 @@ def main():
     somatic_snv_caller.mq_filter_n = args.normal_mq_filter
     somatic_snv_caller.mq_filter_t = args.tumor_mq_filter
     if args.baq_off:
-         somatic_snv_caller.baq_off = True
+        somatic_snv_caller.baq_off = True
     else:
-         somatic_snv_caller.baq_off = False
+        somatic_snv_caller.baq_off = False
     if args.use_orphan:
         somatic_snv_caller.use_orphan = True
     else:
         somatic_snv_caller.use_orphan = False
-    
+
     if args.no_src_qual:
         somatic_snv_caller.src_qual_on = False
     else:
