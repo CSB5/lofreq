@@ -30,6 +30,8 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 */
 #define SRC_QUAL_TAG "sq"
 
+#undef REF_OVER_CONS
+
 /* results on icga dream syn1.2 suggest that somatic calls made extra
  * with this settings are likely fp whereas the ones missing a likely
  * tp, therefore disabled */
@@ -907,9 +909,13 @@ void compile_plp_col(plp_col_t *plp_col,
 
      plp_col->coverage -= num_skips;
      
+#ifdef REF_OVER_CONS
+     plp_col->cons_base = plp_col->ref_base;
+#else
      /* determine consensus from 'counts'. will never produce N on tie  */
      plp_col->cons_base = bam_nt4_rev_table[
           argmax_d(base_counts, NUM_NT4)];
+#endif
 
      if (debug) {
           plp_col_debug_print(plp_col, stderr);
