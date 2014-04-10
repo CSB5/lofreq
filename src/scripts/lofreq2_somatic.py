@@ -81,7 +81,7 @@ class SomaticSNVCaller(object):
     DEFAULT_MQ_OFF = False
     DEFAULT_SRC_QUAL_ON = True
     DEFAULT_SRC_QUAL_IGN_VCF = None
-    DEFAULT_MIN_COV = 10
+    DEFAULT_MIN_COV = 10;# for initial tumor calls and stringent filtering of any
     DEFAULT_USE_ORPHAN = False
     DEFAULT_NUM_THREADS = 1
     DEFAULT_DO_GERMLINE = False
@@ -334,6 +334,7 @@ class SomaticSNVCaller(object):
                '--snvqual-mtc', "%s" % self.mtc_t,
                '--snvqual-alpha', '%f' % self.mtc_alpha_t,
                '--snvqual-ntests', '%d' % num_tests,
+               '--cov-min', '%d' % self.min_cov,
                '--only-passed', '-o', vcf_str]
 
         #import pdb; pdb.set_trace()

@@ -97,7 +97,7 @@ static int sb_missing_warning_printed = 0;
 
 
 void
-dump_filter_conf(filter_conf_t *cfg)
+dump_filter_conf(const filter_conf_t *cfg)
 {
      fprintf(stderr, "filter_conf:\n");
      fprintf(stderr, "  print_only_passed=%d\n", cfg->print_only_passed);
@@ -235,7 +235,7 @@ void apply_af_filter(var_t *var, af_filter_t *af_filter)
 void apply_dp_filter(var_t *var, dp_filter_t *dp_filter)
 {
      char *dp_char = NULL;
-     float cov;
+     int cov;
 
      if (dp_missing_warning_printed) {
           return;
@@ -244,16 +244,24 @@ void apply_dp_filter(var_t *var, dp_filter_t *dp_filter)
      if (dp_filter->min > 0 || dp_filter->max > 0) {
           if ( ! vcf_var_has_info_key(&dp_char, var, "DP")) {
                if ( ! dp_missing_warning_printed) {
+#ifdef DEBUG
+                    vcf_file_t f; f.fh = stderr; f.gz = 0; vcf_write_var(&f, var);
+#endif
                     LOG_WARN("%s\n", "Requested coverage filtering failed since DP tag is missing in variant");
                     dp_missing_warning_printed = 1;
                     return;
                }
           }
-          cov = atoi(dp_char);
+          errno = 0;
+          /*cov = atoi(dp_char);*/
+          cov = strtol(dp_char, (char **) NULL, 10);
+          if (errno) {
+               LOG_FATAL("%s\n", "errpr during int conversion");
+               exit(1);
+          }
           free(dp_char);
-
+ 
           if (dp_filter->min > 0 && cov < dp_filter->min) {
-
                vcf_var_add_to_filter(var, dp_filter->id_min);
           }
           if (dp_filter->max > 0 && cov > dp_filter->max) {
@@ -597,13 +605,13 @@ int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const long int num
 
 
 /* adds FILTER tags to vcf header based on config. also initializes
- * filter ids 
+ * filter ids!
  */
 void cfg_filter_to_vcf_header(filter_conf_t *cfg, char **header)
 {
      char full_filter_str[FILTER_STRSIZE];
 
-     /* for getting rid of all those trailong float zeros we might want to look at
+     /* for getting rid of all those trailing float zeros we might want to look at
         http://stackoverflow.com/questions/277772/avoid-trailing-zeroes-in-printf */
 
      if (cfg->af_filter.min > 0) {
@@ -1004,11 +1012,11 @@ main_filter(int argc, char *argv[])
                         " after header parsing failed");
               return -1;
          }
-    } else {
-         cfg_filter_to_vcf_header(& cfg, &vcf_header);
-         vcf_write_header(& cfg.vcf_out, vcf_header);
-         free(vcf_header);
     }
+    /* also sets filter names */
+    cfg_filter_to_vcf_header(& cfg, &vcf_header);
+    vcf_write_header(& cfg.vcf_out, vcf_header);
+    free(vcf_header);
 
 
     /* read in variants. since many filters perform multiple testing
