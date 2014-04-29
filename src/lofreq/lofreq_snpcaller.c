@@ -253,7 +253,7 @@ call_snvs(const plp_col_t *p, void *confp)
 
      snvcall_conf_t *conf = (snvcall_conf_t *)confp;
      /* 4 bases ignoring N, -1 reference/consensus base makes 3 */
-     double pvalues[NUM_NONCONS_BASES]; /* pvalues reported back from snpcaller */
+     long double pvalues[NUM_NONCONS_BASES]; /* pvalues reported back from snpcaller */
      int alt_counts[NUM_NONCONS_BASES]; /* counts for alt bases handed down to snpcaller */
      int alt_raw_counts[NUM_NONCONS_BASES]; /* raw, unfiltered alt-counts */
      int alt_bases[NUM_NONCONS_BASES];/* actual alt bases */
@@ -395,7 +395,7 @@ call_snvs(const plp_col_t *p, void *confp)
           int alt_base = alt_bases[i];
           int alt_count = alt_counts[i];
           int alt_raw_count = alt_raw_counts[i];
-          double pvalue = pvalues[i];
+          long double pvalue = pvalues[i];
           int reported_snv_ref = cons_as_ref ? p->cons_base : p->ref_base;
 
           if (alt_base==reported_snv_ref) { /* p->ref_base && !cons_as_ref) {*/
@@ -420,7 +420,7 @@ call_snvs(const plp_col_t *p, void *confp)
                report_var(& conf->vcf_out, p, reported_snv_ref, alt_base, 
                           af, PROB_TO_PHREDQUAL(pvalue), 
                           is_indel, is_consvar);
-               LOG_DEBUG("low freq snp: %s %d %c>%c pv-prob:%g;pv-qual:%d"
+               LOG_DEBUG("low freq snp: %s %d %c>%c pv-prob:%Lg;pv-qual:%d"
                          " counts-raw:%d/%d=%.6f counts-filt:%d/%d=%.6f\n",
                          p->target, p->pos+1, p->cons_base, alt_base,
                          pvalue, PROB_TO_PHREDQUAL(pvalue),
@@ -429,7 +429,7 @@ call_snvs(const plp_col_t *p, void *confp)
           }
 #if 0
           else {
-               LOG_DEBUG("non sig: pvalue=%g * (double)conf->bonf=%lld < conf->sig=%f\n", pvalue, conf->bonf, conf->sig);
+               LOG_DEBUG("non sig: pvalue=%Lg * (double)conf->bonf=%lld < conf->sig=%f\n", pvalue, conf->bonf, conf->sig);
           }
 #endif
      }

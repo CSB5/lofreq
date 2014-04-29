@@ -417,7 +417,7 @@ source_qual(const bam1_t *b, const char *ref,
      double *err_probs = NULL; /* error probs (qualities) passed down to snpcaller. one for each op, no matter if matching or not */
      int num_err_probs; /* #elements in err_probs */
 
-     double unused_pval;
+     long double unused_pval;
      int src_qual = 255;
      double src_prob = -1; /* prob of this read coming from genome */
      int err_prob_idx;
