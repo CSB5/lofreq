@@ -249,7 +249,7 @@ uniq_snv(const plp_col_t *p, void *confp)
           /* given the current base counts and their error probs,
            * would we've been able to detect at given frequency.
            */
-          double pvalues[NUM_NONCONS_BASES];
+          long double pvalues[NUM_NONCONS_BASES];
           double *err_probs; /* error probs (qualities) passed down to snpcaller */
           int num_err_probs;
 

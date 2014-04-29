@@ -566,7 +566,7 @@ count_cigar_ops(int *counts, int **quals,
           }
      } /* for k */
 
-     assert(pos == bam_calend(&b->core, bam1_cigar(b))); /* FIXME correct assert? what if hard clipped? */
+     assert(qpos == bam_calend(&b->core, bam1_cigar(b))); /* FIXME correct assert? what if hard clipped? */
      if (qpos != qlen) {
           LOG_FIXME("got qpos=%d and qlen=%d for cigar %s l_qseq %d\n", qpos, qlen, cigar_str_from_bam(b), b->core.l_qseq);
      }

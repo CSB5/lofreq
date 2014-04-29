@@ -57,11 +57,11 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream) ;
 
 
 extern double *
-poissbin(double *pvalue, const double *err_probs,
+poissbin(long double *pvalue, const double *err_probs,
          const int num_err_probs, const int num_failures, 
          const long long int bonf, const double sig);
 extern int
-snpcaller(double *snp_pvalues, const double *err_probs,
+snpcaller(long double *snp_pvalues, const double *err_probs,
           const int num_err_probs, const int *noncons_counts,
           const long long int bonf_factor,
           const double sig_level);
