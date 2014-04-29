@@ -219,7 +219,6 @@ def calc_dist(variants):
 
 
 
-
 def violin_plot(ax, data):
     '''
     Create violin plots on an axis
@@ -230,7 +229,12 @@ def violin_plot(ax, data):
     # FIXME possible that this needs values between 0 and 1?
 
     w = min(0.15, 0.5)
-    k = gaussian_kde(data) # calculates the kernel density
+    try:
+        k = gaussian_kde(data) # calculates the kernel density
+    except ValueError:
+        LOG.warn("calculation of kernel density for violin plot failed. skipping...")
+        ax.text(0, 0.8, "gaussian_kde failed", size=14, ha='left', va="top")
+        return
     m = k.dataset.min() #lower bound of violin
     M = k.dataset.max() #upper bound of violin
     x = np.arange(m, M, (M-m)/100.) # support for violin
