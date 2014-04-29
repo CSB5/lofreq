@@ -14,6 +14,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <float.h>
+#include <errno.h>
 
 #include "fet.h"
 #include "utils.h"
@@ -682,7 +683,6 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
 
     for (n=1; n<=N; n++) {
         int k;
-        double pvalue;
         double pn = err_probs[n-1];
         double log_pn, log_1_pn;
 
@@ -734,11 +734,34 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
             /* FIXME check here as well */
 
         } else if (n > K) { 
+             long double pvalue;
              /*LOG_FIXME("probvec_prev[K=%d]=%g probvec_prev[K=%d -1]=%g\n", K, probvec_prev[K], K, probvec_prev[K-1]);*/
              assert(probvec_prev[K]-DBL_EPSILON<=0.0 && probvec_prev[K-1]-DBL_EPSILON<=0.0);
              probvec[K] = log_sum(probvec_prev[K], probvec_prev[K-1]+log_pn);
-             pvalue = exp(probvec[K]);
-             
+             errno = 0;
+             pvalue = expl(probvec[K]);
+/*
+  fprintf(stderr, "FIXME(%s:%s:%d): n=%d K=%d pvalue=%Lg probvec[K]=%g errno=%d\n", 
+  __FILE__, __FUNCTION__, __LINE__, n, K, pvalue, probvec[K], errno);
+*/
+             if (0 != errno) {
+                  pvalue = 0.0;
+             }
+             /* FIXME if probvec[K] is small, pvalue might become
+              * zero. that can be prevented by directly using phred
+              * scores and reporting them instead of pvalues
+
+              Q = -10*log_10(e^X), where X=probvec[K]
+              remember, log_b(x) = log_k(x)/log_k(b), i.e. log_10(Y) = log_e(Y)/log_e(10)
+              therefore, Q = -10 * log_e(e^X)/log_e(10) = -10 * X/log_e(10)
+              e.g.
+              >>> from math import log, log10, e
+              >>> X = -100
+              >>> -10 * log10(e**X)
+              434.29448190325184
+              >>> -10 * X/log(10)
+              434.2944819032518
+             */
              if (pvalue * (double)bonf_factor >= sig_level) {
 #ifdef DEBUG
                   fprintf(stderr, "DEBUG(%s:%s:%d): early exit at n=%d with pvalue %g\n", 
@@ -768,7 +791,7 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
 /* binomial test using poissbin. only good for high n and small prob.
  * returns -1 on error */
 int
-pseudo_binomial(double *pvalue, 
+pseudo_binomial(long double *pvalue, 
                 int num_success, int num_trials, double succ_prob)
 {
      const long long int bonf = 1.0;
@@ -809,7 +832,7 @@ pseudo_binomial(double *pvalue,
  *  note: pvalues > sig/bonf are not computed properly
  */       
 double *
-poissbin(double *pvalue, const double *err_probs,
+poissbin(long double *pvalue, const double *err_probs,
          const int num_err_probs, const int num_failures, 
          const long long int bonf, const double sig) 
 {
@@ -818,7 +841,7 @@ poissbin(double *pvalue, const double *err_probs,
     clock_t start = clock();
     int msec;
 #endif
-    *pvalue = DBL_MAX;
+    *pvalue = LDBL_MAX;
 
 #if TIMING
     start = clock();
@@ -835,7 +858,7 @@ poissbin(double *pvalue, const double *err_probs,
     fprintf(stderr, "calc_prob_dist() took %d s %d ms\n", msec/1000, msec%1000);
 #endif
 
-    *pvalue = exp(probvec[num_failures]); /* no need for tailsum here */
+    *pvalue = expl(probvec[num_failures]); /* no need for tailsum here */
     assert(! isnan(*pvalue));
     return probvec;
 }
@@ -847,11 +870,11 @@ poissbin(double *pvalue, const double *err_probs,
  * 
  * pvalues computed for each of the NUM_NONCONS_BASES noncons_counts
  * will be written to snp_pvalues in the same order. If pvalue was not
- * computed (always insignificant) its value will be set to DBL_MAX
+ * computed (always insignificant) its value will be set to LDBL_MAX
  * 
  */
 int
-snpcaller(double *snp_pvalues, 
+snpcaller(long double *snp_pvalues, 
           const double *err_probs, const int num_err_probs, 
           const int *noncons_counts, 
           const long long int bonf_factor, const double sig_level)
@@ -859,7 +882,7 @@ snpcaller(double *snp_pvalues,
     double *probvec = NULL;
     int i;
     int max_noncons_count = 0;
-    double pvalue;
+    long double pvalue;
 
 #ifdef DEBUG
     fprintf(stderr, "DEBUG(%s:%s():%d): num_err_probs=%d noncons_counts=%d,%d,%d bonf_factor=%lld sig_level=%f\n", 
@@ -870,7 +893,7 @@ snpcaller(double *snp_pvalues,
 
     /* initialise empty results so that we can return anytime */
     for (i=0; i<NUM_NONCONS_BASES; i++) {
-        snp_pvalues[i] = DBL_MAX;
+        snp_pvalues[i] = LDBL_MAX;
     }
     
     /* determine max non-consensus count */
@@ -904,23 +927,23 @@ snpcaller(double *snp_pvalues,
     for (i=1; i<max_noncons_count+1; i++) {        
         fprintf(stderr, "DEBUG(%s:%s():%d): prob for count %d=%g\n", 
                 __FILE__, __FUNCTION__, __LINE__, 
-                i, exp(probvec[i]));
+                i, expl(probvec[i]));
     }
 #endif
 #if 0
     for (i=1; i<max_noncons_count+1; i++) {        
-        fprintf(stderr, "DEBUG(%s:%s():%d): pvalue=%g for noncons_counts %d\n", 
+        fprintf(stderr, "DEBUG(%s:%s():%d): pvalue=%Lg for noncons_counts %d\n", 
                 __FILE__, __FUNCTION__, __LINE__, 
-                exp(probvec_tailsum(probvec, i, max_noncons_count+1)), i);
+                expl(probvec_tailsum(probvec, i, max_noncons_count+1)), i);
     }
 #endif
 
     for (i=0; i<NUM_NONCONS_BASES; i++) { 
         if (0 != noncons_counts[i]) {
-            pvalue = exp(probvec_tailsum(probvec, noncons_counts[i], max_noncons_count+1));
+            pvalue = expl(probvec_tailsum(probvec, noncons_counts[i], max_noncons_count+1));
             snp_pvalues[i] = pvalue;
 #ifdef DEBUG
-            fprintf(stderr, "DEBUG(%s:%s():%d): i=%d noncons_counts=%d max_noncons_count=%d pvalue=%g\n", 
+            fprintf(stderr, "DEBUG(%s:%s():%d): i=%d noncons_counts=%d max_noncons_count=%d pvalue=%Lg\n", 
                     __FILE__, __FUNCTION__, __LINE__, 
                     i, noncons_counts[i], max_noncons_count, pvalue);                  
 #endif
@@ -942,45 +965,80 @@ snpcaller(double *snp_pvalues,
 
 /* 
  * gcc -pedantic -Wall -g -std=gnu99 -O2 -DSNPCALLER_MAIN -o snpcaller snpcaller.c utils.c log.c
+ * newer versions need the convoluted
+ * gcc -Wall -g -std=gnu99 -O2 -DSNPCALLER_MAIN [-DUSE_SNPCALLER] -o snpcaller -I../uthash/ -I../libbam/ snpcaller.c utils.c log.c   plp.c samutils.c ../libbam/libbam.a -lm -lz -lpthread -DNDEBUG
  * 
- * to test the pvalues (remember: large n and small p when comparing to binomial)
- *
- * >>> [scipy.stats.binom_test(x, 10000, 0.0001) for x in [2, 3, 4]]
- * [0.26424111735042727, 0.080292199242652212, 0.018982025450177534]
- * 
- * ./snpcaller 4 10000 0.0001
- * prob from snpcaller(): (.. 0.264204 .. 0.0802738 ..) 0.0189759
- *
- * 
- * to test probs:
 
- * >>> print(zip(range(1,11), scipy.stats.binom.pmf(range(1,11), 10000, 0.0001)))
- * [(1, 0.36789783621841865), (2, 0.18394891810853542), (3, 0.061310173792593993), (4, 0.015324477633007457), (5, 0.0030639759659701437), (6, 0.00051045837549934915), (7, 7.2886160113568433e-05), (8, 9.1053030054241777e-06), (9, 1.0109920728573426e-06), (10, 1.0101831983287595e-07)]
- *
- * ./snpcaller 10 10000 0.0001
- * prob for count 1=...
+ Could use poibin for testing but parameter choice there is unclear
+
+ library(poibin)
+ # if pnorm is missing also do library(stats)
+ 
+ pp=c(0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001)
+ nerrs = 1 
+ # convert to success probabilities
+ pp=1-pp
+ > dpoibin(kk=length(pp)-nerrs, pp=pp)
+ [1] 0.009910359
+ > ppoibin(kk=length(pp)-nerrs, pp=pp)
+ [1] 0.00995512
+ # no approximation seems to work better:
+ > ppoibin(kk=length(pp)-nerrs, pp=pp, method="NA")
+ [1] 4.732391e-07
+ 
+ ./snpcaller 10 1 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001num_trials=10 num_errs=1
+ 0.00896408
+
+ ?!
+
+
+ 
+ $ ./snpcaller 957 9  $(cat eprobs.txt) 
+ num_trials=957 num_errs=9
+ 1.77668e-05
+
+ p = read.table('scratch/errprobs') 
+ pp = c(p)$V1
+ nerrs = 9
+ > ppoibin(kk=957-9, pp=1-pp)
+ [1] 0.000262769
+ > ppoibin(kk=957-9, pp=1-pp, method="NA")
+ [1] 1.162356e-05
+ 
+ ?!
+
  *
  */
 int main(int argc, char *argv[]) {
-     int num_success;
      int num_trials;
-     double succ_prob;
+     int num_errs;
+     double *err_probs;
+     int i;
+     const float bonf = 1.0 ;
+     const float sig = 1.0 ;
+
      verbose = 1;
 
      if (argc<4) {
-          LOG_ERROR("%s\n", "need num_success num_trials and succ_prob as args");
+          LOG_FATAL("%s\n", "need: num_trials num_errs p_e1 ... p_en");
           return -1;
      }
-     num_success = atoi(argv[1]);
-     num_trials = atoi(argv[2]);
-     succ_prob = atof(argv[3]);
 
-     LOG_VERBOSE("num_success=%d num_trials=%d succ_prob=%f\n", num_success, num_trials, succ_prob);
+     num_trials = atoi(argv[1]);
+     num_errs = atoi(argv[2]);
+     if (argc-3 != num_trials) {
+          LOG_FATAL("number of trials (%d) doesn't match number of error probabilities (%d)\n", num_trials, argc-3);
+          exit(1);
+     }
+     err_probs = malloc(sizeof(double) * num_trials);
+     for (i=3; i<argc; i++) {
+          err_probs[i-3] = atof(argv[i]);
+     }
+     LOG_VERBOSE("num_trials=%d num_errs=%d\n", num_trials, num_errs);
 
 
 #ifdef PSEUDO_BINOMIAL
      {
-          double pvalue;
           if (-1 == pseudo_binomial(&pvalue, 
                                     num_success, num_trials, succ_prob)) {
                LOG_ERROR("%s\n", "pseudo_binomial() failed");
@@ -991,31 +1049,29 @@ int main(int argc, char *argv[]) {
 #endif
 
 
-#if 1
+#ifdef USE_SNPCALLER
      {
-          double snp_pvalues[NUM_NONCONS_BASES];
+          long double snp_pvalues[NUM_NONCONS_BASES];
           int noncons_counts[NUM_NONCONS_BASES];
-          double *err_probs;
-          int i;
+          noncons_counts[0] = num_errs;
+          noncons_counts[1] = num_errs-1;
+          noncons_counts[2] = num_errs-2;
 
-          if (NULL == (err_probs = malloc((num_trials) * sizeof(double)))) {
-               fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
-                       __FILE__, __FUNCTION__, __LINE__);
-               return -1;
-          }
-          for (i=0; i<num_trials; i++) {
-               err_probs[i] = succ_prob;
-          }
-
-          noncons_counts[0] = num_success;
-          noncons_counts[1] = num_success-1;
-          noncons_counts[2] = num_success-2;
-
-          snpcaller(snp_pvalues, err_probs, num_trials, noncons_counts, 1, 1);
-
-          printf("prob from snpcaller(): (.. -2:%g .. -1:%g ..) %g\n", snp_pvalues[2], snp_pvalues[1], snp_pvalues[0]);
-          free(err_probs);
+          snpcaller(snp_pvalues, err_probs, num_trials, noncons_counts, bonf, sig);
+          printf("prob from snpcaller(): (.. -2:%Lg .. -1:%Lg ..) = %Lg\n", snp_pvalues[2], snp_pvalues[1], snp_pvalues[0]);
+     }
+#else
+     {
+          double *probvec;
+          long double pvalue;
+          probvec = poissbin(&pvalue, err_probs, num_trials,
+                             num_errs, bonf, sig);
+          /*pvalue = expl(probvec_tailsum(probvec, num_errs, num_errs+1));*/
+          printf("%Lg\n", pvalue);
+          free(probvec);
      }
 #endif
+
+     free(err_probs);
 }
 #endif
