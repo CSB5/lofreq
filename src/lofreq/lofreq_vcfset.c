@@ -45,7 +45,7 @@ typedef struct {
      vcf_file_t vcf_out;
      vcfset_op_t vcf_setop;
      int only_passed; /* if 1, ignore any filtered variant */
-     int use_bases; /* if 0, ignore ref and alt base during comparisons */
+     int only_pos; /* 0: allele aware. if 1, ignore ref and alt base during comparisons.  */
 } vcfset_conf_t;
 
 
@@ -66,7 +66,7 @@ usage(const vcfset_conf_t* vcfset_conf)
              "                        intersect = vcf1 AND vcf2.\n"
 /*             "                        union = vcf1 OR vcf2.\n"*/
              "                        complement = vcf1 \\ vcf2.\n");
-     fprintf(stderr, "       --use-bases      Use position and bases as key for storing and comparison. By default only position is used\n");
+     fprintf(stderr, "       --only-pos      Disable allele-awareness by using position only (ignoring bases) as key for storing and comparison\n");
      fprintf(stderr, "       --count-only     Don't print bases, just numbers\n");
      fprintf(stderr, "       --only-passed    Ignore variants marked as filtered\n");
      fprintf(stderr, "       --verbose        Be verbose\n");
@@ -88,7 +88,7 @@ main_vcfset(int argc, char *argv[])
      long int num_vars_vcf1_ign, num_vars_vcf2_ign, num_vars_out;
      var_hash_t *var_hash_vcf2 = NULL; /* must be declared NULL ! */
      static int only_passed = 0;
-     static int use_bases = 0;
+     static int only_pos = 0;
      static int count_only = 0;
 
      vcf_in1 = vcf_in2 = vcf_out = NULL;
@@ -115,7 +115,7 @@ main_vcfset(int argc, char *argv[])
               {"verbose", no_argument, &verbose, 1},
               {"debug", no_argument, &debug, 1},
               {"only-passed", no_argument, &only_passed, 1},
-              {"use-bases", no_argument, &use_bases, 1},
+              {"only-pos", no_argument, &only_pos, 1},
               {"count-only", no_argument, &count_only, 1},
 
               {"vcf1", required_argument, NULL, '1'},
@@ -191,7 +191,7 @@ main_vcfset(int argc, char *argv[])
     }
 
     vcfset_conf.only_passed = only_passed;
-    vcfset_conf.use_bases = use_bases;
+    vcfset_conf.only_pos = only_pos;
 
 
     if (0 != argc - optind - 1) {
@@ -310,7 +310,7 @@ main_vcfset(int argc, char *argv[])
 
          if (! vcfset_conf.only_passed || VCF_VAR_PASSES(var)) {
               /* if allele-aware then also deal with multi-allelic sites */
-              if (vcfset_conf.use_bases) {
+              if (! vcfset_conf.only_pos) {
                    const char field_delimiter[] = ",";
                    char *token;
                    char *alt_cp;
@@ -372,7 +372,7 @@ main_vcfset(int argc, char *argv[])
               break;
          }
 
-         if (vcfset_conf.use_bases && NULL != strchr(var_1->alt, ',')) {
+         if (! vcfset_conf.only_pos && NULL != strchr(var_1->alt, ',')) {
               LOG_FATAL("%s\n", "No support for multi-allelic SNVs in vcf1");
               exit(1);
          }
@@ -385,7 +385,7 @@ main_vcfset(int argc, char *argv[])
          fprintf(stderr, "var_1 pass: "); vcf_write_var(stderr, var_1);
 #endif
          num_vars_vcf1 += 1;
-         vcfset_conf.use_bases ? vcf_var_key(&key, var_1) : vcf_var_key_pos_only(&key, var_1);
+         vcfset_conf.only_pos ? vcf_var_key_pos_only(&key, var_1) : vcf_var_key(&key, var_1);
          HASH_FIND_STR(var_hash_vcf2, key, var_2);
 #ifdef TRACE
          LOG_DEBUG("var with key %s in 2: %s\n", key, var_2? "found" : "not found");
