@@ -352,7 +352,7 @@ class SomaticSNVCaller(object):
         """
 
         cmd = [self.LOFREQ, 'vcfset',
-               '-a', 'intersect', '--use-bases',
+               '-a', 'intersect',
                '-1', self.vcf_n_rlx, '-2', self.vcf_t_str,
                '-o', self.vcf_germl]
         # FIXME no further filtering and using vcf_n_rlx entries
