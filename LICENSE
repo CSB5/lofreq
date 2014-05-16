@@ -5,7 +5,7 @@ ROSSBACH <rossbachm@gis.a-star.edu.sg> for more info.
 LoFreq-Star consists of two parts:
 
 1. a compiled core program ('lofreq'), which is free for
-non-commerical use. External libraries used in the core are
+non-commercial use. External libraries used in the core are
 - samtools/libbam (see src/libbam/COPYING and src/libbam/AUTHORS)
 - cdflib90 (see src/cdflib90.README)
 - zlib (see src/zlib.LICENSE)
