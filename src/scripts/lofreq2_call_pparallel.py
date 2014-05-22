@@ -6,7 +6,7 @@ feature) and bed file (if given) and combines results at the end.
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
-__copyright__ = "2013 Genome Institute of Singapore"
+__copyright__ = "2013, 2014 Genome Institute of Singapore"
 __license__ = "Free for non-commercial use"
 
 
@@ -20,6 +20,7 @@ import tempfile
 import shutil
 import os
 import gzip
+from collections import namedtuple
 
 #--- third-party imports
 #
@@ -34,47 +35,102 @@ try:
 except ImportError:
     pass
 
-# invocation of ipython on exceptions
-#import sys, pdb
-#from IPython.core import ultratb
-#sys.excepthook = ultratb.FormattedTB(mode='Verbose',
-#                                     color_scheme='Linux', call_pdb=1)
+
+Region = namedtuple('Region', ['chrom', 'start', 'end'])
+# coordinates in Python-slice / bed format, i.e. zero-based half-open
 
 
-#global logger
-# http://docs.python.org/library/logging.html
+# global logger
 LOG = logging.getLogger("")
 logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
 
-
-
 def prob_to_phredqual(prob):
-    """WARNING: copy from utils.py. copied here to make script independent
-    
+    """WARNING: near-identical copy from utils.py. copied here to make
+    script independent.
+
     Turns an error probability into a phred value
-    
+
     >>> prob_to_phredqual(0.01)
     20
     """
 
     from math import log10
-    MAX_INT = 2147483647
-    # instead of sys.maxint
-    
-    assert prob >= 0.0, (
-        "Probability can't be smaller than 0 but got %f" % prob)
+    #MAX_INT = 2147483647
+
+    assert prob >= 0.0 and prob <= 1.0, (
+        "Probability must be >=0 and <=1, but got %f" % prob)
     try:
         return int(round(-10.0 * log10(prob)))
     except ValueError:
         # prob is zero
-        #return sys.maxint
-        return MAX_INT
+        return sys.maxint
+        #return MAX_INT
 
-                                
+def split_region_(start, end):
+    """split region (given in zero-based half-open start and end
+    coordinates) in two halves
+    """
+    l = end - start
+    assert l > 1, ("Region too small to be split: %d--%d" % (start, end))
+    m = l//2# explicit integer divison
+    return ((start, start+m), (start+m, end))
+
+
+def split_region(reg):
+    """split region (given in zero-based half-open start and end
+    coordinates) in two halves
+    """
+    return [Region(reg.chrom, x[0], x[1])
+            for x in split_region_(reg.start, reg.end)]
+
+
+def read_bed_coords(fbed):
+    """Fault-resistant reading of coordinates from bed file and yields
+    them as chrom, start, end tuple with zero-based half-open
+    coordinates. Based on the implementation in LoFreq 0.6.0
+    """
+
+    with open(fbed, 'r') as fh:
+        for line in fh:
+            if line.startswith('#') or len(line.strip()) == 0:
+                continue
+
+            # bed should use tab as delimiter. use space if tab fails.
+            try:
+                (chrom, start, end) = line.split("\t")[0:3]
+            except IndexError:
+                try:
+                    (chrom, start, end) = line.split()[0:3]
+                except IndexError:
+                    raise IndexError, (
+                        "Couldn't parse the following line"
+                        " from bed-file %s: %s" % (fbed, line))
+
+            # http://genome.ucsc.edu/FAQ/FAQformat.html#format1
+            # 4: name, score, strand...
+            #
+            # int(float()) conversion necessary for values in
+            # scientific notation
+            try:
+                (start, end) = [int(float(x)) for x in [start, end]]
+            except ValueError:
+                raise ValueError, (
+                    "Couldn't parse the following line"
+                    " from bed-file %s: %s" % (fbed, line))
+
+            if end <= start:
+                LOG.fatal("end>=start (%d>=%d) in %s" % (
+                    start, end, fbed))
+                raise ValueError
+
+            yield (chrom, start, end)
+
+
 def total_num_tests_from_logs(log_files):
-    """FIXME:add-doc
+    """Extract number of performed tests from all log files and
+    returns their sum (for multiple testing correction)
     """
 
     total_num_tests = 0
@@ -97,12 +153,10 @@ def total_num_tests_from_logs(log_files):
     return total_num_tests
 
 
-
 def concat_vcf_files(vcf_files, vcf_concat, source=None):
     """Keeps only head of first vcf file (with '##source=lofreq call'
     replaced by source + \n if given) and write content of all to
     vcf_concat
-
     """
 
     # FIXME add gzip support to concat_vcf_files() or make vcfset subcommand"
@@ -122,43 +176,6 @@ def concat_vcf_files(vcf_files, vcf_concat, source=None):
     fh_out.close()
 
 
-
-#def read_bed_coords(fbed):
-#    """Reads coordinates from bed file and returns them as list of
-#    tuples (chrom, start, end). Start and end pos are 0-based;
-#    half-open just like bed and python ranges
-#
-#    Based on lofreq 0.6.0
-#    """
-#
-#    with open(fbed, 'r') as fh:
-#        for line in fh:
-#            if line.startswith('#'):
-#                continue
-#            if len(line.strip()) == 0:
-#                continue
-#            try:
-#                (chrom, start, end) = line.split("\t")[0:3]
-#            except IndexError:
-#                LOG.fatal(
-#                "FATAL: Failed to parse bed line: %s\n" % (line))
-#                raise ValueError
-#
-#            # http://genome.ucsc.edu/FAQ/FAQformat.html#format1
-#            # 4: name, score, strand...
-#            start = int(float(start))
-#            end = int(float(end))
-#            # stupid float is necessary for scientific notation, e.g. 1.25e+08
-#            # the only alternative is to use Decimal
-#            if end <= start :
-#                LOG.fatal("Start value (%d) not lower end value (%d)."
-#                " Parsed from file %s" % (
-#                    start, end, fbed))
-#                raise ValueError
-#            yield (chrom, start, end)
-#
-
-
 def sq_list_from_bam_samtools(bam):
     """Extract SQs listed in BAM head using samtools
 
@@ -172,7 +189,7 @@ def sq_list_from_bam_samtools(bam):
                                shell=False,
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
-    (stdoutdata, stderrdata) =  process.communicate()
+    (stdoutdata, stderrdata) = process.communicate()
 
     retcode = process.returncode
     if retcode != 0:
@@ -203,7 +220,6 @@ def sq_list_from_bam_samtools(bam):
     return sq_list
 
 
-
 def sq_list_from_bam(bam):
     """Extract SQs listed in BAM. Elements of returned list is a
     3-tuple with sq, length and number of mapped reads.
@@ -216,7 +232,7 @@ def sq_list_from_bam(bam):
                                shell=False,
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
-    (stdoutdata, stderrdata) =  process.communicate()
+    (stdoutdata, stderrdata) = process.communicate()
 
     retcode = process.returncode
     if retcode != 0:
@@ -239,70 +255,54 @@ def sq_list_from_bam(bam):
     return sq_list
 
 
-def lofreq_cmd_per_sq(bam, lofreq_call_args, tmp_dir):
-    """Returns argument for one lofreq call per chromosome. Commands
-    will be inversely sorted by number of mapped reads, if index
-    supports idxstats otherwise by length. Output vcf file names are
-    in order of chromosome.
+def bins_from_bamheader(bam):
+    """Returns regions/bins determine by chromosomes listed in bam
+    file. Will skip chromosomes with no reads mapped.
     """
 
-    # FIXME: this can be improved a lot. When asked for x threads we
-    # should simply bin the BAM file such that we get exactly x
-    # threads. The number of mapped reads per sq should be taken into
-    # account for the binning process and to make it even more
-    # complicated the regions in the optional bed file could be taken
-    # into account as well. 
-
     sq_list = sq_list_from_bam(bam)
-    if len(sq_list) < 2:
-        LOG.warn("Not more than one SQ found in BAM header."
-                 " No point in running in parallel mode.")
-        sys.exit(1)
 
-    # A quick&dirty way to make sure all processors are always busy is
-    # to sort chromosomes by coverage/nreads/length (but keep original
-    # order for output prefixing)
+    # get list of chromosome and their length. if supported also get
+    # number of mapped reads to remove chromosome with no reads mapped
     #
-    # sq_list contains extra info len and, where possible, number of
-    # mapped reads as two or three-tuple. if three elems then third is
-    # n_mapped. use that for sorting otherwise fall back to chromosome
-    # length
-    #
-    if len(sq_list[0])==3:
-        # have three elements and 3rd is #reads
-        sort_idx = 2
+    # have three elements and 3rd is #reads
+    if len(sq_list[0]) == 3:
         # remove those with no reads mapped
         sq_list = [x for x in sq_list if x[2] > 0]
-
         if len(sq_list) == 0:
             LOG.warning("Looks like the index for %s is a bit old"
                         " (idxstats reports no reads mapped). Reindexing"
-                        " should solve this. Can continue without problem,"
+                        " should solve this. Will continue by calling samtools,"
                         " so no need to worry for now though." % (bam))
             sq_list = sq_list_from_bam_samtools(bam)
             if len(sq_list) == 0:
-                LOG.fatal("Sorry, fallback solution failed as well :(")
+                LOG.fatal("Sorry, samtools failed as well :(")
                 sys.exit(1)
-            
-    if len(sq_list[0])!=3:
-        # only have two elements and 2nd is chrom length or fallback
-        sort_idx = 1
-        
-    # sort list by sort_idx and prepend original index, which is used
-    # for vcf file naming to create the same order as in the bam
-    enum_sq_list = sorted(enumerate(sq_list), key=lambda x: x[1][sort_idx], reverse=True)
-    # keep only original index and sq name
-    enum_sq_list = [(x[0], x[1][0]) for x in enum_sq_list]
-    #import pdb; pdb.set_trace()
-    #from IPython import embed; embed()
-    # if all the above is too compliated just use enumerate(sq_list) below
 
-    #import pdb; pdb.set_trace()
-    
-    for (i, sq) in enum_sq_list:
+    if len(sq_list) == 0:
+        LOG.fatal("Oops. Found no chromsomes in header of %s"
+                  " that have any reads mapped!?" % bam)
+        sys.exit(1)
+
+    return [(x[0], 0, x[1]) for x in sq_list]
+
+
+def lofreq_cmd_per_bin(lofreq_call_args, bins, tmp_dir):
+    """Returns argument for one lofreq call per bins (Regions()).
+    Order is by length byt file naming is according to input order
+    """
+
+    # longest bins first, but keep input order as index so that we can
+    # use this as file name and only need to concatenate later and
+    # output will be sorted by input order
+
+    enum_bins = sorted(enumerate(bins),
+                       key=lambda eb: eb[1].end-eb[1].start, reverse=True)
+
+    for (i, b) in enum_bins:
+        LOG.warn("length sorted bin keeping input index #%d: %s" % (i, b))
         # maintain region order by using index
-        reg_str = "%s" % sq
-        # which surprisingly works without pos:pos
+        reg_str = "%s:%d-%d" % (b.chrom, b.start+1, b.end)
         cmd = ' '.join(lofreq_call_args)
         cmd += ' --no-default-filter'# needed here whether user-arg or not
         cmd += " -r %s -o %s/%d.vcf > %s/%d.log 2>&1" % (
@@ -321,14 +321,14 @@ def work(cmd):
     return subprocess.call(cmd, shell=True)
 
 
-
 def main():
     """The main function
     """
 
     orig_argv = list(sys.argv[1:])
 
-    # parse pparallel specific args: get and remove from list
+    #
+    # 1. parse pparallel specific args: get and remove from list
     #
 
     # poor man's usage
@@ -336,12 +336,11 @@ def main():
     if '-h' in orig_argv:
         sys.stderr.write(__doc__ + "\n")
         sys.stderr.write("All arguments except --pp-threads (mandatory),"
-                  " --pp-debug, --pp-verbose\nand --pp-dryrun"
-                  " will be passed down to 'lofreq call'."
-                  "Make sure that the\nremaining args are valid 'lofreq call'"
-                  " args as no syntax check will be\nperformed.\n")
+                         " --pp-debug, --pp-verbose\nand --pp-dryrun"
+                         " will be passed down to 'lofreq call'."
+                         "Make sure that the\nremaining args are valid 'lofreq call'"
+                         " args as no syntax check will be\nperformed.\n")
         sys.exit(1)
-
 
     verbose = True
     try:
@@ -397,15 +396,24 @@ def main():
     #LOG.warn("lofreq_call_args = %s" % ' '.join(lofreq_call_args))
 
 
-    # check for disallowed args
     #
-    # use region ourselves
+    # 2. check for disallowed args
+    #
+
+    # using region ourselves
+    #
+    # FIXME could easily be merged into main logic by turning it into
+    # a region and intersecting with the rest
     #
     for disallowed_arg in ['--plp-summary-only', '-r', '--region']:
         if disallowed_arg in lofreq_call_args:
-            LOG.fatal("regions argument -r not allowed in pparallel mode")
+            LOG.fatal("%s not allowed in pparallel mode" % disallowed_arg)
             sys.exit(1)
 
+
+    #
+    # 3. modify args that we use
+    #
 
     # get final/original output file name and remove arg
     #
@@ -420,6 +428,21 @@ def main():
         if os.path.exists(final_vcf_out):
             LOG.fatal("Cowardly refusing to overwrite already existing"
                       " VCF output file %s" % final_vcf_out)
+            sys.exit(1)
+        lofreq_call_args = lofreq_call_args[0:idx] +  lofreq_call_args[idx+2:]
+
+    # bed-file
+    #
+    bed_file = None
+    idx = -1
+    for arg in ['-l', '--bed']:
+        if arg in lofreq_call_args:
+            idx = lofreq_call_args.index(arg)
+            break
+    if idx != -1:
+        bed_file = lofreq_call_args[idx+1]
+        if not os.path.exists(bed_file):
+            LOG.fatal("Bed-file %s does not exist" % bed_file)
             sys.exit(1)
         lofreq_call_args = lofreq_call_args[0:idx] +  lofreq_call_args[idx+2:]
 
@@ -452,7 +475,6 @@ def main():
     if idx != -1:
         sig_opt = float(lofreq_call_args[idx+1])
 
-
     # determine whether no-default-filter was given
     #
     no_default_filter = False
@@ -466,6 +488,16 @@ def main():
     lofreq_call_args.insert(0, 'lofreq')
     lofreq_call_args.insert(1, 'call')
 
+    bam = None
+    for arg in lofreq_call_args:
+        ext = os.path.splitext(arg)[1].lower()
+        if ext in [".bam", ".sam"] and os.path.exists(arg):
+            bam = arg
+            break
+    if not bam:
+        LOG.fatal("Could determine BAM file from argument list"
+                  " or file doesn't exist")
+        sys.exit(1)
 
     # now use one thread per region. output is numerated per thread
     # (%d.log and %d.vcf) and goes into tmp_dir
@@ -483,21 +515,71 @@ def main():
     LOG.info("Using %d threads with following basic args: %s\n" % (
             num_threads, ' '.join(lofreq_call_args)))
 
-    bam = None
-    for arg in lofreq_call_args:
-        ext = os.path.splitext(arg)[1].lower()
-        if ext in [".bam", ".sam"] and os.path.exists(arg):
-            bam = arg
-            break
-    if not bam:
-        LOG.fatal("Could determine BAM file from argument list"
-                  " or file doesn't exist")
-        sys.exit(1)
 
-    cmd_list = list(lofreq_cmd_per_sq(bam, lofreq_call_args, tmp_dir))
-    assert len(cmd_list)>1, (
+    # At this stage all basic args are known. In theory there are
+    # three major variables that determine the splitting logic:
+    #
+    # - bed file
+    # - region arg
+    # - sq+length from bam header
+    #
+    # We should in theory use intersection of all three, bed, region and sq
+    # (e.g. using pybedtools or a lightweight alternative)
+    # but for now we disallow regions (need it for ourselves; see above)
+
+    if bed_file:
+        bins = [Region._make(x) for x in read_bed_coords(bed_file)]
+    else:
+        bins = [Region._make(x) for x in bins_from_bamheader(bam)]
+
+    # split greedily into bins such that nregions ~ 2*threads:
+    # keep more bins than threads to make up for differences in regions
+    # even after split
+    #
+    BIN_PER_THREAD = 2
+    while len(bins) < BIN_PER_THREAD*num_threads:
+        # FIXME inefficient: should split max and insert new elements
+        # intelligently to avoid sorting whole list. but probably
+        # doesn't matter in practice.
+        bins = sorted(bins, key=lambda b: b.end-b.start)
+        biggest = bins.pop()
+        #import pdb; pdb.set_trace()
+        if biggest.end-biggest.start < 100:
+            LOG.warn("Regions getting too small to be efficiently processed")
+            bins.append(biggest)
+            break
+        (b1, b2) = split_region(biggest)
+        bins.extend([b1, b2])
+
+    for (i, b) in enumerate(bins):
+        LOG.warn("bins after splitting: #%d %s %d %d len %d" % (
+            i, b.chrom, b.start, b.end, b.end-b.start))
+
+
+    # need to make sure bins are order as chromosome order in BAM
+    # header (might not be the case in bed-file either which samtools
+    # parses the whole BAM when given a bed), otherwise output will
+    # not be sorted since it just concatenates
+    #
+    # sort first by start position and then by predefined chromsome
+    # order
+    bins = sorted(bins, key=lambda b: b.start)
+    sq_list = sq_list_from_bam(bam)
+    LOG.warn("sq_list  %s" % sq_list)
+    sdict = dict()
+    for (i, sq) in enumerate(sq_list):
+        sdict[sq[0]] = i
+    bins = sorted(bins, key=lambda b: sdict[b.chrom])
+
+    for (i, b) in enumerate(bins):
+        LOG.warn("bins after chrom ordering: #%d %s %d %d len %d" % (
+            i, b.chrom, b.start, b.end, b.end-b.start))
+
+    cmd_list = list(lofreq_cmd_per_bin(lofreq_call_args, bins, tmp_dir))
+    assert len(cmd_list) > 1, (
         "Oops...did get %d instead of multiple commands to run on BAM: %s" % (len(cmd_list), bam))
     LOG.info("Adding %d commands to mp-pool" % len(cmd_list))
+    #import pdb; pdb.set_trace()
     LOG.debug("cmd_list = %s" % cmd_list)
     if dryrun:
         for cmd in cmd_list:
@@ -519,7 +601,7 @@ def main():
         sys.exit(1)
 
 
-    # concat the output
+    # concat the output by number
     #
     vcf_concat = os.path.join(tmp_dir, "concat.vcf")
     # maintain order
@@ -554,7 +636,7 @@ def main():
 
     elif bonf_opt == 'auto':
         raise NotImplementedError
-    
+
     if bonf_opt not in ['auto', 'dynamic'] and no_default_filter:
         # if bonf_opt was a fixed int, then it was already used properly and
         # there's no need to filter against snv qual. if furthermore,
@@ -570,7 +652,7 @@ def main():
                 LOG.fatal("Cowardly refusing to overwrite %s with %s" % (
                     final_vcf_out, vcf_concat))
                 sys.exit(1)
-                                
+
             if final_vcf_out[-3:] == '.gz':
                 fh_out = gzip.open(final_vcf_out, 'w')
             else:
