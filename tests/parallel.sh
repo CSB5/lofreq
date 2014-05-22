@@ -21,6 +21,15 @@ outraw_parallel=$outdir/raw_parallel.vcf
 outraw_single=$outdir/raw_single.vcf
 log=$outdir/log.txt
 
+LOFREQ_PARALLEL="$(dirname $LOFREQ)/../scripts/lofreq2_call_pparallel.py"
+cmd="/usr/bin/time -p $LOFREQ_PARALLEL --pp-threads $NUM_THREADS -f $REFFA -o $outraw_parallel --verbose $BAM"
+test $SIMULATE -eq 1 && cmd="echo $cmd"
+test $DEBUG -eq 1 && echo "DEBUG: cmd=$cmd" 1>&2
+if ! eval $cmd >> $log 2>&1; then
+    echoerror "The following command failed (see $log for more): $cmd"
+    exit 1
+fi
+
 
 cmd="/usr/bin/time -p $LOFREQ call -f $REFFA -o $outraw_single --verbose $BAM"
 test $SIMULATE -eq 1 && cmd="echo $cmd"
@@ -30,14 +39,6 @@ if ! eval $cmd >> $log 2>&1; then
     exit 1
 fi
 
-LOFREQ_PARALLEL="$(dirname $LOFREQ)/../lofreq_python/scripts/lofreq2_call_pparallel.py"
-cmd="/usr/bin/time -p $LOFREQ_PARALLEL --pp-threads $NUM_THREADS -f $REFFA -o $outraw_parallel --verbose $BAM"
-test $SIMULATE -eq 1 && cmd="echo $cmd"
-test $DEBUG -eq 1 && echo "DEBUG: cmd=$cmd" 1>&2
-if ! eval $cmd >> $log 2>&1; then
-    echoerror "The following command failed (see $log for more): $cmd"
-    exit 1
-fi
 
 if [ $SIMULATE -eq 1 ]; then
     ndiff=0
