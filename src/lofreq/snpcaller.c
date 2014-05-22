@@ -686,7 +686,6 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
         double pn = err_probs[n-1];
         double log_pn, log_1_pn;
 
-
         /* if pn=0 log(on) will fail. likewise if pn=1 (Q0) then
          * log1p(-pn) = log(1-1) = log(0) will fail. therefore test */
         if (fabs(pn) < DBL_EPSILON) {             
@@ -730,20 +729,18 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
 #endif
 
         if (n==K) {
-            probvec[K] = probvec_prev[K-1] + log_pn;
-            /* FIXME check here as well */
+             probvec[K] = probvec_prev[K-1] + log_pn;
+             /* FIXME prune here as well? */
 
         } else if (n > K) { 
              long double pvalue;
              /*LOG_FIXME("probvec_prev[K=%d]=%g probvec_prev[K=%d -1]=%g\n", K, probvec_prev[K], K, probvec_prev[K-1]);*/
              assert(probvec_prev[K]-DBL_EPSILON<=0.0 && probvec_prev[K-1]-DBL_EPSILON<=0.0);
+
              probvec[K] = log_sum(probvec_prev[K], probvec_prev[K-1]+log_pn);
+
              errno = 0;
-             pvalue = expl(probvec[K]);
-/*
-  fprintf(stderr, "FIXME(%s:%s:%d): n=%d K=%d pvalue=%Lg probvec[K]=%g errno=%d\n", 
-  __FILE__, __FUNCTION__, __LINE__, n, K, pvalue, probvec[K], errno);
-*/
+             pvalue = expl(probvec[K]);             
              if (0 != errno) {
                   pvalue = 0.0;
              }
@@ -762,13 +759,17 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
               >>> -10 * X/log(10)
               434.2944819032518
              */
-             if (pvalue * (double)bonf_factor >= sig_level) {
+/*#define NO_PRUNING*/
+#ifndef NO_PRUNING
+             if (pvalue * (double)bonf_factor > sig_level) {
 #ifdef DEBUG
-                  fprintf(stderr, "DEBUG(%s:%s:%d): early exit at n=%d with pvalue %g\n", 
-                          __FILE__, __FUNCTION__, __LINE__, n, pvalue);
+                  fprintf(stderr, "DEBUG(%s:%s:%d): early exit at n=%d K=%d with pvalue %Lg\n", 
+                          __FILE__, __FUNCTION__, __LINE__, n, K, pvalue);
 #endif
-                  goto free_and_exit;
+                  free(probvec_prev);
+                  return probvec;
              }
+#endif
         }
 
         assert(! isinf(probvec[0])); /* used to happen when first q=0 */
@@ -779,10 +780,9 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
         probvec_prev = probvec_swp;
     }
 
- free_and_exit:
-    free(probvec_prev);    
-
-    return probvec;
+    /* return prev because we just swapped (if not pruned) */
+    free(probvec);
+    return probvec_prev;
 }
 /* pruned_calc_prob_dist */
 
@@ -884,6 +884,13 @@ snpcaller(long double *snp_pvalues,
     int max_noncons_count = 0;
     long double pvalue;
 
+#if 0
+    for (i=0; i<num_err_probs; i++) {
+         fprintf(stderr,  "%f ", err_probs[i]);
+    }
+    fprintf(stderr,  "\n");
+#endif
+
 #ifdef DEBUG
     fprintf(stderr, "DEBUG(%s:%s():%d): num_err_probs=%d noncons_counts=%d,%d,%d bonf_factor=%lld sig_level=%f\n", 
             __FILE__, __FUNCTION__, __LINE__, 
@@ -910,8 +917,16 @@ snpcaller(long double *snp_pvalues,
 
     probvec = poissbin(&pvalue, err_probs, num_err_probs,
                        max_noncons_count, bonf_factor, sig_level);
-    
-    if (pvalue * (double)bonf_factor >= sig_level) {
+
+#if 0
+    for (i=1; i<max_noncons_count+1; i++) {        
+        fprintf(stderr, "DEBUG(%s:%s():%d): prob for count %d=%Lg\n", 
+                __FILE__, __FUNCTION__, __LINE__, 
+                i, expl(probvec[i]));
+    }
+#endif
+
+    if (pvalue * (double)bonf_factor > sig_level) {
 #ifdef DEBUG
         fprintf(stderr, "DEBUG(%s:%s():%d): Most frequent SNV candidate already gets not signifcant pvalue of %g * %lld >= %g\n", 
                 __FILE__, __FUNCTION__, __LINE__, 
@@ -923,13 +938,6 @@ snpcaller(long double *snp_pvalues,
 
     /* report p-value for each non-consensus base
      */
-#if 0
-    for (i=1; i<max_noncons_count+1; i++) {        
-        fprintf(stderr, "DEBUG(%s:%s():%d): prob for count %d=%g\n", 
-                __FILE__, __FUNCTION__, __LINE__, 
-                i, expl(probvec[i]));
-    }
-#endif
 #if 0
     for (i=1; i<max_noncons_count+1; i++) {        
         fprintf(stderr, "DEBUG(%s:%s():%d): pvalue=%Lg for noncons_counts %d\n", 
