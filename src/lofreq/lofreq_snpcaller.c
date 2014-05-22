@@ -368,10 +368,6 @@ call_snvs(const plp_col_t *p, void *confp)
           }
      }
 #endif
-     LOG_DEBUG("%s %d: passing down %d quals with noncons_counts"
-               " (%d, %d, %d) to snpcaller()\n", p->target, p->pos+1,
-               num_err_probs, alt_counts[0], alt_counts[1], alt_counts[2]);
- 
      if (conf->bonf_dynamic) {
           if (1 == conf->bonf) {
                conf->bonf = NUM_NONCONS_BASES; /* otherwise we start with 1+NUM_NONCONS_BASES */
@@ -381,6 +377,10 @@ call_snvs(const plp_col_t *p, void *confp)
      }
      num_tests += NUM_NONCONS_BASES;
 
+     LOG_DEBUG("%s %d: passing down %d quals with noncons_counts"
+               " (%d, %d, %d) to snpcaller(num_tests=%lld conf->bonf=%lld, conf->sig=%f)\n", p->target, p->pos+1,
+               num_err_probs, alt_counts[0], alt_counts[1], alt_counts[2], num_tests, conf->bonf, conf->sig);
+ 
      if (snpcaller(pvalues, err_probs, num_err_probs, 
                   alt_counts, conf->bonf, conf->sig)) {
           fprintf(stderr, "FATAL: snpcaller() failed at %s:%s():%d\n",
