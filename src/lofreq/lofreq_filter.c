@@ -134,8 +134,8 @@ usage(const filter_conf_t* filter_conf)
      fprintf(stderr, "  -V | --cov-max INT          Maximum coverage allowed (<1=off)\n");
 
      fprintf(stderr, "  Allele Frequency (AF; neg. values = off):\n");
-     fprintf(stderr, "  -a | --af-min FLOAT         Maximum allele freq allowed (<1=off)\n");
-     fprintf(stderr, "  -A | --af-max FLOAT         Minimum allele freq allowed (<1=off)\n");
+     fprintf(stderr, "  -a | --af-min FLOAT         Minimum allele freq allowed (<1=off)\n");
+     fprintf(stderr, "  -A | --af-max FLOAT         Maximum allele freq allowed (<1=off)\n");
 
      fprintf(stderr, "\n");
      fprintf(stderr, "  Strand Bias (SB):\n");
