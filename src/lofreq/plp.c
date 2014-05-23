@@ -9,7 +9,6 @@
 #include <ctype.h>
 #include <assert.h>
 
-#include "faidx.h"
 #include "kstring.h"
 #include "sam.h"
 #include "log.h"
@@ -1018,26 +1017,17 @@ mpileup(const mplp_conf_t *mplp_conf,
         }
     }
     LOG_DEBUG("%s\n", "BAM header initialized");
-    for (i=0; i < h->n_targets; i++) {
-         int fai_len = -1;
-         if (mplp_conf->fai) {
-              fai_len = fai_seq_len(mplp_conf->fai, i);
+    if (debug) {
+         for (i=0; i < h->n_targets; i++) {
+              LOG_DEBUG("BAM header target #%d: name=%s len=%d\n", i, h->target_name[i], h->target_len[i]);
          }
-         LOG_DEBUG("BAM header target #%d: name=%s len=%d faidx len=%d\n", i, h->target_name[i], h->target_len[i], fai_len);
-    }    
+    }
     if (tid0 >= 0 && mplp_conf->fai) { /* region is set */
-         ref_len = fai_seq_len(mplp_conf->fai, tid0);
-         if (h->target_len[tid0] != ref_len && ref_len!=-1) {
-              LOG_FATAL("Length mismatch between %s in BAM and reference fasta file: %d!=%d\n", h->target_name[tid0], h->target_len[tid0], ref_len);
-              return -1;
-         }
-         ref_len = -1;
          ref = faidx_fetch_seq(mplp_conf->fai, h->target_name[tid0], 0, 0x7fffffff, &ref_len);
          if (NULL == ref || h->target_len[tid0] != ref_len) {
-              LOG_FATAL("%s\n", "Reference fasta file doesn't seem to contain the right sequence(s) for this BAM file. (mismatch for seq %s listed in BAM header).", h->target_name[tid0]);
+              LOG_FATAL("Reference fasta file doesn't seem to contain the right sequence(s) for this BAM file. (mismatch for seq %s listed in BAM header)\n", h->target_name[tid0]);
               return -1;
          }
-         LOG_DEBUG("%s\n", "sequence fetched");
          ref_tid = tid0;
          for (i = 0; i < n; ++i) data[i]->ref = ref, data[i]->ref_id = tid0;
     } else {
@@ -1046,12 +1036,6 @@ mpileup(const mplp_conf_t *mplp_conf,
     }
     iter = bam_mplp_init(n, mplp_func, (void**)data);
     max_depth = mplp_conf->max_depth;
-    if (max_depth * 1 > 1<<20)
-        fprintf(stderr, "(%s) Max depth is above 1M. Potential memory hog!\n", __func__);
-    if (max_depth * 1 < 8000) {
-        max_depth = 8000 / 1;
-        fprintf(stderr, "<%s> Set max per-file depth to %d\n", __func__, max_depth);
-    }
     bam_mplp_set_maxcnt(iter, max_depth);
 
 #ifdef USE_ALNERRPROF
@@ -1076,16 +1060,10 @@ mpileup(const mplp_conf_t *mplp_conf,
         if (tid != ref_tid) {
             free(ref); ref = 0;
             if (mplp_conf->fai) {
-                 ref_len = fai_seq_len(mplp_conf->fai, tid);
-                 if (h->target_len[tid] != ref_len && ref_len!=-1) {
-                      LOG_FATAL("Length mismatch between %s in BAM and reference fasta file: %d!=%d\n", h->target_name[tid], h->target_len[tid], ref_len);
-                      return -1;
-                 }
-                 ref_len = -1;
                  ref = faidx_fetch_seq(mplp_conf->fai, h->target_name[tid], 0, 0x7fffffff, &ref_len);
                  if (NULL == ref || h->target_len[tid] != ref_len) {
                       LOG_DEBUG("ref %s at %p h->target_len[tid]=%d ref_len=%d\n", h->target_name[tid], ref, h->target_name[tid], ref_len)
-                      LOG_FATAL("%s\n", "Reference fasta file doesn't seem to contain the right sequence(s) for this BAM file. (mismatch for seq %s listed in BAM header).", h->target_name[tid]);
+                      LOG_FATAL("Reference fasta file doesn't seem to contain the right sequence(s) for this BAM file. (mismatch for seq %s listed in BAM header).\n", h->target_name[tid]);
                       return -1;
                  }
                  LOG_DEBUG("%s\n", "sequence fetched");
