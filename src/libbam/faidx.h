@@ -96,8 +96,9 @@ extern "C" {
 	 */
 	char *faidx_fetch_seq(const faidx_t *fai, char *c_name, int p_beg_i, int p_end_i, int *len);
 
-    /* lofreq extension */
+#if 0    /* lofreq extension */
     int fai_seq_len(const faidx_t *fai, int tid);
+#endif
 
 #ifdef __cplusplus
 }
