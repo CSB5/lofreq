@@ -19,6 +19,10 @@ md5=$(which md5sum 2>/dev/null || which md5)
 
 seq=$(which seq 2>/dev/null || which gseq)
 
+ncpus=$(hwprefs cpu_count 2>/dev/null || grep -c ^processor /proc/cpuinfo)
+# use 1/8 of available cpus at max but 4 min for parallel tasks
+threads=$(echo $ncpus | awk '{n=$1/8; if (n<4) {n=4}; print n}')
+
 LOFREQ=../src/lofreq/lofreq
 #LOFREQ=../lofreq_star-2.0.0-beta/lofreq/lofreq
 
