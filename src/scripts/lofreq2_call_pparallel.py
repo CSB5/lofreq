@@ -560,7 +560,7 @@ def main():
         LOG.debug("biggest_length=%d  total_length/(2.0*num_threads)=%f" % (biggest_length, total_length/(2.0*num_threads)))
         if biggest_length < total_length/(1.5*num_threads):
             break
-        elif biggest_length < 100:
+        elif biggest_length < 1000:
             LOG.warn("Regions getting too small to be efficiently processed")
             break
         
