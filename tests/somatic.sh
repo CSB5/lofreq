@@ -18,7 +18,7 @@ if [ $KEEP_TMP -eq 1 ]; then
 fi
 
 finalout=${outprefix}somatic_final.vcf
-cmd="$LOFREQ somatic -n $bam_n -t $bam_t -f $reffa -l $bed -o $outprefix";#--verbose";# --debug"
+cmd="$LOFREQ somatic --threads $threads -n $bam_n -t $bam_t -f $reffa -l $bed -o $outprefix";#--verbose";# --debug"
 #echodebug "cmd = $cmd"
 if ! eval $cmd; then
     echoerror "The following command failed: $cmd"
