@@ -215,7 +215,7 @@ main_vcfset(int argc, char *argv[])
 
     /* all input files must be specified */
     if  (vcf_in1 == NULL || vcf_in2 == NULL) {
-         LOG_FATAL("%s\n\n", "At least one needed the vcf input file not specified");
+         LOG_FATAL("%s\n\n", "At least one vcf input file not specified");
          usage(& vcfset_conf);
          free(vcf_in1); free(vcf_in2); free(vcf_out);
          return 1;
