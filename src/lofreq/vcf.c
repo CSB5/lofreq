@@ -228,15 +228,25 @@ vcf_var_has_info_key(char **value, const var_t *var, const char *key) {
           (*value) = NULL;
      }
 
-     if (! var->info) {
+     if (! var->info || ! key) {
           return 0;
      }
-
+     if (strlen(var->info)<2) {
+          return 0;
+     }
      info = strdup(var->info);
+     if (! info) {
+          LOG_FATAL("%s\n", "insufficient memory");
+          exit(1);
+     }
      info_ptr = info;
-     /* note: strsep modifies ptr */
-     while (NULL != (token = strsep(&info_ptr, field_delimiter))) {
-          if (0 == strncasecmp(key, token, strlen(key))) {
+     token = info;
+     /* note: strsep modifies ptr. see also
+      * http://stackoverflow.com/questions/21383082/parsing-a-string-in-c-with-strsep-alternative-methods */
+     while (token) {
+          strsep(&info_ptr, field_delimiter);
+          /*fprintf(stderr, "token=%s key=%s\n", token, key);*/
+          if (0 == strncasecmp(key, token, MIN(strlen(token), strlen(key)))) {
                if (value) {
                     char *s = strchr(token, '=');
                     if (NULL != s) {
@@ -246,6 +256,7 @@ vcf_var_has_info_key(char **value, const var_t *var, const char *key) {
                free(info);
                return 1;
           }
+          token = info_ptr;
      }
 
      free(info);
