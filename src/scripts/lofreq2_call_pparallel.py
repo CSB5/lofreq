@@ -78,6 +78,10 @@ def split_region_(start, end):
     return ((start, start+m), (start+m, end))
 
 
+def region_length(reg):
+    return reg.end-reg.start
+
+
 def split_region(reg):
     """split region (given in zero-based half-open start and end
     coordinates) in two halves
@@ -297,10 +301,10 @@ def lofreq_cmd_per_bin(lofreq_call_args, bins, tmp_dir):
     # output will be sorted by input order
 
     enum_bins = sorted(enumerate(bins),
-                       key=lambda eb: eb[1].end-eb[1].start, reverse=True)
+                       key=lambda eb: region_length(eb[1]), reverse=True)
 
     for (i, b) in enum_bins:
-        LOG.warn("length sorted bin keeping input index #%d: %s" % (i, b))
+        LOG.debug("length sorted bin keeping input index #%d: %s" % (i, b))
         # maintain region order by using index
         reg_str = "%s:%d-%d" % (b.chrom, b.start+1, b.end)
         cmd = ' '.join(lofreq_call_args)
@@ -314,11 +318,19 @@ def lofreq_cmd_per_bin(lofreq_call_args, bins, tmp_dir):
 def work(cmd):
     """Command caller wrapper for multiprocessing"""
 
-    #http://stackoverflow.com/questions/884650/how-to-spawn-parallel-child-processes-on-a-multi-processor-system
-    #return subprocess.check_output(['which', 'lofreq'])
-    #return "Would execute: %s" % (cmd)
-    # FIXME any way to capture stderr?
-    return subprocess.call(cmd, shell=True)
+    #print "DEBUG", os.environ["PATH"]     
+    #from subprocess import Popen, PIPE
+    #call(["which", "lofreq"])
+    #which = Popen(['which', 'lofreq'], stdout=PIPE).stdout.read()
+    #which = Popen("which lofreq", shell=True, stdout=PIPE).stdout.read()
+    #LOG.warn("Executing (lofreq=%s): %s" % (which, cmd))
+    # res = subprocess.call("lofreq version", shell=True)
+    # cmd = 'valgrind --tool=memcheck ' + cmd
+    res = subprocess.call(cmd, shell=True)
+    if res:
+        LOG.fatal("Following command failed with status %d: %s" % (res, cmd))
+        # can't exit here: sys.exit(1)
+    return res
 
 
 def main():
@@ -402,8 +414,8 @@ def main():
 
     # using region ourselves
     #
-    # FIXME could easily be merged into main logic by turning it into
-    # a region and intersecting with the rest
+    # FIXME (re-) use of region could easily be merged into main logic
+    # by turning it into a region and intersecting with the rest
     #
     for disallowed_arg in ['--plp-summary-only', '-r', '--region']:
         if disallowed_arg in lofreq_call_args:
@@ -536,24 +548,29 @@ def main():
     # keep more bins than threads to make up for differences in regions
     # even after split
     #
+    total_length = sum([region_length(b) for b in bins])
     BIN_PER_THREAD = 2
-    while len(bins) < BIN_PER_THREAD*num_threads:
-        # FIXME inefficient: should split max and insert new elements
-        # intelligently to avoid sorting whole list. but probably
-        # doesn't matter in practice.
-        bins = sorted(bins, key=lambda b: b.end-b.start)
-        biggest = bins.pop()
-        #import pdb; pdb.set_trace()
-        if biggest.end-biggest.start < 100:
-            LOG.warn("Regions getting too small to be efficiently processed")
-            bins.append(biggest)
+    while True:
+        #  inefficient but doesn't matter in practice: should split
+        #  max and insert new elements
+        # intelligently to avoid sorting whole list. 
+        bins = sorted(bins, key=lambda b: region_length(b))
+        biggest = bins[-1]
+        biggest_length = region_length(biggest) 
+        LOG.debug("biggest_length=%d  total_length/(2.0*num_threads)=%f" % (biggest_length, total_length/(2.0*num_threads)))
+        if biggest_length < total_length/(1.5*num_threads):
             break
+        elif biggest_length < 100:
+            LOG.warn("Regions getting too small to be efficiently processed")
+            break
+        
+        biggest = bins.pop()
         (b1, b2) = split_region(biggest)
         bins.extend([b1, b2])
 
     for (i, b) in enumerate(bins):
-        LOG.warn("bins after splitting: #%d %s %d %d len %d" % (
-            i, b.chrom, b.start, b.end, b.end-b.start))
+        LOG.debug("bins after splitting: #%d %s %d %d len %d" % (
+            i, b.chrom, b.start, b.end, region_length(b)))
 
 
     # need to make sure bins are order as chromosome order in BAM
@@ -565,20 +582,22 @@ def main():
     # order
     bins = sorted(bins, key=lambda b: b.start)
     sq_list = sq_list_from_bam(bam)
-    LOG.warn("sq_list  %s" % sq_list)
+    LOG.debug("sq_list  %s" % sq_list)
     sdict = dict()
     for (i, sq) in enumerate(sq_list):
         sdict[sq[0]] = i
     bins = sorted(bins, key=lambda b: sdict[b.chrom])
 
     for (i, b) in enumerate(bins):
-        LOG.warn("bins after chrom ordering: #%d %s %d %d len %d" % (
-            i, b.chrom, b.start, b.end, b.end-b.start))
+        LOG.debug("bins after chrom ordering: #%d %s %d %d len %d" % (
+            i, b.chrom, b.start, b.end, region_length(b)))
 
+    #bins = [Region('chr22', 0, 50000000)]# TMPDEBUG
     cmd_list = list(lofreq_cmd_per_bin(lofreq_call_args, bins, tmp_dir))
-    assert len(cmd_list) > 1, (
-        "Oops...did get %d instead of multiple commands to run on BAM: %s" % (len(cmd_list), bam))
+    #FIXME assert len(cmd_list) > 1, (
+    #    "Oops...did get %d instead of multiple commands to run on BAM: %s" % (len(cmd_list), bam))
     LOG.info("Adding %d commands to mp-pool" % len(cmd_list))
+
     #import pdb; pdb.set_trace()
     LOG.debug("cmd_list = %s" % cmd_list)
     if dryrun:
@@ -587,19 +606,21 @@ def main():
         LOG.critical("dryrun ending here")
         sys.exit(1)
 
+    #def mycallback(x):
+    #    if x:
+    #        LOG.warn("multiprocessing.Pool call result: %s" % x)
+    #        pool.terminate()
+    
     pool = multiprocessing.Pool(processes=num_threads)
     results = pool.map(work, cmd_list, chunksize=1)
-    # report failures and exit if found
+    #results = pool.map_async(work, cmd_list, chunksize=1, callback=mycallback)
+    pool.close()# not adding any more
+    pool.join()# wait until all done
+
     if any(results):
-        #for (res) in results:
-        #    LOG.fatal("At least one process reported: %s", res)
-        for (res, cmd) in zip(results, cmd_list):
-            if res != 0:
-                LOG.fatal("The following command failed"
-                          " with code %d: %s" %  (res, cmd))
+        # rerrors printed in work()
         LOG.fatal("Can't continue")
         sys.exit(1)
-
 
     # concat the output by number
     #
