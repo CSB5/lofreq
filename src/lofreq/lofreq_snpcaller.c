@@ -490,8 +490,6 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
 /* usage() */
 
 
-
-
 int 
 main_call(int argc, char *argv[])
 {
@@ -600,8 +598,13 @@ for cov in coverage_range:
          };
 
          /* keep in sync with long_opts and usage */
-
-         static const char *long_opts_str = "r:l:f:co:q:Q:a:BEm:M:JSn:V:b:s:A:C:NIh"; 
+#ifdef DEFAULT_BAQ_ON
+         static const char *long_opts_str = "r:l:f:co:q:Q:a:Bm:M:JSn:V:b:s:C:NIh"; 
+#else
+         static const char *long_opts_str = "r:l:f:co:q:Q:a:Em:M:JSn:V:b:s:C:NIh"; 
+#endif
+         /* USE_ALNERRPROF i.e. A: removed for now */
+         
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
          c = getopt_long(argc-1, argv+1, /* skipping 'lofreq', just leaving 'command', i.e. call */
