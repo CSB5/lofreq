@@ -11,7 +11,7 @@ vcf_n=data/vcf/CHH966-normal-100x-100pur-hg19.bwa.renamed_6431925.vcf.gz
 #vcf_n=data/vcf/CHH966-normal-100x-100pur-hg19.bwa.renamed_6431925.vcf
 vcf_out=$(mktemp -t $(basename $0).XXXXXX.vcf)
 
-cmd="$LOFREQ vcfset --use-bases -1 $vcf_t -2 $vcf_n -a complement -o -"
+cmd="$LOFREQ vcfset -1 $vcf_t -2 $vcf_n -a complement -o -"
 
 #echodebug "cmd=$cmd"
 eval $cmd | cut -f 1-7 > $vcf_out
@@ -95,15 +95,15 @@ vcf_org=data/vcf/vcf_set.vcf.gz
 vcf_baseswap=data/vcf/vcf_set_altrefswap.vcf.gz
 cmd="$LOFREQ vcfset -1 $vcf_org -2 $vcf_baseswap -a intersect -o -"
 num_out=$(eval $cmd | grep -cv '^#')
-if [ $num_out -eq 0 ]; then
+if [ $num_out -ne 0 ]; then
     echoerror "intersection with base swapped file did not return any variants"    
 else
     echook "intersection with base swapped file return variants"    
 fi
 
-cmd="$cmd --use-bases"
+cmd="$cmd --only-pos"
 num_out=$(eval $cmd | grep -cv '^#')
-if [ $num_out -ne 0 ]; then
+if [ $num_out -eq 0 ]; then
     echoerror "intersection with base swapped file when using bases did not return zero variants"
 else
     echook "intersection with base swapped file return zero variants"    
