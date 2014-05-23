@@ -12,7 +12,6 @@ BAM=data/dream-icgc-tcga-first10kperchrom-synthetic.challenge.set1.normal.v2.bam
 REFFA=data/Homo_sapiens_assembly19.fasta
 
 KEEP_TMP=1
-NUM_THREADS=4
 DEBUG=0
 SIMULATE=0
 
@@ -22,7 +21,7 @@ outraw_single=$outdir/raw_single.vcf
 log=$outdir/log.txt
 
 LOFREQ_PARALLEL="$(dirname $LOFREQ)/../scripts/lofreq2_call_pparallel.py"
-cmd="/usr/bin/time -p $LOFREQ_PARALLEL --pp-threads $NUM_THREADS -f $REFFA -o $outraw_parallel --verbose $BAM"
+cmd="/usr/bin/time -p $LOFREQ_PARALLEL --pp-threads $threads -f $REFFA -o $outraw_parallel --verbose $BAM"
 test $SIMULATE -eq 1 && cmd="echo $cmd"
 test $DEBUG -eq 1 && echo "DEBUG: cmd=$cmd" 1>&2
 if ! eval $cmd >> $log 2>&1; then
@@ -41,11 +40,13 @@ fi
 
 
 if [ $SIMULATE -eq 1 ]; then
-    ndiff=0
+    nup=0
+    nus=0
 else
-    ndiff=$($LOFREQ vcfset -a complement -1 $outraw_parallel -2 $outraw_single --count-only)
+    nup=$($LOFREQ vcfset -a complement -1 $outraw_parallel -2 $outraw_single --count-only)
+    nus=$($LOFREQ vcfset -a complement -2 $outraw_parallel -1 $outraw_single --count-only)
 fi
-if [ $ndiff -ne 0 ]; then
+if [ $nup -ne 0 ] || [ $nus -ne 0 ] ; then
     echoerror "Observed some difference between parallel and single results. Check $outraw_parallel and $outraw_single"
     n_parallel=$(grep -vc '^#' $outraw_parallel)
     n_single=$(grep -vc '^#' $outraw_single)
