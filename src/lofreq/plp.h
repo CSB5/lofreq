@@ -53,6 +53,7 @@ typedef struct {
       * during pileup. the latter doesn't work if you want to filter
       * based on a consensus which you don't know in advance */
      int_varray_t base_quals[NUM_NT4]; 
+     int_varray_t baq_quals[NUM_NT4]; 
      int_varray_t map_quals[NUM_NT4]; 
      int_varray_t source_quals[NUM_NT4]; 
 #ifdef USE_ALNERRPROF
