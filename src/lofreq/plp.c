@@ -88,11 +88,8 @@ void init_mplp_conf(mplp_conf_t *c)
      c->min_bq = DEFAULT_MIN_BQ;
      c->capQ_thres = 0;
      c->max_depth = DEFAULT_MAX_PLP_DEPTH;
-#if DEFAULT_BAQ_ON
-     c->flag = MPLP_NO_ORPHAN | MPLP_REALN | MPLP_REDO_BAQ;
-#else
-     c->flag = MPLP_NO_ORPHAN;
-#endif
+     /* REALN == default BAQ */
+     c->flag = MPLP_NO_ORPHAN | MPLP_REALN;
 }
 
 
@@ -120,6 +117,7 @@ plp_col_init(plp_col_t *p) {
     p->coverage = -INT_MAX;
     for (i=0; i<NUM_NT4; i++) {
          int_varray_init(& p->base_quals[i], grow_by_size);
+         int_varray_init(& p->baq_quals[i], grow_by_size);
          int_varray_init(& p->map_quals[i], grow_by_size);
          int_varray_init(& p->source_quals[i], grow_by_size);
 #ifdef USE_ALNERRPROF
@@ -145,6 +143,7 @@ plp_col_free(plp_col_t *p) {
     free(p->target);
     for (i=0; i<NUM_NT4; i++) {
          int_varray_free(& p->base_quals[i]);
+         int_varray_free(& p->baq_quals[i]);
          int_varray_free(& p->map_quals[i]);
          int_varray_free(& p->source_quals[i]);
 #ifdef USE_ALNERRPROF
@@ -577,9 +576,44 @@ mplp_func(void *data, bam1_t *b)
         }
 
         skip = 0;
-        if (has_ref && (ma->conf->flag & MPLP_REALN)) {
-             bam_prob_realn_core(b, ma->ref, (ma->conf->flag & MPLP_REDO_BAQ)? 7 : 3);
+
+#if 0
+        { 
+             uint8_t *of2baq = bam_aux_get(b, "BQ");
+             uint8_t *qual = bam1_qual(b);
+             if (of2baq) of2baq++;
+             int i;
+             for (i = 0; i < b->core.l_qseq; ++i) {
+                  fprintf(stderr, "before: id=%s qpos=%d Q=%d precomp.off=%d precomp.BAQ=%d\n", bam1_qname(b), i, qual[i], 
+                          of2baq ? of2baq[i] : -1,
+                          of2baq ? qual[i] - ((int)of2baq[i] - 64) : 1);
+             }
         }
+#endif
+
+        if (has_ref && (ma->conf->flag & MPLP_REALN)) {
+             /* orig samtools: bam_prob_realn_core(b, ma->ref, (ma->conf->flag & MPLP_REDO_BAQ)? 7 : 3);
+              * 3: 'apply', 'extended'
+              * 7: 'apply', 'extended', 'redo'
+              * apply means original values will be replaced which is not what we want
+              */
+             bam_prob_realn_core(b, ma->ref, (ma->conf->flag & MPLP_REDO_BAQ)? 6 : 0);
+        }
+
+#if 0
+        { 
+             uint8_t *of2baq = bam_aux_get(b, "BQ");
+             uint8_t *qual = bam1_qual(b);
+             of2baq++;
+             int i;
+             for (i = 0; i < b->core.l_qseq; ++i) {
+                  fprintf(stderr, "after: id=%s qpos=%d Q=%d off=%d BAQ=%d\n", bam1_qname(b), i, qual[i], 
+                          of2baq ? of2baq[i] : -1,
+                          of2baq ? qual[i] - ((int)of2baq[i] - 64) : 1);
+             }
+        }
+#endif
+
         if (has_ref && ma->conf->capQ_thres > 10) {
             int q = bam_cap_mapQ(b, ma->ref, ma->conf->capQ_thres);
             if (q < 0) {
@@ -680,7 +714,7 @@ void compile_plp_col(plp_col_t *plp_col,
            */
           const bam_pileup1_t *p = plp + i;
           int nt4;
-          int mq, bq; /* phred scores */
+          int mq, bq, baq; /* phred scores */
           int base_skip = 0; /* boolean */
 #ifdef USE_ALNERRPROF
           int aq = 0;
@@ -695,12 +729,24 @@ void compile_plp_col(plp_col_t *plp_col,
            */
           uint8_t *bi = bam_aux_get(p->b, "BI"); /* GATK indels */
           uint8_t *bd = bam_aux_get(p->b, "BD"); /* GATK deletions */
+          uint8_t *of2baq = NULL; /* Offset to BAQ. See SAM format stored in BQ tag */
+
 #ifdef USE_SOURCEQUAL
           int sq = -1;
           if (conf->flag & MPLP_USE_SQ) {
                sq = bam_aux2i(bam_aux_get(p->b, SRC_QUAL_TAG)); /* lofreq internally computed on the fly */
           }
 #endif
+
+          if (conf->flag & MPLP_REALN) {
+               of2baq = bam_aux_get(p->b, "BQ"); 
+               /* should have been recomputed already */
+               if (! of2baq) {
+                    LOG_FATAL("INTERNAL ERROR: BQ tag missing at %s:%d\n", plp_col->target, plp_col->pos+1);
+                    exit(1);
+               } 
+               of2baq++; /* first char is type (same for bd and bi done below) */
+          }
 
 #if 0
           LOG_FIXME("At %s:%d %c: p->is_del=%d p->is_refskip=%d p->indel=%d p->is_head=%d p->is_tail=%d\n", 
@@ -738,14 +784,23 @@ void compile_plp_col(plp_col_t *plp_col,
                     goto check_indel; /* goto was easiest */
                }
 
-               /* the following will correct base-pairs down if they
-                * exceed the valid sanger/phred limits. is it wise to
-                * do this automatically? doesn't this indicate a
-                * problem with the input ? */
+               /* the following samtools' original code will correct
+                * base-pairs down if they exceed the valid
+                * sanger/phred limits. don't think it's wise to do this
+                * automatically as this would indicate a problem with
+                * the input and it's also unclear what the BAQ then means
+                */
                if (bq > 93) {
-                    bq = 93; /* Sanger/Phred max */
+                    /* bq = 93; /@ Sanger/Phred max */
+                    LOG_FATAL("Base qualitiy above allowed maximum detected (%d)\n", bq);
+                    exit(1);
                }
 
+               if (of2baq) {
+                    baq = bq - ((int)of2baq[p->qpos] - 64);
+               } else {
+                    baq = -1;/* disabled */
+               }
 
                /* no need for check if mq is within user defined
                 * limits. check was done in mplp_func */
@@ -758,7 +813,9 @@ void compile_plp_col(plp_col_t *plp_col,
                 * if (mq > 126) mq = 126;
                 */
 
+
                PLP_COL_ADD_QUAL(& plp_col->base_quals[nt4], bq);
+               PLP_COL_ADD_QUAL(& plp_col->baq_quals[nt4], baq);
                PLP_COL_ADD_QUAL(& plp_col->map_quals[nt4], mq);
 #ifdef USE_SOURCEQUAL
                if (conf->flag & MPLP_USE_SQ) {
@@ -925,6 +982,7 @@ void compile_plp_col(plp_col_t *plp_col,
 
      for (i = 0; i < NUM_NT4; ++i) {
           assert(plp_col->fw_counts[i] + plp_col->rv_counts[i] == plp_col->base_quals[i].n);
+          assert(plp_col->base_quals[i].n == plp_col->baq_quals[i].n);
           assert(plp_col->base_quals[i].n == plp_col->map_quals[i].n);
 #ifdef USE_SOURCEQUAL
            assert(plp_col->map_quals[i].n == plp_col->source_quals[i].n);
