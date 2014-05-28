@@ -20,8 +20,8 @@ bam=data/denv2-pseudoclonal/denv2-pseudoclonal.bam
 # 2. can't use dynamic since that would eventually call a filtering
 # script which valgrind won'tlike
 bonf_arg="-b 308334"
+#region_arg="-r consensus:1-1000"
 
-region_arg="-r consensus:1-1000"
 valgrind --log-file=$valgrind_log --tool=memcheck --leak-check=full \
     $LOFREQ call $region_arg $bonf_arg --no-default-filter -f $reffa -o $vcf_out $bam || exit 1
 
