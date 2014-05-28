@@ -15,13 +15,13 @@
 #include <ctype.h>
 #include <float.h>
 #include <errno.h>
+#include <fenv.h>
 
 #include "fet.h"
 #include "utils.h"
 #include "log.h"
 
 #include "snpcaller.h"
-
 #if TIMING
 #include <time.h>
 #endif
@@ -734,19 +734,30 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
 
         } else if (n > K) { 
              long double pvalue;
+             int errsv = 0;
              /*LOG_FIXME("probvec_prev[K=%d]=%g probvec_prev[K=%d -1]=%g\n", K, probvec_prev[K], K, probvec_prev[K-1]);*/
              assert(probvec_prev[K]-DBL_EPSILON<=0.0 && probvec_prev[K-1]-DBL_EPSILON<=0.0);
 
              probvec[K] = log_sum(probvec_prev[K], probvec_prev[K-1]+log_pn);
 
              errno = 0;
+             feclearexcept(FE_ALL_EXCEPT);
+
              pvalue = expl(probvec[K]);             
-             if (0 != errno) {
-                  pvalue = 0.0;
+
+             errsv = errno;
+             if (errsv || fetestexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW)) {
+                  if (fetestexcept(FE_UNDERFLOW)) {
+                       pvalue = LDBL_MIN;/* underflow okay since we are getting close to zero but prevent actual 0 value */
+                  } else {
+#if 0
+                       fprintf(stderr, "expl failed with errno %d while executing expl(%g) and returning %Lg: %s\n", 
+                               errsv, probvec[K], pvalue, strerror(errsv));
+#endif
+                       pvalue = LDBL_MAX; /* might otherwise be set to 1 which might pass filters */
+                  }
              }
-             /* FIXME if probvec[K] is small, pvalue might become
-              * zero. that can be prevented by directly using phred
-              * scores and reporting them instead of pvalues
+             /* store as phred scores instead:
 
               Q = -10*log_10(e^X), where X=probvec[K]
               remember, log_b(x) = log_k(x)/log_k(b), i.e. log_10(Y) = log_e(Y)/log_e(10)
@@ -837,6 +848,7 @@ poissbin(long double *pvalue, const double *err_probs,
          const long long int bonf, const double sig) 
 {
     double *probvec = NULL;
+    int errsv;
 #if TIMING
     clock_t start = clock();
     int msec;
@@ -858,7 +870,24 @@ poissbin(long double *pvalue, const double *err_probs,
     fprintf(stderr, "calc_prob_dist() took %d s %d ms\n", msec/1000, msec%1000);
 #endif
 
+    errno = 0;
+    feclearexcept(FE_ALL_EXCEPT);
+
     *pvalue = expl(probvec[num_failures]); /* no need for tailsum here */
+
+    errsv = errno;
+    if (errsv || fetestexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW)) {
+         if (fetestexcept(FE_UNDERFLOW)) {
+              *pvalue = LDBL_MIN;/* underflow okay since we are getting close to zero but prevent actual 0 value */
+         } else {
+#if 0
+              fprintf(stderr, "expl failed with errno %d while executing expl(%g) and returning %Lg: %s\n", 
+                      errsv, probvec[num_failures], *pvalue, strerror(errsv));
+#endif
+              *pvalue = LDBL_MAX; /* might otherwise be set to 1 which might pass filters */
+         }
+    }
+
     assert(! isnan(*pvalue));
     return probvec;
 }
@@ -948,7 +977,24 @@ snpcaller(long double *snp_pvalues,
 
     for (i=0; i<NUM_NONCONS_BASES; i++) { 
         if (0 != noncons_counts[i]) {
-            pvalue = expl(probvec_tailsum(probvec, noncons_counts[i], max_noncons_count+1));
+             int errsv;
+             errno = 0;
+             feclearexcept(FE_ALL_EXCEPT);
+
+             pvalue = expl(probvec_tailsum(probvec, noncons_counts[i], max_noncons_count+1));
+
+             errsv = errno;
+             if (errsv || fetestexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW)) {
+                  if (fetestexcept(FE_UNDERFLOW)) {
+                       pvalue = LDBL_MIN;/* underflow okay since we are getting close to zero but prevent actual 0 value */
+                  } else {
+#if 0
+                       fprintf(stderr, "expl failed with errno %d while executing expl(%g) and returning %Lg: %s\n", 
+                               errsv, probvec_tailsum(probvec, noncons_counts[i], max_noncons_count+1), pvalue, strerror(errsv));
+#endif
+                       pvalue = LDBL_MAX; /* might otherwise be set to 1 which might pass filters */
+                  }
+             }
             snp_pvalues[i] = pvalue;
 #ifdef DEBUG
             fprintf(stderr, "DEBUG(%s:%s():%d): i=%d noncons_counts=%d max_noncons_count=%d pvalue=%Lg\n", 
