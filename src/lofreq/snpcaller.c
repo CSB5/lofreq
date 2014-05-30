@@ -29,7 +29,7 @@
 
 /* median number of best hits in bwa for one WGS sample: 3. for one
  * exome sample it's 2. conservative choice is 3. FIXME make user
- * choice 
+ * choice or derive from X0 tag (BWA specific though)
 */
 #define MQ0_ERRPROB 0.66
 
