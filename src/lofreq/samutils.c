@@ -410,6 +410,7 @@ count_cigar_ops(int *counts, int **quals,
                 const bam1_t *b, const char *ref, int min_bq,
                 char *target)
 {
+#define TRACE 1
 #undef TRACE
      int num_ops = 0;
      /* modelled after bam.c:bam_calend(), bam_format1_core() and
@@ -481,6 +482,7 @@ count_cigar_ops(int *counts, int **quals,
                          fake_var.pos = i;
                          /* FIXME evil, evil hack. only works as long as var_in_ign_list only uses chrom and pos */
                          if (var_in_ign_list(&fake_var)) {
+
 #ifdef TRACE
                               fprintf(stderr, "TRACE(%s): MM: ignoring because in ign list at %d (qpos %d)\n", bam1_qname(b), i, qpos);
 #endif
@@ -516,6 +518,7 @@ count_cigar_ops(int *counts, int **quals,
                     if (op==BAM_CINS) {
                          fake_var.pos -= 1;
                     }
+                    /* FIXME see above: only works as long as var_in_ign_list only uses chrom and pos */
                     if (var_in_ign_list(&fake_var)) {
                          if (op == BAM_CINS) {
                               qpos += l;
