@@ -488,7 +488,11 @@ source_qual(const bam1_t *b, const char *ref,
           num_non_matches -= 1;
      }
      if (0 == num_non_matches) {
+#if 0
           src_qual = PROB_TO_PHREDQUAL_SAFE(0.0);
+#else
+          src_qual = PROB_TO_PHREDQUAL(LDBL_MIN);
+#endif
           goto free_and_exit;
      }
 
@@ -642,21 +646,18 @@ mplp_func(void *data, bam1_t *b)
     } while (skip);
 
 #ifdef USE_SOURCEQUAL
-    /* compute source qual if requested and have ref and attach as aux to bam.
-     * only disadvantage of doing this here is that we only have the ref but not the cons base.
+    /* compute source qual if requested and have ref and attach as aux
+     * to bam. only disadvantage of doing this here is that we don't
+     * have BAQ info yet (only interesting if it's supposed to be used
+     * instead of BQ) only have the ref but not the cons base.
      */
-
-    
     if (ma->ref && ma->ref_id == b->core.tid && ma->conf->flag & MPLP_USE_SQ) {
+         int ilen;
          int sq = source_qual(b, ma->ref, ma->conf->def_nm_q,
                               ma->h->target_name[b->core.tid], ma->conf->min_bq);
-          /* see bam_md.c for examples of bam_aux_append()
-          * FIXME only allows us to store values as uint8_t i.e. a byte, i.e. 255 is max (that's also why len 4)
-          */
-         if (sq>255) {
-              sq=255;
-         }
-         bam_aux_append(b, SRC_QUAL_TAG, 'i', 4, (uint8_t*) &sq);     
+         /* length string representation of integer: http://stackoverflow.com/questions/4143000/find-the-string-length-of-an-int */
+         ilen = (sq == 0 ? 1 : ((int)(log10(fabs(sq))+1) + (sq < 0 ? 1 : 0)));
+         bam_aux_append(b, SRC_QUAL_TAG, 'i', ilen, (uint8_t*) &sq);     
     }
 #endif
     return ret;
@@ -838,7 +839,7 @@ void compile_plp_col(plp_col_t *plp_col,
                          PLP_COL_ADD_QUAL(& plp_col->alnerr_qual[nt4], aq);
                     } else {
                          LOG_ERROR("alnerror for tid=%d too small for qpos=%d. Setting to 0\n", tid, p->qpos+1);
-                         PLP_COL_ADD_QUAL(& plp_col->alnerr_qual[nt4], PROB_TO_PHREDQUAL_SAFE(0.0));
+                         PLP_COL_ADD_QUAL(& plp_col->alnerr_qual[nt4], PROB_TO_PHREDQUAL(LDBL_MIN));
                     }
                }
                /* don't add anything. keep empty */
@@ -992,7 +993,7 @@ void compile_plp_col(plp_col_t *plp_col,
           assert(plp_col->base_quals[i].n == plp_col->baq_quals[i].n);
           assert(plp_col->base_quals[i].n == plp_col->map_quals[i].n);
 #ifdef USE_SOURCEQUAL
-           assert(plp_col->map_quals[i].n == plp_col->source_quals[i].n);
+          assert(plp_col->map_quals[i].n == plp_col->source_quals[i].n);
 #endif
      }
 }
