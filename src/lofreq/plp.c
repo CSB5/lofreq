@@ -459,7 +459,14 @@ source_qual(const bam1_t *b, const char *ref,
      num_non_matches = 0;
      err_prob_idx = 0;
      for (i=0; i<NUM_OP_CATS; i++) {
-          if (i!=OP_MATCH) {/* && i!=OP_INS && i!=OP_DEL) {/@ ignore indels. FIXME should probably collapse consecutive indels into one, but what about returned qual then? */
+#ifdef SOURCEQUAL_IGNORES_INDELS
+          /* pretend it never happened: remove counts and ignore qualities */
+          if (i==OP_INS || i==OP_DEL) {
+               num_err_probs -= op_counts[i];
+               continue;
+          }
+#endif
+          if (i!=OP_MATCH) {
                num_non_matches += op_counts[i];
           }
           for (j=0; j<op_counts[i]; j++) {
