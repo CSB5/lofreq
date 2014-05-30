@@ -32,14 +32,14 @@ fi
 
 ndiff=$($LOFREQ vcfset -a complement --only-passed -1 $outfinal_def -2 $truesnv  | grep -c '^[^#]')
 if [ $ndiff -ne 0 ]; then
-    echoerror "Found FP SNVs (not part of the list of true SNVs)"
+    echoerror "Found FP SNVs (not part of the list of true SNVs). Check $outdir"
     exit 1
 fi
 
 ndiff=$($LOFREQ vcfset -a intersect --only-passed -1 $outfinal_def -2 $truesnv  | grep -c '^[^#]')
 nexp=229
 if [ $ndiff -lt $nexp ]; then
-    echoerror "Expected $nexp TP SNVs but got $ndiff"
+    echoerror "Expected $nexp TP SNVs but got $ndiff. Check $outdir"
     exit 1
 fi
 
