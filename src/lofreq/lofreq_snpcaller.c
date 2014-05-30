@@ -199,15 +199,17 @@ plp_summary(const plp_col_t *plp_col, void* confp)
      fprintf(stream, "\n");
 #if 1
      for (i=0; i<NUM_NT4; i++) {
-          for (x=0; x<2; x++) {/* bq or mq */
+          for (x=0; x<3; x++) {/* bq, baq mq */
                int j;
                int nt = bam_nt4_rev_table[i];
-               fprintf(stream, "  %s %c =", x==0? "BQ":"MQ", nt);
+               fprintf(stream, "  %s %c =", x==0? "BQ" : (x==1 ? "BAQ" : "MQ"), nt);
                for (j=0; j<plp_col->base_quals[i].n; j++) {
                     int q;
                     if (x==0) {
                          q = plp_col->base_quals[i].data[j];
-                    } else {
+                    } else if (x==1) {
+                         q = plp_col->baq_quals[i].data[j];
+                    } else if (x==2) {
                          q = plp_col->map_quals[i].data[j];
                     }
                     fprintf(stream, " %d", q);
@@ -456,11 +458,8 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -q | --min-bq INT            Skip any base with baseQ smaller than INT [%d]\n", mplp_conf->min_bq);
      fprintf(stderr, "       -Q | --min-altbq INT         Skip non-reference bases with baseQ smaller than INT [%d]. Not active if ref is N\n", snvcall_conf->min_altbq);
      fprintf(stderr, "       -a | --def-altbq INT         Non-reference base qualities will be replaced with this value (use median ref-bq if -1) [%d]\n", snvcall_conf->def_altbq);
-#if DEFAULT_BAQ_ON
-     fprintf(stderr, "       -B | --no-baq                Disable BAQ computation (increases sensitivity if no indels are expected or mapper doesn't support them)\n");
-#else
-     fprintf(stderr, "       -E | --baq                   Enable (extended) per-base alignment quality (BAQ) computation (reduces false positive calls if indels are expected; recommended for WGS)\n");
-#endif
+     fprintf(stderr, "       -B | --no-baq                Disable use of base-alignment quality (BAQ)\n");
+     fprintf(stderr, "       -E | --ext-baq               Compute extended base-alignment quality (BAQ) on the fly (otherwise use 'normal' BAQ, which is computed on the fly, if not already present in BQ tag)\n");
      fprintf(stderr, "- Mapping quality\n");                                
      fprintf(stderr, "       -m | --min-mq INT            Skip alignments with mapping quality smaller than INT [%d]\n", mplp_conf->min_mq);
      fprintf(stderr, "       -M | --max-mq INT            Cap mapping quality at INT [%d]\n", mplp_conf->max_mq);
@@ -563,12 +562,9 @@ for cov in coverage_range:
               {"min-bq", required_argument, NULL, 'q'},
               {"min-altbq", required_argument, NULL, 'Q'},
               {"def-altbq", required_argument, NULL, 'a'},
-#if DEFAULT_BAQ_ON
               {"no-baq", no_argument, NULL, 'B'},
-#else
-              {"baq", no_argument, NULL, 'E'},
-#endif
-                   
+              {"ext-baq", no_argument, NULL, 'E'},
+                  
               {"min-mq", required_argument, NULL, 'm'},
               {"max-mq", required_argument, NULL, 'M'},
               {"no-mq", no_argument, NULL, 'J'},
@@ -598,11 +594,7 @@ for cov in coverage_range:
          };
 
          /* keep in sync with long_opts and usage */
-#ifdef DEFAULT_BAQ_ON
-         static const char *long_opts_str = "r:l:f:co:q:Q:a:Bm:M:JSn:V:b:s:C:NIh"; 
-#else
-         static const char *long_opts_str = "r:l:f:co:q:Q:a:Em:M:JSn:V:b:s:C:NIh"; 
-#endif
+         static const char *long_opts_str = "r:l:f:co:q:Q:a:BEm:M:JSn:V:b:s:C:NIh"; 
          /* USE_ALNERRPROF i.e. A: removed for now */
          
          /* getopt_long stores the option index here. */
@@ -665,17 +657,14 @@ for cov in coverage_range:
               snvcall_conf.def_altbq = atoi(optarg); 
               break;
 
-#if DEFAULT_BAQ_ON
          case 'B': 
               mplp_conf.flag &= ~MPLP_REALN; 
-              mplp_conf.flag &= ~MPLP_REDO_BAQ;
               break;
-#else
+
          case 'E': 
-              mplp_conf.flag |= MPLP_REALN; /* BAQ */
-              mplp_conf.flag |= MPLP_REDO_BAQ; /* ext BAQ */
+              mplp_conf.flag |= MPLP_REDO_BAQ;
               break;
-#endif
+
          case 'm': 
               mplp_conf.min_mq = atoi(optarg); 
               break;
