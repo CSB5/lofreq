@@ -2,7 +2,6 @@
 """Plot characteristics of variants listed in VCF file
 """
 
-
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
 __copyright__ = "2014 Genome Institute of Singapore"
@@ -56,13 +55,6 @@ except ImportError:
     sys.exit(1)
 
 
-# invocation of ipython on exceptions
-#import sys, pdb
-#from IPython.core import ultratb
-#sys.excepthook = ultratb.FormattedTB(mode='Verbose',
-#                                     color_scheme='Linux', call_pdb=1)
-
-
 # global logger
 #
 LOG = logging.getLogger("")
@@ -71,7 +63,6 @@ logging.basicConfig(level=logging.WARN,
 
 
 COLORS = ["b", "g", "r", "c", "m", "y", "k"]
-
 
 
 def r_ify(axes):
@@ -157,9 +148,37 @@ def subst_perc(ax, subst_type_counts):
     plt.tight_layout()
 
 
+def calc_dist_left(vars):
+    """Calculated distance to previous variant. Return -1 for first. Means multi-allelic
 
-def calc_dist(variants):
-    """Calculated distance to next variant.
+    Variants need to be sorted (checking via assert here)
+    """
+
+    dists = []
+
+    # group per chromosome
+    processed_chroms = []
+    for (chrom, vars_on_chrom) in itertools.groupby(vars, lambda v: v.CHROM):
+        assert chrom not in processed_chroms
+        processed_chroms.append(chrom)
+
+        prev_var = None
+        for var in vars_on_chrom:
+            if not prev_var:
+                dists.append(-1)
+            else:
+                dists.append(var.POS-prev_var.POS)
+            prev_var = var
+
+    assert len(dists) == len(vars)
+    #print "end at %s" % now()
+
+    return dists
+
+
+
+def calc_dist_min(variants):
+    """Calculated smallest distance to next closest (left or right) variant.
 
     If a chromosome only contains a single SNV, -1 will be stored as
     dist as we can't use 0 which would mean multi-allelic position.
@@ -167,8 +186,10 @@ def calc_dist(variants):
     Variants need to be sorted (checking via assert here)
 
     This is several order of magnitudes faster then calc_dist_to_next
+
     """
 
+    
     #print "starting at %s" % now()
 
     dists = []
@@ -296,6 +317,10 @@ def cmdline_parser():
                       dest="vcf",
                       required=False,
                       help="Input vcf file (gzip supported; - for stdin).")
+    parser.add_argument("--simple",
+                      action="store_true",
+                      dest="simple",
+                      help="Simple plots only - no combinations")
     parser.add_argument("--maxdp",
                       dest="maxdp",
                       type=int,
@@ -345,6 +370,10 @@ def main():
             sys.exit(1)
 
 
+    summary_txt = []
+    summary_txt.append("Reading vars from %s" % args.vcf)
+    LOG.info(summary_txt[-1])
+
     if args.vcf == '-':
         vcfreader = vcf.VCFReader(sys.stdin)
     else:
@@ -352,10 +381,6 @@ def main():
     # v.FILTER is empty if not set in pyvcf. LoFreq's vcf.py clone set it to PASS or .
     vars = [v for v in vcfreader if not v.FILTER or v.FILTER in ['PASS', '.']]
 
-
-    summary_txt = []
-    summary_txt.append("Reading vars from %s" % args.vcf)
-    LOG.info(summary_txt[-1])
     summary_txt.append("Loaded %d (non-filtered) vars" % (len(vars)))
     LOG.info(summary_txt[-1])
 
@@ -395,15 +420,15 @@ def main():
     props = dict()
     for t in ['AF', 'DP']:
         try:
-            props[t] = [v.INFO[t] for v in vars]
+            props[t] = np.array([v.INFO[t] for v in vars])
         except KeyError:
             LOG.critical("Couldn't find %s info tag in all variants"
             " (is %s a LoFreq file?). Won't plot..." % (t, args.vcf))
-    props['Distance (log10)'] = [np.log10(d) if d>0 else -1 for d in calc_dist(vars)]
-
+    props['Distance (log10)'] = np.array([np.log10(d) if d>0 else -1 for d in calc_dist_left(vars)])
+    props['QUAL (non-CONSVARs only)'] = np.array([v.QUAL for v in vars if not v.INFO.has_key('CONSVAR')])
 
     if args.summary_only:
-        for p in [p for p in props.keys()]:
+        for p in props.keys():
             x = np.array(props[p])
             for (name, val) in [("minimum", np.min(x)),
                                 ("1st %ile", np.percentile(x, 1)),
@@ -435,6 +460,8 @@ def main():
     # boxplots and histograms first
     #
     for p in [p for p in props.keys()]:
+        LOG.info("Printing boxplot, histogram and scatter plot for %s" % p)
+        
         # boxplots
         fig = plt.figure()
         ax = plt.subplot(1, 1, 1)
@@ -472,25 +499,6 @@ def main():
         plt.close()
 
 
-    # heatmaps of all combinations
-    #
-    for (x, y) in itertools.combinations(props.keys(), 2):
-        fig = plt.figure()
-        ax = plt.subplot(1, 1, 1)
-
-        p = plt.hist2d(props[x], props[y], bins=20)
-        ax.set_ylim([0, plt.ylim()[1]])
-        ax.set_xlim([0, plt.xlim()[1]])
-        plt.colorbar()
-
-        ax.set_xlabel(x)
-        ax.set_ylabel(y)
-        plt.title('%s vs. %s' % (x, y))
-        pp.savefig()
-        plt.close()
-
-
-
     # substitution types
     #
     # FIXME needs percentages
@@ -510,6 +518,25 @@ def main():
     plt.close()
 
 
+    if not args.simple:
+        # heatmaps of all combinations
+        #
+        for (x, y) in itertools.combinations(props.keys(), 2):
+            fig = plt.figure()
+            ax = plt.subplot(1, 1, 1)
+    
+            p = plt.hist2d(props[x], props[y], bins=20)
+            ax.set_ylim([0, plt.ylim()[1]])
+            ax.set_xlim([0, plt.xlim()[1]])
+            plt.colorbar()
+    
+            ax.set_xlabel(x)
+            ax.set_ylabel(y)
+            plt.title('%s vs. %s' % (x, y))
+            pp.savefig()
+            plt.close()
+    
+
     # FIXME Put related plots together. See http://blog.marmakoide.org/?p=94"
 
     pp.close()
@@ -518,4 +545,3 @@ def main():
 if __name__ == "__main__":
     main()
     LOG.info("Successful program exit")
-    LOG.warn("FIXME missing QUAL summary")
