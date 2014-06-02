@@ -374,17 +374,6 @@ source_qual_load_ign_vcf(const char *vcf_path, void *bed)
  * comes from this reference genome. P(r not from g|mapping) = 1 - P(r
  * from g). 
  * 
- * The overall idea was to use something as follows:
- * PJ = PM  +  (1-PM) * PS  +  (1-PM) * (1-PS) * PB, where
- * PJ = joined error probability
- * PM = mapping err.prob.
- * PS = source/genome err.prob.
- * PB = base err.prob.
- * 
- * In theory PS should go first but the rest is hard to compute then.
- * Using PM things get tractable and it intrinsically takes care of
- * PS.
- * 
  * Use base-qualities and poisson-binomial dist, similar to core SNV
  * calling, but return prob instead of pvalue (and subtract one
  * mismatch which is the SNV we are checking for the benefit of doubt;
@@ -691,15 +680,13 @@ mplp_func(void *data, bam1_t *b)
 
 
 
-/* Convenience function to press pileup info into one easy to handle
- * data-structure. plp_col members allocated here. Called must free
- * with plp_col_free(plp_col);
+/* Press pileup info into one data-structure. plp_col members
+ * allocated here. Called must free with plp_col_free();
  *
  * FIXME this used to be a convenience function and turned into a big
- * and slow monster. keeping copies of everything is inefficient.
- * const bam_pileup1_t *plp is (almost) all we need for snv calling,
- * so get rid of this function in the future (which will however break
- * the subcommand plpsummmary)
+ * and slow monster. keeping copies of everything is inefficient and
+ * in some cases an unnecessary waste of memory (e.g. SQ, BAQ or MQ if
+ * not needed). Needs optimization.
  */
 void compile_plp_col(plp_col_t *plp_col,
                  const bam_pileup1_t *plp, const int n_plp, 
@@ -750,6 +737,9 @@ void compile_plp_col(plp_col_t *plp_col,
           int nt4;
           int mq, bq, baq; /* phred scores */
           int base_skip = 0; /* boolean */
+#ifdef USE_SOURCEQUAL
+          int sq = -1;
+#endif
 #ifdef USE_ALNERRPROF
           int aq = 0;
 #endif
@@ -766,12 +756,11 @@ void compile_plp_col(plp_col_t *plp_col,
           uint8_t *of2baq = NULL; /* Offset to BAQ. See SAM format stored in BQ tag */
 
 #ifdef USE_SOURCEQUAL
-          int sq = -1;
           if (conf->flag & MPLP_USE_SQ) {
                sq = bam_aux2i(bam_aux_get(p->b, SRC_QUAL_TAG)); /* lofreq internally computed on the fly */
           }
 #endif
-
+          
           if (conf->flag & MPLP_REALN) {
                of2baq = bam_aux_get(p->b, "BQ"); 
                /* should have been recomputed already */
@@ -849,8 +838,8 @@ void compile_plp_col(plp_col_t *plp_col,
 
 
                PLP_COL_ADD_QUAL(& plp_col->base_quals[nt4], bq);
-               PLP_COL_ADD_QUAL(& plp_col->baq_quals[nt4], baq);
                PLP_COL_ADD_QUAL(& plp_col->map_quals[nt4], mq);
+               PLP_COL_ADD_QUAL(& plp_col->baq_quals[nt4], baq);
 #ifdef USE_SOURCEQUAL
                if (conf->flag & MPLP_USE_SQ) {
                     PLP_COL_ADD_QUAL(& plp_col->source_quals[nt4], sq);
@@ -1175,7 +1164,7 @@ mpileup(const mplp_conf_t *mplp_conf,
         }
 
         compile_plp_col(&plp_col, plp[i], n_plp[i], mplp_conf, 
-                    ref, pos, ref_len, h->target_name[tid]);
+                        ref, pos, ref_len, h->target_name[tid]);
 
         (*plp_proc_func)(& plp_col, plp_proc_conf);
 
