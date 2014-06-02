@@ -8,6 +8,8 @@
  */
 #include <ctype.h>
 #include <assert.h>
+#include <errno.h>
+#include <fenv.h>
 
 #include "kstring.h"
 #include "sam.h"
@@ -398,8 +400,7 @@ source_qual_load_ign_vcf(const char *vcf_path, void *bed)
  *
  * If target is non-NULL will ignore SNPs via var_in_ign_list
  *
- * Returns -1 on error. otherwise prob to see the observed number of
- * mismatches-1
+ * Returns -1 on error or if NA. otherwise source quality
  *
  */
 int
@@ -416,7 +417,7 @@ source_qual(const bam1_t *b, const char *ref,
      int num_err_probs; /* #elements in err_probs */
 
      long double unused_pval;
-     int src_qual = 255;
+     int src_qual = -1;
      double src_prob = -1; /* prob of this read coming from genome */
      int err_prob_idx;
      int i, j;
@@ -441,8 +442,8 @@ source_qual(const bam1_t *b, const char *ref,
       */
      /* LOG_FIXME("%s\n", "Don't know ref name in count_cigar_ops which would be needed as hash key");*/
      num_err_probs = count_cigar_ops(op_counts, op_quals, b, ref, min_bq, target);
-     if (-1 == num_err_probs) {
-          LOG_WARN("%s\n", "count_cigar_ops failed on read"); /* FIXME print read */
+     if (1 > num_err_probs) {
+          LOG_VERBOSE("count_cigar_ops returned %d counts on read %s\n", num_err_probs, bam1_qname(b));
           src_qual = -1;
           goto free_and_exit;
      }
@@ -507,7 +508,17 @@ source_qual(const bam1_t *b, const char *ref,
      probvec = poissbin(&unused_pval, err_probs,
                         num_err_probs, num_non_matches, 1.0, 0.05);
      /* need prob not pv */
+     errno = 0;
+     feclearexcept(FE_ALL_EXCEPT);
      src_prob = exp(probvec[num_non_matches-1]);
+     if (errno || fetestexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW)) {
+          if (fetestexcept(FE_UNDERFLOW)) {
+               src_prob = DBL_MIN;/* underflow okay since we are getting close to zero but prevent actual 0 value */
+          } else {
+               src_prob = DBL_MAX; /* might otherwise be set to 1 which might pass filters */
+          }
+     }
+
      free(probvec);
      src_qual = PROB_TO_PHREDQUAL(1.0 - src_prob);
 
@@ -529,6 +540,7 @@ free_and_exit:
      LOG_DEBUG("returning src_qual=%d (orig prob = %g) for cigar=%s num_err_probs=%d num_non_matches=%d(%d) @%d\n", 
                src_qual, src_prob, cigar_str_from_bam(b), num_err_probs, num_non_matches, orig_num_non_matches, b->core.pos);
 #endif
+#undef TRACE
      return src_qual;
 }
 /* source_qual() */
@@ -592,13 +604,15 @@ mplp_func(void *data, bam1_t *b)
         { 
              uint8_t *of2baq = bam_aux_get(b, "BQ");
              uint8_t *qual = bam1_qual(b);
-             if (of2baq) of2baq++;
              int i;
+             fprintf(stderr, "BQ before: of2baq=%p qual=%p id=%s\n",
+                     of2baq, qual, bam1_qname(b));
+             if (of2baq) of2baq++;
              for (i = 0; i < b->core.l_qseq; ++i) {
-                  fprintf(stderr, "before: id=%s qpos=%d Q=%d precomp.off=%d precomp.BAQ=%d\n", bam1_qname(b), i, qual[i], 
-                          of2baq ? of2baq[i] : -1,
-                          of2baq ? qual[i] - ((int)of2baq[i] - 64) : 1);
+                  fprintf(stderr, " pos %d: Q=%d precomp.off=%d precomp.BAQ=%d\n", 
+                          i, qual[i], of2baq ? of2baq[i] : -1, of2baq ? qual[i] - ((int)of2baq[i] - 64) : 1);
              }
+             fprintf(stderr, "\n");
         }
 #endif
 
@@ -608,20 +622,31 @@ mplp_func(void *data, bam1_t *b)
               * 7: 'apply', 'extended', 'redo'
               * apply means original values will be replaced which is not what we want
               */
-             bam_prob_realn_core(b, ma->ref, (ma->conf->flag & MPLP_REDO_BAQ)? 6 : 0);
+             if (bam_prob_realn_core(b, ma->ref, (ma->conf->flag & MPLP_REDO_BAQ)? 2 : 0)) {
+                  LOG_ERROR("bam_prob_realn_core() failed for %s\n", bam1_qname(b));
+             }
+        } else if (ma->conf->flag & MPLP_REALN) {
+             /* should never get here */
+             LOG_WARN("%s\n", "Can't compue BAQ without reference sequence");
         }
 
 #if 0
         { 
              uint8_t *of2baq = bam_aux_get(b, "BQ");
              uint8_t *qual = bam1_qual(b);
-             of2baq++;
              int i;
-             for (i = 0; i < b->core.l_qseq; ++i) {
-                  fprintf(stderr, "after: id=%s qpos=%d Q=%d off=%d BAQ=%d\n", bam1_qname(b), i, qual[i], 
-                          of2baq ? of2baq[i] : -1,
-                          of2baq ? qual[i] - ((int)of2baq[i] - 64) : 1);
+             if (! of2baq) {
+                  LOG_FATAL("%s\n", "of2baq=0");
+                  exit(1);
              }
+             fprintf(stderr, "BQ after: of2baq=%p qual=%p id=%s\n",
+                     of2baq, qual, bam1_qname(b));
+             of2baq++;
+             for (i = 0; i < b->core.l_qseq; ++i) {
+                  fprintf(stderr, " pos %d : Q=%d precomp.off=%d precomp.BAQ=%d\n", 
+                          i, qual[i], of2baq ? of2baq[i] : -1, of2baq ? qual[i] - ((int)of2baq[i] - 64) : 1);
+             }
+             fprintf(stderr, "\n");
         }
 #endif
 
@@ -652,12 +677,13 @@ mplp_func(void *data, bam1_t *b)
      * instead of BQ) only have the ref but not the cons base.
      */
     if (ma->ref && ma->ref_id == b->core.tid && ma->conf->flag & MPLP_USE_SQ) {
-         int ilen;
          int sq = source_qual(b, ma->ref, ma->conf->def_nm_q,
                               ma->h->target_name[b->core.tid], ma->conf->min_bq);
-         /* length string representation of integer: http://stackoverflow.com/questions/4143000/find-the-string-length-of-an-int */
-         ilen = (sq == 0 ? 1 : ((int)(log10(fabs(sq))+1) + (sq < 0 ? 1 : 0)));
-         bam_aux_append(b, SRC_QUAL_TAG, 'i', ilen, (uint8_t*) &sq);     
+         /* -1 indicates error or NA, but can't be stored as uint. hack is to use 0 instead */
+         if (sq<0) {
+              sq=0;
+         }
+         bam_aux_append(b, SRC_QUAL_TAG, 'i', sizeof(sq), (uint8_t*) &sq);
     }
 #endif
     return ret;
