@@ -390,7 +390,8 @@ cigar_str_from_bam(const bam1_t *b)
  * Returns the total number of operations counted (excl. clipped bases
  * or those with bq<min_bq) or -1 on error. Consecutive indels are
  * counted as one operation, using INDEL_QUAL_DEFAULT, which is
- * suboptimal.
+ * suboptimal. 0 is a valid return value, e.g. if all bases are below
+ * the quality threshold.
  *
  * If quals is not NULL it will be used as a two dim array (has to be
  * preallocated) with OPs as first dim (len NUM_OP_CATS) and the
@@ -406,12 +407,12 @@ cigar_str_from_bam(const bam1_t *b)
  * two functions was too complicated (and the latter is unused anyway)
  */
 int
-count_cigar_ops(int *counts, int **quals,
-                const bam1_t *b, const char *ref, int min_bq,
-                char *target)
+count_cigar_ops(int *counts, int **quals, const bam1_t *b,
+                const char *ref, int min_bq, char *target)
 {
+#if 0
 #define TRACE 1
-#undef TRACE
+#endif
      int num_ops = 0;
      /* modelled after bam.c:bam_calend(), bam_format1_core() and
       * pysam's aligned_pairs (./pysam/csamtools.pyx)
@@ -571,9 +572,9 @@ count_cigar_ops(int *counts, int **quals,
 
      assert(qpos == bam_calend(&b->core, bam1_cigar(b))); /* FIXME correct assert? what if hard clipped? */
      if (qpos != qlen) {
-          LOG_FIXME("got qpos=%d and qlen=%d for cigar %s l_qseq %d\n", qpos, qlen, cigar_str_from_bam(b), b->core.l_qseq);
+          LOG_WARN("got qpos=%d and qlen=%d for cigar %s l_qseq %d in read %s\n", qpos, qlen, cigar_str_from_bam(b), b->core.l_qseq, bam1_qname(b));
      }
-     assert(qpos == qlen); /* FIXME correct assert? What if hard clipped? */
+     assert(qpos == qlen);
 
      num_ops = 0;
      for (i=0; i<NUM_OP_CATS; i++) {
