@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
 {
      add_local_dir_to_path(argv[0]);
 
-     LOG_WARN("%s\n", "Note this version has BAQ on by default. Use -E to emulate to previous default");
+     LOG_WARN("%s\n", "Note this version has BAQ on by default. Does -E to emulate to previous default work? Doesn't replace Q but computes BQ");
 
      if (argc < 2) {
           usage(BASENAME(argv[0]));
