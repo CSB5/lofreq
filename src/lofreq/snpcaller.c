@@ -159,6 +159,8 @@ int mq_trans(int mq) {
      return mq;
 }
 
+
+#ifdef USE_ALNERRPROF
 /* J = PM  +  (1-PM) * PS  +  (1-PM) * (1-PS) * PA + (1-PM) * (1-PS) * (1-PA) * PB, where
    PJ = joined error probability
    PM = mapping prob.
@@ -216,27 +218,32 @@ merge_srcq_baseq_mapq_and_alnq(const int sq, const int bq, const int mq, const i
 
      return jp;
 }
+#endif
 
 
-
-/* J = PM  +  (1-PM) * PS  +  (1-PM) * (1-PS) * PB, where
-   PJ = joined error probability
-   PM = mapping err.prob.
-   PS = source/genome err.prob.
-   PB = base err.prob.
-   
-   Or in simple English:
-   either this is a mapping error
-   or
-   not a mapping error, but a genome/source error
-   or
-   not mapping error and no genome/source error AND base-error
-
- * NOTE: for mq the standard says that 255 means NA. In this function we
- * use -1 instead, and treat 255 as valid phred-score so you might want
- * to change mq before calling this functio
+/* PJ = PM  +  (1-PM) * PS  +  (1-PM) * (1-PS) * PB, where
+ * PJ = joined error probability
+ * PM = mapping err.prob.
+ * PS = source/genome err.prob.
+ * PB = base err.prob.
+ *  
+ * Or in plain English:
+ * either this is a mapping error
+ * or
+ * not a mapping error, but a genome/source error
+ * or
+ * not mapping error and not a genome/source error, but a base-error
  *
-*/
+ * In theory PS should go first but the rest is hard to compute then.
+ * Using PM things get tractable and it intrinsically takes care of
+ * PS.
+ * 
+ * NOTE: the standard says that MQ=255 means NA. In this function we
+ * use -1 instead for all unknown values, and treat 255 as valid
+ * phred-score so you might want to change mq before.
+ *
+ * FIXME do calculations in log space and return Q instead of p
+ */
 double
 merge_srcq_baseq_and_mapq(const int sq, const int bq, const int mq)
 {
@@ -248,7 +255,11 @@ merge_srcq_baseq_and_mapq(const int sq, const int bq, const int mq)
           sp = PHREDQUAL_TO_PROB(sq);
      }
 
-     bp = PHREDQUAL_TO_PROB(bq);
+     if (-1 == bq) {
+          bp = 0.0;
+     } else {
+          bp = PHREDQUAL_TO_PROB(bq);
+     }
 
      if (-1 == mq) {
           mp = 0.0;
@@ -267,48 +278,68 @@ merge_srcq_baseq_and_mapq(const int sq, const int bq, const int mq)
 }
 
 
-/* "Merge" MQ and BQ if requested using the following equation:
- *  P_jq = P_mq * + (1-P_mq) P_bq.
- *
- * NOTE: for mq the standard says that 255 means NA. In this function we
- * use -1 instead, and treat 255 as valid phred-score so you might want
- * to change mq before calling this functio
- *
 
+
+/* PJ = PM + (1-PM)*PS + (1-PM)*(1-PS)*PA + (1-PM)*(1-PS)*(1-PA)*PB, where
+ * PJ = joined error prob
+ * PM = mapping error prob
+ * PS = source/genome error prob
+ * PA = base alignment error prob (BAQ)
+ * PB = base error prob
+ * Or in plain English:
+ * either this is a mapping error
+ * or
+ * not, but a genome/source error
+ * or
+ * none of the above, but a base-alignment error
+ * or
+ * none of the above but a base-error
+ *
+ * In theory PS should go first but the rest is hard to compute then.
+ * Using PM things get tractable and it intrinsically takes care of
+ * PS.
+ * 
+ * NOTE: the standard says that MQ=255 means NA. In this function we
+ * use -1 instead for all unknown values, and treat 255 as valid
+ * phred-score so you might want to change mq before.
+ *
+ * FIXME do calculations in log space and return Q instead of p
  */
 double
-merge_baseq_and_mapq(const int bq, const int mq)
+merge_srcq_mapq_baq_and_bq(const int sq, const int mq, const int baq, const int bq)
 {
-     double mp, bp, jp; /* corresponding probs */
-
-     bp = PHREDQUAL_TO_PROB(bq);
-     if (-1 == mq) {
-          return bp;
+     double sp, mp, bap, bp, jp; /* corresponding probs */
+     
+     if (-1 == sq) {
+          sp = 0.0;
+     } else {
+          sp = PHREDQUAL_TO_PROB(sq);
      }
 
-     if (0 == mq) {
+     if (-1 == mq) {
+          mp = 0.0;
+     } else if (0 == mq) {
           mp = MQ0_ERRPROB;
      } else {
           mp = PHREDQUAL_TO_PROB(mq);
      }
 
-     /* No need to do computation in phred-space as
-      * numbers won't get small enough.
-      */
+     if (-1 == baq) {
+          bap = 0.0;
+     } else {
+          bap = PHREDQUAL_TO_PROB(baq);
+     }
 
-     /* note: merging Q1 with anything else will result in Q0. */
-     jp = mp + (1.0 - mp) * bp;
-#ifdef DEBUG
-     LOG_DEBUG("P_M + (1-P_M) P_B:   %g + (1.0 - %g) * %g = %g  ==  Q%d + (1.0 - Q%d) * Q%d  =  Q%d\n",
-               mp, mp, bp, jp, mq, mq, bq, PROB_TO_PHREDQUAL_SAFE(jp));
-#endif
-#if 0
-     LOG_DEBUG("BQ %d after merging with MQ %d = %d\n", bq, mq, PROB_TO_PHREDQUAL_SAFE(jp));
-#endif
+     if (-1 == bq) {
+          bp = 0.0;
+     } else {
+          bp = PHREDQUAL_TO_PROB(bq);
+     }
+
+     jp = mp + (1.0-mp)*sp + (1-mp)*(1-sp)*bap + (1-mp)*(1-sp)*(1-bap)*bp;
 
      return jp;
 }
-/* merge_baseq_and_mapq() */
 
 
 
@@ -379,7 +410,7 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
           }
 
           for (j=0; j<p->base_quals[i].n; j++) {
-               int bq = p->base_quals[i].data[j];                
+               int bq = -1;
                int mq = -1;
                int sq = -1;
 #ifdef USE_ALNERRPROF
@@ -387,6 +418,10 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
 #endif
                double final_err_prob; /* == final quality used for snv calling */
                
+               if (p->map_quals[i].n) {
+                    bq = p->base_quals[i].data[j];
+               };
+
                if ((conf->flag & SNVCALL_USE_MQ) && p->map_quals[i].n) {
                     mq = p->map_quals[i].data[j];
                     /*according to spec 255 is unknown */
