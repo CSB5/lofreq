@@ -211,7 +211,7 @@ plp_summary(const plp_col_t *plp_col, void* confp)
                int nt = bam_nt4_rev_table[i];
                fprintf(stream, "  %s %c =", title[x], nt);
                for (j=0; j<plp_col->base_quals[i].n; j++) {
-                    int q;
+                    int q = -1;
                     if (x==0) {
                          q = plp_col->base_quals[i].data[j];
                     } else if (x==1) {
@@ -467,7 +467,7 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -Q | --min-altbq INT         Skip non-reference bases with baseQ smaller than INT [%d]. Not active if ref is N\n", snvcall_conf->min_altbq);
      fprintf(stderr, "       -a | --def-altbq INT         Non-reference base qualities will be replaced with this value (use median ref-bq if -1) [%d]\n", snvcall_conf->def_altbq);
      fprintf(stderr, "       -B | --no-baq                Disable use of base-alignment quality (BAQ)\n");
-     fprintf(stderr, "       -E | --ext-baq               Compute extended base-alignment quality (BAQ) on the fly (otherwise use 'normal' BAQ, which is computed on the fly, if not already present in BQ tag)\n");
+     fprintf(stderr, "       -E | --ext-baq               Compute extended base-alignment quality (BAQ) on the fly (otherwise use 'normal' BAQ, which is computed on the fly, if not already present in %s tag)\n", BAQ_TAG);
      fprintf(stderr, "- Mapping quality\n");                                
      fprintf(stderr, "       -m | --min-mq INT            Skip alignments with mapping quality smaller than INT [%d]\n", mplp_conf->min_mq);
      fprintf(stderr, "       -M | --max-mq INT            Cap mapping quality at INT [%d]\n", mplp_conf->max_mq);

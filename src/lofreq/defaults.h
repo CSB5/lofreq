@@ -44,6 +44,9 @@
 #define SNVCALL_USE_SQ      0x04
 #define SNVCALL_CONS_AS_REF 0x08
 
+/* private tag for actual baq values: "l"ofreseq "b"ase-alignment */
+#define BAQ_TAG "lb"
+
 
 #ifndef MIN
 #define MIN(X,Y) ((X) < (Y) ? (X) : (Y))

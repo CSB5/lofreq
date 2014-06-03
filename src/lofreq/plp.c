@@ -80,7 +80,7 @@ static alnerrprof_t *alnerrprof = NULL;
 #endif
 
 
-/* initialize members of preallocated snvcall_conf */
+/* initialize members of preallocated mplp_conf */
 void init_mplp_conf(mplp_conf_t *c) 
 {
      memset(c, 0, sizeof(mplp_conf_t));
@@ -501,10 +501,10 @@ source_qual(const bam1_t *b, const char *ref,
      feclearexcept(FE_ALL_EXCEPT);
      src_prob = exp(probvec[num_non_matches-1]);
      if (errno || fetestexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW)) {
-          if (fetestexcept(FE_UNDERFLOW)) {
-               src_prob = DBL_MIN;/* underflow okay since we are getting close to zero but prevent actual 0 value */
+          if (src_prob < DBL_EPSILON) { 
+               src_prob = DBL_MIN;/* to zero but prevent actual 0 value */
           } else {
-               src_prob = DBL_MAX; /* might otherwise be set to 1 which might pass filters */
+               src_prob = DBL_MAX; /* otherwise set to 1 which might pass filters */
           }
      }
 
@@ -540,10 +540,11 @@ free_and_exit:
 static int
 mplp_func(void *data, bam1_t *b)
 {
-    extern int bam_realn(bam1_t *b, const char *ref);
-    extern int bam_prob_realn_core(bam1_t *b, const char *ref, int);
-    extern int bam_cap_mapQ(bam1_t *b, char *ref, int thres);
-    mplp_aux_t *ma = (mplp_aux_t*)data;
+     /*extern int bam_realn(bam1_t *b, const char *ref);*/
+     /*extern int bam_prob_realn_core(bam1_t *b, const char *ref, int);*/
+     extern int bam_prob_realn_lofreq(bam1_t *b, const char *ref, int redo);
+     extern int bam_cap_mapQ(bam1_t *b, char *ref, int thres);
+     mplp_aux_t *ma = (mplp_aux_t*)data;
     int ret, skip = 0;
 
     do {
@@ -576,7 +577,7 @@ mplp_func(void *data, bam1_t *b)
          * the reads mapping to first position have a reference
          * attached as well and therefore baq, sq etc can be
          * applied */
-        if (!has_ref && ma->conf->fai) {
+        if (! has_ref && ma->conf->fai) {
              int ref_len = -1;
              ma->ref = faidx_fetch_seq(ma->conf->fai, ma->h->target_name[b->core.tid], 0, 0x7fffffff, &ref_len);
              if (!ma->ref) {
@@ -591,17 +592,26 @@ mplp_func(void *data, bam1_t *b)
 
 #if 0
         { 
-             uint8_t *of2baq = bam_aux_get(b, "BQ");
+             uint8_t *baq_aux = bam_aux_get(b, BAQ_TAG);
              uint8_t *qual = bam1_qual(b);
              int i;
-             fprintf(stderr, "BQ before: of2baq=%p qual=%p id=%s\n",
-                     of2baq, qual, bam1_qname(b));
-             if (of2baq) of2baq++;
+             fprintf(stderr, "BQ before: baq=%p qual=%p id=%s\n",
+                     baq, qual, bam1_qname(b));
+             if (baq_aux) baq_aux++;
              for (i = 0; i < b->core.l_qseq; ++i) {
-                  fprintf(stderr, " pos %d: Q=%d precomp.off=%d precomp.BAQ=%d\n", 
-                          i, qual[i], of2baq ? of2baq[i] : -1, of2baq ? qual[i] - ((int)of2baq[i] - 64) : 1);
+                  fprintf(stderr, " pos %d: Q=%d BAQ=%d\n", 
+                          i, qual[i], baq_aux ? baq_aux[i]-33 : -1);
              }
              fprintf(stderr, "\n");
+        }
+#endif
+
+#if 0
+        {
+           fprintf(stdout, "before realn\n");
+           samfile_t *fp = samopen("-", "w",  ma->h);
+           samwrite(fp, b);
+           fflush(stdout);
         }
 #endif
 
@@ -611,31 +621,39 @@ mplp_func(void *data, bam1_t *b)
               * 7: 'apply', 'extended', 'redo'
               * apply means original values will be replaced which is not what we want
               */
-             if (bam_prob_realn_core(b, ma->ref, (ma->conf->flag & MPLP_REDO_BAQ)? 2 : 0)) {
+             if (bam_prob_realn_lofreq(b, ma->ref, (ma->conf->flag & MPLP_REDO_BAQ))) {
                   LOG_ERROR("bam_prob_realn_core() failed for %s\n", bam1_qname(b));
              }
         } else if (ma->conf->flag & MPLP_REALN) {
              /* should never get here */
-             LOG_WARN("%s\n", "Can't compue BAQ without reference sequence");
+             LOG_FATAL("%s\n", "Can't compue BAQ without reference sequence");
+             exit(1);
         }
 
 #if 0
         { 
-             uint8_t *of2baq = bam_aux_get(b, "BQ");
+             uint8_t *baq_aux = bam_aux_get(b, BAQ_TAG);
              uint8_t *qual = bam1_qual(b);
              int i;
-             if (! of2baq) {
-                  LOG_FATAL("%s\n", "of2baq=0");
-                  exit(1);
-             }
-             fprintf(stderr, "BQ after: of2baq=%p qual=%p id=%s\n",
-                     of2baq, qual, bam1_qname(b));
-             of2baq++;
-             for (i = 0; i < b->core.l_qseq; ++i) {
-                  fprintf(stderr, " pos %d : Q=%d precomp.off=%d precomp.BAQ=%d\n", 
-                          i, qual[i], of2baq ? of2baq[i] : -1, of2baq ? qual[i] - ((int)of2baq[i] - 64) : 1);
-             }
-             fprintf(stderr, "\n");
+             if (baq_aux) {/* zero if -B */
+                 fprintf(stderr, "BQ after: baq=%p qual=%p id=%s\n",
+                         baq_aux, qual, bam1_qname(b));
+                 baq_aux++;
+                 for (i = 0; i < b->core.l_qseq; ++i) {
+                      fprintf(stderr, " pos %d : Q=%d BAQ=%d\n", 
+                              i, qual[i], baq_aux ? baq_aux[i]-33 : -1);
+                 }
+                 fprintf(stderr, "\n");
+            }
+        }
+#endif
+
+#if 0
+        {
+           fprintf(stdout, "after realn\n");
+           samfile_t *fp = samopen("-", "w",  ma->h);
+           samwrite(fp, b);
+           fflush(stdout);
         }
 #endif
 
@@ -673,6 +691,10 @@ mplp_func(void *data, bam1_t *b)
               sq=0;
          }
          bam_aux_append(b, SRC_QUAL_TAG, 'i', sizeof(sq), (uint8_t*) &sq);
+#if 0
+         int sq2 = bam_aux2i(bam_aux_get(b, SRC_QUAL_TAG));
+         LOG_WARN("sq=%d sq2=%d\n", sq, sq2);
+#endif
     }
 #endif
     return ret;
@@ -753,7 +775,7 @@ void compile_plp_col(plp_col_t *plp_col,
            */
           uint8_t *bi = bam_aux_get(p->b, "BI"); /* GATK indels */
           uint8_t *bd = bam_aux_get(p->b, "BD"); /* GATK deletions */
-          uint8_t *of2baq = NULL; /* Offset to BAQ. See SAM format stored in BQ tag */
+          uint8_t *baq_aux = NULL; /* full baq value (not offset as "BQ"!) */
 
 #ifdef USE_SOURCEQUAL
           if (conf->flag & MPLP_USE_SQ) {
@@ -762,13 +784,13 @@ void compile_plp_col(plp_col_t *plp_col,
 #endif
           
           if (conf->flag & MPLP_REALN) {
-               of2baq = bam_aux_get(p->b, "BQ"); 
+               baq_aux = bam_aux_get(p->b, BAQ_TAG); 
                /* should have been recomputed already */
-               if (! of2baq) {
-                    LOG_FATAL("INTERNAL ERROR: BQ tag missing at %s:%d\n", plp_col->target, plp_col->pos+1);
+               if (! baq_aux) {
+                    LOG_FATAL("INTERNAL ERROR: %s tag missing at %s:%d\n", BAQ_TAG, plp_col->target, plp_col->pos+1);
                     exit(1);
                } 
-               of2baq++; /* first char is type (same for bd and bi done below) */
+               baq_aux++; /* first char is type (same for bd and bi done below) */
           }
 
 #if 0
@@ -819,8 +841,8 @@ void compile_plp_col(plp_col_t *plp_col,
                     exit(1);
                }
 
-               if (of2baq) {
-                    baq = bq - ((int)of2baq[p->qpos] - 64);
+               if (baq_aux) {
+                    baq = baq_aux[p->qpos]-33;
                } else {
                     baq = -1;/* disabled */
                }
