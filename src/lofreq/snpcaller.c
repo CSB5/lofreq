@@ -303,7 +303,6 @@ merge_srcq_baseq_and_mapq(const int sq, const int bq, const int mq)
  * use -1 instead for all unknown values, and treat 255 as valid
  * phred-score so you might want to change mq before.
  *
- * FIXME do calculations in log space and return Q instead of p
  */
 double
 merge_srcq_mapq_baq_and_bq(const int sq, const int mq, const int baq, const int bq)
@@ -336,8 +335,13 @@ merge_srcq_mapq_baq_and_bq(const int sq, const int mq, const int baq, const int 
           bp = PHREDQUAL_TO_PROB(bq);
      }
 
+     /* FIXME do calculations in log space and return Q instead of p */
      jp = mp + (1.0-mp)*sp + (1-mp)*(1-sp)*bap + (1-mp)*(1-sp)*(1-bap)*bp;
 
+#if 0
+     LOG_DEBUG("sq=%d|%f mq=%d|%f baq=%d|%f bq=%d|%f. returning %f\n", 
+              sq, sp, mq, mp, baq, bap, bq, bp, jp);
+#endif
      return jp;
 }
 
@@ -413,14 +417,19 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                int bq = -1;
                int mq = -1;
                int sq = -1;
+               int baq = -1;
 #ifdef USE_ALNERRPROF
                int aq = -1;
 #endif
                double final_err_prob; /* == final quality used for snv calling */
                
-               if (p->map_quals[i].n) {
+               if (p->base_quals[i].n) {
                     bq = p->base_quals[i].data[j];
                };
+
+               if ((conf->flag & SNVCALL_USE_BAQ) && p->baq_quals[i].n) {
+                    baq = p->baq_quals[i].data[j];
+               }
 
                if ((conf->flag & SNVCALL_USE_MQ) && p->map_quals[i].n) {
                     mq = p->map_quals[i].data[j];
@@ -436,11 +445,8 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                }
 
 #ifdef USE_SOURCEQUAL
-               if (p->source_quals[i].n) {
+               if ((conf->flag & SNVCALL_USE_SQ) && p->source_quals[i].n) {
                     sq = p->source_quals[i].data[j];
-                    if (! (conf->flag & SNVCALL_USE_SQ)) {
-                         sq = -1; /* i.e. NA */
-                    }
                }
 #endif
 
@@ -448,12 +454,12 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                if (p->alnerr_qual[i].n) {
                     aq = p->alnerr_qual[i].data[j];
                }
-#endif
 
-#ifdef USE_ALNERRPROF
+               LOG_FIXME("%s\n", "alnerrprof on. not using baq");
                final_err_prob = merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
 #else
-               final_err_prob = merge_srcq_baseq_and_mapq(sq, bq, mq);
+               final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, baq, bq);
+               /* final_err_prob = merge_srcq_baseq_and_mapq(sq, bq, mq); */
 #endif
 
                /* special treatment of alt bases */
@@ -468,14 +474,15 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                          continue; 
                     }
                     alt_counts[alt_idx] += 1;
-                    /* if passed filter, set to default */
+
                     if (-1 == conf->def_altbq) {
                          /* ...change bq which also requires change of final_err_prob */
                          bq = avg_qual;
 #ifdef USE_ALNERRPROF
+                         LOG_FIXME("%s\n", "alnerrprof on. not using baq");
                          final_err_prob = merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
 #else
-                         final_err_prob = merge_srcq_baseq_and_mapq(sq, bq, mq);
+                         final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, baq, bq);
 #endif
 
                     } else {
@@ -508,7 +515,8 @@ init_snvcall_conf(snvcall_conf_t *c)
      c->bonf = 1;
      c->sig = 0.05;
      /* c->out = ; */
-     c->flag = SNVCALL_USE_MQ;
+     c->flag |= SNVCALL_USE_MQ;
+     c->flag |= SNVCALL_USE_BAQ;
 }
 
 
@@ -524,6 +532,7 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
      fprintf(stream, "  bonf_dynamic   = %d\n", c->bonf_dynamic);
      fprintf(stream, "  sig            = %f\n", c->sig);
 /*     fprintf(stream, "  out            = %p\n", (void*)c->out);*/
+     fprintf(stream, "  flag & SNVCALL_USE_BAQ     = %d\n", c->flag&SNVCALL_USE_BAQ?1:0);
      fprintf(stream, "  flag & SNVCALL_USE_MQ      = %d\n", c->flag&SNVCALL_USE_MQ?1:0);
      fprintf(stream, "  flag & SNVCALL_USE_SQ      = %d\n", c->flag&SNVCALL_USE_SQ?1:0);
      fprintf(stream, "  flag & SNVCALL_CONS_AS_REF = %d\n", c->flag&SNVCALL_CONS_AS_REF?1:0);
