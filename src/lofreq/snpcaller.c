@@ -791,13 +791,9 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
 
              errsv = errno;
              if (errsv || fetestexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW)) {
-                  if (fetestexcept(FE_UNDERFLOW)) {
-                       pvalue = LDBL_MIN;/* underflow okay since we are getting close to zero but prevent actual 0 value */
+                  if (pvalue < DBL_EPSILON) { 
+                       pvalue = LDBL_MIN;/* to zero but prevent actual 0 value */
                   } else {
-#if 0
-                       fprintf(stderr, "expl failed with errno %d while executing expl(%g) and returning %Lg: %s\n", 
-                               errsv, probvec[K], pvalue, strerror(errsv));
-#endif
                        pvalue = LDBL_MAX; /* might otherwise be set to 1 which might pass filters */
                   }
              }
@@ -921,14 +917,10 @@ poissbin(long double *pvalue, const double *err_probs,
 
     errsv = errno;
     if (errsv || fetestexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW)) {
-         if (fetestexcept(FE_UNDERFLOW)) {
-              *pvalue = LDBL_MIN;/* underflow okay since we are getting close to zero but prevent actual 0 value */
+         if (*pvalue < DBL_EPSILON) { 
+              *pvalue = LDBL_MIN;/* to zero but prevent actual 0 value */
          } else {
-#if 0
-              fprintf(stderr, "expl failed with errno %d while executing expl(%g) and returning %Lg: %s\n", 
-                      errsv, probvec[num_failures], *pvalue, strerror(errsv));
-#endif
-              *pvalue = LDBL_MAX; /* might otherwise be set to 1 which might pass filters */
+              *pvalue = LDBL_MAX; /* otherwise set to 1 which might pass filters */
          }
     }
 
@@ -1029,14 +1021,17 @@ snpcaller(long double *snp_pvalues,
 
              errsv = errno;
              if (errsv || fetestexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW)) {
-                  if (fetestexcept(FE_UNDERFLOW)) {
-                       pvalue = LDBL_MIN;/* underflow okay since we are getting close to zero but prevent actual 0 value */
+                  /* failed expl will set pvalue either to 0 or 1,
+                   * both of which is not wanted here: this function
+                   * should never return 0.0 but only just (LDBL_MIN)
+                   * and 1.0 might vreate problems with high Bonf/Sig
+                   * factors so we need to return a high value
+                   * (LDBL_MAX)
+                   */
+                  if (pvalue < DBL_EPSILON) { 
+                       pvalue = LDBL_MIN;/* to zero but prevent actual 0 value */
                   } else {
-#if 0
-                       fprintf(stderr, "expl failed with errno %d while executing expl(%g) and returning %Lg: %s\n", 
-                               errsv, probvec_tailsum(probvec, noncons_counts[i], max_noncons_count+1), pvalue, strerror(errsv));
-#endif
-                       pvalue = LDBL_MAX; /* might otherwise be set to 1 which might pass filters */
+                       pvalue = LDBL_MAX; /* otherwise set to 1 which might pass filters */
                   }
              }
             snp_pvalues[i] = pvalue;
@@ -1164,7 +1159,6 @@ int main(int argc, char *argv[]) {
           long double pvalue;
           probvec = poissbin(&pvalue, err_probs, num_trials,
                              num_errs, bonf, sig);
-          /*pvalue = expl(probvec_tailsum(probvec, num_errs, num_errs+1));*/
           printf("%Lg\n", pvalue);
           free(probvec);
      }
