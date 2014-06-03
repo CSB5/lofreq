@@ -4,26 +4,22 @@ High Prio:
 ==========
 
 - add normal and tumor plp info to somatic calls
-- fix license info in source
-- add external licenses for binary release
+- fix license info in source and add external licenses for binary release
+- use bgzip instead of gzip for vcf compression and SQ fetch or releveant (region,bed) vars per chrom (tabix/bgzip)
 
 Med Prio:
 =========
 
-- uniq logic
-- what to do at high coverages? replace already read values randomly if above cap?
-- parallel based on region bins instead of sequences so that this works in
-  parallel per sequence as well (e.g. one chrom). beware of border effects.
-  see also strelka's approach. 
-- use bgzip instead of gzip for vcf compression
+- replace uniq logic?
+- what to do at high coverages where X>cap? replace already read values  randomly?
+- profile code e.g.
+  $LOFREQ call -f mers_coronavirus_NC_019843.2.fa --verbose --debug NC_019843.2:2399-2399 dwgsim-ion-samba-mers-100kX-pool.bwamem.bam
 
 Low Prio:
 =========
 
 - keep var info field with hash
-- memory saving loading of ignore vcf per chrom (tabix)
 - use samtools hash functions instead of uhash?
-- memory saving loading of ignore vcf for source qual per chrom (tabix)
 - (done?) support of indels during ignore vcf loading and source qual computation
 - make source quality allele aware once we can handle (multi character) indels
 - allow multiple ign vcf input
@@ -34,7 +30,5 @@ Low Prio:
     --- test!
 - add internal sens test as in original version
 - split lofreq_snpcaller cmd parsing: plp, snv, others (do they change argv?)
-- Implement test against old SNV caller
-- check diffs between -l bed, -r region and none, all with and without BAQ
 - get rid of all FIXME's
 - gui?
