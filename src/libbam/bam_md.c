@@ -186,6 +186,138 @@ int bam_cap_mapQ(bam1_t *b, char *ref, int thres)
 	return (int)(t + .499);
 }
 
+/* this is a lofreq version of bam_prob_realn_core() which keep
+ * baq as separate values instead of capping/merging it with base
+ * qualities. changes were kept minimal to make diff against future
+ * samtools versions easier.
+ */
+int bam_prob_realn_core_lofreq(bam1_t *b, const char *ref, int flag)
+{
+	int k, i, bw, x, y, yb, ye, xb, xe, apply_baq = flag&1, extend_baq = flag>>1&1, redo_baq = flag&4;
+	uint32_t *cigar = bam1_cigar(b);
+	bam1_core_t *c = &b->core;
+	kpa_par_t conf = kpa_par_def;
+	uint8_t *bq = 0, *zq = 0, *qual = bam1_qual(b);
+#ifndef ORIG_SAMTOOLS
+    if (extend_baq) {
+        fprintf(stderr,"FATAL(%s|%s): LoFreq internal extended BAQ not implemented yet.\n", __FILE__, __FUNCTION__);
+        exit(1);
+    }
+#endif
+	if ((c->flag & BAM_FUNMAP) || b->core.l_qseq == 0) return -1; // do nothing
+	// test if BQ or ZQ is present
+	if ((bq = bam_aux_get(b, "BQ")) != 0) ++bq;
+	if ((zq = bam_aux_get(b, "ZQ")) != 0 && *zq == 'Z') ++zq;
+	if (bq && redo_baq)
+	{
+	    bam_aux_del(b, bq-1);
+	    bq = 0;
+	}
+	if (bq && zq) { // remove the ZQ tag
+		bam_aux_del(b, zq-1);
+		zq = 0;
+	}
+	if (bq || zq) {
+		if ((apply_baq && zq) || (!apply_baq && bq)) return -3; // in both cases, do nothing
+		if (bq && apply_baq) { // then convert BQ to ZQ
+			for (i = 0; i < c->l_qseq; ++i)
+				qual[i] = qual[i] + 64 < bq[i]? 0 : qual[i] - ((int)bq[i] - 64);
+			*(bq - 3) = 'Z';
+		} else if (zq && !apply_baq) { // then convert ZQ to BQ
+			for (i = 0; i < c->l_qseq; ++i)
+				qual[i] += (int)zq[i] - 64;
+			*(zq - 3) = 'B';
+		}
+		return 0;
+	}
+	// find the start and end of the alignment	
+	x = c->pos, y = 0, yb = ye = xb = xe = -1;
+	for (k = 0; k < c->n_cigar; ++k) {
+		int op, l;
+		op = cigar[k]&0xf; l = cigar[k]>>4;
+		if (op == BAM_CMATCH || op == BAM_CEQUAL || op == BAM_CDIFF) {
+			if (yb < 0) yb = y;
+			if (xb < 0) xb = x;
+			ye = y + l; xe = x + l;
+			x += l; y += l;
+		} else if (op == BAM_CSOFT_CLIP || op == BAM_CINS) y += l;
+		else if (op == BAM_CDEL) x += l;
+		else if (op == BAM_CREF_SKIP) return -1; // do nothing if there is a reference skip
+	}
+	// set bandwidth and the start and the end
+	bw = 7;
+	if (abs((xe - xb) - (ye - yb)) > bw)
+		bw = abs((xe - xb) - (ye - yb)) + 3;
+	conf.bw = bw;
+	xb -= yb + bw/2; if (xb < 0) xb = 0;
+	xe += c->l_qseq - ye + bw/2;
+	if (xe - xb - c->l_qseq > bw)
+		xb += (xe - xb - c->l_qseq - bw) / 2, xe -= (xe - xb - c->l_qseq - bw) / 2;
+	{ // glocal
+		uint8_t *s, *r, *q, *seq = bam1_seq(b), *bq;
+		int *state;
+		bq = calloc(c->l_qseq + 1, 1);
+		memcpy(bq, qual, c->l_qseq);
+		s = calloc(c->l_qseq, 1);
+		for (i = 0; i < c->l_qseq; ++i) s[i] = bam_nt16_nt4_table[bam1_seqi(seq, i)];
+		r = calloc(xe - xb, 1);
+		for (i = xb; i < xe; ++i) {
+			if (ref[i] == 0) { xe = i; break; }
+			r[i-xb] = bam_nt16_nt4_table[bam_nt16_table[(int)ref[i]]];
+		}
+		state = calloc(c->l_qseq, sizeof(int));
+		q = calloc(c->l_qseq, 1);
+		kpa_glocal(r, xe-xb, s, c->l_qseq, qual, &conf, state, q);
+		if (!extend_baq) { // in this block, bq[] is capped by base quality qual[]
+			for (k = 0, x = c->pos, y = 0; k < c->n_cigar; ++k) {
+				int op = cigar[k]&0xf, l = cigar[k]>>4;
+				if (op == BAM_CMATCH || op == BAM_CEQUAL || op == BAM_CDIFF) {
+					for (i = y; i < y + l; ++i) {
+                            if ((state[i]&3) != 0 || state[i]>>2 != x - xb + (i - y)) {
+                                    bq[i] = 0;
+                            } else {
+#ifdef ORIG_SAMTOOLS
+						 bq[i] = bq[i] < q[i]? bq[i] : q[i];
+#else
+						 bq[i] = q[i];
+#endif
+                            }
+					}
+					x += l; y += l;
+				} else if (op == BAM_CSOFT_CLIP || op == BAM_CINS) y += l;
+				else if (op == BAM_CDEL) x += l;
+			}
+			for (i = 0; i < c->l_qseq; ++i) bq[i] = qual[i] - bq[i] + 64; // finalize BQ
+		} else { // in this block, bq[] is BAQ that can be larger than qual[] (different from the above!)
+			uint8_t *left, *rght;
+			left = calloc(c->l_qseq, 1); rght = calloc(c->l_qseq, 1);
+			for (k = 0, x = c->pos, y = 0; k < c->n_cigar; ++k) {
+				int op = cigar[k]&0xf, l = cigar[k]>>4;
+				if (op == BAM_CMATCH || op == BAM_CEQUAL || op == BAM_CDIFF) {
+					for (i = y; i < y + l; ++i)
+						bq[i] = ((state[i]&3) != 0 || state[i]>>2 != x - xb + (i - y))? 0 : q[i];
+					for (left[y] = bq[y], i = y + 1; i < y + l; ++i)
+						left[i] = bq[i] > left[i-1]? bq[i] : left[i-1];
+					for (rght[y+l-1] = bq[y+l-1], i = y + l - 2; i >= y; --i)
+						rght[i] = bq[i] > rght[i+1]? bq[i] : rght[i+1];
+					for (i = y; i < y + l; ++i)
+						bq[i] = left[i] < rght[i]? left[i] : rght[i];
+					x += l; y += l;
+				} else if (op == BAM_CSOFT_CLIP || op == BAM_CINS) y += l;
+				else if (op == BAM_CDEL) x += l;
+			}
+			for (i = 0; i < c->l_qseq; ++i) bq[i] = 64 + (qual[i] <= bq[i]? 0 : qual[i] - bq[i]); // finalize BQ
+			free(left); free(rght);
+		}
+		if (apply_baq) {
+			for (i = 0; i < c->l_qseq; ++i) qual[i] -= bq[i] - 64; // modify qual
+			bam_aux_append(b, "ZQ", 'Z', c->l_qseq + 1, bq);
+		} else bam_aux_append(b, "BQ", 'Z', c->l_qseq + 1, bq);
+		free(bq); free(s); free(r); free(q); free(state);
+	}
+	return 0;
+}
+
 int bam_prob_realn_core(bam1_t *b, const char *ref, int flag)
 {
 	int k, i, bw, x, y, yb, ye, xb, xe, apply_baq = flag&1, extend_baq = flag>>1&1, redo_baq = flag&4;
