@@ -667,6 +667,7 @@ for cov in coverage_range:
 
          case 'B': 
               mplp_conf.flag &= ~MPLP_REALN; 
+              snvcall_conf.flag &= ~SNVCALL_USE_BAQ; 
               break;
 
          case 'E': 
