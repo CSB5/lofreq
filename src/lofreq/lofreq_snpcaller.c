@@ -463,9 +463,9 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "- Output\n");                                                
      fprintf(stderr, "       -o | --out FILE              Vcf output file [- = stdout]\n");
      fprintf(stderr, "- Base-call quality\n");                      
-     fprintf(stderr, "       -q | --min-bq INT            Skip any base with baseQ smaller than INT [%d]\n", mplp_conf->min_bq);
-     fprintf(stderr, "       -Q | --min-altbq INT         Skip non-reference bases with baseQ smaller than INT [%d]. Not active if ref is N\n", snvcall_conf->min_altbq);
-     fprintf(stderr, "       -a | --def-altbq INT         Non-reference base qualities will be replaced with this value (use median ref-bq if -1) [%d]\n", snvcall_conf->def_altbq);
+     fprintf(stderr, "       -q | --min-bq INT            Skip any base with baseQ smaller than INT [%d]\n", snvcall_conf->min_bq);
+     fprintf(stderr, "       -Q | --min-altbq INT         Skip non-reference bases with baseQ smaller than INT [%d]\n", snvcall_conf->min_altbq);
+     fprintf(stderr, "       -a | --def-altbq INT         Non-reference base qualities will be replaced with this value (-1: use median ref-bq; 0: keep) [%d]\n", snvcall_conf->def_altbq);
      fprintf(stderr, "       -B | --no-baq                Disable use of base-alignment quality (BAQ)\n");
      fprintf(stderr, "       -E | --ext-baq               Compute extended base-alignment quality (BAQ) on the fly (otherwise use 'normal' BAQ, which is computed on the fly, if not already present in %s tag)\n", BAQ_TAG);
      fprintf(stderr, "- Mapping quality\n");                                
@@ -654,7 +654,7 @@ for cov in coverage_range:
               break;
 
          case 'q': 
-              mplp_conf.min_bq = atoi(optarg); 
+              snvcall_conf.min_bq = atoi(optarg); 
               break;
 
          case 'Q': 
@@ -820,9 +820,9 @@ for cov in coverage_range:
                    mplp_conf.min_mq, mplp_conf.max_mq); 
          return 1;
     }
-    if (mplp_conf.min_bq > snvcall_conf.min_altbq) {
+    if (snvcall_conf.min_bq > snvcall_conf.min_altbq) {
          LOG_FATAL("Minimum base-call quality for all bases (%d) larger than minimum base-call quality for alternate bases (%d)\n",
-                   mplp_conf.min_bq, snvcall_conf.min_altbq); 
+                   snvcall_conf.min_bq, snvcall_conf.min_altbq); 
          return 1;
     }
     if (mplp_conf.flag & MPLP_REALN && ! mplp_conf.fa && ! plp_summary_only) {

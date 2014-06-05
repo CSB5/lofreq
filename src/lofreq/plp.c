@@ -87,7 +87,7 @@ void init_mplp_conf(mplp_conf_t *c)
      c->max_mq = DEFAULT_MAX_MQ;
      c->min_mq = DEFAULT_MIN_MQ;
      c->def_nm_q = DEFAULT_DEF_NM_QUAL;
-     c->min_bq = DEFAULT_MIN_BQ;
+/*     c->min_bq = DEFAULT_MIN_BQ;*/
      c->capQ_thres = 0;
      c->max_depth = DEFAULT_MAX_PLP_DEPTH;
      /* REALN == default BAQ */
@@ -229,7 +229,7 @@ dump_mplp_conf(const mplp_conf_t *c, FILE *stream)
      
      fprintf(stream, "  capQ_thres   = %d\n", c->capQ_thres);
      fprintf(stream, "  max_depth    = %d\n", c->max_depth);
-     fprintf(stream, "  min_bq       = %d\n", c->min_bq);
+/*     fprintf(stream, "  min_bq       = %d\n", c->min_bq);*/
      fprintf(stream, "  def_nm_q     = %d\n", c->def_nm_q);
      fprintf(stream, "  reg          = %s\n", c->reg);
      fprintf(stream, "  fa           = %p\n", c->fa);
@@ -432,7 +432,9 @@ source_qual(const bam1_t *b, const char *ref,
      /* LOG_FIXME("%s\n", "Don't know ref name in count_cigar_ops which would be needed as hash key");*/
      num_err_probs = count_cigar_ops(op_counts, op_quals, b, ref, min_bq, target);
      if (1 > num_err_probs) {
-          LOG_VERBOSE("count_cigar_ops returned %d counts on read %s\n", num_err_probs, bam1_qname(b));
+#ifdef TRACE
+          LOG_DEBUG("count_cigar_ops returned %d counts on read %s\n", num_err_probs, bam1_qname(b));
+#endif          
           src_qual = -1;
           goto free_and_exit;
      }
@@ -545,76 +547,76 @@ mplp_func(void *data, bam1_t *b)
      extern int bam_prob_realn_lofreq(bam1_t *b, const char *ref, int redo);
      extern int bam_cap_mapQ(bam1_t *b, char *ref, int thres);
      mplp_aux_t *ma = (mplp_aux_t*)data;
-    int ret, skip = 0;
+     int ret, skip = 0;
 
-    do {
-        int has_ref;
-        ret = ma->iter? bam_iter_read(ma->fp, ma->iter, b) : bam_read1(ma->fp, b);
-        if (ret < 0) 
-             break;
-        if (b->core.tid < 0 || (b->core.flag&BAM_FUNMAP)) { /* exclude unmapped reads */
+     do {
+          int has_ref;
+          ret = ma->iter? bam_iter_read(ma->fp, ma->iter, b) : bam_read1(ma->fp, b);
+          if (ret < 0) 
+               break;
+          if (b->core.tid < 0 || (b->core.flag&BAM_FUNMAP)) { /* exclude unmapped reads */
 #ifdef TRACE
-             LOG_DEBUG("%s unmapped\n", bam1_qname(b));
+               LOG_DEBUG("%s unmapped\n", bam1_qname(b));
 #endif
-            skip = 1;
-            continue;
-        }
-        if (ma->conf->bed) { /* test overlap */
-            skip = !bed_overlap(ma->conf->bed, ma->h->target_name[b->core.tid], b->core.pos, bam_calend(&b->core, bam1_cigar(b)));
-            if (skip) 
-                 continue;
-        }
+               skip = 1;
+               continue;
+          }
+          if (ma->conf->bed) { /* test overlap */
+               skip = !bed_overlap(ma->conf->bed, ma->h->target_name[b->core.tid], b->core.pos, bam_calend(&b->core, bam1_cigar(b)));
+               if (skip) 
+                    continue;
+          }
 
-        if (ma->conf->flag & MPLP_ILLUMINA13) {
-            int i;
-            uint8_t *qual = bam1_qual(b);
-            for (i = 0; i < b->core.l_qseq; ++i)
-                qual[i] = qual[i] > 31? qual[i] - 31 : 0;
-        }
-        has_ref = (ma->ref && ma->ref_id == b->core.tid)? 1 : 0;
-
-        /* lofreq fix to original samtools routines which ensures that
-         * the reads mapping to first position have a reference
-         * attached as well and therefore baq, sq etc can be
-         * applied */
-        if (! has_ref && ma->conf->fai) {
-             int ref_len = -1;
-             ma->ref = faidx_fetch_seq(ma->conf->fai, ma->h->target_name[b->core.tid], 0, 0x7fffffff, &ref_len);
-             if (!ma->ref) {
-                  has_ref = 0;
-             } else {
-                  ma->ref_id = b->core.tid;
-                  has_ref = 1;
-             }
-        }
-
-        skip = 0;
-
+          if (ma->conf->flag & MPLP_ILLUMINA13) {
+               int i;
+               uint8_t *qual = bam1_qual(b);
+               for (i = 0; i < b->core.l_qseq; ++i)
+                    qual[i] = qual[i] > 31? qual[i] - 31 : 0;
+          }
+          has_ref = (ma->ref && ma->ref_id == b->core.tid)? 1 : 0;
+          
+          /* lofreq fix to original samtools routines which ensures that
+           * the reads mapping to first position have a reference
+           * attached as well and therefore baq, sq etc can be
+           * applied */
+          if (! has_ref && ma->conf->fai) {
+               int ref_len = -1;
+               ma->ref = faidx_fetch_seq(ma->conf->fai, ma->h->target_name[b->core.tid], 0, 0x7fffffff, &ref_len);
+               if (!ma->ref) {
+                    has_ref = 0;
+               } else {
+                    ma->ref_id = b->core.tid;
+                    has_ref = 1;
+               }
+          }
+          
+          skip = 0;
+          
 #if 0
-        { 
-             uint8_t *baq_aux = bam_aux_get(b, BAQ_TAG);
-             uint8_t *qual = bam1_qual(b);
-             int i;
-             fprintf(stderr, "BQ before: baq=%p qual=%p id=%s\n",
-                     baq, qual, bam1_qname(b));
-             if (baq_aux) baq_aux++;
-             for (i = 0; i < b->core.l_qseq; ++i) {
-                  fprintf(stderr, " pos %d: Q=%d BAQ=%d\n", 
-                          i, qual[i], baq_aux ? baq_aux[i]-33 : -1);
-             }
-             fprintf(stderr, "\n");
-        }
+          { 
+               uint8_t *baq_aux = bam_aux_get(b, BAQ_TAG);
+               uint8_t *qual = bam1_qual(b);
+               int i;
+               fprintf(stderr, "BQ before: baq=%p qual=%p id=%s\n",
+                       baq, qual, bam1_qname(b));
+               if (baq_aux) baq_aux++;
+               for (i = 0; i < b->core.l_qseq; ++i) {
+                    fprintf(stderr, " pos %d: Q=%d BAQ=%d\n", 
+                            i, qual[i], baq_aux ? baq_aux[i]-33 : -1);
+               }
+               fprintf(stderr, "\n");
+          }
 #endif
-
+          
 #if 0
-        {
-           fprintf(stdout, "before realn\n");
-           samfile_t *fp = samopen("-", "w",  ma->h);
-           samwrite(fp, b);
-           fflush(stdout);
-        }
+          {
+               fprintf(stdout, "before realn\n");
+               samfile_t *fp = samopen("-", "w",  ma->h);
+               samwrite(fp, b);
+               fflush(stdout);
+          }
 #endif
-
+          
         if (has_ref && (ma->conf->flag & MPLP_REALN)) {
              /* orig samtools: bam_prob_realn_core(b, ma->ref, (ma->conf->flag & MPLP_REDO_BAQ)? 7 : 3);
               * 3: 'apply', 'extended'
@@ -685,7 +687,7 @@ mplp_func(void *data, bam1_t *b)
      */
     if (ma->ref && ma->ref_id == b->core.tid && ma->conf->flag & MPLP_USE_SQ) {
          int sq = source_qual(b, ma->ref, ma->conf->def_nm_q,
-                              ma->h->target_name[b->core.tid], ma->conf->min_bq);
+                              ma->h->target_name[b->core.tid], DEFAULT_MIN_BQ/*ma->conf->min_bq*/);
          /* -1 indicates error or NA, but can't be stored as uint. hack is to use 0 instead */
          if (sq<0) {
               sq=0;
@@ -822,12 +824,14 @@ void compile_plp_col(plp_col_t *plp_col,
 
                bq = bam1_qual(p->b)[p->qpos];
 
+#if 0
                /* minimal base-call quality filtering
                 */
                if (bq < conf->min_bq) {
                     base_skip = 1;
                     goto check_indel; /* goto was easiest */
                }
+#endif
 
                /* the following samtools' original code will correct
                 * base-pairs down if they exceed the valid
