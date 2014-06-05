@@ -17,6 +17,7 @@ import argparse
 import subprocess
 import tempfile
 import gzip
+from socket import gethostname
 
 #--- third-party imports
 #
@@ -426,6 +427,7 @@ class SomaticSNVCaller(object):
         """Run the whole somatic SNV calling pipeline
         """
 
+        LOG.info("Running on %s" % gethostname())
         if not bam_index_exists(self.bam_n):
             LOG.fatal("Normal BAM file is not indexed."
                       " Please create the index first"
@@ -649,7 +651,7 @@ def main():
                 somatic_snv_caller.src_qual_ign_vcf = args.ign_vcf
 
     somatic_snv_caller.do_germline = args.germline
-
+        
     if not somatic_snv_caller.run():
         LOG.fatal("Somatic SNV caller failed. Exiting")
         sys.exit(1)
