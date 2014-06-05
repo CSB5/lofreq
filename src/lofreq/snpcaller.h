@@ -24,6 +24,7 @@
 
 
 typedef struct {
+     int min_bq;
      int min_altbq;
      int def_altbq;
      int bonf_dynamic; /* boolean: incr bonf as we go along. eventual
