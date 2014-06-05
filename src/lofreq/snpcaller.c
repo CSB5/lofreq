@@ -354,7 +354,7 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
 {
      int i, j;
      int alt_idx;
-     int avg_qual = -1;
+     int avg_ref_bq = -1;
 
      if (NULL == ((*err_probs) = malloc(p->coverage * sizeof(double)))) {
           /* coverage = base-count after read level filtering */
@@ -363,36 +363,25 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
           return;
      }
 
-     /* determine avg_qual if needed, which is to be the median
-      * quality of reference bases (ie. cons bases since vars are
-      * always called against cons_base). compute average of all
-      * unfiltered cons bases in this column (pretending we did that
-      * many experiments)
+     /* determine median ref bq in advance if needed
      */
      if (-1 == conf->def_altbq) {
-
+          avg_ref_bq = -1;
           for (i=0; i<NUM_NT4; i++) {
                int nt = bam_nt4_rev_table[i];
                if (nt != p->cons_base) {
                     continue;
                }
-
-               if (p->base_quals[i].n == 0) {
-                    /* set avg_qual to non-sense value, won't use it anyway
-                     * if there were no 'errors'. can't return here though
-                     * since we still want to report the consvar */
-                    avg_qual = -1;
-               } else {
+               if (p->base_quals[i].n) {
                     int *ref_quals = malloc(sizeof(int) * p->base_quals[i].n);
                     memcpy(ref_quals, p->base_quals[i].data, sizeof(int) * p->base_quals[i].n);
-                    avg_qual = int_median(ref_quals, p->base_quals[i].n);
+                    avg_ref_bq = int_median(ref_quals, p->base_quals[i].n);
                     free(ref_quals);
                     break; /* there can only be one */
                }
           }
-
+          LOG_DEBUG("avg_ref_bq=%d\n", avg_ref_bq);
      }
-
 
      (*num_err_probs) = 0;
      alt_idx = -1;
@@ -406,7 +395,6 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
           is_alt_base = 0;
           if (nt != p->cons_base) {
                is_alt_base = 1;
-
                alt_idx += 1;
                alt_bases[alt_idx] = nt;
                alt_counts[alt_idx] = 0;
@@ -420,12 +408,32 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                int baq = -1;
 #ifdef USE_ALNERRPROF
                int aq = -1;
+               LOG_FATAL("%s\n", "ALNERRPROF not supported anymore\n"); exit(1);
 #endif
-               double final_err_prob; /* == final quality used for snv calling */
-               
+               double merged_err_prob; /* final quality used for snv calling */
+               int merged_qual;
+
                if (p->base_quals[i].n) {
                     bq = p->base_quals[i].data[j];
-               };
+
+                    /* bq filtering for all */
+                    if (bq < conf->min_bq) {
+                         continue;
+                    }
+
+                    /* alt bq threshold and overwrite if needed */
+                    if (is_alt_base) {
+                         alt_raw_counts[alt_idx] += 1;
+                         /* ignore altogether if below alt bq threshold */
+                         if (bq < conf->min_altbq) {
+                              continue; 
+                         } else if (-1 == conf->def_altbq)  {
+                              bq = avg_ref_bq;
+                         } else if (0 != conf->def_altbq)  {
+                              bq = conf->def_altbq;
+                         }
+                    } 
+               }
 
                if ((conf->flag & SNVCALL_USE_BAQ) && p->baq_quals[i].n) {
                     baq = p->baq_quals[i].data[j];
@@ -450,52 +458,39 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                }
 #endif
 
-#ifdef USE_ALNERRPROF
-               if (p->alnerr_qual[i].n) {
-                    aq = p->alnerr_qual[i].data[j];
+               merged_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, baq, bq);
+               merged_qual =  PROB_TO_PHREDQUAL_SAFE(merged_err_prob);
+
+               /* min merged q filtering for all */
+               if (merged_qual < DEFAULT_MIN_MERGEDQ) {
+                    continue; 
                }
 
-               LOG_FIXME("%s\n", "alnerrprof on. not using baq");
-               final_err_prob = merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
-#else
-               final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, baq, bq);
-               /* final_err_prob = merge_srcq_baseq_and_mapq(sq, bq, mq); */
-#endif
-
-               /* special treatment of alt bases */
                if (is_alt_base) {
-                    alt_raw_counts[alt_idx] += 1;
-
 #if 0
-                    LOG_FIXME("alt_base %d: bq=%d merged q=%d p=%f\n", alt_idx, bq, PROB_TO_PHREDQUAL_SAFE(final_err_prob), final_err_prob);
+                    LOG_debug("alt_base %d: bq=%d merged q=%d p=%f\n", alt_idx, bq, PROB_TO_PHREDQUAL_SAFE(merged_err_prob), merged_err_prob);
 #endif
-                    /* ignore if below bq or merged threshold */
-                    if (bq < conf->min_altbq || PROB_TO_PHREDQUAL_SAFE(final_err_prob) < DEFAULT_MIN_ALT_MERGEDQ) {
+                    /* alt mergedq threshold and overwrite if needed
+                     *
+                     * FIXME make DEFAULT_MIN_ALT_MERGEDQ and DEFAULT_DEF_ALT_MERGEDQ use parameters
+                     */
+                    if (merged_qual < DEFAULT_MIN_ALT_MERGEDQ) {
                          continue; 
+                    } else if (-1 == DEFAULT_DEF_ALT_MERGEDQ)  {
+                         LOG_FATAL("%s\n", "median off ref joined q not implemented yet (FIXME)");
+                         exit(1);
+                    } else if (0 != DEFAULT_DEF_ALT_MERGEDQ)  {
+                         merged_err_prob = PHREDQUAL_TO_PROB(DEFAULT_DEF_ALT_MERGEDQ);
+                         merged_qual = DEFAULT_DEF_ALT_MERGEDQ;
                     }
+
                     alt_counts[alt_idx] += 1;
-
-                    if (-1 == conf->def_altbq) {
-                         /* ...change bq which also requires change of final_err_prob */
-                         bq = avg_qual;
-#ifdef USE_ALNERRPROF
-                         LOG_FIXME("%s\n", "alnerrprof on. not using baq");
-                         final_err_prob = merge_srcq_baseq_mapq_and_alnq(sq, bq, mq, aq);
-#else
-                         final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, baq, bq);
-#endif
-
-                    } else {
-                         /* easy case: just set to default */
-                         final_err_prob = PHREDQUAL_TO_PROB(conf->def_altbq);
-                    }
                }
+               (*err_probs)[(*num_err_probs)++] = merged_err_prob;
 
 #if 0
-               LOG_FIXME("%s:%d %c bq=%d mq=%d finalq=%d is_alt_base=%d\n", p->target, p->pos+1, nt, bq, mq, PROB_TO_PHREDQUAL_SAFE(final_err_prob), is_alt_base);
+               LOG_FIXME("%s:%d %c bq=%d mq=%d finalq=%d is_alt_base=%d\n", p->target, p->pos+1, nt, bq, mq, PROB_TO_PHREDQUAL_SAFE(merged_err_prob), is_alt_base);
 #endif
-
-               (*err_probs)[(*num_err_probs)++] = final_err_prob;
           }
      }
 }
@@ -507,6 +502,7 @@ void
 init_snvcall_conf(snvcall_conf_t *c) 
 {
      memset(c, 0, sizeof(snvcall_conf_t));
+     c->min_bq = DEFAULT_MIN_BQ;
      c->min_altbq = DEFAULT_MIN_ALT_BQ;
      c->def_altbq = DEFAULT_DEF_ALT_BQ; /* c->min_altbq; */
      c->min_cov = DEFAULT_MIN_COV;
@@ -524,6 +520,7 @@ void
 dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream) 
 {
      fprintf(stream, "snvcall options\n");
+     fprintf(stream, "  min_bq      = %d\n", c->min_bq);
      fprintf(stream, "  min_altbq      = %d\n", c->min_altbq);
      fprintf(stream, "  def_altbq      = %d\n", c->def_altbq);
      fprintf(stream, "  min_cov        = %d\n", c->min_cov);
