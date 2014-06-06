@@ -72,8 +72,8 @@ class SomaticSNVCaller(object):
 
     LOFREQ = 'lofreq'
 
-    DEFAULT_ALPHA_N = 0.03;# input for call -s
-    DEFAULT_ALPHA_T = 0.01;# input for call -s
+    DEFAULT_ALPHA_N = 0.03;# input for call -a
+    DEFAULT_ALPHA_T = 0.01;# input for call -a
     DEFAULT_MTC_T = 'bonf'
     DEFAULT_MTC_ALPHA_T = 10;# input for filter
     DEFAULT_MQ_FILTER_T = 0
@@ -226,7 +226,7 @@ class SomaticSNVCaller(object):
         #
         if sample_type == "normal":
             cmd.extend(['-m', "%d" % self.mq_filter_n])
-            cmd.extend(['-b', "%d" % 1, '-s', "%f" % self.alpha_n])
+            cmd.extend(['-b', "%d" % 1, '-a', "%f" % self.alpha_n])
             cmd.append('--use-orphan')
             out_vcf = self.vcf_n_rlx
             out_log = self.vcf_n_rlx_log
@@ -234,7 +234,7 @@ class SomaticSNVCaller(object):
             if self.use_orphan:
                 cmd.append('--use-orphan')
             cmd.extend(['-m', "%d" % self.mq_filter_t])
-            cmd.extend(['-b', "%d" % 1, '-s', "%f" % self.alpha_t])
+            cmd.extend(['-b', "%d" % 1, '-a', "%f" % self.alpha_t])
             out_vcf = self.vcf_t_rlx
             out_log = self.vcf_t_rlx_log
         else:
@@ -244,14 +244,14 @@ class SomaticSNVCaller(object):
         if self.baq_off or sample_type == "normal":
             cmd.append('-B')
         if self.mq_off or sample_type == "normal":
-            cmd.append('-J')
+            cmd.append('-N')
 
         if sample_type == "tumor":
             cmd.extend(['-C', "%d" % self.min_cov])
             if self.src_qual_on:
-                cmd.append('-S')
+                cmd.append('-s')
             if self.src_qual_ign_vcf:
-                cmd.extend(['-V', self.src_qual_ign_vcf])
+                cmd.extend(['-S', self.src_qual_ign_vcf])
 
         if sample_type == "normal":
             cmd.append(self.bam_n)
@@ -547,7 +547,7 @@ def cmdline_parser():
                         action="store_true",
                         help="Disable BAQ computation everywhere")
 
-    parser.add_argument("-J", "--mq-off",
+    parser.add_argument("-N", "--mq-off",
                         action="store_true",
                         help="Disable use of mapping quality in LoFreq's model everywhere")
 
@@ -559,7 +559,7 @@ def cmdline_parser():
                         action="store_true",
                         help="Disable use of source quality in tumor (see also -V)")
     default = "normal"
-    parser.add_argument("-V", "--ign-vcf",
+    parser.add_argument("-S", "--ign-vcf",
                         default=default,
                         help="Ignore variants in this vcf-file for source"
                         " quality computation in tumor (collides with "

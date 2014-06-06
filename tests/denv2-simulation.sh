@@ -36,7 +36,7 @@ if ! eval $cmd >> $log 2>&1; then
 fi
 
 
-cmd="$LOFREQ call -B -b $bonf -f $reffa -o $outraw_nomq -J $bam"
+cmd="$LOFREQ call -B -b $bonf -f $reffa -o $outraw_nomq -N $bam"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1

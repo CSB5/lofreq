@@ -18,7 +18,7 @@ log=$outdir/log.txt
 
 KEEP_TMP=0
 
-cmd="$LOFREQ call -b dynamic -f $reffa -l $bed -o $outraw_def -S -V $truesnv $bam"
+cmd="$LOFREQ call -b dynamic -f $reffa -l $bed -o $outraw_def -s -S $truesnv $bam"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
