@@ -478,9 +478,9 @@ def main():
             'FIXME bonf "auto" handling not implemented')
         # Just need derivation here and no more filtering at end
 
-    sig_opt = 0.05# NOTE: needs to be default is in lofreq call
+    sig_opt = 0.01# WARN: needs to be default is in lofreq call
     idx = -1
-    for arg in ['-s', '--sig']:
+    for arg in ['-a', '--sig']:
         if arg in lofreq_call_args:
             idx = lofreq_call_args.index(arg)
             break
