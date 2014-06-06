@@ -87,7 +87,7 @@ void init_mplp_conf(mplp_conf_t *c)
      c->max_mq = DEFAULT_MAX_MQ;
      c->min_mq = DEFAULT_MIN_MQ;
      c->def_nm_q = DEFAULT_DEF_NM_QUAL;
-/*     c->min_bq = DEFAULT_MIN_BQ;*/
+     c->min_plp_bq = DEFAULT_MIN_PLP_BQ;/* note: different from DEFAULT_MIN_BQ */
      c->capQ_thres = 0;
      c->max_depth = DEFAULT_MAX_PLP_DEPTH;
      /* REALN == default BAQ */
@@ -229,7 +229,7 @@ dump_mplp_conf(const mplp_conf_t *c, FILE *stream)
      
      fprintf(stream, "  capQ_thres   = %d\n", c->capQ_thres);
      fprintf(stream, "  max_depth    = %d\n", c->max_depth);
-/*     fprintf(stream, "  min_bq       = %d\n", c->min_bq);*/
+     fprintf(stream, "  min_plp_bq   = %d\n", c->min_plp_bq);
      fprintf(stream, "  def_nm_q     = %d\n", c->def_nm_q);
      fprintf(stream, "  reg          = %s\n", c->reg);
      fprintf(stream, "  fa           = %p\n", c->fa);
@@ -687,7 +687,7 @@ mplp_func(void *data, bam1_t *b)
      */
     if (ma->ref && ma->ref_id == b->core.tid && ma->conf->flag & MPLP_USE_SQ) {
          int sq = source_qual(b, ma->ref, ma->conf->def_nm_q,
-                              ma->h->target_name[b->core.tid], DEFAULT_MIN_BQ/*ma->conf->min_bq*/);
+                              ma->h->target_name[b->core.tid], DEFAULT_MIN_BQ/* FIXME could use->conf->min_bq which is set to a conservative 3 */);
          /* -1 indicates error or NA, but can't be stored as uint. hack is to use 0 instead */
          if (sq<0) {
               sq=0;
@@ -824,14 +824,14 @@ void compile_plp_col(plp_col_t *plp_col,
 
                bq = bam1_qual(p->b)[p->qpos];
 
-#if 0
-               /* minimal base-call quality filtering
+               /* minimal base-call quality filtering. doing this here
+                * will make all downstream analysis blind to filtering
+                * and might skew AFs etc
                 */
-               if (bq < conf->min_bq) {
+               if (bq < conf->min_plp_bq) {
                     base_skip = 1;
                     goto check_indel; /* goto was easiest */
                }
-#endif
 
                /* the following samtools' original code will correct
                 * base-pairs down if they exceed the valid

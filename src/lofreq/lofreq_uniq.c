@@ -313,7 +313,7 @@ uniq_snv(const plp_col_t *p, void *confp)
 
 #ifdef DEBUG
           LOG_DEBUG("Now testing af=%f cov=%d alt_count=%d at %s %d for var:",
-          af, p->coverage, alt_count, p->target, p->pos+1);
+                    af, p->coverage, alt_count, p->target, p->pos+1);
 #endif
           
           /* this is a one sided test */
@@ -400,8 +400,7 @@ main_uniq(int argc, char *argv[])
      memset(&mplp_conf, 0, sizeof(mplp_conf_t));
      mplp_conf.max_mq = DEFAULT_MAX_MQ;
      mplp_conf.min_mq = 1;
-     /*mplp_conf.min_bq = DEFAULT_MIN_BQ;*/
-     LOG_WARN("%s\n", "FIXME: uniq no looking at all bases since we removed mplp_conf.min_bq = DEFAULT_MIN_BQ and corresponding plp code");
+     mplp_conf.min_plp_bq = DEFAULT_MIN_PLP_BQ;
      mplp_conf.capQ_thres = 0;
      mplp_conf.max_depth = DEFAULT_MAX_PLP_DEPTH;
      mplp_conf.flag = MPLP_NO_ORPHAN;

@@ -30,6 +30,7 @@ typedef struct {
      int flag; /* tag: shared */
      int capQ_thres;
      int max_depth;
+     int min_plp_bq; /* use with caution: this makes lofreq blind to any bases below this value */
      int def_nm_q;
      char *reg;
      char *fa;
