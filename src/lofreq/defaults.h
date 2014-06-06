@@ -16,10 +16,10 @@
 #define DEFAULT_DEF_ALT_BQ 0
 /* -1: ref median, 0: keep original, >0: replace with this value */
 
-#define DEFAULT_MIN_MERGEDQ 6
+#define DEFAULT_MIN_JQ 0
 /* minimum merged quality for alt bases  */
-#define DEFAULT_MIN_ALT_MERGEDQ 6
-#define DEFAULT_DEF_ALT_MERGEDQ 0
+#define DEFAULT_MIN_ALT_JQ 0
+#define DEFAULT_DEF_ALT_JQ 0
 /* -1: ref median, 0: keep original, >0: replace with this value */
 
 /* non match quality for source qual */
@@ -30,6 +30,10 @@
 #define DEFAULT_MAX_PLP_DEPTH 1000000
 
 #define DEFAULT_BAQ_ON 1
+
+
+/* make lofreq blind to anything below this value */
+#define DEFAULT_MIN_PLP_BQ 3
 
 /* ---------------------------------------------------------------------- */
 

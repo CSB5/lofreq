@@ -365,7 +365,7 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
 
      /* determine median ref bq in advance if needed
      */
-     if (-1 == conf->def_altbq) {
+     if (-1 == conf->def_alt_bq) {
           avg_ref_bq = -1;
           for (i=0; i<NUM_NT4; i++) {
                int nt = bam_nt4_rev_table[i];
@@ -425,13 +425,14 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                     if (is_alt_base) {
                          alt_raw_counts[alt_idx] += 1;
                          /* ignore altogether if below alt bq threshold */
-                         if (bq < conf->min_altbq) {
+                         if (bq < conf->min_alt_bq) {
                               continue; 
-                         } else if (-1 == conf->def_altbq)  {
+                         } else if (-1 == conf->def_alt_bq)  {
                               bq = avg_ref_bq;
-                         } else if (0 != conf->def_altbq)  {
-                              bq = conf->def_altbq;
+                         } else if (0 != conf->def_alt_bq)  {
+                              bq = conf->def_alt_bq;
                          }
+                         /* 0: keep original */
                     } 
                }
 
@@ -462,28 +463,27 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                merged_qual =  PROB_TO_PHREDQUAL_SAFE(merged_err_prob);
 
                /* min merged q filtering for all */
-               if (merged_qual < DEFAULT_MIN_MERGEDQ) {
+               if (merged_qual < conf->min_jq) {
                     continue; 
                }
 
                if (is_alt_base) {
 #if 0
-                    LOG_debug("alt_base %d: bq=%d merged q=%d p=%f\n", alt_idx, bq, PROB_TO_PHREDQUAL_SAFE(merged_err_prob), merged_err_prob);
+                    LOG_debug("alt_base %d: bq=%d merged q=%d p=%f\n", 
+                              alt_idx, bq, PROB_TO_PHREDQUAL_SAFE(merged_err_prob), merged_err_prob);
 #endif
-                    /* alt mergedq threshold and overwrite if needed
-                     *
-                     * FIXME make DEFAULT_MIN_ALT_MERGEDQ and DEFAULT_DEF_ALT_MERGEDQ use parameters
+                    /* apply alt merged qual threshold and overwrite if needed
                      */
-                    if (merged_qual < DEFAULT_MIN_ALT_MERGEDQ) {
+                    if (merged_qual < conf->min_alt_jq) {
                          continue; 
-                    } else if (-1 == DEFAULT_DEF_ALT_MERGEDQ)  {
+                    } else if (-1 == conf->def_alt_jq)  {
                          LOG_FATAL("%s\n", "median off ref joined q not implemented yet (FIXME)");
                          exit(1);
-                    } else if (0 != DEFAULT_DEF_ALT_MERGEDQ)  {
-                         merged_err_prob = PHREDQUAL_TO_PROB(DEFAULT_DEF_ALT_MERGEDQ);
-                         merged_qual = DEFAULT_DEF_ALT_MERGEDQ;
+                    } else if (0 != conf->def_alt_jq)  {
+                         merged_err_prob = PHREDQUAL_TO_PROB(conf->def_alt_jq);
+                         merged_qual = conf->def_alt_jq;
                     }
-
+                    /* 0: keep original */
                     alt_counts[alt_idx] += 1;
                }
                (*err_probs)[(*num_err_probs)++] = merged_err_prob;
@@ -502,9 +502,15 @@ void
 init_snvcall_conf(snvcall_conf_t *c) 
 {
      memset(c, 0, sizeof(snvcall_conf_t));
+
      c->min_bq = DEFAULT_MIN_BQ;
-     c->min_altbq = DEFAULT_MIN_ALT_BQ;
-     c->def_altbq = DEFAULT_DEF_ALT_BQ; /* c->min_altbq; */
+     c->min_alt_bq = DEFAULT_MIN_ALT_BQ;
+     c->def_alt_bq = DEFAULT_DEF_ALT_BQ;
+
+     c->min_jq = DEFAULT_MIN_JQ;
+     c->min_alt_jq = DEFAULT_MIN_ALT_JQ;
+     c->def_alt_jq = DEFAULT_DEF_ALT_JQ;
+
      c->min_cov = DEFAULT_MIN_COV;
      c->dont_skip_n = 0;
      c->bonf_dynamic = 1;
@@ -520,9 +526,12 @@ void
 dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream) 
 {
      fprintf(stream, "snvcall options\n");
-     fprintf(stream, "  min_bq      = %d\n", c->min_bq);
-     fprintf(stream, "  min_altbq      = %d\n", c->min_altbq);
-     fprintf(stream, "  def_altbq      = %d\n", c->def_altbq);
+     fprintf(stream, "  min_bq         = %d\n", c->min_bq);
+     fprintf(stream, "  min_alt_bq     = %d\n", c->min_alt_bq);
+     fprintf(stream, "  def_alt_bq     = %d\n", c->def_alt_bq);
+     fprintf(stream, "  min_jq         = %d\n", c->min_jq);
+     fprintf(stream, "  min_alt_jq     = %d\n", c->min_alt_jq);
+     fprintf(stream, "  def_alt_jq     = %d\n", c->def_alt_jq);
      fprintf(stream, "  min_cov        = %d\n", c->min_cov);
      fprintf(stream, "  dont_skip_n    = %d\n", c->dont_skip_n);
      fprintf(stream, "  bonf           = %lld  (might get recalculated)\n", c->bonf);

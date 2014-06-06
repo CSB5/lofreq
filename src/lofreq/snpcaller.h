@@ -25,8 +25,13 @@
 
 typedef struct {
      int min_bq;
-     int min_altbq;
-     int def_altbq;
+     int min_alt_bq;
+     int def_alt_bq;
+
+     int min_jq;
+     int min_alt_jq;
+     int def_alt_jq;
+
      int bonf_dynamic; /* boolean: incr bonf as we go along. eventual
                         * filtering of all has to be done by
                         * caller! */
