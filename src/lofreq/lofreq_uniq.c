@@ -259,7 +259,7 @@ uniq_snv(const plp_col_t *p, void *confp)
           snvcall_conf_t snvcall_conf;
 
           int bonf = 1;
-          float alpha = 0.05;
+          float alpha = 0.01;
 
           init_snvcall_conf(&snvcall_conf);
           if (debug) {

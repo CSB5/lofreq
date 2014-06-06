@@ -32,8 +32,6 @@
 #define MYNAME PACKAGE
 #endif
 
-#define DEFAULT_ALPHA 0.01
-
 #define FILTER_ID_STRSIZE 64
 #define FILTER_STRSIZE 128
 
@@ -719,9 +717,9 @@ main_filter(int argc, char *argv[])
      memset(&cfg, 0, sizeof(filter_conf_t));
      cfg.dp_filter.min = cfg.dp_filter.max = -1;
      cfg.af_filter.min = cfg.af_filter.max = -1;
-     cfg.sb_filter.alpha = DEFAULT_ALPHA;
-     cfg.snvqual_filter.alpha = DEFAULT_ALPHA;
-     cfg.indelqual_filter.alpha = DEFAULT_ALPHA;
+     cfg.sb_filter.alpha = DEFAULT_SIG;
+     cfg.snvqual_filter.alpha = DEFAULT_SIG;
+     cfg.indelqual_filter.alpha = DEFAULT_SIG;
 
 
     /* keep in sync with long_opts_str and usage
