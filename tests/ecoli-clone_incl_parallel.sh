@@ -33,7 +33,7 @@ MAX_SNVS=20
 #
 nsnvs=$(grep -c '^[^#]' $outvcf_p)
 if [ $nsnvs -ge $MAX_SNVS ]; then
-    echoerror "Expected less then $MAX_SNVS on this clonal dataset"
+    echoerror "Expected less then $MAX_SNVS on this clonal dataset but got $nsnvs (see $outdir)"
     exit 1
 else
     echook "Got $nsnvs SNVs for this clonal dataset which is okay (below limit of $MAX_SNVS)"
