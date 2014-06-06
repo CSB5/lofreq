@@ -457,37 +457,48 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "- Regions\n");                                        
      fprintf(stderr, "       -r | --region STR            Region in which pileup should be generated [null]\n");
      fprintf(stderr, "       -l | --bed FILE              List of positions (chr pos) or regions (BED) [null]\n");
+
      fprintf(stderr, "- Reference\n");                                               
-     fprintf(stderr, "       -f | --reffa FILE            Indexed reference fasta file (gzip supported) [null]\n");
-     fprintf(stderr, "       -c | --cons-as-ref           Use consensus base as ref, i.e. ignore base given in reffa (reffa still used for BAQ, if enabled)\n");
+     fprintf(stderr, "       -f | --ref FILE            Indexed reference fasta file (gzip supported) [null]\n");
+     fprintf(stderr, "            --cons-as-ref           Use consensus base as ref, i.e. ignore base given in reffa (reffa still used for BAQ, if enabled)\n");
+
      fprintf(stderr, "- Output\n");                                                
      fprintf(stderr, "       -o | --out FILE              Vcf output file [- = stdout]\n");
+
      fprintf(stderr, "- Base-call quality\n");                      
      fprintf(stderr, "       -q | --min-bq INT            Skip any base with baseQ smaller than INT [%d]\n", snvcall_conf->min_bq);
-     fprintf(stderr, "       -Q | --min-altbq INT         Skip non-reference bases with baseQ smaller than INT [%d]\n", snvcall_conf->min_altbq);
-     fprintf(stderr, "       -a | --def-altbq INT         Non-reference base qualities will be replaced with this value (-1: use median ref-bq; 0: keep) [%d]\n", snvcall_conf->def_altbq);
+     fprintf(stderr, "       -Q | --min-alt-bq INT        Skip alternate bases with baseQ smaller than INT [%d]\n", snvcall_conf->min_alt_bq);
+     fprintf(stderr, "       -R | --def-alt-bq INT        Overwrite baseQs of alternate bases (that passed bq filter) with this value (-1: use median ref-bq; 0: keep) [%d]\n", snvcall_conf->def_alt_bq);
+
+     fprintf(stderr, "       -j | --min-jq INT            Skip any base with joinedQ smaller than INT [%d]\n", snvcall_conf->min_jq);
+     fprintf(stderr, "       -J | --min-alt-jq INT        Skip alterate bases with joinedQ smaller than INT [%d]\n", snvcall_conf->min_alt_jq);
+     fprintf(stderr, "       -K | --def-alt-jq INT        Overwrite joinedQs of alternate bases (that passed jq filter) with this value (-1: use median ref-bq; 0: keep) [%d]\n", snvcall_conf->def_alt_jq);
+
      fprintf(stderr, "       -B | --no-baq                Disable use of base-alignment quality (BAQ)\n");
      fprintf(stderr, "       -E | --ext-baq               Compute extended base-alignment quality (BAQ) on the fly (otherwise use 'normal' BAQ, which is computed on the fly, if not already present in %s tag)\n", BAQ_TAG);
+
      fprintf(stderr, "- Mapping quality\n");                                
-     fprintf(stderr, "       -m | --min-mq INT            Skip alignments with mapping quality smaller than INT [%d]\n", mplp_conf->min_mq);
+     fprintf(stderr, "       -m | --min-mq INT            Skip reads with mapping quality smaller than INT [%d]\n", mplp_conf->min_mq);
      fprintf(stderr, "       -M | --max-mq INT            Cap mapping quality at INT [%d]\n", mplp_conf->max_mq);
-     fprintf(stderr, "       -J | --no-mq                 Don't merge mapping quality in LoFreq's model\n");
+     fprintf(stderr, "       -N | --no-mq                 Don't merge mapping quality in LoFreq's model\n");
+
 #ifdef USE_SOURCEQUAL                                     
      fprintf(stderr, "- Source quality\n");                                
-     fprintf(stderr, "       -S | --source-qual           Enable computation of source quality for reads\n");
-     fprintf(stderr, "       -V | --ign-vcf FILE          Ignore variants in this vcf file for source quality computation\n"),
-     fprintf(stderr, "       -n | --def-nm-q INT          If >= 0, then replace non-match base qualities with this default value [%d]\n", mplp_conf->def_nm_q);
+     fprintf(stderr, "       -s | --src-qual           Enable computation of source quality for reads\n");
+     fprintf(stderr, "       -S | --ign-vcf FILE          Ignore variants in this vcf file for source quality computation\n"),
+     fprintf(stderr, "       -T | --def-nm-q INT          If >= 0, then replace non-match base qualities with this default value [%d]\n", mplp_conf->def_nm_q);
 #endif                                                    
      fprintf(stderr, "- P-Values\n");                                          
-     fprintf(stderr, "       -s | --sig                   P-Value cutoff / significance level [%f]\n", snvcall_conf->sig);
-     fprintf(stderr, "       -b | --bonf                  Bonferroni factor. 'dynamic' (increase per actually performed test), 'auto' (infer from bed-file) or INT ['dynamic']\n");
+     fprintf(stderr, "       -a | --sig                   P-Value cutoff / significance level [%f]\n", snvcall_conf->sig);
+     fprintf(stderr, "       -b | --bonf                  Bonferroni factor. 'dynamic' (increase per actually performed test) or INT ['dynamic']\n");
+     /* don't mention auto: was misused by users and is deprecated anyway: 'auto' (infer from bed-file)*/
      fprintf(stderr, "- Misc.\n");                                           
 #ifdef USE_ALNERRPROF
      fprintf(stderr, "       -A | --map-prof FILE         Mapping error profile (produced with bamstats)\n");
 #endif
      fprintf(stderr, "       -C | --min-cov INT           Test only positions having at least this coverage [%d]\n", snvcall_conf->min_cov);
-     fprintf(stderr, "       -N | --dont-skip-n           Don't skip positions where refbase is N (will try to predict CONSVARs (only) at those positions)\n");
-     fprintf(stderr, "       -I | --illumina-1.3          Assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
+     fprintf(stderr, "            --illumina-1.3          Assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
+     fprintf(stderr, "            --dont-skip-n           Don't skip positions where refbase is N (will try to predict CONSVARs (only) at those positions)\n");
      fprintf(stderr, "            --use-orphan            Count anomalous read pairs (i.e. where mate is not aligned properly)\n");
      fprintf(stderr, "            --plp-summary-only      No snv-calling: just output pileup summary per column\n");
      fprintf(stderr, "            --no-default-filter     Don't apply default filter command after calling variants\n");
@@ -503,8 +514,11 @@ main_call(int argc, char *argv[])
      /* based on bam_mpileup() */
      int c, i;
      static int use_orphan = 0;
+     static int cons_as_ref = 0;
      static int plp_summary_only = 0;
      static int no_default_filter = 0;
+     static int dont_skip_n = 0;
+     static int illumina_1_3 = 0;
      int bonf_auto = 0;
      char *bam_file = NULL;
      char *bed_file = NULL;
@@ -562,35 +576,41 @@ for cov in coverage_range:
               {"region", required_argument, NULL, 'r'},
               {"bed", required_argument, NULL, 'l'}, /* changes here must be reflected in pseudo_parallel code as well */
               
-              {"reffa", required_argument, NULL, 'f'},
-              {"cons-as-ref", no_argument, NULL, 'c'},
+              {"ref", required_argument, NULL, 'f'},
+              {"cons-as-ref", required_argument, &cons_as_ref, 1},
 
               {"out", required_argument, NULL, 'o'}, /* NOTE changes here must be reflected in pseudo_parallel code as well */
 
               {"min-bq", required_argument, NULL, 'q'},
-              {"min-altbq", required_argument, NULL, 'Q'},
-              {"def-altbq", required_argument, NULL, 'a'},
+              {"min-alt-bq", required_argument, NULL, 'Q'},
+              {"def-alt-bq", required_argument, NULL, 'R'},
+
+              {"min-jq", required_argument, NULL, 'j'},
+              {"min-alt-jq", required_argument, NULL, 'J'},
+              {"def-alt-jq", required_argument, NULL, 'K'},
+
               {"no-baq", no_argument, NULL, 'B'},
               {"ext-baq", no_argument, NULL, 'E'},
                   
               {"min-mq", required_argument, NULL, 'm'},
               {"max-mq", required_argument, NULL, 'M'},
-              {"no-mq", no_argument, NULL, 'J'},
+              {"no-mq", no_argument, NULL, 'N'},
 #ifdef USE_SOURCEQUAL
-              {"source-qual", no_argument, NULL, 'S'},
-              {"def-nm-q", required_argument, NULL, 'n'},
-              {"ign-vcf", required_argument, NULL, 'V'},
+              {"src-qual", no_argument, NULL, 's'},
+              {"ign-vcf", required_argument, NULL, 'S'},
+              {"def-nm-q", required_argument, NULL, 'R'},
 #endif
-              {"sig", required_argument, NULL, 's'},
+              {"sig", required_argument, NULL, 'a'},
               {"bonf", required_argument, NULL, 'b'}, /* NOTE changes here must be reflected in pseudo_parallel code as well */
 
 #ifdef USE_ALNERRPROF
               {"map-prof", required_argument, NULL, 'A'},
 #endif                   
               {"min-cov", required_argument, NULL, 'C'},
-              {"dont-skip-n", required_argument, NULL, 'N'},
               /*{"maxdepth", required_argument, NULL, 'd'},*/
-              {"illumina-1.3", no_argument, NULL, 'I'},
+
+              {"dont-skip-n", required_argument, &dont_skip_n, 1},
+              {"illumina-1.3", no_argument, &illumina_1_3, 1},
               {"use-orphan", no_argument, &use_orphan, 1},
               {"plp-summary-only", no_argument, &plp_summary_only, 1},
               {"no-default-filter", no_argument, &no_default_filter, 1},
@@ -602,8 +622,7 @@ for cov in coverage_range:
          };
 
          /* keep in sync with long_opts and usage */
-         static const char *long_opts_str = "r:l:f:co:q:Q:a:BEm:M:JSn:V:b:s:C:NIh"; 
-         /* USE_ALNERRPROF i.e. A: removed for now */
+         static const char *long_opts_str = "r:l:f:o:q:Q:R:j:J:K:BEm:M:NsS:T:a:b:A:C:h"; 
          
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
@@ -639,10 +658,6 @@ for cov in coverage_range:
               warn_old_fai(mplp_conf.fa);
               break;
 
-         case 'c': 
-              snvcall_conf.flag |= SNVCALL_CONS_AS_REF;
-              break;
-
          case 'o':
               if (0 != strcmp(optarg, "-")) {
                    if (file_exists(optarg)) {
@@ -658,11 +673,27 @@ for cov in coverage_range:
               break;
 
          case 'Q': 
-              snvcall_conf.min_altbq = atoi(optarg); 
+              snvcall_conf.min_alt_bq = atoi(optarg); 
               break;
 
-         case 'a':
-              snvcall_conf.def_altbq = atoi(optarg); 
+         case 'R':
+              snvcall_conf.def_alt_bq = atoi(optarg); 
+              break;
+
+         case 'j': 
+              snvcall_conf.min_jq = atoi(optarg); 
+              break;
+
+         case 'J': 
+              snvcall_conf.min_alt_jq = atoi(optarg); 
+              break;
+
+         case 'K':
+              snvcall_conf.def_alt_jq = atoi(optarg);
+              if (-1 == snvcall_conf.def_alt_jq) {
+                   LOG_FATAL("%s\n", "Sorry, use of median ref JQ implemented yet");/* FIXME */
+                   exit(1);
+              }
               break;
 
          case 'B': 
@@ -682,48 +713,42 @@ for cov in coverage_range:
               mplp_conf.max_mq = atoi(optarg); 
               break;
 
-         case 'J': 
+         case 'N': 
               snvcall_conf.flag &= ~SNVCALL_USE_MQ; 
               break;
 
 #ifdef USE_SOURCEQUAL
-         case 'S': 
+         case 's': 
               mplp_conf.flag |= MPLP_USE_SQ;
               snvcall_conf.flag |= SNVCALL_USE_SQ; 
               break;
 
-         case 'V': 
+         case 'S': 
               ign_vcf = strdup(optarg);
               break;
 
-         case 'n': 
+         case 'T': 
               mplp_conf.def_nm_q = atoi(optarg);
               break;
 #else
+         case 's': 
+              LOG_FATAL("%s\n", "source-qual was disabled at compile time"); 
+              return 1;
          case 'S': 
               LOG_FATAL("%s\n", "source-qual was disabled at compile time"); 
               return 1;
-         case 'V': 
-              LOG_FATAL("%s\n", "source-qual was disabled at compile time"); 
-              return 1;
-         case 'n': 
+         case 'R': 
               LOG_FATAL("%s\n", "source-qual was disabled at compile time"); 
               return 1;
 #endif
 
-         case 's': 
+         case 'a': 
               snvcall_conf.sig = strtof(optarg, (char **)NULL); /* atof */
               if (0==snvcall_conf.sig) {
                    LOG_FATAL("%s\n", "Couldn't parse sign-threshold"); 
                    return 1;
               }
               break;
-
-#ifdef USE_ALNERRPROF
-         case 'A':
-              mplp_conf.alnerrprof_file = strdup(optarg);
-              break;
-#endif
          case 'b': 
               if (0 == strncmp(optarg, "auto", 4)) {
                    bonf_auto = 1;
@@ -745,23 +770,16 @@ for cov in coverage_range:
               }
               break;
 
+
+#ifdef USE_ALNERRPROF
+         case 'A':
+              mplp_conf.alnerrprof_file = strdup(optarg);
+              break;
+#endif
+
          case 'C': 
               snvcall_conf.min_cov = atoi(optarg); 
               break;
-
-         case 'N': 
-              snvcall_conf.dont_skip_n = 1;
-              break;
-/*
-         case 'd': 
-              mplp_conf.max_depth = atoi(optarg); 
-              break;
-*/       
-         case 'I': 
-              mplp_conf.flag |= MPLP_ILLUMINA13; 
-              break;
-
-         /* already set: use-orphan, plp-summary-only, verbose, debug */
 
          case 'h': 
               usage(& mplp_conf, & snvcall_conf); 
@@ -783,8 +801,19 @@ for cov in coverage_range:
          }
     }
 
+
+    snvcall_conf.dont_skip_n = dont_skip_n;
+
+    if (illumina_1_3) {
+         mplp_conf.flag |= MPLP_ILLUMINA13; 
+    }
+
     if (use_orphan) {
          mplp_conf.flag &= ~MPLP_NO_ORPHAN;
+    }
+
+    if (cons_as_ref) {
+         snvcall_conf.flag |= SNVCALL_CONS_AS_REF;
     }
     
     if (argc == 2) {
@@ -820,9 +849,9 @@ for cov in coverage_range:
                    mplp_conf.min_mq, mplp_conf.max_mq); 
          return 1;
     }
-    if (snvcall_conf.min_bq > snvcall_conf.min_altbq) {
+    if (snvcall_conf.min_bq > snvcall_conf.min_alt_bq) {
          LOG_FATAL("Minimum base-call quality for all bases (%d) larger than minimum base-call quality for alternate bases (%d)\n",
-                   snvcall_conf.min_bq, snvcall_conf.min_altbq); 
+                   snvcall_conf.min_bq, snvcall_conf.min_alt_bq); 
          return 1;
     }
     if (mplp_conf.flag & MPLP_REALN && ! mplp_conf.fa && ! plp_summary_only) {
