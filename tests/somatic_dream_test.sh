@@ -1,11 +1,13 @@
 #!/bin/bash
 source lib.sh || exit 1
 
-REF=/mnt/userArchive/wilma/projects/somatic/testproject/refseq/Homo_sapiens_assembly19.fasta
-TUMOR=/mnt/userArchive/wilma/projects/somatic/testproject/tumor.chr20.bam
-NORMAL=/mnt/userArchive/wilma/projects/somatic/testproject/normal.chr20.bam
-TRUTH=/mnt/userArchive/wilma/projects/somatic/testproject/truth.chr20.vcf.gz
-BED=/mnt/userArchive/wilma/projects/somatic/testproject/chr20.bed
+BASE=/projects/wilma/SOMATIC/dream-challenge/testproject/
+#BASE=/mnt/userArchive/wilma/projects/somatic/testproject/
+REF=${BASE}/refseq/Homo_sapiens_assembly19.fasta
+TUMOR=${BASE}/tumor.chr20.bam
+NORMAL=${BASE}/normal.chr20.bam
+TRUTH=${BASE}/truth.chr20.vcf.gz
+BED=${BASE}/chr20.bed
 EVALUATOR=/projects/wilma/SOMATIC/dream-challenge/tools/bamsurgeon.git/etc/evaluator.py
 DEBUG=0
 
@@ -17,7 +19,7 @@ for f in $REF $TUMOR $NORMAL $TRUTH $EVLUATOR; do
 done
 vcf_out=$(mktemp -t $(basename $0).XXXXXX.vcf)
 if [ $DEBUG -eq 1 ]; then
-    cp /mnt/userArchive/wilma/projects/somatic/testproject/snvs/lofreq/beta-4-8-g7b8b334-dirty_somatic_final.vcf $vcf_out
+    cp ${BASE}/snvs/lofreq/beta-4-8-g7b8b334-dirty_somatic_final.vcf $vcf_out
 else
     $LOFREQ somatic -l $BED -n $NORMAL -t $TUMOR -f $REF -o $vcf_out --threads $threads || exit 1
     echoinfo "lofreq somatic run completed. now checking results"
