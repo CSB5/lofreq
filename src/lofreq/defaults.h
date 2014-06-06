@@ -31,9 +31,10 @@
 
 #define DEFAULT_BAQ_ON 1
 
-
 /* make lofreq blind to anything below this value */
 #define DEFAULT_MIN_PLP_BQ 3
+
+#define DEFAULT_SIG 0.01
 
 /* ---------------------------------------------------------------------- */
 

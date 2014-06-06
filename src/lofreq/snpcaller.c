@@ -515,7 +515,7 @@ init_snvcall_conf(snvcall_conf_t *c)
      c->dont_skip_n = 0;
      c->bonf_dynamic = 1;
      c->bonf = 1;
-     c->sig = 0.05;
+     c->sig = DEFAULT_SIG;
      /* c->out = ; */
      c->flag |= SNVCALL_USE_MQ;
      c->flag |= SNVCALL_USE_BAQ;
