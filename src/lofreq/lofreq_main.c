@@ -180,8 +180,6 @@ int main(int argc, char *argv[])
 {
      add_local_dir_to_path(argv[0]);
 
-     LOG_WARN("%s\n", "This version uses default BAQ (computed in extra function) and incorporates it into model");
-
      if (argc < 2) {
           usage(BASENAME(argv[0]));
           return 1;
