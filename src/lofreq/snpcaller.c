@@ -816,8 +816,6 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
               >>> -10 * X/log(10)
               434.2944819032518
              */
-/*#define NO_PRUNING*/
-#ifndef NO_PRUNING
              if (pvalue * (double)bonf_factor > sig_level) {
 #ifdef DEBUG
                   fprintf(stderr, "DEBUG(%s:%s:%d): early exit at n=%d K=%d with pvalue %Lg\n", 
@@ -826,7 +824,6 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
                   free(probvec_prev);
                   return probvec;
              }
-#endif
         }
 
         assert(! isinf(probvec[0])); /* used to happen when first q=0 */
@@ -930,7 +927,6 @@ poissbin(long double *pvalue, const double *err_probs,
          }
     }
 
-    assert(! isnan(*pvalue));
     return probvec;
 }
 
@@ -1009,14 +1005,6 @@ snpcaller(long double *snp_pvalues,
 
     /* report p-value for each non-consensus base
      */
-#if 0
-    for (i=1; i<max_noncons_count+1; i++) {        
-        fprintf(stderr, "DEBUG(%s:%s():%d): pvalue=%Lg for noncons_counts %d\n", 
-                __FILE__, __FUNCTION__, __LINE__, 
-                expl(probvec_tailsum(probvec, i, max_noncons_count+1)), i);
-    }
-#endif
-
     for (i=0; i<NUM_NONCONS_BASES; i++) { 
         if (0 != noncons_counts[i]) {
              int errsv;
@@ -1033,8 +1021,8 @@ snpcaller(long double *snp_pvalues,
                    * and 1.0 might vreate problems with high Bonf/Sig
                    * factors so we need to return a high value
                    * (LDBL_MAX)
-                   */
-                  if (pvalue < DBL_EPSILON) { 
+                   */ 
+                 if (pvalue < DBL_EPSILON) { 
                        pvalue = LDBL_MIN;/* to zero but prevent actual 0 value */
                   } else {
                        pvalue = LDBL_MAX; /* otherwise set to 1 which might pass filters */
