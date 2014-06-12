@@ -101,7 +101,42 @@ def r_ify(axes):
 
     return axes
 
+def ts_or_tv(b1, b2):
+    """Inspired by https://github.com/yesimon/rosalind/blob/master/TRAN.py
 
+    Returns None if any of the two given bases is not in 'ACGT'
+    """
+    type_map = {
+        frozenset(['A', 'G']): 'ts',
+        frozenset(['C', 'T']): 'ts',
+        frozenset(['A', 'C']): 'tv',
+        frozenset(['G', 'T']): 'tv',
+        frozenset(['A', 'T']): 'tv',
+        frozenset(['C', 'G']): 'tv',
+        }
+    return type_map.get(frozenset([b1, b2]))
+
+
+def ts_tv_ratio(vars):
+    """Computes Ts/Tv ratio. Only works on SNVs
+    """
+
+    counts = dict()
+    num_vars = 0
+    for v in vars:
+        assert len(v.REF)==1
+        assert len(v.ALT)==1 and len(v.ALT[0])==1
+        num_vars += 1
+        ref = v.REF.upper()
+        alt = str(v.ALT[0]).upper()
+        t = ts_or_tv(ref, alt)
+        if t:
+            counts[t] = counts.get(t, 0) + 1
+    ratio = counts['ts']/float(counts['tv'])
+    #print "DEBUG: %d vars. %d ts. %d tv. ratio %2.f" % (num_vars, counts['ts'], counts['tv'], ratio)
+    return ratio
+
+            
 def subst_type_str(ref, alt, strand_specific=False):
     """FIXME:add-doc
     """
@@ -321,6 +356,10 @@ def cmdline_parser():
                       action="store_true",
                       dest="simple",
                       help="Simple plots only - no combinations")
+    parser.add_argument("--ign-filter",
+                      action="store_true",
+                      dest="ign_filter",
+                      help="Use all, not just passed variants")                      
     parser.add_argument("--maxdp",
                       dest="maxdp",
                       type=int,
@@ -378,10 +417,13 @@ def main():
         vcfreader = vcf.VCFReader(sys.stdin)
     else:
         vcfreader = vcf.VCFReader(filename=args.vcf)
-    # v.FILTER is empty if not set in pyvcf. LoFreq's vcf.py clone set it to PASS or .
-    vars = [v for v in vcfreader if not v.FILTER or v.FILTER in ['PASS', '.']]
-
-    summary_txt.append("Loaded %d (non-filtered) vars" % (len(vars)))
+        
+    vars = [v for v in vcfreader]
+    
+    if not args.ign_filter:
+        # v.FILTER is empty if not set in pyvcf. LoFreq's vcf.py clone set it to PASS or .
+        vars = [v for v in vcfreader if not v.FILTER or v.FILTER in ['PASS', '.']]
+    summary_txt.append("Loaded %d variants" % (len(vars)))
     LOG.info(summary_txt[-1])
 
     filter_list = []
@@ -466,6 +508,9 @@ def main():
         fig = plt.figure()
         ax = plt.subplot(1, 1, 1)
         x = props[p]
+        if len(x) == 0:
+            LOG.warn("No values for %s. Not plotting..." % p)
+            continue
         ax.boxplot(x, notch=1, positions=[0], vert=1)
         violin_plot(ax, x)
         ax.set_ylabel('#SNVs')
@@ -513,7 +558,7 @@ def main():
     fig = plt.figure()
     ax = plt.subplot(1, 1, 1)
     subst_perc(ax, subst_type_counts)
-    plt.title('Substitution Types')
+    plt.title('Substitution Types (Ts/Tv=%.2f)' % (ts_tv_ratio(vars)))
     pp.savefig()
     plt.close()
 
