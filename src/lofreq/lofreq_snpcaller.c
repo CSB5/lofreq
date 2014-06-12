@@ -471,7 +471,7 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -R | --def-alt-bq INT        Overwrite baseQs of alternate bases (that passed bq filter) with this value (-1: use median ref-bq; 0: keep) [%d]\n", snvcall_conf->def_alt_bq);
 
      fprintf(stderr, "       -j | --min-jq INT            Skip any base with joinedQ smaller than INT [%d]\n", snvcall_conf->min_jq);
-     fprintf(stderr, "       -J | --min-alt-jq INT        Skip alterate bases with joinedQ smaller than INT [%d]\n", snvcall_conf->min_alt_jq);
+     fprintf(stderr, "       -J | --min-alt-jq INT        Skip alternate bases with joinedQ smaller than INT [%d]\n", snvcall_conf->min_alt_jq);
      fprintf(stderr, "       -K | --def-alt-jq INT        Overwrite joinedQs of alternate bases (that passed jq filter) with this value (-1: use median ref-bq; 0: keep) [%d]\n", snvcall_conf->def_alt_jq);
 
      fprintf(stderr, "       -B | --no-baq                Disable use of base-alignment quality (BAQ)\n");
