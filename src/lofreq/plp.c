@@ -90,8 +90,7 @@ void init_mplp_conf(mplp_conf_t *c)
      c->min_plp_bq = DEFAULT_MIN_PLP_BQ;/* note: different from DEFAULT_MIN_BQ */
      c->capQ_thres = 0;
      c->max_depth = DEFAULT_MAX_PLP_DEPTH;
-     /* REALN == default BAQ */
-     c->flag = MPLP_NO_ORPHAN | MPLP_REALN;
+     c->flag = MPLP_NO_ORPHAN | MPLP_BAQ;
 }
 
 
@@ -221,11 +220,12 @@ dump_mplp_conf(const mplp_conf_t *c, FILE *stream)
      fprintf(stream, "  min_mq       = %d\n", c->min_mq);
      fprintf(stream, "  flag         = %d\n", c->flag);
 
-     fprintf(stream, "  flag & MPLP_NO_ORPHAN  = %d\n", c->flag&MPLP_NO_ORPHAN ? 1:0);
-     fprintf(stream, "  flag & MPLP_REALN      = %d\n", c->flag&MPLP_REALN ? 1:0);
-     fprintf(stream, "  flag & MPLP_USE_SQ     = %d\n", c->flag&MPLP_USE_SQ ? 1:0);
-     fprintf(stream, "  flag & MPLP_REDO_BAQ    = %d\n", c->flag&MPLP_REDO_BAQ ? 1:0);
-     fprintf(stream, "  flag & MPLP_ILLUMINA13 = %d\n", c->flag&MPLP_ILLUMINA13 ? 1:0);
+     fprintf(stream, "  flag & MPLP_NO_ORPHAN  = %d\n", c->flag & MPLP_NO_ORPHAN ? 1:0);
+     fprintf(stream, "  flag & MPLP_BAQ        = %d\n", c->flag & MPLP_BAQ ? 1:0);
+     fprintf(stream, "  flag & MPLP_REDO_BAQ   = %d\n", c->flag & MPLP_REDO_BAQ ? 1:0);
+     fprintf(stream, "  flag & MPLP_EXT_BAQ    = %d\n", c->flag & MPLP_EXT_BAQ ? 1:0);
+     fprintf(stream, "  flag & MPLP_USE_SQ     = %d\n", c->flag & MPLP_USE_SQ ? 1:0);
+     fprintf(stream, "  flag & MPLP_ILLUMINA13 = %d\n", c->flag & MPLP_ILLUMINA13 ? 1:0);
      
      fprintf(stream, "  capQ_thres   = %d\n", c->capQ_thres);
      fprintf(stream, "  max_depth    = %d\n", c->max_depth);
@@ -544,7 +544,7 @@ mplp_func(void *data, bam1_t *b)
 {
      /*extern int bam_realn(bam1_t *b, const char *ref);*/
      /*extern int bam_prob_realn_core(bam1_t *b, const char *ref, int);*/
-     extern int bam_prob_realn_lofreq(bam1_t *b, const char *ref, int redo);
+     extern int bam_prob_realn_lofreq(bam1_t *b, const char *ref, int extended, int redo);
      extern int bam_cap_mapQ(bam1_t *b, char *ref, int thres);
      mplp_aux_t *ma = (mplp_aux_t*)data;
      int ret, skip = 0;
@@ -617,16 +617,13 @@ mplp_func(void *data, bam1_t *b)
           }
 #endif
           
-        if (has_ref && (ma->conf->flag & MPLP_REALN)) {
-             /* orig samtools: bam_prob_realn_core(b, ma->ref, (ma->conf->flag & MPLP_REDO_BAQ)? 7 : 3);
-              * 3: 'apply', 'extended'
-              * 7: 'apply', 'extended', 'redo'
-              * apply means original values will be replaced which is not what we want
-              */
-             if (bam_prob_realn_lofreq(b, ma->ref, (ma->conf->flag & MPLP_REDO_BAQ))) {
+        if (has_ref && (ma->conf->flag & MPLP_BAQ)) {
+             if (bam_prob_realn_lofreq(b, ma->ref, 
+                                       (ma->conf->flag & MPLP_EXT_BAQ),
+                                       (ma->conf->flag & MPLP_REDO_BAQ))) {
                   LOG_ERROR("bam_prob_realn_core() failed for %s\n", bam1_qname(b));
              }
-        } else if (ma->conf->flag & MPLP_REALN) {
+        } else if (ma->conf->flag & MPLP_BAQ) {
              /* should never get here */
              LOG_FATAL("%s\n", "Can't compue BAQ without reference sequence");
              exit(1);
@@ -785,7 +782,7 @@ void compile_plp_col(plp_col_t *plp_col,
           }
 #endif
           
-          if (conf->flag & MPLP_REALN) {
+          if (conf->flag & MPLP_BAQ) {
                baq_aux = bam_aux_get(p->b, BAQ_TAG); 
                /* should have been recomputed already */
                if (! baq_aux) {
@@ -844,12 +841,13 @@ void compile_plp_col(plp_col_t *plp_col,
                     LOG_FATAL("Base qualitiy above allowed maximum detected (%d)\n", bq);
                     exit(1);
                }
+               PLP_COL_ADD_QUAL(& plp_col->base_quals[nt4], bq);
 
                if (baq_aux) {
                     baq = baq_aux[p->qpos]-33;
-               } else {
-                    baq = -1;/* disabled */
+                    PLP_COL_ADD_QUAL(& plp_col->baq_quals[nt4], baq);
                }
+               /* otherwise baq disabled */
 
                /* no need for check if mq is within user defined
                 * limits. check was done in mplp_func */
@@ -861,11 +859,8 @@ void compile_plp_col(plp_col_t *plp_col,
                 * gets executed, which is why we remove it:
                 * if (mq > 126) mq = 126;
                 */
-
-
-               PLP_COL_ADD_QUAL(& plp_col->base_quals[nt4], bq);
                PLP_COL_ADD_QUAL(& plp_col->map_quals[nt4], mq);
-               PLP_COL_ADD_QUAL(& plp_col->baq_quals[nt4], baq);
+
 #ifdef USE_SOURCEQUAL
                if (conf->flag & MPLP_USE_SQ) {
                     PLP_COL_ADD_QUAL(& plp_col->source_quals[nt4], sq);

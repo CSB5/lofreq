@@ -192,7 +192,7 @@ int bam_cap_mapQ(bam1_t *b, char *ref, int thres)
  * qualities. changes were kept minimal to make diff against future
  * samtools versions easier.
  */
-int bam_prob_realn_lofreq(bam1_t *b, const char *ref, int redo)
+int bam_prob_realn_lofreq(bam1_t *b, const char *ref, int extended, int redo)
 {
     int k, i, bw, x, y, yb, ye, xb, xe;
 	uint32_t *cigar = bam1_cigar(b);
@@ -205,18 +205,14 @@ int bam_prob_realn_lofreq(bam1_t *b, const char *ref, int redo)
      * speciﬁcation. */
     const char *BAQ_TAG = "lb";  /* private tag for actual baq values: "l"ofreseq "b"ase-alignment: also defined in defaults.h */
     uint8_t *baq_full = 0; /* actual baq values; not stored as offset and not capped */
-    const int extend_baq = 0;
 
-    if (extend_baq) {
-        fprintf(stderr,"FATAL(%s|%s): LoFreq internal extended BAQ not implemented yet.\n", __FILE__, __FUNCTION__);
-        exit(1);
-    }
+    
+	if ((c->flag & BAM_FUNMAP) || b->core.l_qseq == 0)
+            return -1; // do nothing
+	if ((baq_full = bam_aux_get(b, BAQ_TAG)) != 0 && *baq_full == 'Z') 
+            ++baq_full;
 
-	if ((c->flag & BAM_FUNMAP) || b->core.l_qseq == 0) return -1; // do nothing
-	if ((baq_full = bam_aux_get(b, BAQ_TAG)) != 0 && *baq_full == 'Z') ++baq_full;
-
-	if (baq_full && redo)
-	{
+	if (baq_full && redo) {
 	    bam_aux_del(b, baq_full-1);
 	    baq_full = 0;
 	}
@@ -264,7 +260,7 @@ int bam_prob_realn_lofreq(bam1_t *b, const char *ref, int redo)
 		state = calloc(c->l_qseq, sizeof(int));
 		q = calloc(c->l_qseq, 1);
 		kpa_glocal(r, xe-xb, s, c->l_qseq, qual, &conf, state, q);
-		if (!extend_baq) { // in this block, bq[] is capped by base quality qual[]
+		if (!extended) { // in this block, bq[] is capped by base quality qual[]
 			for (k = 0, x = c->pos, y = 0; k < c->n_cigar; ++k) {
 				int op = cigar[k]&0xf, l = cigar[k]>>4;
 				if (op == BAM_CMATCH || op == BAM_CEQUAL || op == BAM_CDIFF) {
@@ -292,13 +288,10 @@ int bam_prob_realn_lofreq(bam1_t *b, const char *ref, int redo)
                             bq[i]=93;
                     }
                     bq[i] += 33;
-                    /*fprintf(stderr, "bq[i=%d] = %c==%d\n", i, bq[i], bq[i]-33);*/
             }
 #endif
 		} else { // in this block, bq[] is BAQ that can be larger than qual[] (different from the above!)
 			uint8_t *left, *rght;
-            fprintf(stderr, "FATAL INTERNAL ERROR: internal error: should not get into extended baq computation\n"); 
-            exit(1);
 			left = calloc(c->l_qseq, 1); rght = calloc(c->l_qseq, 1);
 			for (k = 0, x = c->pos, y = 0; k < c->n_cigar; ++k) {
 				int op = cigar[k]&0xf, l = cigar[k]>>4;
@@ -315,7 +308,17 @@ int bam_prob_realn_lofreq(bam1_t *b, const char *ref, int redo)
 				} else if (op == BAM_CSOFT_CLIP || op == BAM_CINS) y += l;
 				else if (op == BAM_CDEL) x += l;
 			}
+#ifdef ORIG_SAMTOOLS
 			for (i = 0; i < c->l_qseq; ++i) bq[i] = 64 + (qual[i] <= bq[i]? 0 : qual[i] - bq[i]); // finalize BQ
+#else
+			for (i = 0; i < c->l_qseq; ++i) {
+                    /* need to cap to phred max to be able to store it */
+                    if (bq[i]>93) {
+                            bq[i]=93;
+                    }
+                    bq[i] += 33;
+            }
+#endif
 			free(left); free(rght);
 		}
 #ifdef ORIG_SAMTOOLS
