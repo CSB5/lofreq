@@ -214,7 +214,7 @@ plp_summary(const plp_col_t *plp_col, void* confp)
                     int q = -1;
                     if (x==0) {
                          q = plp_col->base_quals[i].data[j];
-                    } else if (x==1) {
+                    } else if (x==1 && conf->flag & SNVCALL_USE_BAQ) {
                          q = plp_col->baq_quals[i].data[j];
                     } else if (x==2) {
                          q = plp_col->map_quals[i].data[j];
@@ -474,7 +474,9 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -J | --min-alt-jq INT        Skip alternate bases with joinedQ smaller than INT [%d]\n", snvcall_conf->min_alt_jq);
      fprintf(stderr, "       -K | --def-alt-jq INT        Overwrite joinedQs of alternate bases (that passed jq filter) with this value (-1: use median ref-bq; 0: keep) [%d]\n", snvcall_conf->def_alt_jq);
 
+     fprintf(stderr, "- Base-alignment quality (BAQ)\n");                      
      fprintf(stderr, "       -B | --no-baq                Disable use of base-alignment quality (BAQ)\n");
+     fprintf(stderr, "       -D | --del-baq               Delete pre-existing BAQ values, i.e. compute even if already present in BAM\n");
      fprintf(stderr, "       -E | --ext-baq               Compute extended base-alignment quality (BAQ) on the fly (otherwise use 'normal' BAQ, which is computed on the fly, if not already present in %s tag)\n", BAQ_TAG);
 
      fprintf(stderr, "- Mapping quality\n");                                
@@ -590,6 +592,7 @@ for cov in coverage_range:
               {"def-alt-jq", required_argument, NULL, 'K'},
 
               {"no-baq", no_argument, NULL, 'B'},
+              {"del-baq", no_argument, NULL, 'D'},
               {"ext-baq", no_argument, NULL, 'E'},
                   
               {"min-mq", required_argument, NULL, 'm'},
@@ -622,7 +625,7 @@ for cov in coverage_range:
          };
 
          /* keep in sync with long_opts and usage */
-         static const char *long_opts_str = "r:l:f:o:q:Q:R:j:J:K:BEm:M:NsS:T:a:b:A:C:h"; 
+         static const char *long_opts_str = "r:l:f:o:q:Q:R:j:J:K:BDEm:M:NsS:T:a:b:A:C:h"; 
          
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
@@ -697,12 +700,16 @@ for cov in coverage_range:
               break;
 
          case 'B': 
-              mplp_conf.flag &= ~MPLP_REALN; 
+              mplp_conf.flag &= ~MPLP_BAQ; 
               snvcall_conf.flag &= ~SNVCALL_USE_BAQ; 
               break;
 
-         case 'E': 
+         case 'D': 
               mplp_conf.flag |= MPLP_REDO_BAQ;
+              break;
+
+         case 'E': 
+              mplp_conf.flag |= MPLP_EXT_BAQ;
               break;
 
          case 'm': 
@@ -854,7 +861,7 @@ for cov in coverage_range:
                    snvcall_conf.min_bq, snvcall_conf.min_alt_bq); 
          return 1;
     }
-    if (mplp_conf.flag & MPLP_REALN && ! mplp_conf.fa && ! plp_summary_only) {
+    if (mplp_conf.flag & MPLP_BAQ && ! mplp_conf.fa && ! plp_summary_only) {
          LOG_FATAL("%s\n", "Can't compute BAQ with no reference...\n"); 
          return 1;
     }
@@ -1076,7 +1083,6 @@ for cov in coverage_range:
     if (0==rc) {
          LOG_VERBOSE("%s\n", "Successful exit.");
     }
-
 
     return rc;
 }
