@@ -165,9 +165,6 @@ static void usage(const char *myname)
      fprintf(stderr, "  Extra Tools (if installed):\n");
      fprintf(stderr, "    vcfplot       : Plot VCF statistics\n");
      fprintf(stderr, "    cluster       : Cluster variants in VCF file (supports legacy SNP format)\n");
-#ifdef FIXME_NOT_IMPLEMENTED
-     fprintf(stderr, "    peek          : Check properties of BAM file\n");
-#endif
      fprintf(stderr, "\n");
      fprintf(stderr, "  Samtools Clones:\n");
      fprintf(stderr, "    index         : Create index for BAM file\n");
@@ -206,11 +203,12 @@ int main(int argc, char *argv[])
      } else if (strcmp(argv[1], "checkref") == 0) {
           return main_checkref(argc, argv);
           
-     } else if (strcmp(argv[1], "peek") == 0 ||
-                strcmp(argv[1], "inspect") == 0 ||
-                strcmp(argv[1], "doctor") == 0 ||
-                strcmp(argv[1], "run-me-first") == 0)  {
+     } else if (strcmp(argv[1], "info") == 0) {
           LOG_FIXME("%s\n", "NOT IMPLEMENTED YET: has BI, has BD, readlen, has extra BAQ. is_paired. all based on first, say, 10k read\n");
+          return 1;
+
+     } else if (strcmp(argv[1], "wizard") == 0) {
+          LOG_FIXME("%s\n", "NOT IMPLEMENTED YET\n");
           return 1;
 
      } else if (strcmp(argv[1], "filter") == 0) {
