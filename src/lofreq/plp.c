@@ -1073,9 +1073,9 @@ mpileup(const mplp_conf_t *mplp_conf,
     /* read the header and initialize data 
      *
      * note: most of this is overkill since it deals with multiple bam
-     * files, whereas we allow only one. * however, if we keep it
-     * close to the original source then a diff * against future
-     * versions of samtools is easie
+     * files, whereas we allow only one. however, if we keep it close
+     * to the original source then a diff against future versions of
+     * samtools is easier
      *
      */
     for (i = 0; i < n; ++i) {
