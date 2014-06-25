@@ -18,6 +18,7 @@
 #ifdef USE_ALNERRPROF
 #include "lofreq_bamstats.h"
 #endif
+#include "lofreq_checkref.h"
 #include "lofreq_filter.h"
 #include "lofreq_snpcaller.h"
 #include "lofreq_uniq.h"
@@ -151,6 +152,7 @@ static void usage(const char *myname)
      fprintf(stderr, "    somatic       : Call somatic variants\n");
      fprintf(stderr, "\n");
      fprintf(stderr, "  Other Commands:\n");
+     fprintf(stderr, "    checkref      : Check that reference fasta and BAM file match\n");
      fprintf(stderr, "    filter        : Filter variants in VCF file\n");
      fprintf(stderr, "    uniq          : Test whether variants predicted in only one sample really are unique\n");
      fprintf(stderr, "    plpsummary    : Print pileup summary per position\n"); 
@@ -176,6 +178,8 @@ static void usage(const char *myname)
 }
 
 
+
+
 int main(int argc, char *argv[])
 {
      add_local_dir_to_path(argv[0]);
@@ -199,8 +203,10 @@ int main(int argc, char *argv[])
      } else if (strcmp(argv[1], "idxstats") == 0)  {
           return main_idxstats(argc, argv);
 
+     } else if (strcmp(argv[1], "checkref") == 0) {
+          return main_checkref(argc, argv);
+          
      } else if (strcmp(argv[1], "peek") == 0 ||
-                strcmp(argv[1], "check") == 0 ||
                 strcmp(argv[1], "inspect") == 0 ||
                 strcmp(argv[1], "doctor") == 0 ||
                 strcmp(argv[1], "run-me-first") == 0)  {
