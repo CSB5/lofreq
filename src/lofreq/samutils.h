@@ -1,6 +1,9 @@
 #ifndef SAMUTILS_H
 #define SAMUTILS_H
 
+#include "sam.h"
+
+
 /* FIXME should become shared const MAX_READ_LEN. values <10k might not be enough for pacbio */
 #define MAX_READ_LEN 8192
 
@@ -61,5 +64,6 @@ free_alnerrprof(alnerrprof_t *alnerrprof);
 
 #endif
 
+int checkref(char *fasta_file, char *bam_file);
 
 #endif
