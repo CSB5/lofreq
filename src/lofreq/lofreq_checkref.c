@@ -48,7 +48,7 @@ int main_checkref(int argc, char *argv[])
          printf("Failed\n");
          return 1;
     } else {
-         printf("Okay\n");
+         printf("OK\n");
          return 0;
     }
 }
