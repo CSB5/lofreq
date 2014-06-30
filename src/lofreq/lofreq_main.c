@@ -18,6 +18,7 @@
 #ifdef USE_ALNERRPROF
 #include "lofreq_bamstats.h"
 #endif
+#include "lofreq_checkref.h"
 #include "lofreq_filter.h"
 #include "lofreq_snpcaller.h"
 #include "lofreq_uniq.h"
@@ -151,6 +152,7 @@ static void usage(const char *myname)
      fprintf(stderr, "    somatic       : Call somatic variants\n");
      fprintf(stderr, "\n");
      fprintf(stderr, "  Other Commands:\n");
+     fprintf(stderr, "    checkref      : Check that reference fasta and BAM file match\n");
      fprintf(stderr, "    filter        : Filter variants in VCF file\n");
      fprintf(stderr, "    uniq          : Test whether variants predicted in only one sample really are unique\n");
      fprintf(stderr, "    plpsummary    : Print pileup summary per position\n"); 
@@ -163,9 +165,6 @@ static void usage(const char *myname)
      fprintf(stderr, "  Extra Tools (if installed):\n");
      fprintf(stderr, "    vcfplot       : Plot VCF statistics\n");
      fprintf(stderr, "    cluster       : Cluster variants in VCF file (supports legacy SNP format)\n");
-#ifdef FIXME_NOT_IMPLEMENTED
-     fprintf(stderr, "    peek          : Check properties of BAM file\n");
-#endif
      fprintf(stderr, "\n");
      fprintf(stderr, "  Samtools Clones:\n");
      fprintf(stderr, "    index         : Create index for BAM file\n");
@@ -174,6 +173,8 @@ static void usage(const char *myname)
 
      fprintf(stderr, "\n");
 }
+
+
 
 
 int main(int argc, char *argv[])
@@ -199,12 +200,15 @@ int main(int argc, char *argv[])
      } else if (strcmp(argv[1], "idxstats") == 0)  {
           return main_idxstats(argc, argv);
 
-     } else if (strcmp(argv[1], "peek") == 0 ||
-                strcmp(argv[1], "check") == 0 ||
-                strcmp(argv[1], "inspect") == 0 ||
-                strcmp(argv[1], "doctor") == 0 ||
-                strcmp(argv[1], "run-me-first") == 0)  {
+     } else if (strcmp(argv[1], "checkref") == 0) {
+          return main_checkref(argc, argv);
+          
+     } else if (strcmp(argv[1], "info") == 0) {
           LOG_FIXME("%s\n", "NOT IMPLEMENTED YET: has BI, has BD, readlen, has extra BAQ. is_paired. all based on first, say, 10k read\n");
+          return 1;
+
+     } else if (strcmp(argv[1], "wizard") == 0) {
+          LOG_FIXME("%s\n", "NOT IMPLEMENTED YET\n");
           return 1;
 
      } else if (strcmp(argv[1], "filter") == 0) {

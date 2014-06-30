@@ -1,5 +1,5 @@
-#ifndef DEFAULTS_H
-#define DEFAULTS_H
+#ifndef LOFREQ_DEFAULTS_H
+#define LOFREQ_DEFAULTS_H
 
 /* mapping quality filters: applied to all reads. don't set too high as
  * this is a mapper dependent value
