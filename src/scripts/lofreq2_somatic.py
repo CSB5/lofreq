@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 """LoFreq* Somatic SNV Caller.
+
+Predict somatic variants from a paired normal/disease sample.
+
+The script will produce several output files (use -o to define the
+prefix). The most important one ends in somatic_final.vcf
 """
 
 __author__ = "Andreas Wilm"
@@ -470,36 +475,38 @@ def cmdline_parser():
     # http://docs.python.org/dev/howto/argparse.html
     parser = argparse.ArgumentParser(description=__doc__)
 
-    parser.add_argument("-v", "--verbose",
+    basic = parser.add_argument_group('Basic Options')
+
+    basic.add_argument("-v", "--verbose",
                         action="store_true",
                         help="Be verbose")
-    parser.add_argument("--debug",
-                        action="store_true",
-                        help="Enable debugging")
-    parser.add_argument("-n", "--normal",
+    basic.add_argument("-n", "--normal",
                         required=True,
                         help="Normal BAM file")
-    parser.add_argument("-t", "--tumor",
+    basic.add_argument("-t", "--tumor",
                         required=True,
                         help="Tumor BAM file")
-    parser.add_argument("-o", "--outprefix",
+    basic.add_argument("-o", "--outprefix",
                         help="Prefix for output files. Final somatic SNV"
                         " calls will be stored in PREFIX+%s." % (
                             SomaticSNVCaller.VCF_SOMATIC_FINAL_EXT))
-    parser.add_argument("-f", "--ref",
+    basic.add_argument("-f", "--ref",
                         required=True,
                         help="Reference fasta file")
-    parser.add_argument("-l", "--bed",
+    basic.add_argument("-l", "--bed",
                         help="BED file listing regions to restrict analysis to")
-    parser.add_argument("--continue",
-                        dest="continue_interrupted",
-                        action="store_true",
-                        help="Expert only: continue interrupted run."
-                        " Will reuse existing files, assuming they are complete"
-                        " and created with identical options as this run!")
+    
+    default = SomaticSNVCaller.DEFAULT_NUM_THREADS
+    basic.add_argument("--threads",
+                        type=int,
+                        default=default,
+                        dest="num_threads",
+                        help="Use this many threads for each call")
+
+    advanced = parser.add_argument_group('Advanced Options')
 
     default = SomaticSNVCaller.DEFAULT_ALPHA_T
-    parser.add_argument("--tumor-alpha",
+    advanced.add_argument("--tumor-alpha",
                         #required=True,
                         default=default,
                         type=float,
@@ -508,7 +515,7 @@ def cmdline_parser():
                         " (default: %f)" % default)
 
     default = SomaticSNVCaller.DEFAULT_ALPHA_N
-    parser.add_argument("--normal-alpha",
+    advanced.add_argument("--normal-alpha",
                         #required=True,
                         default=default,
                         type=float,
@@ -517,7 +524,7 @@ def cmdline_parser():
 
     default = SomaticSNVCaller.DEFAULT_MTC_T
     choices = ['bonf', 'holm-bonf', 'fdr']
-    parser.add_argument("--tumor-mtc",
+    advanced.add_argument("--tumor-mtc",
                         #required=True,
                         default=default,
                         choices=choices,
@@ -525,7 +532,7 @@ def cmdline_parser():
                         " (default: %s)" % default)
 
     default = SomaticSNVCaller.DEFAULT_MTC_ALPHA_T
-    parser.add_argument("--tumor-mtc-alpha",
+    advanced.add_argument("--tumor-mtc-alpha",
                         #required=True,
                         default=default,
                         type=float,
@@ -533,49 +540,55 @@ def cmdline_parser():
                         " (default: %f)" % default)
 
     default = SomaticSNVCaller.DEFAULT_MQ_FILTER_T
-    parser.add_argument("--tumor-mq-filter",
+    advanced.add_argument("--tumor-mq-filter",
                         type=int,
                         default=default,
                         help="Ignore reads in tumor sample with mapping quality below this value (default=%d)" % default)
     default = SomaticSNVCaller.DEFAULT_MQ_FILTER_N
-    parser.add_argument("--normal-mq-filter",
+    advanced.add_argument("--normal-mq-filter",
                         type=int,
                         default=default,
                         help="Ignore any reads in normal sample with mapping quality below this value (default=%d)" % default)
 
-    parser.add_argument("-B", "--baq-off",
+    advanced.add_argument("-B", "--baq-off",
                         action="store_true",
                         help="Disable BAQ computation everywhere")
 
-    parser.add_argument("-N", "--mq-off",
+    advanced.add_argument("-N", "--mq-off",
                         action="store_true",
                         help="Disable use of mapping quality in LoFreq's model everywhere")
 
-    parser.add_argument("--germline",
+    advanced.add_argument("--germline",
                         action="store_true",
                         help="Also list germline calls in separate file")
 
-    parser.add_argument("--no-src-qual",
+    advanced.add_argument("--no-src-qual",
                         action="store_true",
                         help="Disable use of source quality in tumor (see also -V)")
     default = "normal"
-    parser.add_argument("-S", "--ign-vcf",
+    advanced.add_argument("-S", "--ign-vcf",
                         default=default,
                         help="Ignore variants in this vcf-file for source"
                         " quality computation in tumor (collides with "
                         " --no-src-qual). Default is to use predictions in"
                         " (stringently called) normal sample")
 
-    parser.add_argument("--use-orphan",
-                        action="store_true",
-                        help="Use orphaned/anomalous reads from read pairs")
+    advanced.add_argument("--debug",
+                          action="store_true",
+                          help="Enable debugging")
 
-    default = SomaticSNVCaller.DEFAULT_NUM_THREADS
-    parser.add_argument("--threads",
-                        type=int,
-                        default=default,
-                        dest="num_threads",
-                        help="Use this many threads for each call")
+    
+    experts_only = parser.add_argument_group('Experts only')
+
+    experts_only.add_argument("--continue",
+                              dest="continue_interrupted",
+                              action="store_true",
+                              help="Expert only: continue interrupted run."
+                              " Will reuse existing files, assuming they are complete"
+                              " and created with identical options as this run!")
+    experts_only.add_argument("--use-orphan",
+                              action="store_true",
+                              help="Use orphaned/anomalous reads from read pairs")
 
     return parser
 
