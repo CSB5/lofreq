@@ -18,13 +18,16 @@ log=$outdir/log.txt
 
 KEEP_TMP=0
 
-cmd="$LOFREQ call -B -f $reffa -o $vcfout1 $bam1"
+# true var 1687 in $bam1 has Q62 which becomes 2% after bonf correction
+# i.e. default -a 0.01 swallows it
+
+cmd="$LOFREQ call -s 0.05 -B -f $reffa -o $vcfout1 $bam1"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
 fi
 
-cmd="$LOFREQ call -B -f $reffa -o $vcfout2 $bam2"
+cmd="$LOFREQ call -s 0.05 -B -f $reffa -o $vcfout2 $bam2"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
@@ -42,12 +45,12 @@ N_ABSENT=0
 n_absent=$(for pos in 7035 7404; do grep "^consensus[^0-9]*$pos" $vcfinter; done | wc -l)
 
 if [ $n_present -ne $N_PRESENT ]; then
-    echoerror "Expected $N_PRESENT but got $n_present SNVs"
+    echoerror "Expected $N_PRESENT but got $n_present SNVs (see $outdir)"
     exit 1
 fi
 
 if [ $n_absent -ne $N_ABSENT ]; then
-    echoerror "Expected $N_ABSENT but got $n_absent SNVs"
+    echoerror "Expected $N_ABSENT but got $n_absent SNVs (see $outdir)"
     exit 1
 fi
 
