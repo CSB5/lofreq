@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-"""Parallel wrapper for LoFreq* SNV Caller: Runs one thread per
-seq/chrom listed in header (used as region to make use of indexing
-feature) and bed file (if given) and combines results at the end.
+"""Parallel wrapper for 'lofreq call': Runs one thread per seq/chrom
+listed in header (used as region to make use of indexing feature) and
+bed file (if given) and combines results at the end.
 """
 
 __author__ = "Andreas Wilm"
@@ -507,7 +507,7 @@ def main():
             bam = arg
             break
     if not bam:
-        LOG.fatal("Could determine BAM file from argument list"
+        LOG.fatal("Couldn't determine BAM file from argument list"
                   " or file doesn't exist")
         sys.exit(1)
 
@@ -619,7 +619,7 @@ def main():
 
     if any(results):
         # rerrors printed in work()
-        LOG.fatal("Can't continue")
+        LOG.fatal("Some commands in pool failed. Can't continue")
         sys.exit(1)
 
     # concat the output by number
