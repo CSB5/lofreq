@@ -62,18 +62,19 @@ class SomaticSNVCaller(object):
     """Somatic SNV caller using LoFreq
     """
 
-    VCF_NORMAL_RLX_EXT = "normal_relaxed.vcf"
+    VCF_NORMAL_RLX_EXT = "normal_relaxed.vcf.gz"
     VCF_NORMAL_RLX_LOG_EXT = "normal_relaxed.log"
-    VCF_NORMAL_STR_EXT = "normal_stringent.vcf"
+    VCF_NORMAL_STR_EXT = "normal_stringent.vcf.gz"
     #
-    VCF_TUMOR_RLX_EXT = "tumor_relaxed.vcf"
+    VCF_TUMOR_RLX_EXT = "tumor_relaxed.vcf.gz"
     VCF_TUMOR_RLX_LOG_EXT = "tumor_relaxed.log"
-    VCF_TUMOR_STR_EXT = "tumor_stringent.vcf"
+    VCF_TUMOR_STR_EXT = "tumor_stringent.vcf.gz"
     #
-    VCF_SOMATIC_RAW_EXT = "somatic_raw.vcf"
+    VCF_SOMATIC_RAW_EXT = "somatic_raw.vcf.gz"
     VCF_SOMATIC_FINAL_EXT = "somatic_final.vcf"
+    VCF_SOMATIC_FINAL_WO_DBSNP_EXT = "somatic_final_minus-dbsnp.vcf"
     #
-    VCF_GERMLINE_EXT = "germline.vcf"
+    VCF_GERMLINE_EXT = "germline.vcf.gz"
 
     LOFREQ = 'lofreq'
 
@@ -94,7 +95,7 @@ class SomaticSNVCaller(object):
 
 
     def __init__(self, bam_n, bam_t, ref, outprefix,
-                 bed=None, continue_interrupted=False):
+                 bed=None, dbsnp=None, continue_interrupted=False):
         """init function
         """
 
@@ -106,6 +107,8 @@ class SomaticSNVCaller(object):
         infiles = [bam_n, bam_t, ref]
         if bed:
             infiles.append(bed)
+        if dbsnp:
+            infiles.append(dbsnp)
         for f in infiles:
             assert os.path.exists(f), (
                 "File %s does not exist" % f)
@@ -114,6 +117,7 @@ class SomaticSNVCaller(object):
         self.bam_t = bam_t
         self.ref = ref
         self.bed = bed
+        self.dbsnp = dbsnp
         self.outprefix = outprefix
 
         # continue interrupted program. use with caution. existing
@@ -123,18 +127,19 @@ class SomaticSNVCaller(object):
 
         # setup output files
         #
-        self.vcf_n_rlx = self.outprefix + self.VCF_NORMAL_RLX_EXT + ".gz"
+        self.vcf_n_rlx = self.outprefix + self.VCF_NORMAL_RLX_EXT
         self.vcf_n_rlx_log = self.outprefix + self.VCF_NORMAL_RLX_LOG_EXT
-        self.vcf_n_str = self.outprefix + self.VCF_NORMAL_STR_EXT + ".gz"
+        self.vcf_n_str = self.outprefix + self.VCF_NORMAL_STR_EXT
         #
-        self.vcf_t_rlx = self.outprefix + self.VCF_TUMOR_RLX_EXT + ".gz"
+        self.vcf_t_rlx = self.outprefix + self.VCF_TUMOR_RLX_EXT
         self.vcf_t_rlx_log = self.outprefix + self.VCF_TUMOR_RLX_LOG_EXT
-        self.vcf_t_str = self.outprefix + self.VCF_TUMOR_STR_EXT + ".gz"
+        self.vcf_t_str = self.outprefix + self.VCF_TUMOR_STR_EXT
         #
-        self.vcf_som_raw = self.outprefix + self.VCF_SOMATIC_RAW_EXT + ".gz"
+        self.vcf_som_raw = self.outprefix + self.VCF_SOMATIC_RAW_EXT
         self.vcf_som_fin = self.outprefix + self.VCF_SOMATIC_FINAL_EXT
+        self.vcf_som_fin_wo_dbsnp = self.outprefix + self.VCF_SOMATIC_FINAL_WO_DBSNP_EXT
         #
-        self.vcf_germl = self.outprefix + self.VCF_GERMLINE_EXT + ".gz"
+        self.vcf_germl = self.outprefix + self.VCF_GERMLINE_EXT
 
         # make sure output files don't exist if we are not in
         # 'continue' mode
@@ -142,7 +147,7 @@ class SomaticSNVCaller(object):
         self.outfiles = []
         self.outfiles = [self.vcf_n_rlx, self.vcf_n_rlx_log, self.vcf_n_str,
                         self.vcf_t_rlx, self.vcf_t_rlx_log, self.vcf_t_str,
-                        self.vcf_som_raw, self.vcf_som_fin,
+                        self.vcf_som_raw, self.vcf_som_fin, self.vcf_som_fin_wo_dbsnp,
                         self.vcf_germl]
         if not self.continue_interrupted:
             for f in self.outfiles:
@@ -365,7 +370,7 @@ class SomaticSNVCaller(object):
         self.subprocess_wrapper(cmd)
 
 
-    def complement(self):
+    def remove_normal(self):
         """Produce complement of tumor and normal variants and filter
         them
 
@@ -428,6 +433,23 @@ class SomaticSNVCaller(object):
         e.close()
 
 
+    def remove_dbsnp(self):
+        """Remove dbSNP from 'final' somatic calls
+        """
+
+        if self.continue_interrupted and os.path.exists(self.vcf_som_fin_wo_dbsnp):
+            LOG.info('Reusing %s' % self.vcf_som_fin_wo_dbsnp)
+            return
+        else:
+            assert not os.path.exists(self.vcf_som_fin_wo_dbsnp)
+
+        cmd = [self.LOFREQ, 'vcfset',
+               '-a', 'complement',
+               '-1', self.vcf_som_fin, '-2', self.dbsnp,
+               '-o', self.vcf_som_fin_wo_dbsnp]
+        self.subprocess_wrapper(cmd)
+
+            
     def run(self):
         """Run the whole somatic SNV calling pipeline
         """
@@ -457,8 +479,10 @@ class SomaticSNVCaller(object):
             num_tests = self.call_rlx("tumor")
             self.rlx_to_str("tumor", num_tests)
 
-            self.complement()
+            self.remove_normal()
             self.uniq()
+            if self.dbsnp:
+                self.remove_dbsnp()
             if self.do_germline:
                 self.call_germline()
         except:
@@ -488,13 +512,15 @@ def cmdline_parser():
                         help="Tumor BAM file")
     basic.add_argument("-o", "--outprefix",
                         help="Prefix for output files. Final somatic SNV"
-                        " calls will be stored in PREFIX+%s." % (
-                            SomaticSNVCaller.VCF_SOMATIC_FINAL_EXT))
+                        " calls will be stored in PREFIX+%s (or PREFIX+%s if dbsnp was provided)" % (
+                            SomaticSNVCaller.VCF_SOMATIC_FINAL_EXT, SomaticSNVCaller.VCF_SOMATIC_FINAL_WO_DBSNP_EXT))
     basic.add_argument("-f", "--ref",
                         required=True,
                         help="Reference fasta file")
     basic.add_argument("-l", "--bed",
                         help="BED file listing regions to restrict analysis to")
+    basic.add_argument("-d", "--dbsnp",
+                        help="vcf-file (gzip supported) containing known germline variants")
     
     default = SomaticSNVCaller.DEFAULT_NUM_THREADS
     basic.add_argument("--threads",
@@ -634,6 +660,7 @@ def main():
         ref=args.ref,
         outprefix=args.outprefix,
         bed=args.bed,
+        dbsnp=args.dbsnp,
         continue_interrupted=args.continue_interrupted)
 
     somatic_snv_caller.alpha_n = args.normal_alpha
