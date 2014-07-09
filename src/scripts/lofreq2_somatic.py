@@ -78,10 +78,10 @@ class SomaticSNVCaller(object):
 
     LOFREQ = 'lofreq'
 
-    DEFAULT_ALPHA_N = 0.03# input for call -a
+    DEFAULT_ALPHA_N = 0.10# input for call -a
     DEFAULT_ALPHA_T = 0.01# input for call -a
     DEFAULT_MTC_T = 'bonf'
-    DEFAULT_MTC_ALPHA_T = 10# input for filter
+    DEFAULT_MTC_ALPHA_T = 1# input for filter
     DEFAULT_SRC_QUAL_ON = True
     DEFAULT_SRC_QUAL_IGN_VCF = None
     DEFAULT_MIN_COV = 10# for initial tumor calls and stringent filtering of any
@@ -239,6 +239,8 @@ class SomaticSNVCaller(object):
             
         elif sample_type == "tumor":
             cmd.extend(['-a', "%f" % self.alpha_t])
+            if self.use_orphan:
+                cmd.append('--use-orphan')
             cmd.extend(['-C', "%d" % self.min_cov])
             if self.src_qual_on:
                 cmd.append('-s')
@@ -325,6 +327,7 @@ class SomaticSNVCaller(object):
                '--snvqual-mtc', "%s" % self.mtc_t,
                '--snvqual-alpha', '%f' % self.mtc_alpha_t,
                '--snvqual-ntests', '%d' % num_tests,
+               '--sb-mtc', 'fdr', '--sb-alpha', '%f' % 0.001,
                '--cov-min', '%d' % self.min_cov,
                '--only-passed', '-o', vcf_str]
 
