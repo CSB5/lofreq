@@ -90,7 +90,7 @@ void init_mplp_conf(mplp_conf_t *c)
      c->min_plp_bq = DEFAULT_MIN_PLP_BQ;/* note: different from DEFAULT_MIN_BQ */
      c->capQ_thres = 0;
      c->max_depth = DEFAULT_MAX_PLP_DEPTH;
-     c->flag = MPLP_NO_ORPHAN | MPLP_BAQ;
+     c->flag = MPLP_NO_ORPHAN | MPLP_BAQ | MPLP_EXT_BAQ;
 }
 
 
@@ -625,7 +625,7 @@ mplp_func(void *data, bam1_t *b)
              }
         } else if (ma->conf->flag & MPLP_BAQ) {
              /* should never get here */
-             LOG_FATAL("%s\n", "Can't compue BAQ without reference sequence");
+             LOG_FATAL("%s\n", "Can't compute BAQ without reference sequence");
              exit(1);
         }
 

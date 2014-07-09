@@ -477,7 +477,7 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "- Base-alignment quality (BAQ)\n");                      
      fprintf(stderr, "       -B | --no-baq                Disable use of base-alignment quality (BAQ)\n");
      fprintf(stderr, "       -D | --del-baq               Delete pre-existing BAQ values, i.e. compute even if already present in BAM\n");
-     fprintf(stderr, "       -E | --ext-baq               Compute extended base-alignment quality (BAQ) on the fly (otherwise use 'normal' BAQ, which is computed on the fly, if not already present in %s tag)\n", BAQ_TAG);
+     fprintf(stderr, "       -e | --no-ext-baq            Use 'normal' BAQ (samtools default) instead of extended BAQ (both computed on the fly if not already present in %s tag)\n", BAQ_TAG);
 
      fprintf(stderr, "- Mapping quality\n");                                
      fprintf(stderr, "       -m | --min-mq INT            Skip reads with mapping quality smaller than INT [%d]\n", mplp_conf->min_mq);
@@ -593,7 +593,7 @@ for cov in coverage_range:
 
               {"no-baq", no_argument, NULL, 'B'},
               {"del-baq", no_argument, NULL, 'D'},
-              {"ext-baq", no_argument, NULL, 'E'},
+              {"no-ext-baq", no_argument, NULL, 'e'},
                   
               {"min-mq", required_argument, NULL, 'm'},
               {"max-mq", required_argument, NULL, 'M'},
@@ -625,7 +625,7 @@ for cov in coverage_range:
          };
 
          /* keep in sync with long_opts and usage */
-         static const char *long_opts_str = "r:l:f:o:q:Q:R:j:J:K:BDEm:M:NsS:T:a:b:A:C:h"; 
+         static const char *long_opts_str = "r:l:f:o:q:Q:R:j:J:K:BDem:M:NsS:T:a:b:A:C:h"; 
          
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
@@ -708,8 +708,8 @@ for cov in coverage_range:
               mplp_conf.flag |= MPLP_REDO_BAQ;
               break;
 
-         case 'E': 
-              mplp_conf.flag |= MPLP_EXT_BAQ;
+         case 'e': 
+              mplp_conf.flag &= ~MPLP_EXT_BAQ;
               break;
 
          case 'm': 
