@@ -325,7 +325,7 @@ uniq_snv(const plp_col_t *p, void *confp)
           snprintf(info_str, 128, "%s=%d", uniq_phred_tag, PROB_TO_PHREDQUAL_SAFE(pvalue));
           vcf_var_add_to_info(conf->var, info_str);
 
-          LOG_DEBUG("%s %d %c>%c AF=%f | %s (p-value=%g) | BAM alt_count=%d cov=%d (freq=%f)\n",
+          LOG_DEBUG("%s %d %s>%s AF=%f | %s (p-value=%g) | BAM alt_count=%d cov=%d (freq=%f)\n",
                       conf->var->chrom, conf->var->pos+1, conf->var->ref, conf->var->alt, af,
                       is_uniq ? "unique" : "not necessarily unique", pvalue,
                       alt_count, p->coverage, alt_count/(float)p->coverage);
