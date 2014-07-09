@@ -286,7 +286,7 @@ main_vcfset(int argc, char *argv[])
     /* skip meta-data/header in vcf_in2
      */
     if (0 != vcf_skip_header(& vcfset_conf.vcf_in2)) {
-         LOG_FATAL("%s\n", "Failed to skip header in 2nd vcf files");
+         LOG_FATAL("%s\n", "Failed to skip header in 2nd vcf file");
          return -1;
     }
 
