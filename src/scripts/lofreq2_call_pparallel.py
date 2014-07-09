@@ -309,7 +309,7 @@ def lofreq_cmd_per_bin(lofreq_call_args, bins, tmp_dir):
         reg_str = "%s:%d-%d" % (b.chrom, b.start+1, b.end)
         cmd = ' '.join(lofreq_call_args)
         cmd += ' --no-default-filter'# needed here whether user-arg or not
-        cmd += " -r %s -o %s/%d.vcf > %s/%d.log 2>&1" % (
+        cmd += ' -r "%s" -o %s/%d.vcf > %s/%d.log 2>&1' % (
             reg_str, tmp_dir, i, tmp_dir, i)
         #LOG.warn("DEBUG: yielding %s" % cmd)
         yield cmd
