@@ -148,9 +148,7 @@ static void usage(const char *myname)
      fprintf(stderr, "Usage: %s <command> [options]\n\n", myname);
      fprintf(stderr, "  Main Commands:\n");
      fprintf(stderr, "    call          : Call variants\n");
-#ifdef PARALLEL
      fprintf(stderr, "    call-parallel : Call variants in parallel\n");
-#endif
      fprintf(stderr, "    somatic       : Call somatic variants\n");
      fprintf(stderr, "\n");
      fprintf(stderr, "  Other Commands:\n");
@@ -231,10 +229,8 @@ int main(int argc, char *argv[])
 
           if (strcmp(argv[1], "somatic") == 0) {
                script_to_call = somatic_script;
-#ifdef PARALLEL
           } else if (strcmp(argv[1], "call-parallel") == 0) {
                script_to_call = parallel_script;
-#endif
           } else if (strcmp(argv[1], "vcfset") == 0) {
                script_to_call = vcfset_script;
           } else if (strcmp(argv[1], "vcfplot") == 0) {
@@ -242,7 +238,7 @@ int main(int argc, char *argv[])
           } else if (strcmp(argv[1], "cluster") == 0) {
                script_to_call = cluster_script;
           } else {
-               LOG_FATAL("%s\n", "Internal error: unknown option");
+               LOG_FATAL("Internal error: unknown option: %s\n", argv[1]);
                return 1;
           }
 
