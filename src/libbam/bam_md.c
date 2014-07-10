@@ -259,7 +259,7 @@ int bam_prob_realn_lofreq(bam1_t *b, const char *ref, int extended, int redo)
 		}
 		state = calloc(c->l_qseq, sizeof(int));
 		q = calloc(c->l_qseq, 1);
-		kpa_glocal(r, xe-xb, s, c->l_qseq, qual, &conf, state, q);
+		kpa_glocal(r, xe-xb, s, c->l_qseq, qual, &conf, state, q, NULL, NULL);
 		if (!extended) { // in this block, bq[] is capped by base quality qual[]
 			for (k = 0, x = c->pos, y = 0; k < c->n_cigar; ++k) {
 				int op = cigar[k]&0xf, l = cigar[k]>>4;
@@ -403,7 +403,7 @@ int bam_prob_realn_core(bam1_t *b, const char *ref, int flag)
 		}
 		state = calloc(c->l_qseq, sizeof(int));
 		q = calloc(c->l_qseq, 1);
-		kpa_glocal(r, xe-xb, s, c->l_qseq, qual, &conf, state, q);
+		kpa_glocal(r, xe-xb, s, c->l_qseq, qual, &conf, state, q, NULL, NULL);
 		if (!extend_baq) { // in this block, bq[] is capped by base quality qual[]
 			for (k = 0, x = c->pos, y = 0; k < c->n_cigar; ++k) {
 				int op = cigar[k]&0xf, l = cigar[k]>>4;
