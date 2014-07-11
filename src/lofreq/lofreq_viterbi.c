@@ -5,6 +5,8 @@
 #include "faidx.h"
 #include "sam.h"
 #include "viterbi.h"
+/* added lofreq_viterbi.h" */
+#include "lofreq_viterbi.h"
 
 #define RWIN 10
 
@@ -194,7 +196,8 @@ static int fetch_func(bam1_t *b, void *data)
      return 0;
 }
 
-int main(int argc, char *argv[])
+/* renamed the main function */
+int main_viterbi(int argc, char *argv[])
 {
      tmpstruct_t tmp;
 

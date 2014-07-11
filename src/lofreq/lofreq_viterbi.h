@@ -4,6 +4,6 @@
 #define HEADER_FILE
 
 /* funcion prototypes here */
-void main_viterbi();
+int main_viterbi(int argc, char *argv[]);
 
 #endif
