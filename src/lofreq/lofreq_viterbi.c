@@ -200,25 +200,28 @@ static int fetch_func(bam1_t *b, void *data)
 int main_viterbi(int argc, char *argv[])
 {
      tmpstruct_t tmp;
-
-     if (argc == 1) {
+    
+     /*should be 2 args, lofreq and viterbi */
+     if (argc == 2) {
           fprintf(stderr, "Usage: viterbi_realigner <in.bam> <ref.fa>\n");
           return 1;
      }
-     if (argc == 3) {
+    /*should be 4 args, added lofreq*/
+    /*all argv values increased by one*/
+     if (argc == 4) {
          
           time_t now = time(NULL);
           char date[100];
           strftime(date, 100, "%c", localtime(&now));
           fprintf(stderr, "Started at %s.\n", date);
 
-          if ((tmp.in = samopen(argv[1], "rb", 0)) == 0) {
-               fprintf(stderr, "viterbi_realigner: Failed to open BAM file %s\n", argv[1]);
+          if ((tmp.in = samopen(argv[2], "rb", 0)) == 0) {
+               fprintf(stderr, "viterbi_realigner: Failed to open BAM file %s\n", argv[2]);
                return 1;
           }
            
-          if ((tmp.fai = fai_load(argv[2])) == 0) {
-               fprintf(stderr, "viterbi_realigner: Failed to open .fa file %s\n", argv[2]);
+          if ((tmp.fai = fai_load(argv[3])) == 0) {
+               fprintf(stderr, "viterbi_realigner: Failed to open .fa file %s\n", argv[3]);
                return 1;
           }
 
