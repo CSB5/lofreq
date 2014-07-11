@@ -25,6 +25,8 @@
 #include "lofreq_vcfset.h"
 #include "lofreq_index.h"
 
+/*added lofreq_viterbi.h */
+#include "lofreq_viterbi.h"
 
 #ifndef __DATE__
 __DATE__ = "NA";
@@ -162,6 +164,9 @@ static void usage(const char *myname)
      fprintf(stderr, "    bamstats      : Collect BAM statistics\n");
 #endif
      fprintf(stderr, "    vcfset        : VCF set operations\n");
+	/*added the viterbi printout */
+     fprintf(stderr, "    viterbi       : viterbi realignment\n");
+
      fprintf(stderr, "    version       : Print version info\n");
      fprintf(stderr, "\n");
      fprintf(stderr, "  Extra Tools (if installed):\n");
@@ -195,7 +200,8 @@ int main(int argc, char *argv[])
 
      } else if (strcmp(argv[1], "vcfset") == 0)  {
           return main_vcfset(argc, argv);
-
+     } else if (strcmp(argv[1], "viterbi") == 0){
+	  return main_viterbi(argc,argv);  /*added the viterbi call!!! */
      } else if (strcmp(argv[1], "index") == 0)  {
           return main_index(argc, argv);
 
