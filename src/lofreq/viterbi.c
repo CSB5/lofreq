@@ -8,6 +8,8 @@
 
 #define SANGERQUAL_TO_PROB(qual) (pow(10.0, -0.1*((int)qual - 33)))
 
+const int BQ2_DEFAULT = 20;
+
 int argmax(double *array, int alen) {
      int i;
      int curr_i = 0;
@@ -140,7 +142,15 @@ int viterbi(char *ref, char *query, char *bqual, char *aln)
           
           // Define emission probabilities
            
-          bp = SANGERQUAL_TO_PROB(bqual[i-1]);
+          //turn:
+          //	bp = SANGERQUAL_TO_PROB(bqual[i-1]);
+          //to:
+
+	  if (bqual [i-1] == 2) {
+		bp = SANGERQUAL_TO_PROB(BQ2_DEFAULT);
+	  } else {
+		bp = SANGERQUAL_TO_PROB(bqual[i-1]);
+	  }
           
           double ep_match = log10(1-bp);
           double ep_match_not = log10(bp/3.);
