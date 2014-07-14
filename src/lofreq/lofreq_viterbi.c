@@ -8,6 +8,12 @@
 /* added lofreq_viterbi.h" */
 #include "lofreq_viterbi.h"
 
+// FIXME:
+//	viterbi output not necessarily sorted anymore!!
+//	remedy: pipe through samtools sort - (warning added to terminal output)
+//
+//	auto clipping of Q2 tails (complicated stuff!)
+
 #define RWIN 10
 
 typedef struct {

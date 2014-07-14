@@ -167,10 +167,14 @@ static void usage(const char *myname)
      fprintf(stderr, "    vcfset        : VCF set operations\n");
 	/*added the viterbi printout */
      fprintf(stderr, "    viterbi       : viterbi realignment\n");
-     fprintf(stderr, "        remove 	: OPTIONAL flag, removes extra flags form BAM file (MC, MD, NM, AS) to compress BAM file; if not added to command line flags will be written to BAM\n");
+     fprintf(stderr, "        remove 	: OPTIONAL flag, removes extra flags form BAM file\n
+					 (MC, MD, NM, AS) to compress BAM file; if not added\n 						to command line flags will be written to BAM\n");
+     fprintf(stderr, " WARNING: After viterbi realignment, output is not necessarly sorted.\n
+		        	Use samtools sort - during pipelining!\n\n");
      /* added the indel quality printout*/
-     fprintf(stderr, "    indel_quality : insertion of indel quality, extra flag indicating the type of quality OBLIGATORY (form: indel_quality <subflag>)\n");
-     fprintf(stderr, "       default	: uniformly inserts default indel quality values, user specified\n");
+     fprintf(stderr, "    indel_quality : insertion of indel quality, extra flag indicating\n 						the type of quality OBLIGATORY\n
+					  (form: indel_quality <subflag>)\n");
+     fprintf(stderr, "       default	: uniformly inserts default indel quality values,\n						user specified\n");
      fprintf(stderr, "       dindel     : inserts qualities based on Dindel\n");
 
      fprintf(stderr, "    version       : Print version info\n");
