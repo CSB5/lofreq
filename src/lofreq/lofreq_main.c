@@ -24,6 +24,7 @@
 #include "lofreq_uniq.h"
 #include "lofreq_vcfset.h"
 #include "lofreq_index.h"
+#include "lofreq_indel_quality.h"
 
 /*added lofreq_viterbi.h */
 #include "lofreq_viterbi.h"
@@ -166,6 +167,11 @@ static void usage(const char *myname)
      fprintf(stderr, "    vcfset        : VCF set operations\n");
 	/*added the viterbi printout */
      fprintf(stderr, "    viterbi       : viterbi realignment\n");
+     fprintf(stderr, "        remove 	: OPTIONAL flag, removes extra flags form BAM file (MC, MD, NM, AS) to compress BAM file; if not added to command line flags will be written to BAM\n");
+     /* added the indel quality printout*/
+     fprintf(stderr, "    indel_quality : insertion of indel quality, extra flag indicating the type of quality OBLIGATORY (form: indel_quality <subflag>)\n");
+     fprintf(stderr, "       default	: uniformly inserts default indel quality values, user specified\n");
+     fprintf(stderr, "       dindel     : inserts qualities based on Dindel\n");
 
      fprintf(stderr, "    version       : Print version info\n");
      fprintf(stderr, "\n");
@@ -204,7 +210,9 @@ int main(int argc, char *argv[])
 	  return main_viterbi(argc,argv);  /*added the viterbi call!!! */
      } else if (strcmp(argv[1], "index") == 0)  {
           return main_index(argc, argv);
-
+     /* added the indel quality call!! */
+     } else if (strcmp(argv[1], "indel_quality") == 0){
+	  return main_indel_quality(argc, argv);
      } else if (strcmp(argv[1], "idxstats") == 0)  {
           return main_idxstats(argc, argv);
 

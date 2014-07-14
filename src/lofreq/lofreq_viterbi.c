@@ -35,7 +35,7 @@ static void replace_cigar(bam1_t *b, int n, uint32_t *cigar)
 	} else memcpy(b->data + b->core.l_qname, cigar, n * 4);
 }
 
-static int fetch_func(bam1_t *b, void *data)
+static int fetch_func(bam1_t *b, void *data, int flag)
 {
      // see https://github.com/lh3/bwa/blob/426e54740ca2b9b08e013f28560d01a570a0ab15/ksw.c 
      // for optimizations and speedups
@@ -45,6 +45,22 @@ static int fetch_func(bam1_t *b, void *data)
      uint8_t *seq = bam1_seq(b);
      uint32_t *cigar = bam1_cigar(b);
      int reflen;
+	
+     // IDEA (Andreas) : flags (NM, MC, MD, AS) might become invalid
+     // removal is optional (user flag)
+     if (flag == 1){
+	uint8_t *old_nm = bam_aux_get(b, "NM");
+	if (old_nm) bam_aux_del(b, old_nm);
+
+	uint8_t *old_mc = bam_aux_get(b, "MC");
+	if (old_mc) bam_aux_del(b, old_mc);
+
+	uint8_t *old_md = bam_aux_get(b, "MD");
+	if (old_md) bam_aux_del(b, old_md);
+
+	uint8_t *old_as = bam_aux_get(b, "AS");
+	if (old_as) bam_aux_del(b, old_as);
+     }
 
      if (c->flag & BAM_FUNMAP) {
           bam_write1(tmp->out, b);
@@ -200,21 +216,23 @@ static int fetch_func(bam1_t *b, void *data)
 int main_viterbi(int argc, char *argv[])
 {
      tmpstruct_t tmp;
+     int usrflg = 0;
     
      /*should be 2 args, lofreq and viterbi */
      if (argc == 2) {
-          fprintf(stderr, "Usage: viterbi_realigner <in.bam> <ref.fa>\n");
+          fprintf(stderr, "Usage: lofreq viterbi <flag> <in.bam> <ref.fa>\n");
           return 1;
      }
-    /*should be 4 args, added lofreq*/
+    /*should be 4 or 5 args, added lofreq*/
     /*all argv values increased by one*/
-     if (argc == 4) {
+     if (argc >= 4) {
          
           time_t now = time(NULL);
           char date[100];
           strftime(date, 100, "%c", localtime(&now));
           fprintf(stderr, "Started at %s.\n", date);
 
+	if (argc == 4){
           if ((tmp.in = samopen(argv[2], "rb", 0)) == 0) {
                fprintf(stderr, "viterbi_realigner: Failed to open BAM file %s\n", argv[2]);
                return 1;
@@ -225,6 +243,27 @@ int main_viterbi(int argc, char *argv[])
                return 1;
           }
 
+	} else if (argc == 5){
+		if ((tmp.in = samopen(argv[3], "rb", 0)) == 0){
+			fprintf(stderr, "viterbi_realigner: Failed to open BAM file %s\n", argv[3]);
+			return 1;
+		}
+		if ((tmp.fai = fai_load(argv[4])) == 0) {
+			fprintf(stderr, "viterbi_realigner: Failed to open .fa file %s\n", argv[4]);
+			return 1;
+		}
+		if (strcmp(argv[2], "remove") == 0){
+			usrflg = 1;
+		} else {
+			fprintf(stderr, "Nonexisting flag\n");
+			return 1;
+		}
+	} else {
+		fprintf(stderr, "Too many arguments\n");
+		return 1;
+	}
+				
+
           tmp.out = bam_dopen(fileno(stdout), "w");
           bam_header_write(tmp.out, tmp.in->header);
 
@@ -232,7 +271,7 @@ int main_viterbi(int argc, char *argv[])
           tmp.tid = -1;
           tmp.ref = 0;
           while (samread(tmp.in, b) >= 0) {
-               fetch_func(b, &tmp);
+               fetch_func(b, &tmp, usrflg);
           }
           bam_destroy1(b);
 
