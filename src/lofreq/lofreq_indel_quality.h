@@ -1,9 +1,6 @@
-/* lofreq_indel_quality.h */
+#ifndef LOFREQ_INDEL_QUALITY
+#define LOFREQ_INDEL_QUALITY
 
-#ifndef HEADER_FILE
-#define HEADER_FILE
-
-/* function prototypes here */
 int main_indel_quality(int argc, char *argv[]);
 
 #endif
