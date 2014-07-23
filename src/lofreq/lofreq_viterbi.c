@@ -1,12 +1,18 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <time.h>
+#include <getopt.h>
+#include <stdlib.h>
 
 #include "faidx.h"
 #include "sam.h"
 #include "viterbi.h"
+#include "log.h"
 /* added lofreq_viterbi.h" */
 #include "lofreq_viterbi.h"
+#include "utils.h"
+
+#define SANGERQUAL_TO_PHRED(c) ((int)(c)-33)
 
 // FIXME:
 //	viterbi output not necessarily sorted anymore!!
@@ -41,17 +47,59 @@ static void replace_cigar(bam1_t *b, int n, uint32_t *cigar)
 	} else memcpy(b->data + b->core.l_qname, cigar, n * 4);
 }
 
-static int fetch_func(bam1_t *b, void *data, int flag)
+
+// function checks if alignment is made of all Q2s
+// if not, returns remaining values so that median 
+// can be calculated
+int check_Q2(char *bqual, int *num){
+	//printf("inside check\n");
+	int is_all_Q2 = 1;
+	int i, pom = 0;
+	int l = strlen(bqual);
+//	char c;
+	*num = 0;
+	//printf("Length %d\n", l);
+	for (i=0; i<l; i++){
+		if (SANGERQUAL_TO_PHRED(bqual[i]) != 2){
+			pom++;
+			is_all_Q2 = 0;
+			//printf("Found one without Q2, num is %d\n", pom);
+		//	while(!(c=fgetc(stdin)));
+		}
+	}		
+	*num = pom;
+	return is_all_Q2;
+}
+
+void remain(char *bqual, int *remaining){
+	int pom = 0;
+	int i, q;
+//	char c;
+	int l = strlen(bqual);
+	for (i=0; i<l; i++){
+		q = SANGERQUAL_TO_PHRED(bqual[i]);
+		if (q != 2){
+			remaining[pom] = q;
+		//	printf("Remaining[pom] %d\n",remaining[pom]);
+		//	while(!(c=fgetc(stdin)));
+			pom++;
+		}
+	}	
+}
+
+static int fetch_func(bam1_t *b, void *data, int flag, int quality)
 {
      // see https://github.com/lh3/bwa/blob/426e54740ca2b9b08e013f28560d01a570a0ab15/ksw.c 
      // for optimizations and speedups
 
+	//char chr;
      tmpstruct_t *tmp = (tmpstruct_t*)data;
      bam1_core_t *c = &b->core;
      uint8_t *seq = bam1_seq(b);
      uint32_t *cigar = bam1_cigar(b);
      int reflen;
 	
+	 // FIXME: removal of unupdated flags
      // IDEA (Andreas) : flags (NM, MC, MD, AS) might become invalid
      // removal is optional (user flag)
      if (flag == 1){
@@ -134,6 +182,29 @@ static int fetch_func(bam1_t *b, void *data, int flag)
           bam_write1(tmp->out, b);
           return 0;
      }
+	FILE *f;
+	f = fopen("dogadaji.txt","w"); 
+	int len_remaining = 0;
+	if (check_Q2(bqual, &len_remaining)){
+	//	printf("All are Q2\n");
+	//	while(!(chr=fgetc(stdin)));
+		bam_write1(tmp->out, b);
+		fprintf(f,"All Q2\n");
+        return 0;
+     }
+	fprintf(f,"Continuing\n");
+//	printf("starting\n");
+//	printf("len_remaining %d\n",len_remaining);
+//	while(!(chr=fgetc(stdin)));
+	int remaining[len_remaining+1];
+	remain(bqual, remaining);
+	remaining[len_remaining] = '\0';
+	if (quality < 0){
+		quality = int_median(remaining, len_remaining);
+		fprintf(f, "New quality %d\n", quality);
+//		printf("New quality %d\n", quality);
+//		while(!(chr=fgetc(stdin)));
+	}
     
      // get reference with RWIN padding
      char ref[c->l_qseq+1+indels+RWIN*2];
@@ -148,7 +219,7 @@ static int fetch_func(bam1_t *b, void *data, int flag)
 
      // run viterbi
      char *aln = malloc(sizeof(char)*(2*(c->l_qseq)));
-     int shift = viterbi(ref, query, bqual, aln);
+     int shift = viterbi(ref, query, bqual, aln, quality);
      // fprintf(stderr, "Realigned read %s with shift %d\n", 
      //                 bam1_qname(b), shift-(c->pos-lower));
 
@@ -215,6 +286,7 @@ static int fetch_func(bam1_t *b, void *data, int flag)
 
      free(aln);
      free(realn_cigar);
+	 fclose(f);
      return 0;
 }
 
@@ -222,81 +294,99 @@ static int fetch_func(bam1_t *b, void *data, int flag)
 int main_viterbi(int argc, char *argv[])
 {
      tmpstruct_t tmp;
-     int usrflg = 0;
+     static int usrflg = 0;
+     static int quality = -1;
+     int c;
     
+	time_t now = time(NULL);
+	char date[100];
+	strftime(date, 100, "%c", localtime(&now));
+	fprintf(stderr, "started at %s.\n", date);
+
      /*should be 2 args, lofreq and viterbi */
      if (argc == 2) {
-          fprintf(stderr, "Usage: lofreq viterbi <flag> <in.bam> <ref.fa>\n");
-          return 1;
-     }
-    /*should be 4 or 5 args, added lofreq*/
-    /*all argv values increased by one*/
-     if (argc >= 4) {
-         
-          time_t now = time(NULL);
-          char date[100];
-          strftime(date, 100, "%c", localtime(&now));
-          fprintf(stderr, "Started at %s.\n", date);
+          fprintf(stderr, "Usage: lofreq viterbi [options] in.bam\n");
+	  fprintf(stderr, "Options:\n");
+	  fprintf(stderr, "	Reference\n");
+	  fprintf(stderr, "	    -f | --ref FILE	Indexed reference fasta file [null]\n");
+	  fprintf(stderr, "	Flags\n");
+	  fprintf(stderr, "	    -d | --delete	Deletes flags (MC, MD, NM, AS) from BAM file\n");
+	  fprintf(stderr, "	Q2 qualities\n");
+	  fprintf(stderr, "	    -q | --qualities Q	Replaces Q2 qualities with given quality Q\n");
 
-	if (argc == 4){
-          if ((tmp.in = samopen(argv[2], "rb", 0)) == 0) {
-               fprintf(stderr, "viterbi_realigner: Failed to open BAM file %s\n", argv[2]);
-               return 1;
-          }
-           
-          if ((tmp.fai = fai_load(argv[3])) == 0) {
-               fprintf(stderr, "viterbi_realigner: Failed to open .fa file %s\n", argv[3]);
-               return 1;
-          }
-
-	} else if (argc == 5){
-		if ((tmp.in = samopen(argv[3], "rb", 0)) == 0){
-			fprintf(stderr, "viterbi_realigner: Failed to open BAM file %s\n", argv[3]);
-			return 1;
-		}
-		if ((tmp.fai = fai_load(argv[4])) == 0) {
-			fprintf(stderr, "viterbi_realigner: Failed to open .fa file %s\n", argv[4]);
-			return 1;
-		}
-		if (strcmp(argv[2], "remove") == 0){
-			usrflg = 1;
-		} else {
-			fprintf(stderr, "Nonexisting flag\n");
-			return 1;
-		}
-	} else {
-		fprintf(stderr, "Too many arguments\n");
-		return 1;
-	}
-				
-
-          tmp.out = bam_dopen(fileno(stdout), "w");
-          bam_header_write(tmp.out, tmp.in->header);
-
-          bam1_t *b = bam_init1(); 
-          tmp.tid = -1;
-          tmp.ref = 0;
-          while (samread(tmp.in, b) >= 0) {
-               fetch_func(b, &tmp, usrflg);
-          }
-          bam_destroy1(b);
-
-          fprintf(stderr, "Done reading all reads\n");
-
-          samclose(tmp.in);
-          bam_close(tmp.out);
-          if (tmp.ref) free(tmp.ref);
-          fai_destroy(tmp.fai);
-
-          now = time(NULL);
-          strftime(date, 100, "%c", localtime(&now));
-          fprintf(stderr, "Ended at %s.\n", date);
-
-          return 0;
-     
-     } else {
-          fprintf(stderr, "Usage: viterbi_realigner <in.bam> <ref.fa>\n");
+	  fprintf(stderr, "WARNING: 	BAM file is unsorted after viterbi, pipelining through\n");
+	  fprintf(stderr, "		'samtools sort -' obligatory\n");
           return 1;
      }
 
+		//make structure for long options
+		static struct option long_options[] = {
+			{"ref", required_argument, NULL, 'f'},
+			{"delete", no_argument, NULL, 'd'},
+			{"qualities", required_argument, NULL, 'q'},
+			{0,0,0,0}
+		};
+		
+		// make string of arguments
+		static const char *long_opts_str = "df:q:";
+		
+		//getopt_long stores option index
+		int long_option_index = 0;
+		
+		while((c = getopt_long(argc-1, argv+1, long_opts_str, long_options, &long_option_index)) != -1){
+			switch (c){
+				case 'f':
+					if(access(optarg,F_OK)== -1){
+						LOG_FATAL("Reference fasta file %s does not exist. Exiting...\n", optarg);
+						return 1;
+				}
+				tmp.fai = fai_load(optarg);	
+				break;
+			case 'd':
+				usrflg = 1;
+				break;
+			case 'q':
+				quality = atoi(optarg);
+				fprintf(stderr, "Given quality %d \n", atoi(optarg));
+				break;
+			case '?':
+				LOG_FATAL("%s\n", "Unrecognized arguments found. Exiting\n");
+				break;
+			default:
+				break;
+		}
+		}
+		
+		// get bam file
+		if (1 != argc-optind-1){
+			fprintf(stderr, "Need exactly one BAM file as last argument\n");
+			return 1;
+		}
+		if ((tmp.in = samopen((argv+optind+1)[0], "rb",0)) == 0){
+			fprintf(stderr, "Failed to open BAM file %s. Exiting...\n", (argv+optind+1)[0]);
+			return 1;
+		}
+
+		tmp.out = bam_dopen(fileno(stdout), "w");
+		bam_header_write(tmp.out, tmp.in->header);
+
+		bam1_t *b = bam_init1();
+		tmp.tid = -1;
+		tmp.ref = 0;
+		while (samread(tmp.in, b) >= 0){
+			fetch_func(b, &tmp, usrflg, quality);
+		}
+		bam_destroy1(b);
+	
+		fprintf(stderr, "Done reading all reads\n");
+
+		samclose(tmp.in);
+		bam_close(tmp.out);
+		if (tmp.ref) free(tmp.ref);
+		fai_destroy(tmp.fai);
+
+		now = time(NULL);
+		strftime(date, 100, "%c", localtime(&now));
+		fprintf(stderr, "Ended at %s.\n", date);
+		return 0;
 }

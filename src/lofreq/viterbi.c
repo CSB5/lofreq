@@ -5,8 +5,11 @@
 #include <string.h>
 
 #include "viterbi.h"
+#include "utils.h"
 
-#define SANGERQUAL_TO_PROB(qual) (pow(10.0, -0.1*((int)qual - 33)))
+#define PHRED_TO_SANGERQUAL(i)     ((char)(i)+33)
+#define SANGERQUAL_TO_PHRED(c) ((int)(c)-33)
+#define SANGERQUAL_TO_PROB(c)  (pow(10.0, -0.1*SANGERQUAL_TO_PHRED(c)))
 
 const int BQ2_DEFAULT = 20;
 
@@ -73,10 +76,13 @@ int left_align_indels(char *sref, char *squery, int slen, char *new_state_seq) {
      return 0;
 }
 
-int viterbi(char *ref, char *query, char *bqual, char *aln)
+/* bqual is the base quality phred score representation as string. so use SANGERQUAL_TO_PROB for conversion */
+int viterbi(char *ref, char *query, char *bqual, char *aln, int quality)
 {
+     //printf("inside viterbi\n");
      int qlen = strlen(query)+1;
      int rlen = strlen(ref)+1;
+	 
           
      // Define transition probabilities
      // FIXME: define globally to speed up
@@ -134,147 +140,143 @@ int viterbi(char *ref, char *query, char *bqual, char *aln)
      memset(ptr_match, 0, sizeof(ptr_match));
      memset(ptr_ins, 0, sizeof(ptr_ins));
      memset(ptr_del, 0, sizeof(ptr_del));
+	
+	
+		 // Recursion
 
-     // Recursion
+		 double bp;
+		 for (i = 1; i < qlen; i++) {
+			  // Define emission probabilities
+		  if ( SANGERQUAL_TO_PHRED(bqual[i-1]) == 2) {
+			bp = SANGERQUAL_TO_PROB(PHRED_TO_SANGERQUAL(quality));
+		  } else {
+			bp = SANGERQUAL_TO_PROB(bqual[i-1]);
+		  }
+			  
+			  double ep_match = log10(1-bp);
+			  double ep_match_not = log10(bp/3.);
 
-     double bp;
-     for (i = 1; i < qlen; i++) {
-          
-          // Define emission probabilities
-           
-          //turn:
-          //	bp = SANGERQUAL_TO_PROB(bqual[i-1]);
-          //to:
+			  for (k = 1; k < rlen; k++) {
+				
+				   int index;
 
-	  if (bqual [i-1] == 2) {
-		bp = SANGERQUAL_TO_PROB(BQ2_DEFAULT);
-	  } else {
-		bp = SANGERQUAL_TO_PROB(bqual[i-1]);
-	  }
-          
-          double ep_match = log10(1-bp);
-          double ep_match_not = log10(bp/3.);
+				   // V_Mk(i) = log(e_Mk(x_i)) + max( S_0(i-1) + log(a_(S_0,M_k)),
+				   //                                 M_k-1(i-1) + log(a_(M_k-1,M_k)),
+				   //                                 I_k-1(i-1) + log(a_(I_k-1,M_k)),
+				   //                                 D_k-1(i-1) + log(a_(D_k-1,M_k)) )
+				   double mterms[4] = {V_start[i-1] + tp[3][0],
+									  V_match[k-1][i-1] + tp[0][0],
+									  V_ins[k-1][i-1] + tp[1][0],
+									  V_del[k-1][i-1] + tp[2][0]};
+				   index = argmax(mterms, 4);
+				   ptr_match[k][i] = "SMID"[index];
+				   if (query[i-1] == ref[k-1]) {
+						V_match[k][i] = ep_match + mterms[index];
+				   } else {
+						V_match[k][i] = ep_match_not + mterms[index];
+				   }
 
-          for (k = 1; k < rlen; k++) {
-            
-               int index;
+				   // V_Ik(i) = log(e_Ik(x_i)) + max( S_0(i-1) + log(a_(S_0,I_k)),
+				   //                                 M_k(i-1) + log(a_(M_k,I_k)),
+				   //                                 I_k(i-1) + log(a_(I_k,I_k)) )
 
-               // V_Mk(i) = log(e_Mk(x_i)) + max( S_0(i-1) + log(a_(S_0,M_k)),
-               //                                 M_k-1(i-1) + log(a_(M_k-1,M_k)),
-               //                                 I_k-1(i-1) + log(a_(I_k-1,M_k)),
-               //                                 D_k-1(i-1) + log(a_(D_k-1,M_k)) )
-               double mterms[4] = {V_start[i-1] + tp[3][0],
-                                  V_match[k-1][i-1] + tp[0][0],
-                                  V_ins[k-1][i-1] + tp[1][0],
-                                  V_del[k-1][i-1] + tp[2][0]};
-               index = argmax(mterms, 4);
-               ptr_match[k][i] = "SMID"[index];
-               if (query[i-1] == ref[k-1]) {
-                    V_match[k][i] = ep_match + mterms[index];
-               } else {
-                    V_match[k][i] = ep_match_not + mterms[index];
-               }
+				   double iterms[3] = {V_start[i-1] + tp[3][1],
+									  V_match[k][i-1] + tp[0][1],
+									  V_ins[k][i-1] + tp[1][1]};
+				   index = argmax(iterms, 3);
+				   ptr_ins[k][i] = "SMI"[index];
+				   V_ins[k][i] = ep_ins + iterms[index];
 
-               // V_Ik(i) = log(e_Ik(x_i)) + max( S_0(i-1) + log(a_(S_0,I_k)),
-               //                                 M_k(i-1) + log(a_(M_k,I_k)),
-               //                                 I_k(i-1) + log(a_(I_k,I_k)) )
+				   // V_Dk(i) = max( M_k-1(i) + log(a_(M_k-1,D_k)),
+				   //                D_k-1(i) + log(a_(D_k-1,D_k)) )
+				   double dterms[2] = {V_match[k-1][i] + tp[0][2],
+									  V_del[k-1][i] + tp[2][2]};
+				   index = argmax(dterms, 2);
+				   ptr_del[k][i] = "MD"[index];
+				   V_del[k][i] = dterms[index];
 
-               double iterms[3] = {V_start[i-1] + tp[3][1],
-                                  V_match[k][i-1] + tp[0][1],
-                                  V_ins[k][i-1] + tp[1][1]};
-               index = argmax(iterms, 3);
-               ptr_ins[k][i] = "SMI"[index];
-               V_ins[k][i] = ep_ins + iterms[index];
+				   //fprintf(stderr, "k:%d, i:%d, %f, %f, %f\n", k, i, 
+				   //                 V_match[k][i], V_ins[k][i], V_del[k][i]);
+			  }
+		 }
 
-               // V_Dk(i) = max( M_k-1(i) + log(a_(M_k-1,D_k)),
-               //                D_k-1(i) + log(a_(D_k-1,D_k)) )
-               double dterms[2] = {V_match[k-1][i] + tp[0][2],
-                                  V_del[k-1][i] + tp[2][2]};
-               index = argmax(dterms, 2);
-               ptr_del[k][i] = "MD"[index];
-               V_del[k][i] = dterms[index];
+		 // Termination
+		 // max[M_L(N), I_L(N), D_L(N)]
+		 char end_state = '!';
+		 double best_score = INT_MIN;
+		 int best_index = 0;
+		 for (k = 0; k < rlen; k++) {
+			  if (V_match[k][qlen-1] > best_score) {
+				   end_state = 'M';
+				   best_score = V_match[k][qlen-1];
+				   best_index = k;
+			  }
+			  if (V_ins[k][qlen-1] > best_score) {
+				   end_state = 'I';
+				   best_score = V_ins[k][qlen-1];
+				   best_index = k;
+			  }
+		 }
+		 //fprintf(stderr, "ended on %c, best_score is %f, best_index is %d\n",
+		 //     end_state, best_score, best_index);
+		
+		 // Trace-back
+		 i = qlen - 1;
+		 k = best_index;
+		 int maxslen = qlen+rlen;
+		 char current_ptr = end_state;
+		 char tmp_state_seq[maxslen], tmp_ref[maxslen], tmp_query[maxslen];
+		 tmp_state_seq[qlen+rlen-1] = tmp_ref[qlen+rlen-1] = tmp_query[qlen+rlen-1] = '\0';
+		 int si = qlen+rlen-2;
 
-               //fprintf(stderr, "k:%d, i:%d, %f, %f, %f\n", k, i, 
-               //                 V_match[k][i], V_ins[k][i], V_del[k][i]);
-          }
-     }
+		 while (i != 0 && k != 0) {
+			  tmp_state_seq[si] = current_ptr;
+			  if (current_ptr == 'S') {
+				   break;
+			  } else if (current_ptr == 'M') {
+				   tmp_ref[si] = ref[k-1];
+				   tmp_query[si] = query[i-1];
+				   current_ptr = ptr_match[k][i];
+				   i -= 1;
+				   k -= 1;
+			  } else if (current_ptr == 'I') {
+				   tmp_ref[si] = '*';
+				   tmp_query[si] = query[i-1];
+				   current_ptr = ptr_ins[k][i];
+				   i -= 1;
+			  } else if (current_ptr == 'D') {
+				   tmp_ref[si] = ref[k-1];
+				   tmp_query[si] = '*';
+				   current_ptr = ptr_del[k][i];
+				   k -= 1;
+			  } else {
+				   return -1;
+			  }
+			  si--;
+		 }
 
-     // Termination
-     // max[M_L(N), I_L(N), D_L(N)]
-     char end_state = '!';
-     double best_score = INT_MIN;
-     int best_index = 0;
-     for (k = 0; k < rlen; k++) {
-          if (V_match[k][qlen-1] > best_score) {
-               end_state = 'M';
-               best_score = V_match[k][qlen-1];
-               best_index = k;
-          }
-          if (V_ins[k][qlen-1] > best_score) {
-               end_state = 'I';
-               best_score = V_ins[k][qlen-1];
-               best_index = k;
-          }
-     }
-     //fprintf(stderr, "ended on %c, best_score is %f, best_index is %d\n",
-     //     end_state, best_score, best_index);
-    
-     // Trace-back
-     i = qlen - 1;
-     k = best_index;
-     int maxslen = qlen+rlen;
-     char current_ptr = end_state;
-     char tmp_state_seq[maxslen], tmp_ref[maxslen], tmp_query[maxslen];
-     tmp_state_seq[qlen+rlen-1] = tmp_ref[qlen+rlen-1] = tmp_query[qlen+rlen-1] = '\0';
-     int si = qlen+rlen-2;
+		 char *state_seq = tmp_state_seq+si+1;
+		 char *new_ref = tmp_ref+si+1;
+		 char *new_query = tmp_query+si+1;
+		 //fprintf(stderr, "ref:%s, query:%s, state_seq:%s\n", ref+1, query+1, state_seq);
+		 int state_seq_len = strlen(state_seq);
+		 char *new_state_seq = malloc(sizeof(char)*(state_seq_len+1));
+		 left_align_indels(new_ref, new_query, state_seq_len, new_state_seq);
 
-     while (i != 0 && k != 0) {
-          tmp_state_seq[si] = current_ptr;
-          if (current_ptr == 'S') {
-               break;
-          } else if (current_ptr == 'M') {
-               tmp_ref[si] = ref[k-1];
-               tmp_query[si] = query[i-1];
-               current_ptr = ptr_match[k][i];
-               i -= 1;
-               k -= 1;
-          } else if (current_ptr == 'I') {
-               tmp_ref[si] = '*';
-               tmp_query[si] = query[i-1];
-               current_ptr = ptr_ins[k][i];
-               i -= 1;
-          } else if (current_ptr == 'D') {
-               tmp_ref[si] = ref[k-1];
-               tmp_query[si] = '*';
-               current_ptr = ptr_del[k][i];
-               k -= 1;
-          } else {
-               return -1;
-          }
-          si--;
-     }
+		 if (aln) {
+			  strcpy(aln, new_state_seq);
+		 }
 
-     char *state_seq = tmp_state_seq+si+1;
-     char *new_ref = tmp_ref+si+1;
-     char *new_query = tmp_query+si+1;
-     //fprintf(stderr, "ref:%s, query:%s, state_seq:%s\n", ref+1, query+1, state_seq);
-     int state_seq_len = strlen(state_seq);
-     char *new_state_seq = malloc(sizeof(char)*(state_seq_len+1));
-     left_align_indels(new_ref, new_query, state_seq_len, new_state_seq);
+		 free(new_state_seq);
+		 return k;
 
-     if (aln) {
-          strcpy(aln, new_state_seq);
-     }
-
-     free(new_state_seq);
-     return k;
 }
 
 int viterbi_test()
 {
 
      fprintf(stderr, "Testing viterbi realignment...\n");
-     viterbi("CCATATGG", "CCATGG", "??????", NULL);
+     viterbi("CCATATGG", "CCATGG", "??????", NULL, 20);
 
      fprintf(stderr, "Testing left-alignment of indels...\n");
      left_align_indels("CCATATGG", "CCAT**GG", 8, 0);
@@ -283,3 +285,17 @@ int viterbi_test()
 
      return 0;
 }
+
+//test to figure out quality calculation
+#ifdef VITERBI_MAIN
+int main(int argc, char *argv[])
+{
+  int i;
+  char *bq = "#5?";
+  for (i=0; i<strlen(bq); i++) {
+    char c = bq[i];
+    printf("#%d: %c=%g=%d (cast %d)\n", i+1, c, SANGERQUAL_TO_PROB(c), SANGERQUAL_TO_PHRED(c), (int)c);
+  }
+  return 0;
+}
+#endif
