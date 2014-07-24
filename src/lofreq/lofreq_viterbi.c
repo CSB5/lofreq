@@ -1,6 +1,13 @@
+/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*- */
+/*********************************************************************
+ *
+ * FIXME update license
+ *
+ *********************************************************************/
+
+
 #include <ctype.h>
 #include <stdio.h>
-#include <time.h>
 #include <getopt.h>
 #include <stdlib.h>
 
@@ -8,17 +15,12 @@
 #include "sam.h"
 #include "viterbi.h"
 #include "log.h"
-/* added lofreq_viterbi.h" */
 #include "lofreq_viterbi.h"
 #include "utils.h"
 
 #define SANGERQUAL_TO_PHRED(c) ((int)(c)-33)
 
-// FIXME:
-//	viterbi output not necessarily sorted anymore!!
-//	remedy: pipe through samtools sort - (warning added to terminal output)
-//
-//	auto clipping of Q2 tails (complicated stuff!)
+/* FIXME: implement auto clipping of Q2 tails */
 
 #define RWIN 10
 
@@ -33,18 +35,18 @@ typedef struct {
 
 static void replace_cigar(bam1_t *b, int n, uint32_t *cigar)
 {
-	if (n != b->core.n_cigar) {
-		int o = b->core.l_qname + b->core.n_cigar * 4;
-		if (b->data_len + (n - b->core.n_cigar) * 4 > b->m_data) {
-			b->m_data = b->data_len + (n - b->core.n_cigar) * 4;
-			kroundup32(b->m_data);
-			b->data = (uint8_t*)realloc(b->data, b->m_data);
-		}
-		memmove(b->data + b->core.l_qname + n * 4, b->data + o, b->data_len - o);
-		memcpy(b->data + b->core.l_qname, cigar, n * 4);
-		b->data_len += (n - b->core.n_cigar) * 4;
-		b->core.n_cigar = n;
-	} else memcpy(b->data + b->core.l_qname, cigar, n * 4);
+    if (n != b->core.n_cigar) {
+        int o = b->core.l_qname + b->core.n_cigar * 4;
+        if (b->data_len + (n - b->core.n_cigar) * 4 > b->m_data) {
+            b->m_data = b->data_len + (n - b->core.n_cigar) * 4;
+            kroundup32(b->m_data);
+            b->data = (uint8_t*)realloc(b->data, b->m_data);
+        }
+        memmove(b->data + b->core.l_qname + n * 4, b->data + o, b->data_len - o);
+        memcpy(b->data + b->core.l_qname, cigar, n * 4);
+        b->data_len += (n - b->core.n_cigar) * 4;
+        b->core.n_cigar = n;
+    } else memcpy(b->data + b->core.l_qname, cigar, n * 4);
 }
 
 
@@ -52,68 +54,55 @@ static void replace_cigar(bam1_t *b, int n, uint32_t *cigar)
 // if not, returns remaining values so that median 
 // can be calculated
 int check_Q2(char *bqual, int *num){
-	//printf("inside check\n");
-	int is_all_Q2 = 1;
-	int i, pom = 0;
-	int l = strlen(bqual);
-//	char c;
-	*num = 0;
-	//printf("Length %d\n", l);
-	for (i=0; i<l; i++){
-		if (SANGERQUAL_TO_PHRED(bqual[i]) != 2){
-			pom++;
-			is_all_Q2 = 0;
-			//printf("Found one without Q2, num is %d\n", pom);
-		//	while(!(c=fgetc(stdin)));
-		}
-	}		
-	*num = pom;
-	return is_all_Q2;
+    int is_all_Q2 = 1;
+    int i, pom = 0;
+    int l = strlen(bqual);
+    *num = 0;
+    for (i=0; i<l; i++){
+            if (SANGERQUAL_TO_PHRED(bqual[i]) != 2){
+                    pom++;
+                    is_all_Q2 = 0;
+            }
+    }       
+    *num = pom;
+    return is_all_Q2;
 }
 
 void remain(char *bqual, int *remaining){
-	int pom = 0;
-	int i, q;
-//	char c;
-	int l = strlen(bqual);
-	for (i=0; i<l; i++){
-		q = SANGERQUAL_TO_PHRED(bqual[i]);
-		if (q != 2){
-			remaining[pom] = q;
-		//	printf("Remaining[pom] %d\n",remaining[pom]);
-		//	while(!(c=fgetc(stdin)));
-			pom++;
-		}
-	}	
+     int pom = 0;
+     int i, q;
+     int l = strlen(bqual);
+     for (i=0; i<l; i++){
+          q = SANGERQUAL_TO_PHRED(bqual[i]);
+          if (q != 2){
+               remaining[pom] = q;
+               pom++;
+          }
+     }   
 }
 
-static int fetch_func(bam1_t *b, void *data, int flag, int quality)
+static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def)
 {
-     // see https://github.com/lh3/bwa/blob/426e54740ca2b9b08e013f28560d01a570a0ab15/ksw.c 
-     // for optimizations and speedups
-
-	//char chr;
+     /* see
+      https://github.com/lh3/bwa/blob/426e54740ca2b9b08e013f28560d01a570a0ab15/ksw.c
+      for optimizations and speedups
+     */
      tmpstruct_t *tmp = (tmpstruct_t*)data;
      bam1_core_t *c = &b->core;
      uint8_t *seq = bam1_seq(b);
      uint32_t *cigar = bam1_cigar(b);
      int reflen;
-	
-	 // FIXME: removal of unupdated flags
-     // IDEA (Andreas) : flags (NM, MC, MD, AS) might become invalid
-     // removal is optional (user flag)
-     if (flag == 1){
-	uint8_t *old_nm = bam_aux_get(b, "NM");
-	if (old_nm) bam_aux_del(b, old_nm);
+    
+     if (del_flag) {
+          uint8_t *old_nm = bam_aux_get(b, "NM");
+          uint8_t *old_mc = bam_aux_get(b, "MC");
+          uint8_t *old_md = bam_aux_get(b, "MD");
+          uint8_t *old_as = bam_aux_get(b, "AS");
 
-	uint8_t *old_mc = bam_aux_get(b, "MC");
-	if (old_mc) bam_aux_del(b, old_mc);
-
-	uint8_t *old_md = bam_aux_get(b, "MD");
-	if (old_md) bam_aux_del(b, old_md);
-
-	uint8_t *old_as = bam_aux_get(b, "AS");
-	if (old_as) bam_aux_del(b, old_as);
+          if (old_nm) bam_aux_del(b, old_nm);
+          if (old_mc) bam_aux_del(b, old_mc);          
+          if (old_md) bam_aux_del(b, old_md);
+          if (old_as) bam_aux_del(b, old_as);
      }
 
      if (c->flag & BAM_FUNMAP) {
@@ -121,7 +110,7 @@ static int fetch_func(bam1_t *b, void *data, int flag, int quality)
           return 0;
      }
 
-     // fetch reference sequence if incorrect tid
+     /* fetch reference sequence if incorrect tid */
      if (tmp->tid != c->tid) {
           if (tmp->ref) free(tmp->ref);
           if ((tmp->ref = 
@@ -182,31 +171,19 @@ static int fetch_func(bam1_t *b, void *data, int flag, int quality)
           bam_write1(tmp->out, b);
           return 0;
      }
-	FILE *f;
-	f = fopen("dogadaji.txt","w"); 
-	int len_remaining = 0;
-	if (check_Q2(bqual, &len_remaining)){
-	//	printf("All are Q2\n");
-	//	while(!(chr=fgetc(stdin)));
-		bam_write1(tmp->out, b);
-		fprintf(f,"All Q2\n");
+    int len_remaining = 0;
+    if (check_Q2(bqual, &len_remaining)) {
+        bam_write1(tmp->out, b);
         return 0;
-     }
-	fprintf(f,"Continuing\n");
-//	printf("starting\n");
-//	printf("len_remaining %d\n",len_remaining);
-//	while(!(chr=fgetc(stdin)));
-	int remaining[len_remaining+1];
-	remain(bqual, remaining);
-	remaining[len_remaining] = '\0';
-	if (quality < 0){
-		quality = int_median(remaining, len_remaining);
-		fprintf(f, "New quality %d\n", quality);
-//		printf("New quality %d\n", quality);
-//		while(!(chr=fgetc(stdin)));
-	}
+    }
+    int remaining[len_remaining+1];
+    remain(bqual, remaining);
+    remaining[len_remaining] = '\0';
+    if (q2def < 0) {
+        q2def = int_median(remaining, len_remaining);
+    }
     
-     // get reference with RWIN padding
+     /* get reference with RWIN padding */
      char ref[c->l_qseq+1+indels+RWIN*2];
      int lower = c->pos - RWIN;
      lower = lower < 0? 0: lower;
@@ -217,17 +194,15 @@ static int fetch_func(bam1_t *b, void *data, int flag, int quality)
      }
      ref[z] = '\0';
 
-     // run viterbi
+     /* run viterbi */
      char *aln = malloc(sizeof(char)*(2*(c->l_qseq)));
-     int shift = viterbi(ref, query, bqual, aln, quality);
-     // fprintf(stderr, "Realigned read %s with shift %d\n", 
-     //                 bam1_qname(b), shift-(c->pos-lower));
+     int shift = viterbi(ref, query, bqual, aln, q2def);
 
-     // convert to cigar
+     /* convert to cigar */
      uint32_t *realn_cigar = 0;
      int realn_n_cigar = 0;
      
-     // check if soft-clipped in the front
+     /* check if soft-clipped in the front */
      int curr_oplen = cigar[0] >> 4; 
      int curr_op = cigar[0]&0xf;
      if (curr_op == BAM_CSOFT_CLIP) {
@@ -236,7 +211,7 @@ static int fetch_func(bam1_t *b, void *data, int flag, int quality)
           realn_n_cigar += 1;
      }
      
-     // get the cigar of the realigned query
+     /* get cigar of the realigned query */
      curr_op = aln[0] == 'M' ? 0 : (aln[0] == 'I'? 1 : 2);
      curr_oplen = 1;
      for (i = 1; i < strlen(aln); i++) {
@@ -255,7 +230,7 @@ static int fetch_func(bam1_t *b, void *data, int flag, int quality)
      realn_cigar[realn_n_cigar] = curr_oplen<<4 | curr_op;
      realn_n_cigar += 1; 
     
-     // check if soft-clipped in the back
+     /* check if soft-clipped in the back */
      curr_oplen = cigar[c->n_cigar-1] >> 4; 
      curr_op = cigar[c->n_cigar-1]&0xf;
      if (curr_op == BAM_CSOFT_CLIP) {
@@ -273,11 +248,11 @@ static int fetch_func(bam1_t *b, void *data, int flag, int quality)
      }
 #endif
 
-     // check if read was shifted
+     /* check if read was shifted */
      if (shift-(c->pos-lower) != 0) {
-          fprintf(stderr, "Read %s with shift of %d at original pos %s:%d\n", 
-                           bam1_qname(b), shift-(c->pos-lower),
-                           tmp->in->header->target_name[c->tid], c->pos);
+          LOG_VERBOSE("Read %s with shift of %d at original pos %s:%d\n", 
+                      bam1_qname(b), shift-(c->pos-lower),
+                      tmp->in->header->target_name[c->tid], c->pos);
           c->pos = c->pos + (shift - (c->pos - lower));
      }
      
@@ -286,107 +261,113 @@ static int fetch_func(bam1_t *b, void *data, int flag, int quality)
 
      free(aln);
      free(realn_cigar);
-	 fclose(f);
      return 0;
 }
 
 /* renamed the main function */
 int main_viterbi(int argc, char *argv[])
 {
-     tmpstruct_t tmp;
-     static int usrflg = 0;
-     static int quality = -1;
-     int c;
-    
-	time_t now = time(NULL);
-	char date[100];
-	strftime(date, 100, "%c", localtime(&now));
-	fprintf(stderr, "started at %s.\n", date);
-
-     /*should be 2 args, lofreq and viterbi */
+     tmpstruct_t tmp = {0};
+     static int del_flag = 1;
+     static int q2default = -1;
+     char *bam_out = NULL;
+     bam1_t *b = NULL;
+ 
      if (argc == 2) {
           fprintf(stderr, "Usage: lofreq viterbi [options] in.bam\n");
-	  fprintf(stderr, "Options:\n");
-	  fprintf(stderr, "	Reference\n");
-	  fprintf(stderr, "	    -f | --ref FILE	Indexed reference fasta file [null]\n");
-	  fprintf(stderr, "	Flags\n");
-	  fprintf(stderr, "	    -d | --delete	Deletes flags (MC, MD, NM, AS) from BAM file\n");
-	  fprintf(stderr, "	Q2 qualities\n");
-	  fprintf(stderr, "	    -q | --qualities Q	Replaces Q2 qualities with given quality Q\n");
-
-	  fprintf(stderr, "WARNING: 	BAM file is unsorted after viterbi, pipelining through\n");
-	  fprintf(stderr, "		'samtools sort -' obligatory\n");
+          fprintf(stderr, "Options:\n");
+          fprintf(stderr, "     -f | --ref FILE     Indexed reference fasta file [null]\n");
+          fprintf(stderr, "     -k | --keepflags    Don't delete flags MC, MD, NM and AS which are all prone to change during realignment\n");
+          fprintf(stderr, "     -q | --defqual INT  Assume INT as quality for all bases with base-quality 2\n");
+          fprintf(stderr, "     -o | --out FILE     Output BAM file [- = stdout = default]\n");
+          fprintf(stderr, "          --verbose      Be verbose\n");
+          fprintf(stderr, "\n");
+          fprintf(stderr, "NOTE: Output BAM file will be unsorted (use samtools sort, e.g. samtools sort -')");
           return 1;
      }
 
-		//make structure for long options
-		static struct option long_options[] = {
-			{"ref", required_argument, NULL, 'f'},
-			{"delete", no_argument, NULL, 'd'},
-			{"qualities", required_argument, NULL, 'q'},
-			{0,0,0,0}
-		};
-		
-		// make string of arguments
-		static const char *long_opts_str = "df:q:";
-		
-		//getopt_long stores option index
-		int long_option_index = 0;
-		
-		while((c = getopt_long(argc-1, argv+1, long_opts_str, long_options, &long_option_index)) != -1){
-			switch (c){
-				case 'f':
-					if(access(optarg,F_OK)== -1){
-						LOG_FATAL("Reference fasta file %s does not exist. Exiting...\n", optarg);
-						return 1;
-				}
-				tmp.fai = fai_load(optarg);	
-				break;
-			case 'd':
-				usrflg = 1;
-				break;
-			case 'q':
-				quality = atoi(optarg);
-				fprintf(stderr, "Given quality %d \n", atoi(optarg));
-				break;
-			case '?':
-				LOG_FATAL("%s\n", "Unrecognized arguments found. Exiting\n");
-				break;
-			default:
-				break;
-		}
-		}
-		
-		// get bam file
-		if (1 != argc-optind-1){
-			fprintf(stderr, "Need exactly one BAM file as last argument\n");
-			return 1;
-		}
-		if ((tmp.in = samopen((argv+optind+1)[0], "rb",0)) == 0){
-			fprintf(stderr, "Failed to open BAM file %s. Exiting...\n", (argv+optind+1)[0]);
-			return 1;
-		}
+     while (1) {
+          int c;
+          static struct option long_options[] = {
+               {"ref", required_argument, NULL, 'f'},
+               {"verbose", no_argument, &verbose, 1},
+               {"keepflags", no_argument, NULL, 'k'},
+               {"out", required_argument, NULL, 'o'},
+               {"defqual", required_argument, NULL, 'q'},
+               {0,0,0,0}
+          };
+          
+          static const char *long_opts_str = "kf:q:o:";
+          int long_option_index = 0;
+          c = getopt_long(argc-1, argv+1, long_opts_str, long_options, &long_option_index);
 
-		tmp.out = bam_dopen(fileno(stdout), "w");
-		bam_header_write(tmp.out, tmp.in->header);
+          if (c == -1) {
+               break;
+          }
+          switch (c){
+          case 'f':
+               if (! file_exists(optarg)) {
+                    LOG_FATAL("Reference fasta file %s does not exist. Exiting...\n", optarg);
+                    return 1;
+               }
+               tmp.fai = fai_load(optarg);	
+               break;
+          case 'k':
+               del_flag = 0;
+               break;
+          case 'q':
+               q2default = atoi(optarg);
+               break;
+          case 'o':
+               if (0 != strcmp(optarg, "-")) {
+                    if (file_exists(optarg)) {
+                         LOG_FATAL("Cowardly refusing to overwrite file '%s'. Exiting...\n", optarg);
+                         return 1;
+                    }
+               }
+               bam_out = strdup(optarg);
+               break;
+          case '?':
+               LOG_FATAL("%s\n", "Unrecognized arguments found. Exiting\n");
+               break;
+          default:
+               break;
+          }
+     }
 
-		bam1_t *b = bam_init1();
-		tmp.tid = -1;
-		tmp.ref = 0;
-		while (samread(tmp.in, b) >= 0){
-			fetch_func(b, &tmp, usrflg, quality);
-		}
-		bam_destroy1(b);
-	
-		fprintf(stderr, "Done reading all reads\n");
+     /* get bam file */
+     if (1 != argc-optind-1){
+          LOG_FATAL("%s\n", "Need exactly one BAM file as last argument\n");
+          return 1;
+     }
+     if ((tmp.in = samopen((argv+optind+1)[0], "rb",0)) == 0){
+          LOG_FATAL("Failed to open BAM file %s. Exiting...\n", (argv+optind+1)[0]);
+          return 1;
+     }
 
-		samclose(tmp.in);
-		bam_close(tmp.out);
-		if (tmp.ref) free(tmp.ref);
-		fai_destroy(tmp.fai);
+     if (!bam_out || bam_out[0] == '-') {
+          tmp.out = bam_dopen(fileno(stdout), "w");
+     } else {
+          tmp.out = bam_open(bam_out, "w");
+     }
+     bam_header_write(tmp.out, tmp.in->header);
+     
+     b = bam_init1();
+     tmp.tid = -1;
+     tmp.ref = 0;
+     while (samread(tmp.in, b) >= 0){
+          fetch_func(b, &tmp, del_flag, q2default);
+     }
+     bam_destroy1(b);
+     
+     samclose(tmp.in);
+     bam_close(tmp.out);
+     if (tmp.ref)
+          free(tmp.ref);
+     fai_destroy(tmp.fai);
+     free(bam_out);
 
-		now = time(NULL);
-		strftime(date, 100, "%c", localtime(&now));
-		fprintf(stderr, "Ended at %s.\n", date);
-		return 0;
+     LOG_VERBOSE("%s\n", "NOTE: Output BAM file will be unsorted (use samtools sort, e.g. samtools sort -')");
+
+     return 0;
 }
