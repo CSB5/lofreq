@@ -133,7 +133,8 @@ static int dindel_fetch_func(bam1_t *b, void *data)
                for (j = 0; j < oplen; j++) {
                        /*fprintf(stderr, "query:%d, ref:%d, count:%d\n", 
                          y, x, tmp->hpcount[x+1]); */
-                    indelq[y] = (x > tmp->rlen-2) ? DINDELQ[0] : (tmp->hpcount[x+1]>18? 
+                    /* FIXME valgrind complaints: The left operand of '>' is a garbage value */
+                    indelq[y] = (x > tmp->rlen-2) ? DINDELQ[0] : (tmp->hpcount[x+1]>18 ?
                          DINDELQ[0] : DINDELQ[tmp->hpcount[x+1]]);
                     x++; 
                     y++;
@@ -263,6 +264,7 @@ usage()
      fprintf(stderr, " (clashes with -u; needs --ref)\n");
      fprintf(stderr, "  -f | --ref          Reference sequence used for mapping");
      fprintf(stderr, "  -o | --out FILE     Output BAM file [- = stdout = default]\n");
+     fprintf(stderr, "       --verbose      Be verbose\n");
      fprintf(stderr, "\n\n");
      fprintf(stderr, "Do not realign your BAM file after this!\n");
      fprintf(stderr, "\n");
