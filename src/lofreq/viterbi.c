@@ -1,3 +1,9 @@
+/*********************************************************************
+ *
+ * FIXME update license
+ *
+ *********************************************************************/
+
 #include <limits.h>
 #include <math.h>
 #include <stdio.h>
@@ -7,24 +13,12 @@
 #include "viterbi.h"
 #include "utils.h"
 
-#define PHRED_TO_SANGERQUAL(i)     ((char)(i)+33)
+#define PHRED_TO_SANGERQUAL(i) ((char)(i)+33)
 #define SANGERQUAL_TO_PHRED(c) ((int)(c)-33)
 #define SANGERQUAL_TO_PROB(c)  (pow(10.0, -0.1*SANGERQUAL_TO_PHRED(c)))
 
 const int BQ2_DEFAULT = 20;
 
-int argmax(double *array, int alen) {
-     int i;
-     int curr_i = 0;
-     double curr_max = INT_MIN;
-     for (i = 0; i < alen; i++) {
-          if (array[i] > curr_max) {
-               curr_i = i;
-               curr_max = array[i];
-          }
-     }
-     return curr_i;
-}
 
 int left_align_indels(char *sref, char *squery, int slen, char *new_state_seq) {
 
@@ -168,7 +162,7 @@ int viterbi(char *ref, char *query, char *bqual, char *aln, int quality)
 									  V_match[k-1][i-1] + tp[0][0],
 									  V_ins[k-1][i-1] + tp[1][0],
 									  V_del[k-1][i-1] + tp[2][0]};
-				   index = argmax(mterms, 4);
+				   index = argmax_d(mterms, 4);
 				   ptr_match[k][i] = "SMID"[index];
 				   if (query[i-1] == ref[k-1]) {
 						V_match[k][i] = ep_match + mterms[index];
@@ -183,7 +177,7 @@ int viterbi(char *ref, char *query, char *bqual, char *aln, int quality)
 				   double iterms[3] = {V_start[i-1] + tp[3][1],
 									  V_match[k][i-1] + tp[0][1],
 									  V_ins[k][i-1] + tp[1][1]};
-				   index = argmax(iterms, 3);
+				   index = argmax_d(iterms, 3);
 				   ptr_ins[k][i] = "SMI"[index];
 				   V_ins[k][i] = ep_ins + iterms[index];
 
@@ -191,7 +185,7 @@ int viterbi(char *ref, char *query, char *bqual, char *aln, int quality)
 				   //                D_k-1(i) + log(a_(D_k-1,D_k)) )
 				   double dterms[2] = {V_match[k-1][i] + tp[0][2],
 									  V_del[k-1][i] + tp[2][2]};
-				   index = argmax(dterms, 2);
+				   index = argmax_d(dterms, 2);
 				   ptr_del[k][i] = "MD"[index];
 				   V_del[k][i] = dterms[index];
 
