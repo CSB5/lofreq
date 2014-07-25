@@ -35,6 +35,8 @@
 #define FILTER_ID_STRSIZE 64
 #define FILTER_STRSIZE 128
 
+#define ALT_STRAND_RATIO 0.85
+
 typedef struct {
      int min;
      char id_min[FILTER_ID_STRSIZE];
@@ -55,7 +57,7 @@ typedef struct {
      double alpha;
      long int ntests;
      char id[FILTER_ID_STRSIZE];
-     int no_compound; /* otherwise 90% of var bases have to be on one strand as well */
+     int no_compound; /* otherwise ALT_STRAND_RATIO of var bases have to be on one strand as well */
 } sb_filter_t;
 
 typedef struct {
@@ -138,7 +140,7 @@ usage(const filter_conf_t* filter_conf)
      fprintf(stderr, "\n");
      fprintf(stderr, "  Strand Bias (SB):\n");
      fprintf(stderr, "  Note, variants are only filtered if their SB pvalue is below the threshold\n");
-     fprintf(stderr, "  AND 90%% of variant bases are on one strand (toggled with --sb-no-compound).\n");
+     fprintf(stderr, "  AND %d%% of variant bases are on one strand (toggled with --sb-no-compound).\n", (int)ALT_STRAND_RATIO*100);
      fprintf(stderr, "  -B | --sb-thresh INT        Maximum phred-value allowed. Conflicts with -b.\n");
      fprintf(stderr, "  -b | --sb-mtc STRING        Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -B\n");
      fprintf(stderr, "  -c | --sb-alpha FLOAT       Multiple testing correcion pvalue threshold\n");
@@ -172,7 +174,6 @@ usage(const filter_conf_t* filter_conf)
 int alt_mostly_on_one_strand(var_t *var)
 {
      dp4_counts_t dp4;
-     const float thresh = 0.9;
      float ratio = 0.0;
 
      if (vcf_get_dp4(&dp4, var)) {
@@ -182,12 +183,16 @@ int alt_mostly_on_one_strand(var_t *var)
           }
           return 0;
      }          
-     
+
+     /* FIXME: also check whether ref and alt ration is opposite?
+        pro: that's the FPs we usually see
+        con: violating fisher's exact test and additional rather arbitrary filter  */
+
      ratio = MAX(dp4.alt_fw, dp4.alt_rv)/(float)(dp4.alt_fw + dp4.alt_rv);
 #if 0
      LOG_DEBUG("ratio for %s %d = %f\n", var->chrom, var->pos, ratio);
 #endif
-     if (ratio > thresh) {
+     if (ratio > ALT_STRAND_RATIO) {
           return 1;
      } else {
           return 0;
@@ -275,7 +280,7 @@ void apply_snvqual_threshold(var_t *var, snvqual_filter_t *snvqual_filter)
      if (! snvqual_filter->thresh) {
           return;
      }
-     if (var->qual>0 && var->qual<snvqual_filter->thresh) {
+     if (var->qual>-1 && var->qual<snvqual_filter->thresh) {
           vcf_var_add_to_filter(var, snvqual_filter->id);
      }
 }
@@ -287,7 +292,7 @@ void apply_indelqual_threshold(var_t *var, indelqual_filter_t *indelqual_filter)
      if (! indelqual_filter->thresh) {
           return;
      }
-     if (var->qual>0 && var->qual<indelqual_filter->thresh) {
+     if (var->qual>-1 && var->qual<indelqual_filter->thresh) {
           vcf_var_add_to_filter(var, indelqual_filter->id);
      }
 }
@@ -360,7 +365,7 @@ int apply_snvqual_filter_mtc(snvqual_filter_t *snvqual_filter, var_t **vars, con
      }
      num_noncons_vars = 0;
      for (i=0; i<num_vars; i++) {
-          if (vars[i]->qual>0 && ! vcf_var_has_info_key(NULL, vars[i], "INDEL")) {
+          if (vars[i]->qual>-1 && ! vcf_var_has_info_key(NULL, vars[i], "INDEL")) {
                noncons_errprobs[num_noncons_vars] = PHREDQUAL_TO_PROB(vars[i]->qual);
                orig_idx[num_noncons_vars] = i;
                num_noncons_vars += 1;
@@ -459,7 +464,7 @@ int apply_indelqual_filter_mtc(indelqual_filter_t *indelqual_filter, var_t **var
      }
      num_noncons_vars = 0;
      for (i=0; i<num_vars; i++) {
-          if (vars[i]->qual>0 && vcf_var_has_info_key(NULL, vars[i], "INDEL")) {
+          if (vars[i]->qual>-1 && vcf_var_has_info_key(NULL, vars[i], "INDEL")) {
                noncons_errprobs[num_noncons_vars] = PHREDQUAL_TO_PROB(vars[i]->qual);
                orig_idx[num_noncons_vars] = i;
                num_noncons_vars += 1;
