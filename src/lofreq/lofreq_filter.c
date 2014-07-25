@@ -918,7 +918,8 @@ main_filter(int argc, char *argv[])
     if (! no_defaults) {
          if (cfg.sb_filter.mtc_type==MTC_NONE && ! cfg.sb_filter.thresh) {
               LOG_VERBOSE("%s\n", "Setting default SB filtering method to holm-bonf");
-              cfg.sb_filter.mtc_type = MTC_HOLMBONF;
+              cfg.sb_filter.mtc_type = MTC_FDR;
+              cfg.sb_filter.alpha = 0.001;
          }
          if (cfg.dp_filter.min<0) {
               LOG_VERBOSE("%s\n", "Setting default minimum coverage to 10");
