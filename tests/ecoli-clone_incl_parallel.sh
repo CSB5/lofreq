@@ -8,7 +8,8 @@ source lib.sh || exit 1
 
 
 basedir=data/ecoli-clone/
-bam=$basedir/Ecoli_K12_MG1655_NC_000913_bwa-sampe-unique-rg_recal.bam
+#bam=$basedir/Ecoli_K12_MG1655_NC_000913_bwa-sampe-unique-rg_recal.bam
+bam=$basedir/EAS20_8_bwamem_picard.mdups.realn.recal.bam
 reffa=$basedir/Ecoli_K12_MG1655_NC_000913.fa
 #truesnv=$basedir/denv2-pseudoclonal_true-snp.vcf
 
@@ -27,7 +28,9 @@ if ! eval $cmd >> $log 2>&1; then
 fi
 
 
-MAX_SNVS=20
+#MAX_SNVS=20
+MAX_SNVS=50
+
 
 # run in parallel (should work in single chromosome) 
 #
