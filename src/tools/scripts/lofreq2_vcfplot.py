@@ -422,7 +422,7 @@ def main():
     
     if not args.ign_filter:
         # v.FILTER is empty if not set in pyvcf. LoFreq's vcf.py clone set it to PASS or .
-        vars = [v for v in vcfreader if not v.FILTER or v.FILTER in ['PASS', '.']]
+        vars = [v for v in vars if not v.FILTER or v.FILTER in ['PASS', '.']]
     summary_txt.append("Loaded %d variants" % (len(vars)))
     LOG.info(summary_txt[-1])
 
@@ -454,8 +454,6 @@ def main():
     LOG.info(summary_txt[-1])
 
     # np.histogram([v.INFO['DP'] for v in vars if v.INFO['DP']<1000], bins=20)
-
-
 
     # setup props we want to check in all possible combinations
     #
@@ -569,11 +567,16 @@ def main():
         for (x, y) in itertools.combinations(props.keys(), 2):
             fig = plt.figure()
             ax = plt.subplot(1, 1, 1)
-    
-            p = plt.hist2d(props[x], props[y], bins=20)
+
+            try:
+                p = plt.hist2d(props[x], props[y], bins=20)
+                plt.colorbar()
+            except:
+                LOG.warn("Plotting %s (#%d) against %s (#%d) failed" % (
+                    x, len(props[x]), y, len(props[y])))
+                
             ax.set_ylim([0, plt.ylim()[1]])
             ax.set_xlim([0, plt.xlim()[1]])
-            plt.colorbar()
     
             ax.set_xlabel(x)
             ax.set_ylabel(y)
