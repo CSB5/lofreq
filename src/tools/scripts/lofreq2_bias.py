@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Experimental implementation of various bias filters
+"""Experimental implementation of various quality bias checks
 """
 
 __author__ = "Andreas Wilm"
@@ -52,11 +52,17 @@ DEFAULT_MTC = 'fdr'
 #DEFAULT_MTC = 'bonf'
 #DEFAULT_MTC = 'holmbonf'
 DEFAULT_MTC_ALPHA = 0.001
-DEFAULT_TAG_TO_FILTER = 'MB'
+DEFAULT_TAG_TO_FILTER = 'BB'
 
 
+def mean(values):
+    """compute mean of (non-empty) list"""
+    size = len(values)
+    if size==0:
+        return ValueError
+    return sum(values)/float(size)
 
-
+           
 def cmdline_parser():
     """Returns an argparse instance
     """
@@ -91,7 +97,7 @@ def cmdline_parser():
                         choices=['BB', 'MB', 'CB'],
                         default = DEFAULT_TAG_TO_FILTER,
                         help="Which tag to apply multiple testing to (default: %s)" % DEFAULT_TAG_TO_FILTER)
-    default = 1
+    default = -1
     parser.add_argument("--mq-filter",
                         dest="min_mq",
                         type=int,
@@ -258,18 +264,24 @@ def main():
         elif len(ref_mquals)==0 or len(alt_mquals)==0:
             m_pv = 1.0
         else:
-            ustat = mannwhitneyu(ref_mquals, alt_mquals)
-            m_pv = ustat[1]
-            
+            # compute only if alternate quals are smaller on average
+            if mean(alt_mquals) < mean(ref_mquals):
+                ustat = mannwhitneyu(ref_mquals, alt_mquals)
+                m_pv = ustat[1]
+            else:
+                m_pv = 1.0
+
         # same for bqs
         if len(set(ref_bquals).union(alt_bquals))==1:
             b_pv = 1.0
         elif len(ref_bquals)==0 or len(alt_bquals)==0:
             b_pv = 1.0
         else:
-            ustat = mannwhitneyu(ref_bquals, alt_bquals)
-            b_pv = ustat[1]
-
+            if mean(alt_bquals) < mean(ref_bquals):
+                ustat = mannwhitneyu(ref_bquals, alt_bquals)
+                b_pv = ustat[1]
+            else:
+                b_pv = 1.0
         # same for isize-qs
         #if len(ref_isize) and len(alt_isize):
         #    if len(set(ref_isize).union(alt_isize))==1:
