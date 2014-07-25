@@ -21,13 +21,13 @@ KEEP_TMP=0
 # true var 1687 in $bam1 has Q62 which becomes 2% after bonf correction
 # i.e. default -a 0.01 swallows it
 
-cmd="$LOFREQ call -s 0.05 -B -f $reffa -o $vcfout1 $bam1"
+cmd="$LOFREQ call -a 0.05 -B -f $reffa -o $vcfout1 $bam1"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
 fi
 
-cmd="$LOFREQ call -s 0.05 -B -f $reffa -o $vcfout2 $bam2"
+cmd="$LOFREQ call -a 0.05 -B -f $reffa -o $vcfout2 $bam2"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
