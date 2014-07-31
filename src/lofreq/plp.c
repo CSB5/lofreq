@@ -241,7 +241,7 @@ dump_mplp_conf(const mplp_conf_t *c, FILE *stream)
 
 
 
-/* FIXME get rid of function in future */
+/* FIXME get rid of function in future 
 static inline int
 printw(int c, FILE *fp)
 {
@@ -257,6 +257,7 @@ printw(int c, FILE *fp)
     fputs(buf, fp);
     return 0;
 }
+*/
 
 
 #ifdef USE_SOURCEQUAL
