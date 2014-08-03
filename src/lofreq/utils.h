@@ -5,6 +5,9 @@
 #include <float.h>
 #include <math.h>
 
+#include <uthash.h>
+#define MAX_INDELSIZE 128
+
 #define HAS_GZIP_EXT(f)  (strlen(f)>3 && 0==strncmp(& f[strlen(f)-3], ".gz", 3))
 
 
@@ -64,5 +67,43 @@ void
 strstrip(char *str);
 int
 is_newer(const char *p1, const char *p2);
+
+/* utility hash functions for indel calling */
+
+typedef struct {
+  char key[MAX_INDELSIZE];
+  int count;
+  int cons_quals;
+  int_varray_t ins_quals;
+  int_varray_t ins_aln_quals;
+  int_varray_t ins_map_quals;
+  int_varray_t ins_source_quals;
+  long int fw_rv[2];
+  UT_hash_handle hh_ins;
+} ins_event;
+
+void add_ins_sequence(ins_event **head_ins_count, char seq[], 
+  int ins_qual, int ins_aln_qual, int ins_map_qual, int ins_source_qual, 
+  int fw_rv);
+ins_event *find_ins_sequence(ins_event *const *head_ins_counts, char seq[]);
+void destruct_ins_event_counts(ins_event **head_ins_counts);
+
+typedef struct {
+  char key[MAX_INDELSIZE];
+  int count;
+  int cons_quals;
+  int_varray_t del_quals;
+  int_varray_t del_aln_quals;
+  int_varray_t del_map_quals;
+  int_varray_t del_source_quals;
+  long int fw_rv[2];
+  UT_hash_handle hh_del;
+} del_event;
+
+void add_del_sequence(del_event **head_del_counts, char seq[], 
+  int del_qual, int del_aln_qual, int del_map_qual, int del_source_qual, 
+  int fw_rv);
+del_event * find_del_sequence(del_event *const *head_del_counts, char seq[]);
+void destruct_del_event_counts(del_event **head_del_counts);
 
 #endif
