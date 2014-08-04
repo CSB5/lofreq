@@ -1046,6 +1046,7 @@ main_filter(int argc, char *argv[])
 
          is_indel = vcf_var_has_info_key(NULL, var, "INDEL");
 
+#define ENABLE_INDELS
 #ifndef ENABLE_INDELS
          if (is_indel) {
               LOG_WARN("%s\n", "Skipping INDEL variants for now");

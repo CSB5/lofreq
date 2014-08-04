@@ -369,7 +369,7 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
           avg_ref_bq = -1;
           for (i=0; i<NUM_NT4; i++) {
                int nt = bam_nt4_rev_table[i];
-               if (nt != p->cons_base) {
+               if (nt != p->cons_base[0]) {
                     continue;
                }
                if (p->base_quals[i].n) {
@@ -393,7 +393,7 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
           }
 
           is_alt_base = 0;
-          if (nt != p->cons_base) {
+          if (nt != p->cons_base[0]) {
                is_alt_base = 1;
                alt_idx += 1;
                alt_bases[alt_idx] = nt;
