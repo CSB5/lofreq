@@ -315,6 +315,7 @@ int main_viterbi(int argc, char *argv[])
           fprintf(stderr, "     -k | --keepflags    Don't delete flags MC, MD, NM and AS which are all prone to change during realignment\n");
           fprintf(stderr, "     -q | --defqual INT  Assume INT as quality for all bases with base-quality 2\n");
 		  fprintf(stderr, "     -r | --reclip       Reclip insertions and/or deletions on the beginning and end of read to soft clip\n");
+		  fprintf(stderr, "                         FILE HAS TO BE PREVIOUSLY UNCLIPPED!!!\n");
           fprintf(stderr, "     -o | --out FILE     Output BAM file [- = stdout = default]\n");
           fprintf(stderr, "          --verbose      Be verbose\n");
           fprintf(stderr, "\n");
