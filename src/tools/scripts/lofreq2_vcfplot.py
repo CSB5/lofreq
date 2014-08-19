@@ -368,6 +368,10 @@ def cmdline_parser():
                       dest="outplot",
                       #required=True, not needed if summary only and otherwise tested separately 
                       help="Output plot (pdf) filename")
+    parser.add_argument("--indels",
+                      action="store_true",
+                      dest="indels_only",
+                      help="Work on indels only and ignore substitutions (default is the reverse)")
     parser.add_argument("--summary-only",
                       action="store_true",
                       help="Don't plot; summarize only")
@@ -421,10 +425,16 @@ def main():
     vars = [v for v in vcfreader]
     
     if not args.ign_filter:
-        # v.FILTER is empty if not set in pyvcf. LoFreq's vcf.py clone set it to PASS or .
-        vars = [v for v in vars if not v.FILTER or v.FILTER in ['PASS', '.']]
+        vars = [v for v in vars if not v.FILTER]
     summary_txt.append("Loaded %d variants" % (len(vars)))
     LOG.info(summary_txt[-1])
+
+    if args.indels_only:
+        vars = [v for v in vars if v.is_indel]
+    else:
+        vars = [v for v in vars if not v.is_indel]
+    LOG.info("%d variants left after only keeping %s" % (
+	len(vars), "indels" if args.indels_only else "substitutions"))
 
     filter_list = []
     if args.maxdp:
@@ -444,13 +454,15 @@ def main():
 
     summary_txt.append("%d vars left after filtering" % (len(filtered_vars)))
     LOG.info(summary_txt[-1])
-
     vars = filtered_vars
 
-    summary_txt.append("#SNVs = %d (%d CONSVARs and %d INDELs)" % (
+    if len(vars)==0:
+        LOG.warn("Nothing to do. Exiting")
+        sys.exit(0)
+
+    summary_txt.append("#vars = %d (of which %d are CONSVARs)" % (
         len(vars),
-        sum([1 for v in vars if v.INFO.has_key('CONSVAR')]),
-        sum([1 for v in vars if v.INFO.has_key('INDEL')])))
+        sum([1 for v in vars if v.INFO.has_key('CONSVAR')])))
     LOG.info(summary_txt[-1])
 
     # np.histogram([v.INFO['DP'] for v in vars if v.INFO['DP']<1000], bins=20)
@@ -542,23 +554,24 @@ def main():
         plt.close()
 
 
-    # substitution types
-    #
-    # FIXME needs percentages
-    subst_type_counts = Counter([subst_type_str(v.REF, v.ALT) for v in vars])
-    # turn into list of tuples sorted by key
-    # subst_type_counts = sorted((k, v/100.0*len(vars)) for (k, v) in subst_type_counts.items())
-    subst_type_counts = sorted(subst_type_counts.items())
-    # FIXME should go to text report
-    #for (k, v) in subst_type_counts:
-    #    print "%s %d" % (k, v)
-    #print
-    fig = plt.figure()
-    ax = plt.subplot(1, 1, 1)
-    subst_perc(ax, subst_type_counts)
-    plt.title('Substitution Types (Ts/Tv=%.2f)' % (ts_tv_ratio(vars)))
-    pp.savefig()
-    plt.close()
+    if not args.indels_only:
+	# substitution types
+	#	
+	# FIXME needs percentages
+	subst_type_counts = Counter([subst_type_str(v.REF, v.ALT) for v in vars])
+	# turn into list of tuples sorted by key
+	# subst_type_counts = sorted((k, v/101.0*len(vars)) for (k, v) in subst_type_counts.items())
+	subst_type_counts = sorted(subst_type_counts.items())
+	# FIXME should go to text report
+	#for (k, v) in subst_type_counts:
+	#    print "%s %d" % (k, v)
+	#print
+	fig = plt.figure()
+	ax = plt.subplot(1, 1, 1)
+	subst_perc(ax, subst_type_counts)
+	plt.title('Substitution Types (Ts/Tv=%.2f)' % (ts_tv_ratio(vars)))
+	pp.savefig()
+	plt.close()
 
 
     if not args.simple:
