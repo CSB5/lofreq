@@ -579,7 +579,7 @@ for cov in coverage_range:
               {"bed", required_argument, NULL, 'l'}, /* changes here must be reflected in pseudo_parallel code as well */
               
               {"ref", required_argument, NULL, 'f'},
-              {"cons-as-ref", required_argument, &cons_as_ref, 1},
+              {"cons-as-ref", no_argument, &cons_as_ref, 1},
 
               {"out", required_argument, NULL, 'o'}, /* NOTE changes here must be reflected in pseudo_parallel code as well */
 
