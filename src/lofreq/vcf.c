@@ -546,13 +546,22 @@ void vcf_write_new_header(vcf_file_t *vcf_file, const char *src, const char *ref
 int vcf_parse_header(char **header, vcf_file_t *vcf_file)
 {
      char line[LINE_BUF_SIZE];
-     
+     const int MAX_HEADER_LEN = 10000;
+     int line_no = 0;
+
      /* make sure strlen below will work on header */
      (*header) = malloc(sizeof(char));
      (*header)[0] = '\0';
 
-     while (NULL != vcf_file_gets(vcf_file, sizeof(line), line)) {
-
+     line_no = 0;
+     while (1) {
+          char *rc = vcf_file_gets(vcf_file, sizeof(line), line);
+          if (++line_no>MAX_HEADER_LEN) {
+               break;
+          }
+          if (NULL == rc || Z_NULL == rc) {
+               break;
+          }
 #ifdef TRACE
           fprintf(stderr, "Got line %s\n", line);
 #endif
@@ -564,7 +573,6 @@ int vcf_parse_header(char **header, vcf_file_t *vcf_file)
                }
           }
      }
-
      /* failed. set default header */
      (*header) = realloc((*header), (strlen(VCF_HEADER) + 1 + 1 /* \n+\0 */) * sizeof(char));
      (void) strcpy(*header, VCF_HEADER);
@@ -600,8 +608,10 @@ int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
      char line[LINE_BUF_SIZE];
      char *line_ptr;
      int field_no = 0;
+     char *rc;
 
-     if (NULL == vcf_file_gets(vcf_file, sizeof(line), line)) {
+     rc = vcf_file_gets(vcf_file, sizeof(line), line);
+     if (NULL == rc || Z_NULL == rc) {
           return 1;
      }
      chomp(line);
