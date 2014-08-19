@@ -81,7 +81,7 @@ void remain(char *bqual, int *remaining){
      }   
 }
 
-static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def)
+static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip)
 {
      /* see
       https://github.com/lh3/bwa/blob/426e54740ca2b9b08e013f28560d01a570a0ab15/ksw.c
@@ -173,6 +173,24 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def)
      }
     int len_remaining = 0;
     if (check_Q2(bqual, &len_remaining)) {
+		if (reclip){
+			// check if first op or last op is I and replace with S
+			 int curr_oplen_check = cigar[0] >> 4;
+			 int curr_op_check = cigar[0]&0xf;
+			 if (curr_op_check == BAM_CINS){
+				curr_op_check = BAM_CSOFT_CLIP;
+				cigar[0] = curr_oplen_check <<4 | curr_op_check;
+			}
+			 curr_oplen_check = cigar[c->n_cigar-1] >> 4;
+			 curr_op_check = cigar[c->n_cigar-1]&0xf;
+
+			 if (curr_op_check == BAM_CINS){
+				curr_op_check = BAM_CSOFT_CLIP;
+				cigar[c->n_cigar-1] = curr_oplen_check <<4 | curr_op_check;
+			}
+			
+			replace_cigar(b,c->n_cigar,cigar);
+		}
         bam_write1(tmp->out, b);
         return 0;
     }
@@ -256,9 +274,25 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def)
           c->pos = c->pos + (shift - (c->pos - lower));
      }
      
+	 if (reclip){
+		 // check if first op or last op is I and replace with S
+		 int curr_oplen_reclip = realn_cigar[0] >> 4;
+		 int curr_op_reclip = realn_cigar[0]&0xf;
+
+		 if (curr_op_reclip == BAM_CINS){
+			curr_op_reclip = BAM_CSOFT_CLIP;
+			realn_cigar[0] = curr_oplen_reclip <<4 | curr_op_reclip;
+		}
+		 curr_oplen_reclip = realn_cigar[realn_n_cigar-1] >> 4;
+		 curr_op_reclip = realn_cigar[realn_n_cigar-1]&0xf;
+
+		 if (curr_op_reclip == BAM_CINS){
+			curr_op_reclip = BAM_CSOFT_CLIP;
+			realn_cigar[realn_n_cigar-1] = curr_oplen_reclip <<4 | curr_op_reclip;
+		}
+	}
      replace_cigar(b, realn_n_cigar, realn_cigar);
      bam_write1(tmp->out, b);
-
      free(aln);
      free(realn_cigar);
      return 0;
@@ -270,6 +304,7 @@ int main_viterbi(int argc, char *argv[])
      tmpstruct_t tmp = {0};
      static int del_flag = 1;
      static int q2default = -1;
+	 static int reclip = 0;
      char *bam_out = NULL;
      bam1_t *b = NULL;
  
@@ -279,26 +314,30 @@ int main_viterbi(int argc, char *argv[])
           fprintf(stderr, "     -f | --ref FILE     Indexed reference fasta file [null]\n");
           fprintf(stderr, "     -k | --keepflags    Don't delete flags MC, MD, NM and AS which are all prone to change during realignment\n");
           fprintf(stderr, "     -q | --defqual INT  Assume INT as quality for all bases with base-quality 2\n");
+		  fprintf(stderr, "     -r | --reclip       Reclip insertions and/or deletions on the beginning and end of read to soft clip\n");
           fprintf(stderr, "     -o | --out FILE     Output BAM file [- = stdout = default]\n");
           fprintf(stderr, "          --verbose      Be verbose\n");
           fprintf(stderr, "\n");
-          fprintf(stderr, "NOTE: Output BAM file will be unsorted (use samtools sort, e.g. samtools sort -')");
+          fprintf(stderr, "NOTE: Output BAM file will be unsorted (use samtools sort, e.g. samtools sort -')\n");
           return 1;
      }
 
      while (1) {
           int c;
+
           static struct option long_options[] = {
                {"ref", required_argument, NULL, 'f'},
                {"verbose", no_argument, &verbose, 1},
                {"keepflags", no_argument, NULL, 'k'},
+			   {"reclip",	no_argument, NULL, 'r'},
                {"out", required_argument, NULL, 'o'},
                {"defqual", required_argument, NULL, 'q'},
                {0,0,0,0}
           };
           
-          static const char *long_opts_str = "kf:q:o:";
+          static const char *long_opts_str = "rkf:q:o:";
           int long_option_index = 0;
+
           c = getopt_long(argc-1, argv+1, long_opts_str, long_options, &long_option_index);
 
           if (c == -1) {
@@ -318,6 +357,9 @@ int main_viterbi(int argc, char *argv[])
           case 'q':
                q2default = atoi(optarg);
                break;
+		  case 'r':
+				reclip = 1;
+				break;
           case 'o':
                if (0 != strcmp(optarg, "-")) {
                     if (file_exists(optarg)) {
@@ -356,7 +398,7 @@ int main_viterbi(int argc, char *argv[])
      tmp.tid = -1;
      tmp.ref = 0;
      while (samread(tmp.in, b) >= 0){
-          fetch_func(b, &tmp, del_flag, q2default);
+          fetch_func(b, &tmp, del_flag, q2default, reclip);
      }
      bam_destroy1(b);
      
