@@ -37,7 +37,8 @@ typedef struct {
                         * caller! */
      int min_cov;
      int dont_skip_n;
-     long long int bonf; /* warning: changed dynamically ! */
+     long long int bonf_sub; /* warning: changed dynamically ! */
+     long long int bonf_indel;
      float sig;
      vcf_file_t vcf_out;
      int flag;

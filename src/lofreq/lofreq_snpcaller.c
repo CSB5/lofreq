@@ -207,12 +207,12 @@ report_cons_ins(const plp_col_t *p, snvcall_conf_t *conf) {
      const int is_consvar = 1;
      const int qual = -1;
 
-     char cons_ins_key[256];
+     char cons_ins_key[MAX_INDELSIZE];
      strcpy(cons_ins_key, p->cons_base+1);
      ins_event *it_ins = find_ins_sequence(&p->ins_event_counts, cons_ins_key);
 
      char report_ins_ref[2];
-     char report_ins_alt[256];
+     char report_ins_alt[MAX_INDELSIZE];
      int ins_length = strlen(cons_ins_key);
      report_ins_ref[0] = report_ins_alt[0] = p->ref_base;
      int j;
@@ -244,11 +244,11 @@ report_cons_del(const plp_col_t *p, snvcall_conf_t *conf) {
      const int is_consvar = 1;
      const int qual = -1;
 
-     char cons_del_key[256];
+     char cons_del_key[MAX_INDELSIZE];
      strcpy(cons_del_key, p->cons_base+1);
      del_event *it_del = find_del_sequence(&p->del_event_counts, cons_del_key);
 
-     char report_del_ref[256];
+     char report_del_ref[MAX_INDELSIZE];
      char report_del_alt[2];
      int del_length = strlen(cons_del_key);
      report_del_ref[0] = report_del_alt[0] = p->ref_base;
@@ -542,20 +542,20 @@ call_snvs(const plp_col_t *p, void *confp)
      }
 #endif
      if (conf->bonf_dynamic) {
-          if (1 == conf->bonf) {
-               conf->bonf = NUM_NONCONS_BASES; /* otherwise we start with 1+NUM_NONCONS_BASES */
+          if (1 == conf->bonf_sub) {
+               conf->bonf_sub = NUM_NONCONS_BASES; /* otherwise we start with 1+NUM_NONCONS_BASES */
           } else {
-               conf->bonf += NUM_NONCONS_BASES; /* will do one test per non-cons nuc */
+               conf->bonf_sub += NUM_NONCONS_BASES; /* will do one test per non-cons nuc */
           }
      }
      num_snv_tests += NUM_NONCONS_BASES;
 
      LOG_DEBUG("%s %d: passing down %d quals with noncons_counts"
                " (%d, %d, %d) to snpcaller(num_snv_tests=%lld conf->bonf=%lld, conf->sig=%f)\n", p->target, p->pos+1,
-               bc_num_err_probs, alt_counts[0], alt_counts[1], alt_counts[2], num_snv_tests, conf->bonf, conf->sig);
+               bc_num_err_probs, alt_counts[0], alt_counts[1], alt_counts[2], num_snv_tests, conf->bonf_sub, conf->sig);
  
      if (snpcaller(pvalues, bc_err_probs, bc_num_err_probs, 
-                  alt_counts, conf->bonf, conf->sig)) {
+                  alt_counts, conf->bonf_sub, conf->sig)) {
           fprintf(stderr, "FATAL: snpcaller() failed at %s:%s():%d\n",
                   __FILE__, __FUNCTION__, __LINE__);
           free(bc_err_probs);
@@ -585,7 +585,7 @@ call_snvs(const plp_col_t *p, void *confp)
                continue;
           }
 
-          if (pvalue * (double)conf->bonf < conf->sig) {
+          if (pvalue * (double)conf->bonf_sub < conf->sig) {
                const int is_indel = 0;
                const int is_consvar = 0;
                float af = alt_raw_count/(float)p->coverage;
@@ -949,8 +949,8 @@ for cov in coverage_range:
                    bonf_auto = 0;
                    snvcall_conf.bonf_dynamic = 0;
 
-                   snvcall_conf.bonf = strtoll(optarg, (char **)NULL, 10); /* atol */ 
-                   if (1>snvcall_conf.bonf) {
+                   snvcall_conf.bonf_sub = strtoll(optarg, (char **)NULL, 10); /* atol */ 
+                   if (1>snvcall_conf.bonf_sub) {
                         LOG_FATAL("%s\n", "Couldn't parse Bonferroni factor"); 
                         return 1;
                    }
@@ -1135,15 +1135,15 @@ for cov in coverage_range:
          snvcall_conf.bonf = num_non0cov_pos*3;
 #else
 
-         snvcall_conf.bonf = bonf_from_bedfile(bed_file);
-         if (snvcall_conf.bonf<1) {
+         snvcall_conf.bonf_sub = bonf_from_bedfile(bed_file);
+         if (snvcall_conf.bonf_sub<1) {
               LOG_FATAL("Automatically determining Bonferroni from bed"
                         " regions listed in %s failed\n", bed_file);
               return 1;
          }
 
 #endif
-         LOG_VERBOSE("Automatically determined Bonferroni factor = %lld\n", snvcall_conf.bonf);
+         LOG_VERBOSE("Automatically determined Bonferroni factor = %lld\n", snvcall_conf.bonf_sub);
     }
 
     if (debug) {
@@ -1205,12 +1205,12 @@ for cov in coverage_range:
          if (no_default_filter && snvcall_conf.bonf_dynamic) {
               snprintf(full_cmd, BUF_SIZE, 
                       "%s --no-defaults --snvqual-thresh %d", 
-                      base_cmd, PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf));
+                      base_cmd, PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf_sub));
 
          } else if (! no_default_filter && snvcall_conf.bonf_dynamic) {
               snprintf(full_cmd, BUF_SIZE, 
                       "%s --snvqual-thresh %d", 
-                      base_cmd, PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf));
+                      base_cmd, PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf_sub));
 
          } else if (! no_default_filter && ! snvcall_conf.bonf_dynamic) {
               snprintf(full_cmd, BUF_SIZE, "%s", base_cmd);

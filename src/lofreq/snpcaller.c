@@ -495,7 +495,129 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
      }
 }
 
+void 
+plp_to_ins_errprobs(double **err_probs, int *num_err_probs, 
+                    const plp_col_t *p, snvcall_conf_t *conf,
+                    char key[256]){
 
+     if (NULL == ((*err_probs) = malloc(p->coverage * sizeof(double)))) {
+          /* coverage = base-count after read level filtering */
+          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
+                  __FILE__, __FUNCTION__, __LINE__);
+          free(err_probs);
+          return;
+     }
+
+     (*num_err_probs) = 0;
+     int i, j;
+     double final_err_prob;
+     int iq, aq, mq, sq = -1;
+
+     for (i = 0; i < p->ins_quals.n; i++) {
+          int iq, mq;
+          iq = p->ins_quals.data[i];
+          mq = p->ins_map_quals.data[i];
+          final_err_prob = merge_srcq_mapq_baq_and_bq(-1, mq, -1, iq);
+          (*err_probs)[(*num_err_probs)++] = final_err_prob;
+     }
+     
+     ins_event *it, *it_tmp;
+     HASH_ITER(hh_ins, p->ins_event_counts, it, it_tmp) {
+          if (0 == strcmp(it->key, key)) {
+               for (j = 0; j < it->ins_quals.n; j++) {
+                    iq = it->ins_quals.data[j];
+                    aq = it->ins_aln_quals.data[j];
+                    mq = it->ins_map_quals.data[j];
+#ifdef USE_SOURCEQUAL
+                    sq = it->ins_source_quals.data[j];
+#else
+                    sq = -1;
+#endif                    
+                    final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, iq);
+                    LOG_DEBUG("+%s IQ:%d IAQ:%d MQ:%d SQ:%d EP:%lg\n", 
+                         it->key, iq, aq, mq, sq, final_err_prob);
+                    (*err_probs)[(*num_err_probs)++] = final_err_prob;
+               }
+          } else {
+               for (j = 0; j < it->ins_quals.n; j++) {
+                    iq = it->ins_quals.data[j];
+                    mq = it->ins_map_quals.data[j];
+                    aq = -1;
+#ifdef USE_SOURCEQUAL
+                    sq = it->ins_source_quals.data[j];
+#else
+                    sq = -1;
+#endif
+                    final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, iq);
+                    LOG_DEBUG("+%s IQ:%d IAQ:%d MQ:%d SQ:%d EP:%lg\n", 
+                         it->key, iq, aq, mq, sq, final_err_prob);
+                    (*err_probs)[(*num_err_probs)++] = final_err_prob;
+               }
+          }
+     }
+
+}
+
+void 
+plp_to_del_errprobs(double **err_probs, int *num_err_probs, 
+                    const plp_col_t *p, snvcall_conf_t *conf,
+                    char key[256]){
+     if (NULL == ((*err_probs) = malloc(p->coverage * sizeof(double)))) {
+          /* coverage = base-count after read level filtering */
+          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
+                  __FILE__, __FUNCTION__, __LINE__);
+          free(err_probs);
+          return;
+     }
+
+     (*num_err_probs) = 0;
+     int i, j;
+     double final_err_prob;
+     int dq, aq, mq, sq = -1;
+
+     for (i = 0; i < p->del_quals.n; i++) {
+          dq = p->del_quals.data[i];
+          mq = p->del_map_quals.data[i];
+          final_err_prob = merge_srcq_mapq_baq_and_bq(-1, mq, -1, dq);
+          //LOG_DEBUG("#DQ:%d MQ:%d\n", dq, mq);
+          (*err_probs)[(*num_err_probs)++] = final_err_prob;
+     }
+
+     del_event *it, *it_tmp;
+     HASH_ITER(hh_del, p->del_event_counts, it, it_tmp) {
+          if (0 == strcmp(it->key, key)) {
+               for (j = 0; j < it->del_quals.n; j++) {
+                    dq = it->del_quals.data[j];
+                    aq = it->del_aln_quals.data[j];
+                    mq = it->del_map_quals.data[j];
+#ifdef USE_SOURCEQUAL
+                    sq = it->del_source_quals.data[j];
+#else
+                    sq = -1;
+#endif
+                    final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, dq);
+                    LOG_DEBUG("+%s DQ:%d DAQ:%d MQ:%d SQ:%d EP:%lg\n", 
+                         it->key, dq, aq, mq, sq, final_err_prob);
+                    (*err_probs)[(*num_err_probs)++] = final_err_prob;
+               }
+          } else {
+               for (j = 0; j < it->del_quals.n; j++) {
+                    dq = it->del_quals.data[j];
+                    mq = it->del_map_quals.data[j];
+#ifdef USE_SOURCEQUAL
+                    sq = it->del_source_quals.data[j];
+#else
+                    sq = -1;
+#endif
+                    final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, dq);
+                    LOG_DEBUG("+%s DQ:%d DAQ:%d MQ:%d SQ:%d EP:%lg\n", 
+                         it->key, dq, aq, mq, sq, final_err_prob);
+                    (*err_probs)[(*num_err_probs)++] = final_err_prob;
+               }
+          }
+     }
+
+}
 
 /* initialize members of preallocated snvcall_conf */
 void
@@ -514,7 +636,8 @@ init_snvcall_conf(snvcall_conf_t *c)
      c->min_cov = DEFAULT_MIN_COV;
      c->dont_skip_n = 0;
      c->bonf_dynamic = 1;
-     c->bonf = 1;
+     c->bonf_sub = 1;
+     c->bonf_indel = 1;
      c->sig = DEFAULT_SIG;
      /* c->out = ; */
      c->flag |= SNVCALL_USE_MQ;
@@ -534,7 +657,8 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
      fprintf(stream, "  def_alt_jq     = %d\n", c->def_alt_jq);
      fprintf(stream, "  min_cov        = %d\n", c->min_cov);
      fprintf(stream, "  dont_skip_n    = %d\n", c->dont_skip_n);
-     fprintf(stream, "  bonf           = %lld  (might get recalculated)\n", c->bonf);
+     fprintf(stream, "  bonf_sub       = %lld  (might get recalculated)\n", c->bonf_sub);
+     fprintf(stream, "  bonf_indel     = %lld  (might get recalculated)\n", c->bonf_indel);
      fprintf(stream, "  bonf_dynamic   = %d\n", c->bonf_dynamic);
      fprintf(stream, "  sig            = %f\n", c->sig);
 /*     fprintf(stream, "  out            = %p\n", (void*)c->out);*/
