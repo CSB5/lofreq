@@ -1348,6 +1348,7 @@ for cov in coverage_range:
          verbose = 1;
          /* lofreq2_call_parallel.py and used by lofreq2_somatic.py */
          LOG_VERBOSE("Number of substitution tests performed: %lld\n", num_snv_tests);
+         LOG_VERBOSE("Number of indel tests performed: %lld\n", num_indel_tests);
          verbose = org_verbose;
     }
 
