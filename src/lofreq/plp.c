@@ -116,6 +116,7 @@ plp_col_init(plp_col_t *p) {
     p->ref_base = '\0';
     p->cons_base[0] = 'N'; p->cons_base[1] = '\0';
     p->coverage = -INT_MAX;
+    p->coverage_safe = p->coverage;
     for (i=0; i<NUM_NT4; i++) {
          int_varray_init(& p->base_quals[i], grow_by_size);
          int_varray_init(& p->baq_quals[i], grow_by_size);
@@ -161,7 +162,7 @@ plp_col_free(plp_col_t *p) {
          int_varray_free(& p->alnerr_qual[i]);
 #endif
     }
-    
+   
     int_varray_free(& p->ins_quals);
     int_varray_free(& p->ins_map_quals);
     int_varray_free(& p->ins_source_quals);
@@ -759,6 +760,7 @@ void compile_plp_col(plp_col_t *plp_col,
      plp_col->ref_base = toupper(ref_base);
      plp_col->coverage = n_plp;  /* this is coverage as in the original mpileup, 
                                    i.e. after read-level filtering */
+     plp_col->coverage_safe = n_plp;
      LOG_DEBUG("Processing %s:%d\n", plp_col->target, plp_col->pos+1);
      
      for (i = 0; i < n_plp; ++i) {

@@ -273,6 +273,117 @@ report_cons_del(const plp_col_t *p, snvcall_conf_t *conf) {
 
 }
 
+int
+call_alt_ins(const plp_col_t *p, double *bi_err_probs, int bi_num_err_probs,
+             snvcall_conf_t *conf, ins_event *it) {
+
+     int ins_counts[3];
+     long double bi_pvalues[3];
+
+     // prep for snpcaller
+     ins_counts[0] = it->count;
+     ins_counts[1] = ins_counts[2] = 0;
+     LOG_DEBUG("%s %d: passing down %d quals with noncons_ins_counts"
+               "(%d, %d, %d) to snpcaller()\n", p->target, p->pos+1,
+               bi_num_err_probs, ins_counts[0], ins_counts[1], ins_counts[2]);
+     // compute p-value for insertion
+     if (snpcaller(bi_pvalues, bi_err_probs, bi_num_err_probs, ins_counts,
+                   conf->bonf_indel, conf->sig)) {
+          fprintf(stderr, "FATAL: snpcaller() failed at %s:%s():%d\n",
+                  __FILE__, __FUNCTION__, __LINE__);
+          return 1;
+     }
+     // see if there was an insertion
+     long double bi_pvalue = bi_pvalues[0];
+     if (bi_pvalue*conf->bonf_indel < conf->sig) {
+          const int is_indel = 1;
+          const int is_consvar = 0;
+          const int qual = PROB_TO_PHREDQUAL(bi_pvalue);
+
+          char report_ins_ref[2];
+          char report_ins_alt[256];
+          int ins_length = strlen(it->key);
+          report_ins_ref[0] = report_ins_alt[0] = p->ref_base;
+          int j;
+          for (j = 0; j <= ins_length; ++j) {
+               report_ins_alt[j+1] = it->key[j];
+          }
+          report_ins_ref[1] = report_ins_alt[j+1] = '\0';
+          float af = it->count / (float)p->coverage;
+     
+          dp4_counts_t dp4;
+          dp4.ref_fw = p->non_ins_fw_rv[0];
+          dp4.ref_rv = p->non_ins_fw_rv[1];
+          dp4.alt_fw = it->fw_rv[0];
+          dp4.alt_rv = it->fw_rv[1];
+
+          LOG_DEBUG("Low freq insertion: %s %d %s>%s pv-prob:%g;pv-qual:%d\n",
+                    p->target, p->pos+1, report_ins_ref, report_ins_alt,
+                    bi_pvalue, qual);
+          report_var(&conf->vcf_out, p, report_ins_ref, report_ins_alt,
+                     af, qual, is_indel, is_consvar, &dp4);
+     }
+     return 0;
+}
+
+int call_alt_del(const plp_col_t *p, double *bd_err_probs, int bd_num_err_probs,
+                 snvcall_conf_t *conf, del_event *it) {
+
+     int del_counts[3];
+     long double bd_pvalues[3];
+
+     // prep for snpcaller
+     del_counts[0] = it->count;
+     del_counts[1] = del_counts[2] = 0;
+     //int k;
+     //for (k = 0; k < bd_num_err_probs; k++) {
+     //     LOG_DEBUG("bd_err_prob: %lg\n", bd_err_probs[k]);
+     //}
+     LOG_DEBUG("%s %d: passing down %d quals with noncons_del_counts"
+               "(%d, %d, %d) to snpcaller()\n", p->target, p->pos+1,
+               bd_num_err_probs, del_counts[0], del_counts[1], del_counts[2]);
+
+     // snpcaller for deletion
+     if (snpcaller(bd_pvalues, bd_err_probs, bd_num_err_probs, del_counts,
+                   conf->bonf_indel, conf->sig)) {
+          fprintf(stderr, "FATAL: snpcaller() failed at %s:%s():%d\n",
+                  __FILE__, __FUNCTION__, __LINE__);
+          return 1;
+     }
+     // compute p-value deletion
+     long double bd_pvalue = bd_pvalues[0];
+     if (bd_pvalue*conf->bonf_indel < conf->sig) {
+          const int is_indel = 1;
+          const int is_consvar = 0;
+          const int qual = PROB_TO_PHREDQUAL(bd_pvalue);
+
+          char report_del_ref[256];
+          char report_del_alt[2];
+          int del_length = strlen(it->key);
+          report_del_ref[0] = report_del_alt[0] = p->ref_base;
+          int j;
+          for (j = 0; j <= del_length; ++j) {
+               report_del_ref[j+1] = it->key[j];
+          }
+          report_del_ref[j+1] = report_del_alt[1] = '\0';
+
+          float af = it->count / (float)p->coverage;
+          
+          dp4_counts_t dp4;
+          dp4.ref_fw = p->non_del_fw_rv[0];
+          dp4.ref_rv = p->non_del_fw_rv[1];
+          dp4.alt_fw = it->fw_rv[0];
+          dp4.alt_rv = it->fw_rv[1];
+
+          LOG_DEBUG("Low freq deletion: %s %d %s>%s pv-prob:%g;pv-qual:%d\n",
+                    p->target, p->pos+1, report_del_ref, report_del_alt,
+                    bd_pvalue, qual);
+          report_var(&conf->vcf_out, p, report_del_ref, report_del_alt,
+                     af, qual, is_indel, is_consvar, &dp4);
+     }
+     return 0;
+}
+
 /* allocates bc_err_probs (to size bc_num_err_probs; also set here) and sets
  * values. user must free.
  *
@@ -439,7 +550,6 @@ call_snvs(const plp_col_t *p, void *confp)
           report_cons_del(p, conf);
           return;
      }
-#if 0
      /* Call indels */
      if (p->num_dels || p->num_ins) {
          
@@ -478,7 +588,6 @@ call_snvs(const plp_col_t *p, void *confp)
                     }
                     num_indel_tests += 1;
                     if (call_alt_del(p, bd_err_probs, bd_num_err_probs, conf, it)) {
-                         free(bi_err_probs);
                          free(bd_err_probs);
                          return;
                     }
@@ -487,7 +596,6 @@ call_snvs(const plp_col_t *p, void *confp)
           }
 
      }
-#endif
 
      /****************************** END INDEL CALLING *************************/
 

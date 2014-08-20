@@ -55,6 +55,15 @@ void
 plp_to_errprobs(double **err_probs, int *num_err_probs, 
                 int *alt_bases, int *alt_counts, int *alt_raw_counts,
                 const plp_col_t *p, snvcall_conf_t *conf);
+void 
+plp_to_ins_errprobs(double **err_probs, int *num_err_probs, 
+                    const plp_col_t *p, snvcall_conf_t *conf,
+                    char key[MAX_INDELSIZE]);
+
+void 
+plp_to_del_errprobs(double **err_probs, int *num_err_probs, 
+                    const plp_col_t *p, snvcall_conf_t *conf,
+                    char key[MAX_INDELSIZE]);
 
 void
 init_snvcall_conf(snvcall_conf_t *c);
