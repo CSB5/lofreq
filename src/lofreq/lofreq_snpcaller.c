@@ -469,6 +469,7 @@ warn_old_fai(const char *fa)
  * Assuming conf->min_bq and read-level filtering was already done
  * upstream. altbase mangling happens here however.
  * 
+ * FIXME split func into snv and indel calling
  */
 void
 call_snvs(const plp_col_t *p, void *confp)
@@ -522,21 +523,6 @@ call_snvs(const plp_col_t *p, void *confp)
      if (! conf->dont_skip_n && p->ref_base == 'N') {
           return;
      }
-
-#ifdef FIXME
-     if (p->num_dels || p->num_ins) {
-          LOG_FIXME("%s:%d (p->num_dels=%d p->del_quals=%d"
-                    " p->num_ins=%d p->ins_quals.n=%d\n", 
-                    p->target, p->pos+1, p->num_dels, p->del_quals.n,
-                    p->num_ins, p->ins_quals.n);
-          if (p->num_dels && p->del_quals.n) {
-               LOG_FIXME("Call deletions at %s:%d\n", p->target, p->pos+1);
-          }
-          if (p->num_ins && p->ins_quals.n) {
-               LOG_FIXME("Call insertions at %s:%d\n", p->target, p->pos+1);
-          }
-     }
-#endif
      
      /****************************** INDEL CALLING *************************/
 
@@ -593,8 +579,13 @@ call_snvs(const plp_col_t *p, void *confp)
                     free(bd_err_probs);
                }
           }
-
      }
+
+/* FIXME */
+#ifndef ENABLE_SNV_CALLS
+     return;
+#endif
+
 
      /****************************** END INDEL CALLING *************************/
 
