@@ -521,11 +521,8 @@ def main():
         if len(x) == 0:
             LOG.warn("No values for %s. Not plotting..." % p)
             continue
-
-        print x
         ax.boxplot(x, notch=1, positions=[0], vert=1)
         violin_plot(ax, x)
-            
         ax.set_ylabel('#SNVs')
         ax.set_xlabel(p)
         plt.title('%s Boxplot' % p)
