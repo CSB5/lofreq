@@ -148,6 +148,7 @@ static void usage(const char *myname)
      fprintf(stderr, "Usage: %s <command> [options]\n\n", myname);
      fprintf(stderr, "  Main Commands:\n");
      fprintf(stderr, "    call          : Call variants\n");
+#define PARALLEL
 #ifdef PARALLEL
      fprintf(stderr, "    call-parallel : Call variants in parallel\n");
 #endif
