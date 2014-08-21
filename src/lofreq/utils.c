@@ -652,7 +652,6 @@ void destruct_del_event_counts(del_event **head_del_counts) {
      }
 }
 
-
 /* gcc -o utils utils.c log.c -DXMAIN -Wall -ansi -pedantic  */
 #ifdef MEDIAN_MAIN
 int main(int argc, char **argv)

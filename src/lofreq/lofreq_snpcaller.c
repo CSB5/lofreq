@@ -551,8 +551,7 @@ call_snvs(const plp_col_t *p, void *confp)
           return;
      }
      /* Call indels */
-     if (p->num_dels || p->num_ins) {
-         
+     if (p->num_dels || p->num_ins) {         
           /*
           LOG_FIXME("%s:%d (p->num_dels=%d p->del_quals=%d"
                     " p->num_ins=%d p->ins_quals.n=%d\n", 

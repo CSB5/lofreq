@@ -1,4 +1,4 @@
-/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*-
+/* -*- -file-style: "k&r"; indent-tabs-mode: nil; -*-
  *
  * This file is partially based on samtools' bam_plcmd.c and very
  * likely needs an update whenever samtools/libbam is updated
@@ -39,7 +39,7 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #undef MERGEQ_FOR_CONS_CALL 
 
 const char *bam_nt4_rev_table = "ACGTN";
-     
+
 const unsigned char bam_nt4_table[256] = {
      4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
      4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
@@ -259,24 +259,6 @@ dump_mplp_conf(const mplp_conf_t *c, FILE *stream)
 /* dump_mplp_conf() */
 
 
-
-/* FIXME get rid of function in future 
-static inline int
-printw(int c, FILE *fp)
-{
-    char buf[16];
-    int l, x;
-    if (c == 0) return fputc('0', fp);
-    for (l = 0, x = c < 0? -c : c; x > 0; x /= 10) buf[l++] = x%10 + '0';
-    if (c < 0) buf[l++] = '-';
-    buf[l] = 0;
-    for (x = 0; x < l/2; ++x) {
-        int y = buf[x]; buf[x] = buf[l-1-x]; buf[l-1-x] = y;
-    }
-    fputs(buf, fp);
-    return 0;
-}
-*/
 
 
 #ifdef USE_SOURCEQUAL
@@ -1111,7 +1093,6 @@ void compile_plp_col(plp_col_t *plp_col,
                } else {
                     plp_col->non_del_fw_rv[0] += 1;
                }
-
           }
           
      }  /* end: for (i = 0; i < n_plp; ++i) { */

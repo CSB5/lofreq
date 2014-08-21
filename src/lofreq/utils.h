@@ -4,8 +4,8 @@
 #include <limits.h>
 #include <float.h>
 #include <math.h>
-
 #include <uthash.h>
+
 #define MAX_INDELSIZE 128
 
 #define HAS_GZIP_EXT(f)  (strlen(f)>3 && 0==strncmp(& f[strlen(f)-3], ".gz", 3))
