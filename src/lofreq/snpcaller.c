@@ -577,10 +577,6 @@ plp_to_del_errprobs(double **err_probs, int *num_err_probs,
      int dq, aq, mq, sq;
      dq = aq = mq = sq = -1;
 
-     LOG_FIXME(" p->del_quals.n=%d\n",  p->del_quals.n);
-     LOG_FIXME(" p->coverage=%d\n",  p->coverage);
-     LOG_FIXME(" p->coverage_safe=%d\n",  p->coverage_safe);
-
      for (i = 0; i < p->del_quals.n; i++) {
           dq = p->del_quals.data[i];
           mq = p->del_map_quals.data[i];
