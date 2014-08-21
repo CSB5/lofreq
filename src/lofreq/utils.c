@@ -534,6 +534,124 @@ is_newer(const char *p1, const char *p2)
      return s1.st_mtime > s2.st_mtime;
 }
 
+void add_ins_sequence(ins_event **head_ins_counts, char seq[], 
+     int ins_qual, int ins_aln_qual, int ins_map_qual, int ins_source_qual, 
+     int fw_rv) {
+     ins_event *it = NULL;
+     int seq_length = strlen(seq);
+
+     HASH_FIND(hh_ins, *head_ins_counts, seq, seq_length, it);
+     if (it) {
+          it->count += 1;
+          it->cons_quals += ins_qual;
+          
+          it->fw_rv[fw_rv] += 1;
+          
+          int_varray_add_value(& it->ins_quals, ins_qual);
+          int_varray_add_value(& it->ins_aln_quals, ins_aln_qual);
+          int_varray_add_value(& it->ins_map_quals, ins_map_qual);
+          int_varray_add_value(& it->ins_source_quals, ins_source_qual);
+
+     } else {
+          it = malloc(sizeof(*it));
+          strcpy((char *)it->key, seq);
+          it->count = 1;
+          it->cons_quals = ins_qual;
+          
+          it->fw_rv[0] = it->fw_rv[1] = 0;
+          it->fw_rv[fw_rv] += 1;
+
+          int_varray_init(& it->ins_quals, 0);
+          int_varray_init(& it->ins_aln_quals, 0);
+          int_varray_init(& it->ins_map_quals, 0);
+          int_varray_init(& it->ins_source_quals, 0);
+          
+          int_varray_add_value(& it->ins_quals, ins_qual);
+          int_varray_add_value(& it->ins_aln_quals, ins_aln_qual);
+          int_varray_add_value(& it->ins_map_quals, ins_map_qual);
+          int_varray_add_value(& it->ins_source_quals, ins_source_qual);
+
+          HASH_ADD_KEYPTR(hh_ins, *head_ins_counts, it->key, seq_length, it);
+     }
+}
+
+ins_event * find_ins_sequence(ins_event *const *head_ins_counts, char seq[]) {
+     ins_event *it = NULL;
+     HASH_FIND(hh_ins, *head_ins_counts, seq, strlen(seq), it);
+     return it;
+}
+
+void destruct_ins_event_counts(ins_event **head_ins_counts) {
+     ins_event *it_ins, *it_tmp;
+     HASH_ITER(hh_ins, *head_ins_counts, it_ins, it_tmp) {
+          HASH_DELETE(hh_ins, *head_ins_counts, it_ins);
+          int_varray_free(& it_ins->ins_quals);
+          int_varray_free(& it_ins->ins_aln_quals);
+          int_varray_free(& it_ins->ins_map_quals);
+          int_varray_free(& it_ins->ins_source_quals);
+          free(it_ins);
+     }
+}
+
+void add_del_sequence(del_event **head_del_counts, char seq[], 
+     int del_qual, int del_aln_qual, int del_map_qual, int del_source_qual, 
+     int fw_rv) {
+     del_event *it = NULL;
+     int seq_length = strlen(seq);
+
+     HASH_FIND(hh_del, *head_del_counts, seq, seq_length, it);
+     if (it) {
+          it->count += 1;
+          it->cons_quals += del_qual;
+          
+          it->fw_rv[fw_rv] += 1;
+          
+          int_varray_add_value(& it->del_quals, del_qual);
+          int_varray_add_value(& it->del_aln_quals, del_aln_qual);
+          int_varray_add_value(& it->del_map_quals, del_map_qual);
+          int_varray_add_value(& it->del_source_quals, del_source_qual);
+     
+     } else {
+          it = malloc(sizeof(*it));
+          strcpy((char *)it->key, seq);
+          it->count = 1;
+          it->cons_quals = del_qual;
+          
+          it->fw_rv[0] = it->fw_rv[1] = 0;
+          it->fw_rv[fw_rv] += 1;
+
+          int_varray_init(& it->del_quals, 0);
+          int_varray_init(& it->del_aln_quals, 0);
+          int_varray_init(& it->del_map_quals, 0);
+          int_varray_init(& it->del_source_quals, 0);
+
+          int_varray_add_value(& it->del_quals, del_qual);
+          int_varray_add_value(& it->del_aln_quals, del_aln_qual);
+          int_varray_add_value(& it->del_map_quals, del_map_qual);
+          int_varray_add_value(& it->del_source_quals, del_source_qual);
+
+          HASH_ADD_KEYPTR(hh_del, *head_del_counts, it->key, seq_length, it);
+     }
+}
+
+del_event * find_del_sequence(del_event *const *head_del_counts, char seq[]) {
+     del_event *it = NULL;
+     HASH_FIND(hh_del, *head_del_counts, seq, strlen(seq), it);
+     return it;
+}
+
+void destruct_del_event_counts(del_event **head_del_counts) {
+     del_event *it_del, *it_tmp;
+     HASH_ITER(hh_del, *head_del_counts, it_del, it_tmp) {
+          HASH_DELETE(hh_del, *head_del_counts, it_del);
+          int_varray_free(& it_del->del_quals);
+          int_varray_free(& it_del->del_aln_quals);
+          int_varray_free(& it_del->del_map_quals);
+          int_varray_free(& it_del->del_source_quals);
+          free(it_del);
+     }
+}
+
 
 /* gcc -o utils utils.c log.c -DXMAIN -Wall -ansi -pedantic  */
 #ifdef MEDIAN_MAIN

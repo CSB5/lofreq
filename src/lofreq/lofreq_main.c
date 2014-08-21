@@ -148,6 +148,7 @@ static void usage(const char *myname)
      fprintf(stderr, "Usage: %s <command> [options]\n\n", myname);
      fprintf(stderr, "  Main Commands:\n");
      fprintf(stderr, "    call          : Call variants\n");
+#define PARALLEL
 #ifdef PARALLEL
      fprintf(stderr, "    call-parallel : Call variants in parallel\n");
 #endif
@@ -232,7 +233,9 @@ int main(int argc, char *argv[])
           char **argv_execvp = calloc(argc, sizeof(char*));
           int i;
           char *somatic_script = "lofreq2_somatic.py";
+#ifdef PARALLEL
           char *parallel_script = "lofreq2_call_pparallel.py";
+#endif
           char *vcfset_script = "lofreq2_vcfset.py";
           char *vcfplot_script = "lofreq2_vcfplot.py";
           char *cluster_script = "lofreq2_cluster.py";

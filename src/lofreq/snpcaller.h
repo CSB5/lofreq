@@ -37,7 +37,8 @@ typedef struct {
                         * caller! */
      int min_cov;
      int dont_skip_n;
-     long long int bonf; /* warning: changed dynamically ! */
+     long long int bonf_sub; /* warning: changed dynamically ! */
+     long long int bonf_indel;
      float sig;
      vcf_file_t vcf_out;
      int flag;
@@ -54,6 +55,15 @@ void
 plp_to_errprobs(double **err_probs, int *num_err_probs, 
                 int *alt_bases, int *alt_counts, int *alt_raw_counts,
                 const plp_col_t *p, snvcall_conf_t *conf);
+void 
+plp_to_ins_errprobs(double **err_probs, int *num_err_probs, 
+                    const plp_col_t *p, snvcall_conf_t *conf,
+                    char key[MAX_INDELSIZE]);
+
+void 
+plp_to_del_errprobs(double **err_probs, int *num_err_probs, 
+                    const plp_col_t *p, snvcall_conf_t *conf,
+                    char key[MAX_INDELSIZE]);
 
 void
 init_snvcall_conf(snvcall_conf_t *c);
