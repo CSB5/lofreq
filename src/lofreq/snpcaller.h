@@ -1,3 +1,4 @@
+/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*- */
 #ifndef SNPCALLER_H
 #define SNPCALLER_H
 
@@ -41,7 +42,13 @@ typedef struct {
      long long int bonf_indel;
      float sig;
      vcf_file_t vcf_out;
-     int flag;
+     int flag; /* FIXME doc? */
+
+     /* FIXME the following two logically don't belong her but
+      * would require a new structure */
+     int only_indels; 
+     int no_indels; 
+
 } snvcall_conf_t;
 
 

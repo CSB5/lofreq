@@ -580,7 +580,6 @@ plp_to_del_errprobs(double **err_probs, int *num_err_probs,
      for (i = 0; i < p->del_quals.n; i++) {
           dq = p->del_quals.data[i];
           mq = p->del_map_quals.data[i];
-          LOG_FIXME("dq=%d mq=%d\n", dq, mq);
           final_err_prob = merge_srcq_mapq_baq_and_bq(-1, mq, -1, dq);
           //LOG_DEBUG("#DQ:%d MQ:%d\n", dq, mq);
           (*err_probs)[(*num_err_probs)++] = final_err_prob;
@@ -645,6 +644,8 @@ init_snvcall_conf(snvcall_conf_t *c)
      /* c->out = ; */
      c->flag |= SNVCALL_USE_MQ;
      c->flag |= SNVCALL_USE_BAQ;
+     c->only_indels = 0;
+     c->no_indels = 0;
 }
 
 
@@ -674,6 +675,8 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
 #elif defined TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
      LOG_WARN("%s\n", "MQ translation switched on!");
 #endif
+     fprintf(stream, "  only_indels    = %d\n", c->only_indels);
+     fprintf(stream, "  no_indels      = %d\n", c->no_indels);
 }
 
 
