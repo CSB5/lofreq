@@ -1,4 +1,4 @@
-/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*-
+/* -*- -file-style: "k&r"; indent-tabs-mode: nil; -*-
  *
  * This file is partially based on samtools' bam_plcmd.c and very
  * likely needs an update whenever samtools/libbam is updated
@@ -114,8 +114,9 @@ plp_col_init(plp_col_t *p) {
     p->target =  NULL;
     p->pos = -INT_MAX;
     p->ref_base = '\0';
-    p->cons_base = 'N';
+    p->cons_base[0] = 'N'; p->cons_base[1] = '\0';
     p->coverage = -INT_MAX;
+    p->coverage_safe = p->coverage;
     for (i=0; i<NUM_NT4; i++) {
          int_varray_init(& p->base_quals[i], grow_by_size);
          int_varray_init(& p->baq_quals[i], grow_by_size);
@@ -129,11 +130,21 @@ plp_col_init(plp_col_t *p) {
     }
 
     p->num_heads = p->num_tails = 0;
-
+ 
     p->num_ins = p->sum_ins = 0;
     int_varray_init(& p->ins_quals, 0);
+    int_varray_init(& p->ins_map_quals, 0);
+    int_varray_init(& p->ins_source_quals, 0);
+    p->ins_event_counts = NULL;
+
     p->num_dels = p->sum_dels = 0;
     int_varray_init(& p->del_quals, 0);
+    int_varray_init(& p->del_map_quals, 0);
+    int_varray_init(& p->del_source_quals, 0);
+    p->del_event_counts = NULL;
+
+    p->non_ins_fw_rv[0] = p->non_ins_fw_rv[1] = 0;
+    p->non_del_fw_rv[0] = p->non_del_fw_rv[1] = 0;
 }
 
 
@@ -151,8 +162,16 @@ plp_col_free(plp_col_t *p) {
          int_varray_free(& p->alnerr_qual[i]);
 #endif
     }
+   
     int_varray_free(& p->ins_quals);
+    int_varray_free(& p->ins_map_quals);
+    int_varray_free(& p->ins_source_quals);
     int_varray_free(& p->del_quals);
+    int_varray_free(& p->del_map_quals);
+    int_varray_free(& p->del_source_quals);
+
+    destruct_ins_event_counts(&p->ins_event_counts);
+    destruct_del_event_counts(&p->del_event_counts);
 }
 
 
@@ -160,7 +179,7 @@ void plp_col_debug_print(const plp_col_t *p, FILE *stream)
 {
      int i;
      
-     fprintf(stream, "%s\t%d\t%c\t%c\tcounts:rv/fw",
+     fprintf(stream, "%s\t%d\t%c\t%s\tcounts:rv/fw",
              p->target, p->pos+1, p->ref_base, p->cons_base);
      for (i=0; i<NUM_NT4; i++) {
           fprintf(stream, " %c:%lu/%lu",
@@ -240,23 +259,6 @@ dump_mplp_conf(const mplp_conf_t *c, FILE *stream)
 /* dump_mplp_conf() */
 
 
-
-/* FIXME get rid of function in future */
-static inline int
-printw(int c, FILE *fp)
-{
-    char buf[16];
-    int l, x;
-    if (c == 0) return fputc('0', fp);
-    for (l = 0, x = c < 0? -c : c; x > 0; x /= 10) buf[l++] = x%10 + '0';
-    if (c < 0) buf[l++] = '-';
-    buf[l] = 0;
-    for (x = 0; x < l/2; ++x) {
-        int y = buf[x]; buf[x] = buf[l-1-x]; buf[l-1-x] = y;
-    }
-    fputs(buf, fp);
-    return 0;
-}
 
 
 #ifdef USE_SOURCEQUAL
@@ -720,7 +722,9 @@ void compile_plp_col(plp_col_t *plp_col,
      /* "base counts" minus error-probs before base-level filtering
       * for each base. temporary data-structure for cheaply determining
       * consensus which is saved in plp_col */
-     double base_counts[NUM_NT4] = { 0 }; 
+     double base_counts[NUM_NT4] = { 0 };
+     /* sum of qualities for all non-indel events */
+     int ins_nonevent_qual = 0, del_nonevent_qual = 0;
 
      /* computation of depth (after read-level *and* base-level filtering)
       * samtools-0.1.18/bam2depth.c: 
@@ -738,6 +742,7 @@ void compile_plp_col(plp_col_t *plp_col,
      plp_col->ref_base = toupper(ref_base);
      plp_col->coverage = n_plp;  /* this is coverage as in the original mpileup, 
                                    i.e. after read-level filtering */
+     plp_col->coverage_safe = n_plp;
      LOG_DEBUG("Processing %s:%d\n", plp_col->target, plp_col->pos+1);
      
      for (i = 0; i < n_plp; ++i) {
@@ -757,6 +762,8 @@ void compile_plp_col(plp_col_t *plp_col,
           const bam_pileup1_t *p = plp + i;
           int nt4;
           int mq, bq, baq; /* phred scores */
+          int iq = 0, dq = 0;
+          int iaq = INT_MAX, daq = INT_MAX;
           int base_skip = 0; /* boolean */
 #ifdef USE_SOURCEQUAL
           int sq = -1;
@@ -774,6 +781,11 @@ void compile_plp_col(plp_col_t *plp_col,
            */
           uint8_t *bi = bam_aux_get(p->b, "BI"); /* GATK indels */
           uint8_t *bd = bam_aux_get(p->b, "BD"); /* GATK deletions */
+#if 0
+          /* FIXME: IAQ */
+          uint8_t *ai = bam_aux_get(p->b, "AI");
+          uint8_t *ad = bam_aux_get(p->b, "AD");
+#endif
           uint8_t *baq_aux = NULL; /* full baq value (not offset as "BQ"!) */
 
 #ifdef USE_SOURCEQUAL
@@ -904,33 +916,6 @@ void compile_plp_col(plp_col_t *plp_col,
                     plp_col->fw_counts[nt4] += 1;
                }
                 
-               if (bi) {
-                    char *t = (char*)(bi+1); /* 1 is type */
-#if 0
-                    int j;
-                    printf("At %d qpos %d: BI=%s", plp_col->pos+1, p->qpos+1, t);
-                    for (j = 0; j < p->indel; ++j) {
-                         printf(" %c:%d-%d-%d", t[p->qpos+j], t[p->qpos+j-1]-33, t[p->qpos+j]-33, t[p->qpos+j+1]-33);
-                    }
-                    printf("\n");
-#endif
-                    /* adding 1 value representing whole insert */
-                    PLP_COL_ADD_QUAL(& plp_col->ins_quals, t[p->qpos]);
-               }
-
-               if (bd) {
-                    char *t = (char*)(bd+1);  /* 1 is type */
-#if 0
-                    int j;
-                    printf("At %d qpos %d: BD=%sx", plp_col->pos+1, p->qpos+1, t);
-                    for (j = 0; j < p->indel; ++j) {
-                         printf(" %c:%d-%d-%d", t[p->qpos+j], t[p->qpos+j-1]-33, t[p->qpos+j]-33, t[p->qpos+j+1]-33);
-                    }
-                    printf("\n");
-#endif
-                    PLP_COL_ADD_QUAL(& plp_col->del_quals, t[p->qpos]);
-                    /* adding 1 value representing whole del */
-               }
           } /* ! p->is_del */
           
 #if 0
@@ -957,6 +942,34 @@ void compile_plp_col(plp_col_t *plp_col,
                num_skips += 1;
           }
           
+          if (bi) {
+               char *t = (char*)(bi+1); /* 1 is type */
+#if 0
+               int j;
+               printf("At %d qpos %d: BI=%s", plp_col->pos+1, p->qpos+1, t);
+               for (j = 0; j < p->indel; ++j) {
+                    printf(" %c:%d-%d-%d", t[p->qpos+j], t[p->qpos+j-1]-33, t[p->qpos+j]-33, t[p->qpos+j+1]-33);
+               }
+               printf("\n");
+#endif
+               /* adding 1 value representing whole insert */
+               iq = t[p->qpos] - 33;
+          } /* else default to 0 */
+
+          if (bd) {
+               char *t = (char*)(bd+1);  /* 1 is type */
+#if 0
+               int j;
+               printf("At %d qpos %d: BD=%sx", plp_col->pos+1, p->qpos+1, t);
+               for (j = 0; j < p->indel; ++j) {
+                    printf(" %c:%d-%d-%d", t[p->qpos+j], t[p->qpos+j-1]-33, t[p->qpos+j]-33, t[p->qpos+j+1]-33);
+               }
+               printf("\n");
+#endif
+               /* adding 1 value representing whole del */
+               dq = t[p->qpos] - 33;
+          } /* else default to 0 */
+          
           /* A pattern \+[0-9]+[ACGTNacgtn]+' indicates there is an
            * insertion between this reference position and the next
            * reference position. The length of the insertion is given
@@ -965,57 +978,184 @@ void compile_plp_col(plp_col_t *plp_col,
            * represents a deletion from the reference. The deleted
            * bases will be presented as ‘*’ in the following lines.
            */
-
+          
           if (p->indel != 0) {
+
                /* insertion (+)
                 */
                if (p->indel > 0) {
                     plp_col->num_ins += 1;
-#ifdef FIXME
-                    LOG_FIXME("%s\n", "FIXME:need-to-save-ins-allele-and-its-counts.above-is-just-a-total.use-list/array-instead-of-hash.dont-expect-many-alleles");
-#endif
                     plp_col->sum_ins += p->indel;
-#ifdef PRINT_INDEL
-                    putchar('+'); printw(p->indel, stdout);
-                    putchar(' ');
+                    
+                    /* get inserted sequence */
+                    char ins_seq[256];
                     int j;
                     for (j = 1; j <= p->indel; ++j) {
-                         int c = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos + j)];
-                         putchar(bam1_strand(p->b)? tolower(c) : toupper(c));
+                         int c = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos+j)];
+                         ins_seq[j-1] = toupper(c);
                     }
-                    printf("\n");
-#endif 
+                    ins_seq[j-1] = '\0';
+
+#if 0                 
+                    // FIXME: IAQ
+                    if (ai) {
+                         char *a = (char*)(ai+1);
+                         iaq = a[p->qpos] - 33;
+                    } 
+#endif
+                     
+                    //LOG_DEBUG("Insertion of %s at %d with iq %d iaq %d\n", 
+                    //           ins_seq, pos, iq, iaq);
+#ifdef USE_SOURCEQUAL
+                    add_ins_sequence(&plp_col->ins_event_counts, 
+                         ins_seq, iq, iaq, mq, sq, 
+                         bam1_strand(p->b)? 1: 0);
+#else
+                    add_ins_sequence(&plp_col->ins_event_counts, 
+                         ins_seq, iq, iaq, mq, -1, 
+                         bam1_strand(p->b)? 1: 0);
+#endif
+                    
+                    PLP_COL_ADD_QUAL(& plp_col->del_quals, dq);
+                    PLP_COL_ADD_QUAL(& plp_col->del_map_quals, mq);
+#ifdef USE_SOURCEQUAL
+                    PLP_COL_ADD_QUAL(& plp_col->del_source_quals, sq);
+#endif
+                    del_nonevent_qual += dq;
+                    if (bam1_strand(p->b)) {
+                         plp_col->non_del_fw_rv[1] += 1;
+                    } else {
+                         plp_col->non_del_fw_rv[0] += 1;
+                    }
+
                /* deletion (-)
                 */
                } else if (p->indel < 0) {
                     plp_col->num_dels += 1;
-#ifdef FIXME
-                    LOG_FIXME("%s\n", "FIXME:need-to-save-del-allele-and-its-counts.above-is-just-a-total.use-list/array-instead-of-hash.dont-expect-many-alleles");
-#endif
                     plp_col->sum_dels -= p->indel;
-#ifdef PRINT_INDEL                   
-                    printw(p->indel, stdout);
-                    putchar(' ');
+                    
+                    /* get deleted sequence */
+                    char del_seq[256];
+                    int j;
                     for (j = 1; j <= -p->indel; ++j) {
-                         int c = (ref && (int)pos+j < ref_len)? ref[pos+j] : 'N';
-                         putchar(bam1_strand(p->b)? tolower(c) : toupper(c));
+                         int c =  (ref && (int)pos+j < ref_len)? ref[pos+j] : 'N';
+                         del_seq[j-1] = toupper(c);
                     }
-                    printf("\n");
+                    del_seq[j-1] = '\0';
+#if 0
+                    // FIXME: IAQ
+                    if (ad) {
+                         char *a = (char*)(ad+1);
+                         daq = a[p->qpos] - 33;
+                    }
 #endif
+                    //LOG_DEBUG("Deletion of %s at %d with dq %d daq %d\n", 
+                    //           del_seq, pos, dq, daq);
+#ifdef USE_SOURCEQUAL
+                    add_del_sequence(&plp_col->del_event_counts, 
+                         del_seq, dq, daq, mq, sq,
+                         bam1_strand(p->b)? 1: 0);
+#else
+                    add_del_sequence(&plp_col->del_event_counts, 
+                         del_seq, dq, daq, mq, -1,
+                         bam1_strand(p->b)? 1: 0);
+#endif
+                    PLP_COL_ADD_QUAL(& plp_col->ins_quals, iq);
+                    PLP_COL_ADD_QUAL(& plp_col->ins_map_quals, mq);
+#ifdef USE_SOURCEQUAL
+                    PLP_COL_ADD_QUAL(& plp_col->ins_source_quals, sq);
+#endif
+                    ins_nonevent_qual += iq;
+                    if (bam1_strand(p->b)) {
+                         plp_col->non_ins_fw_rv[1] += 1;
+                    } else {
+                         plp_col->non_ins_fw_rv[0] += 1;
+                    }
+                    
+               } 
+                    
+          } else { /* if (p->indel != 0) ... */
+               
+               PLP_COL_ADD_QUAL(& plp_col->ins_quals, iq);
+               PLP_COL_ADD_QUAL(& plp_col->ins_map_quals, mq);
+               ins_nonevent_qual += iq;
+               if (bam1_strand(p->b)) {
+                    plp_col->non_ins_fw_rv[1] += 1;
+               } else {
+                    plp_col->non_ins_fw_rv[0] += 1;
                }
-          } /* if (p->indel != 0) ... */
+
+               PLP_COL_ADD_QUAL(& plp_col->del_quals, dq);
+               PLP_COL_ADD_QUAL(& plp_col->del_map_quals, mq);
+               del_nonevent_qual += dq;
+               if (bam1_strand(p->b)) {
+                    plp_col->non_del_fw_rv[1] += 1;
+               } else {
+                    plp_col->non_del_fw_rv[0] += 1;
+               }
+          }
           
      }  /* end: for (i = 0; i < n_plp; ++i) { */
 
-     plp_col->coverage -= num_skips;
+     plp_col->coverage -= num_skips; 
+     
+     /* ****************** FINDING CONSENSUS **************** */
+     /* consensus is saved as a char array starting with '+' or '-' 
+      * if the consensus is an insertion or deletion. there is an 
+      * insertion event if the sum of qualities for that insertion event
+      * is greater than the sum of qualities for all non-insertion events. 
+      * there is a deletion event if the sum of qualities for that
+      * deletion event is greater than the sum of qualities for all non-deletion
+      * events. otherwise, the consensus base is not an indel and is given
+      * by the nucleotide with the greatest sum of qualities.
+      * FIXME: check consensus indel against minimum consensus quality
+      * FIXME: merge indel qualities when determining consensus indel event */
+     
+     ins_event *ins_it, *ins_it_tmp;
+     char *ins_maxevent_key = NULL;
+     int ins_maxevent_qual = 0;
+     HASH_ITER(hh_ins, plp_col->ins_event_counts, ins_it, ins_it_tmp) {
+          if (ins_it->cons_quals > ins_maxevent_qual) {
+               ins_maxevent_key = ins_it->key;
+               ins_maxevent_qual = ins_it->cons_quals;
+          }
+     }
+     del_event *del_it, *del_it_tmp;
+     char *del_maxevent_key = NULL;
+     int del_maxevent_qual = 0;
+     HASH_ITER(hh_del, plp_col->del_event_counts, del_it, del_it_tmp) {
+          if (del_it->cons_quals > del_maxevent_qual) {
+               del_maxevent_key = del_it->key;
+               del_maxevent_qual = del_it->cons_quals;
+          }
+     }
+
+     LOG_DEBUG("ins_maxevent_qual:%d ins_nonevent_qual:%d "
+               "del_maxevent_qual:%d del_nonevent_qual:%d\n",
+               ins_maxevent_qual, ins_nonevent_qual,
+               del_maxevent_qual, del_nonevent_qual);
+     
+     if (!(ins_maxevent_qual > ins_nonevent_qual) && 
+         !(del_maxevent_qual > del_nonevent_qual)) {
      
 #ifdef REF_OVER_CONS
-     plp_col->cons_base = plp_col->ref_base;
+          plp_col->cons_base[0] = plp_col->ref_base;
+          plp_col->cons_base[1] = '\0';
 #else
-     /* determine consensus from 'counts'. will never produce N on tie  */
-     plp_col->cons_base = bam_nt4_rev_table[
-          argmax_d(base_counts, NUM_NT4)];
+          /* determine consensus from 'counts'. will never produce N on tie  */
+          plp_col->cons_base[0] = bam_nt4_rev_table[
+               argmax_d(base_counts, NUM_NT4)];
+          plp_col->cons_base[1] = '\0';
 #endif
+     } else if (ins_maxevent_qual > ins_nonevent_qual) {  // consensus insertion
+          plp_col->cons_base[0] = '+';
+          strcpy(plp_col->cons_base+1, ins_maxevent_key);
+     } else if (del_maxevent_qual > del_nonevent_qual) { // consensus deletion
+          plp_col->cons_base[0] = '-';
+          strcpy(plp_col->cons_base+1, del_maxevent_key);
+     } else {
+          exit(1);
+     }
 
      if (debug) {
           plp_col_debug_print(plp_col, stderr);

@@ -137,24 +137,32 @@ def total_num_tests_from_logs(log_files):
     returns their sum (for multiple testing correction)
     """
 
-    total_num_tests = 0
+    total_num_snv_tests = 0
+    total_num_indel_tests = 0
     for f in log_files:
         fh = open(f, 'r')
-        num_tests_found = False
+        num_snv_tests_found = False
+        num_indel_tests_found = False
 
         for line in fh:
             if line.startswith('Number of substitution tests performed'):
-                num_tests = int(line.split(':')[1])
-                total_num_tests += num_tests
-                num_tests_found = True
-                break
-        if not num_tests_found:
-            LOG.fatal("Didn't find number of tests in log-file %s" % (f))
-            return -1
+                num_snv_tests = int(line.split(':')[1])
+                total_num_snv_tests += num_snv_tests
+                num_snv_tests_found = True
+            if line.startswith('Number of indel tests performed'):
+                num_indel_tests = int(line.split(':')[1])
+                total_num_indel_tests += num_indel_tests
+                num_indel_tests_found = True
+        if not num_snv_tests_found:
+            LOG.fatal("Didn't find number of snv tests in log-file %s" % (f))
+            return (-1, -1)
+        if not num_indel_tests_found:
+            LOG.fatal("Didn't find number of indel tests in log-file %s" % (f))
+            return (-1, -1)
 
         fh.close()
 
-    return total_num_tests
+    return (total_num_snv_tests, total_num_indel_tests)
 
 
 def concat_vcf_files(vcf_files, vcf_concat, source=None):
@@ -560,7 +568,7 @@ def main():
         LOG.debug("biggest_length=%d  total_length/(2.0*num_threads)=%f" % (biggest_length, total_length/(2.0*num_threads)))
         if biggest_length < total_length/(1.5*num_threads):
             break
-        elif biggest_length < 1000:
+        elif biggest_length < 100:
             LOG.warn("Regions getting too small to be efficiently processed")
             break
         
@@ -639,11 +647,12 @@ def main():
     #
     log_files = [os.path.join(tmp_dir, "%d.log" % no)
                  for no in range(len(cmd_list))]
-    num_tests = total_num_tests_from_logs(log_files)
-    if num_tests == -1:
+    num_snv_tests, num_indel_tests = total_num_tests_from_logs(log_files)
+    if num_snv_tests == -1 or num_indel_tests == -1:
         sys.exit(1)
     # same as in lofreq_snpcaller.c and used by lofreq2_somatic.py
-    sys.stderr.write("Number of substitution tests performed: %d\n" % num_tests)
+    sys.stderr.write("Number of substitution tests performed: %d\n" % num_snv_tests)
+    sys.stderr.write("Number of indel tests performed: %d\n" % num_indel_tests)
 
     cmd = ['lofreq', 'filter', '--only-passed', '-i', vcf_concat, '-o', final_vcf_out]
     if no_default_filter:
@@ -651,9 +660,12 @@ def main():
 
     if bonf_opt == 'dynamic':
         # if bonf was computed dynamically, use bonf sum
-        bonf = num_tests
-        phredqual = prob_to_phredqual(sig_opt/float(bonf))
-        cmd.extend(['--snvqual-thresh', "%s" % phredqual])
+        sub_bonf = num_snv_tests
+        indel_bonf = num_indel_tests
+        sub_phredqual = prob_to_phredqual(sig_opt/float(sub_bonf))
+        indel_phredqual = prob_to_phredqual(sig_opt/float(indel_bonf))
+        cmd.extend(['--snvqual-thresh', "%s" % sub_phredqual])
+        cmd.extend(['--indelqual-thresh', "%s" % indel_phredqual])
 
     elif bonf_opt == 'auto':
         raise NotImplementedError

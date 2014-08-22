@@ -78,10 +78,12 @@ class SomaticSNVCaller(object):
 
     LOFREQ = 'lofreq'
 
-    DEFAULT_ALPHA_N = 0.10# input for call -a
-    DEFAULT_ALPHA_T = 0.01# input for call -a
+    LOG.warn("indel specific parameter settings!")
+
+    DEFAULT_ALPHA_N = 0.10
+    DEFAULT_ALPHA_T = 0.01
     DEFAULT_MTC_T = 'bonf'
-    DEFAULT_MTC_ALPHA_T = 1# input for filter
+    DEFAULT_MTC_ALPHA_T = 0.01# optimized on DREAM indel test chr19
     DEFAULT_SRC_QUAL_ON = True
     DEFAULT_SRC_QUAL_IGN_VCF = None
     DEFAULT_MIN_COV = 10# for initial tumor calls and stringent filtering of any
@@ -147,8 +149,8 @@ class SomaticSNVCaller(object):
                          self.vcf_som_fin_wo_dbsnp, self.vcf_germl]
         if not self.continue_interrupted:
             for f in self.outfiles:
-                assert not os.path.exists(f), ("Cowardly refusing to overwrite"
-                                               " already existing file %s" % f)
+                assert not os.path.exists(f), (
+                    "Cowardly refusing to overwrite already existing file %s" % f)
 
         # other params
         self.alpha_n = self.DEFAULT_ALPHA_N
@@ -203,6 +205,25 @@ class SomaticSNVCaller(object):
             fh_stdout.seek(0)
             fh_stderr.seek(0)
             return (fh_stdout, fh_stderr)
+
+
+    @staticmethod
+    def num_tests_from_log(stream):
+        """FIXME:add-doc"""
+
+        num_subst_tests = -1
+        num_indel_tests = -1
+        for l in stream:
+            if l.startswith('Number of substitution tests performed'):
+                num_subst_tests = int(l.split(':')[1])
+            elif l.startswith('Number of indel tests performed'):
+                num_indel_tests = int(l.split(':')[1])
+            if num_subst_tests != -1 and num_indel_tests != -1:
+                break
+        if num_subst_tests == -1 and num_indel_tests == -1:
+            LOG.error("Couldn't parse number of tests from reused %s" % out_log)
+            raise ValueError
+        return (num_subst_tests, num_indel_tests)
 
 
     def call_rlx(self, sample_type):
@@ -263,19 +284,13 @@ class SomaticSNVCaller(object):
                     "%s exists but %s is missing." % (out_vcf, out_log))
                 LOG.info("Skipping rlx call on %s" % sample_type)
 
-                num_tests = -1
+                LOG.info("Parsing number of tests from log file %s" % out_log)
                 fh = open(out_log, 'r')
                 elines = [l.replace("stderr: ", "") for l in fh.readlines()]
                 fh.close()
-                for l in elines:
-                    if l.startswith('Number of substitution tests performed'):
-                        num_tests = int(l.split(':')[1])
-                        break
-                if num_tests == -1:
-                    LOG.error("Couldn't parse number of tests from"
-                              " reused %s" % out_log)
-                    raise ValueError
-                return num_tests
+                return (self.num_tests_from_log(elines))
+            else:
+                assert not os.path.exists(out_log)
 
         (o, e) = self.subprocess_wrapper(cmd, close_tmp=False)
         fh = open(out_log, 'w')
@@ -291,17 +306,7 @@ class SomaticSNVCaller(object):
         o.close()
         e.close()
 
-        num_tests = -1
-        for l in elines:
-            if l.startswith('Number of substitution tests performed'):
-                num_tests = int(l.split(':')[1])
-                break
-        if num_tests == -1:
-            LOG.error("Couldn't parse number of tests from lofreq call output"
-                      " (which was: %s)" % (elines))
-            raise ValueError
-
-        return num_tests
+        return (self.num_tests_from_log(elines))
 
 
     def rlx_to_str(self, sample_type, num_tests):
@@ -323,13 +328,19 @@ class SomaticSNVCaller(object):
         else:
             raise ValueError(sample_type)
 
+        LOG.warn("indel specific filtering!")
+        #cmd = [self.LOFREQ, 'filter', '-i', vcf_rlx,
+        #       '--snvqual-mtc', "%s" % self.mtc_t,
+        #       '--snvqual-alpha', '%f' % self.mtc_alpha_t,
+        #       '--snvqual-ntests', '%d' % num_tests,
+        #       '--only-passed', '-o', vcf_str]
         cmd = [self.LOFREQ, 'filter', '-i', vcf_rlx,
-               '--snvqual-mtc', "%s" % self.mtc_t,
-               '--snvqual-alpha', '%f' % self.mtc_alpha_t,
-               '--snvqual-ntests', '%d' % num_tests,
                '--sb-mtc', 'fdr', '--sb-alpha', '%f' % 0.001,
                '--cov-min', '%d' % self.min_cov,
-               '--only-passed', '-o', vcf_str]
+               '--indelqual-mtc', "%s" % self.mtc_t,
+               '--indelqual-alpha', '%f' % self.mtc_alpha_t,
+               '--indelqual-ntests', '%d' % num_tests,
+                '--only-passed', '-o', vcf_str]
 
         #import pdb; pdb.set_trace()
         if self.continue_interrupted and os.path.exists(vcf_str):
@@ -373,8 +384,10 @@ class SomaticSNVCaller(object):
         else:
             vcf_som_raw_fh = open(self.vcf_som_raw, 'w')
 
+        LOG.warn("indel specific complement (--only-pos)")
         cmd = [self.LOFREQ, 'vcfset', '-1', self.vcf_t_str,
                '-2', self.vcf_n_rlx,
+               '--only-pos',
                '-a', 'complement', '-o', '-']
 
         (cmd_o, cmd_e) = self.subprocess_wrapper(cmd, close_tmp=False)
@@ -427,8 +440,11 @@ class SomaticSNVCaller(object):
         else:
             assert not os.path.exists(self.vcf_som_fin_wo_dbsnp)
 
+        LOG.warn("indel specific dbsnp removal (--only-pos)")
+
         cmd = [self.LOFREQ, 'vcfset',
                '-a', 'complement',
+               '--only-pos',
                '-1', self.vcf_som_fin, '-2', self.dbsnp,
                '-o', self.vcf_som_fin_wo_dbsnp]
         self.subprocess_wrapper(cmd)
@@ -457,17 +473,20 @@ class SomaticSNVCaller(object):
             LOG.fatal("ign-vcf file was provided, but src-qual is off")
             sys.exit(1)
 
-        num_tests = self.call_rlx("normal")
-        self.rlx_to_str("normal", num_tests)
+        LOG.warn("indel specific rlx_to_str")
+        try:
+            (num_subst_tests, num_indel_tests) = self.call_rlx("normal")
+            self.rlx_to_str("normal", num_indel_tests)
 
-        num_tests = self.call_rlx("tumor")
-        self.rlx_to_str("tumor", num_tests)
+            (num_subst_tests, num_indel_tests) = self.call_rlx("tumor")
+            self.rlx_to_str("tumor", num_indel_tests)
+        except:
+            #return False
+            raise
 
-        self.remove_normal()
+        self.complement()
         self.uniq()
-        
-        if self.dbsnp:
-            self.remove_dbsnp()
+
         if self.do_germline:
             self.call_germline()
 

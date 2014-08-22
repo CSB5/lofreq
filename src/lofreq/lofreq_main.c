@@ -24,12 +24,12 @@
 #include "lofreq_uniq.h"
 #include "lofreq_vcfset.h"
 #include "lofreq_index.h"
-
+#include "lofreq_indel_quality.h"
+#include "lofreq_viterbi.h"
 
 #ifndef __DATE__
 __DATE__ = "NA";
 #endif
-
 
 static void prepend_dir_to_path(const char *dir_to_add)
 {
@@ -160,6 +160,9 @@ static void usage(const char *myname)
      fprintf(stderr, "    bamstats      : Collect BAM statistics\n");
 #endif
      fprintf(stderr, "    vcfset        : VCF set operations\n");
+     fprintf(stderr, "    viterbi       : Viterbi realignment\n");
+     fprintf(stderr, "    indel_quality : Insert indel qualities\n"); 				
+  
      fprintf(stderr, "    version       : Print version info\n");
      fprintf(stderr, "\n");
      fprintf(stderr, "  Extra Tools (if installed):\n");
@@ -194,8 +197,14 @@ int main(int argc, char *argv[])
      } else if (strcmp(argv[1], "vcfset") == 0)  {
           return main_vcfset(argc, argv);
 
+     } else if (strcmp(argv[1], "viterbi") == 0){
+          return main_viterbi(argc,argv);
+
      } else if (strcmp(argv[1], "index") == 0)  {
           return main_index(argc, argv);
+
+     } else if (strcmp(argv[1], "indel_quality") == 0){
+          return main_indel_quality(argc, argv);
 
      } else if (strcmp(argv[1], "idxstats") == 0)  {
           return main_idxstats(argc, argv);
