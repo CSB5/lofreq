@@ -26,6 +26,8 @@
 #include "defaults.h"
 
 
+#define ENABLE_INDELS
+
 #if 1
 #define MYNAME "lofreq filter"
 #else
@@ -721,6 +723,9 @@ main_filter(int argc, char *argv[])
      cfg.snvqual_filter.alpha = DEFAULT_SIG;
      cfg.indelqual_filter.alpha = DEFAULT_SIG;
 
+#ifdef ENABLE_INDELS
+         LOG_WARN("%s\n", "indel support enabled but untested");
+#endif
 
     /* keep in sync with long_opts_str and usage
      *
@@ -1046,15 +1051,12 @@ main_filter(int argc, char *argv[])
 
          is_indel = vcf_var_has_info_key(NULL, var, "INDEL");
 
-#define ENABLE_INDELS
 #ifndef ENABLE_INDELS
          if (is_indel) {
               LOG_WARN("%s\n", "Skipping INDEL variants for now");
               free(var);
               continue;
          }
-#else
-         LOG_WARN("%s\n", "indel support enabled but untested");
 #endif
 
          /* read all in, no matter if already filtered. we keep adding filters */
