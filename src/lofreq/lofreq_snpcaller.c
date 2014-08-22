@@ -779,7 +779,6 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "- P-Values\n");                                          
      fprintf(stderr, "       -a | --sig                   P-Value cutoff / significance level [%f]\n", snvcall_conf->sig);
      fprintf(stderr, "       -b | --bonf                  Bonferroni factor. 'dynamic' (increase per actually performed test) or INT ['dynamic']\n");
-     /* don't mention auto: was misused by users and is deprecated anyway: 'auto' (infer from bed-file)*/
      fprintf(stderr, "- Misc.\n");                                           
 #ifdef USE_ALNERRPROF
      fprintf(stderr, "       -A | --map-prof FILE         Mapping error profile (produced with bamstats)\n");
@@ -789,7 +788,7 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "            --dont-skip-n           Don't skip positions where refbase is N (will try to predict CONSVARs (only) at those positions)\n");
      fprintf(stderr, "            --use-orphan            Count anomalous read pairs (i.e. where mate is not aligned properly)\n");
      fprintf(stderr, "            --plp-summary-only      No snv-calling: just output pileup summary per column\n");
-     fprintf(stderr, "            --no-default-filter     Don't apply default filter command after calling variants\n");
+     fprintf(stderr, "            --no-default-filter     Don't run default 'lofreq filter' automatically after calling variants\n");
      fprintf(stderr, "            --verbose               Be verbose\n");
      fprintf(stderr, "            --debug                 Enable debugging\n");
 }
@@ -810,7 +809,6 @@ main_call(int argc, char *argv[])
      static int no_default_filter = 0;
      static int dont_skip_n = 0;
      static int illumina_1_3 = 0;
-     int bonf_auto = 0;
      char *bam_file = NULL;
      char *bed_file = NULL;
      char *vcf_out = NULL; /* == - == stdout */
@@ -1048,16 +1046,10 @@ for cov in coverage_range:
               }
               break;
          case 'b': 
-              if (0 == strncmp(optarg, "auto", 4)) {
-                   bonf_auto = 1;
-                   snvcall_conf.bonf_dynamic = 0;
-
-              } else if (0 == strncmp(optarg, "dynamic", 7)) {
+              if (0 == strncmp(optarg, "dynamic", 7)) {
                    snvcall_conf.bonf_dynamic = 1;
-                   bonf_auto = 0;
                    
               } else {
-                   bonf_auto = 0;
                    snvcall_conf.bonf_dynamic = 0;
 
                    snvcall_conf.bonf_sub = strtoll(optarg, (char **)NULL, 10); /* atol */ 
@@ -1233,37 +1225,6 @@ for cov in coverage_range:
     }
 #endif
 
-    if (bonf_auto && ! plp_summary_only) {
-         if (! bed_file) {
-              LOG_FATAL("%s\n", "Need bed-file for auto bonferroni correction.");
-              free(vcf_tmp_out);
-              return 1;
-         }
-
-#if 0
-         double cov_mean;
-         long long int num_non0cov_pos;
-         LOG_DEBUG("Automatically determining Bonferroni factor for bam=%s reg=%s bed=%s\n",
-                   bam_file, mplp_conf.reg, bed_file); 
-         if (depth_stats(&cov_mean, &num_non0cov_pos, bam_file, mplp_conf.reg, bed_file,
-                         &mplp_conf.minbq, &mplp_conf.min_mq)) {
-              LOG_FATAL("%s\n", "Couldn't determine Bonferroni factor automatically\n"); 
-              return 1;
-         }
-         snvcall_conf.bonf = num_non0cov_pos*3;
-#else
-
-         snvcall_conf.bonf_sub = bonf_from_bedfile(bed_file);
-         if (snvcall_conf.bonf_sub<1) {
-              LOG_FATAL("Automatically determining Bonferroni from bed"
-                        " regions listed in %s failed\n", bed_file);
-              return 1;
-         }
-
-#endif
-         LOG_VERBOSE("Automatically determined Bonferroni factor = %lld\n", snvcall_conf.bonf_sub);
-    }
-
     if (debug) {
          dump_mplp_conf(& mplp_conf, stderr);
          dump_snvcall_conf(& snvcall_conf, stderr);
@@ -1295,54 +1256,46 @@ for cov in coverage_range:
 
     vcf_file_close(& snvcall_conf.vcf_out);
 
-    /* snv calling completed. now filter according to the following schema:
+    /* snv calling completed. now filter according to the following rules:
      *  1. no_default_filter and ! dyn
-     *     print
-     *  2.1 no_ default_filter and dyn
-     *     filter snvphred only
-     *  2.2 ! no_default_filter and dyn
-     *     filter snvphred and default
-     *  2.3 ! no_default_filter and ! dyn 
-     *     filter default
+     *     just print
+     *  2 filter with
+     *     - no_default_filter, if set
+     *     - filter snvphred according to bonf, if dynamic
      */
-    if (no_default_filter && ! snvcall_conf.bonf_dynamic) {
+    if (plp_summary_only) {
+         LOG_VERBOSE("%s\n", "No filtering needed: didn't run in SNV calling mode");
+
+    } else if (no_default_filter && ! snvcall_conf.bonf_dynamic) {
          /* vcf file needs no filtering and was already printed to
           * final destination. already taken care of above. */
          LOG_VERBOSE("%s\n", "No filtering needed or requested: variants already written to final destination");
 
-    } else if (plp_summary_only) {
-         LOG_VERBOSE("%s\n", "No filtering needed: didn't run in SNV calling mode");
-
     } else {
-         char base_cmd[BUF_SIZE];
-         char full_cmd[BUF_SIZE];
-         snprintf(base_cmd, BUF_SIZE, 
+         char cmd[BUF_SIZE];
+         int len; 
+
+         snprintf(cmd, BUF_SIZE, 
                   "lofreq filter --only-passed -i %s -o %s",
                   vcf_tmp_out, NULL==vcf_out ? "-" : vcf_out);
+         len = strlen(cmd);
 
-         if (no_default_filter && snvcall_conf.bonf_dynamic) {
-              snprintf(full_cmd, BUF_SIZE, 
-                      "%s --no-defaults --snvqual-thresh %d", 
-                      base_cmd, PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf_sub));
-
-         } else if (! no_default_filter && snvcall_conf.bonf_dynamic) {
-              snprintf(full_cmd, BUF_SIZE, 
-                      "%s --snvqual-thresh %d", 
-                      base_cmd, PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf_sub));
-
-         } else if (! no_default_filter && ! snvcall_conf.bonf_dynamic) {
-              snprintf(full_cmd, BUF_SIZE, "%s", base_cmd);
-
-         } else {
-              LOG_FATAL("%s\n", "internal logic error during filtering");
-              return 1;
+         if (no_default_filter) {
+              len += sprintf(cmd+len, " %s", "--no-defaults");
          }
 
-         LOG_FIXME("%s\n", "Missing setup for indel default filter in case of dynamic bonf");/* see above for SNVs */
+         if (snvcall_conf.bonf_dynamic) {
+              len += sprintf(cmd+len,/* appending to str with format. see http://stackoverflow.com/questions/14023024/strcat-for-formatted-strings */
+                             " --snvqual-thresh %d --indelqual-thresh %d", 
+                             snvcall_conf.bonf_sub ? PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf_sub) : INT_MAX,
+                             snvcall_conf.bonf_indel ? PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf_indel) : INT_MAX);
+         } else {
+              LOG_VERBOSE("%s\n", "No SNV/indel-quality filtering needed (already applied during call since bonf was fixed)");
+         }
 
-         LOG_VERBOSE("Executing %s\n", full_cmd);
-         if (0 != (rc = system(full_cmd))) {
-              LOG_ERROR("The following command failed: %s\n", full_cmd);
+         LOG_VERBOSE("Executing %s\n", cmd);
+         if (0 != (rc = system(cmd))) {
+              LOG_ERROR("The following command failed: %s\n", cmd);
               rc = 1;
               
          } else {
