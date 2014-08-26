@@ -207,12 +207,14 @@ uniq_snv(const plp_col_t *p, void *confp)
      float af;
      int is_uniq = 0;
 
+#ifdef DISABLE_INDELS
      if (vcf_var_has_info_key(NULL, conf->var, "INDEL")) {
           LOG_WARN("uniq logic can't be applied to indels."
                    " Skipping indel var at %s %d\n",
                    conf->var->chrom, conf->var->pos+1);
           return;
      }
+#endif
 
      if (0 != strcmp(p->target, conf->var->chrom) || p->pos != conf->var->pos) {
           LOG_ERROR("wrong pileup for var. pileup for %s %d. var for %s %d\n",
@@ -234,9 +236,11 @@ uniq_snv(const plp_col_t *p, void *confp)
           af = strtof(af_char, (char **)NULL); /* atof */
           free(af_char);
           if (af < 0.0 || af > 1.0) {
+               float new_af;
+               new_af = af<0.0 ? 0.01 : 1.0;
                /* hard to catch error later */
-               LOG_FATAL("%s\n", "Couldn't parse AF (value out of bound) from variant");
-               return;
+               LOG_FATAL("Invalid (value out of bound) AF %f in variant. Resetting to %f\n", af, new_af);
+               af = new_af;
           }
 
      } else {
@@ -307,9 +311,39 @@ uniq_snv(const plp_col_t *p, void *confp)
           
      } else {
           /* FIXME no support for indels! */
-          int alt_count = base_count(p, conf->var->alt[0]);
+          int alt_count;
           double pvalue;
           char info_str[128];
+
+          if (vcf_var_has_info_key(NULL, conf->var, "INDEL")) {
+               int ref_len = strlen(conf->var->ref);
+               int alt_len = strlen(conf->var->alt);
+               if (ref_len > alt_len) { /* deletion */
+                    char del_key[256];
+                    strcpy(del_key, conf->var->ref+1);
+                    del_event *it_del = find_del_sequence(&p->del_event_counts, del_key);
+                    if (it_del) {
+                         alt_count = it_del->count;
+                    } else {
+                         alt_count = 0;
+                    }
+                    /* LOG_DEBUG("%s>%s k:%s c:%d\n", conf->var->ref, conf->var->alt, del_key, alt_count); */
+               } else { /* insertion */
+                    char ins_key[256];
+                    strcpy(ins_key, conf->var->alt+1);
+                    ins_event *it_ins = find_ins_sequence(&p->ins_event_counts, ins_key);
+                    if (it_ins) {
+                         alt_count = it_ins->count;
+                    } else {
+                         alt_count = 0;
+                    }
+                    /* LOG_DEBUG("%s>%s k:%s c:%d\n", conf->var->ref, conf->var->alt, ins_key, alt_count);*/
+               }
+
+          } else {
+               alt_count = base_count(p, conf->var->alt[0]);
+          }
+
 
 #ifdef DEBUG
           LOG_DEBUG("Now testing af=%f cov=%d alt_count=%d at %s %d for var:",
@@ -647,13 +681,14 @@ main_uniq(int argc, char *argv[])
 
          LOG_DEBUG("pileup for var no %d at %s %d\n",
                    i+1, uniq_conf.var->chrom, uniq_conf.var->pos+1);
+#ifdef DISABLE_INDELS
          if (vcf_var_has_info_key(NULL, uniq_conf.var, "INDEL")) {
               LOG_WARN("Skipping indel var at %s %d\n",
                        uniq_conf.var->chrom, uniq_conf.var->pos+1);
               free(mplp_conf.reg);
               mplp_conf.reg = NULL;
               continue;
-
+#endif
 #ifdef UNNECESSARY_BECAUSE_HANDLED_VIA_PARSE_VARS
          } else if (vcf_var_filtered(uniq_conf.var)) {
               LOG_VERBOSE("Skipping filtered var at %s %d\n",
@@ -661,8 +696,8 @@ main_uniq(int argc, char *argv[])
               free(mplp_conf.reg);
               mplp_conf.reg = NULL;
               continue;
-#endif
          }
+#endif
 
          rc = mpileup(&mplp_conf, plp_proc_func, (void*)&uniq_conf,
                       1, (const char **) argv + optind + 1);
