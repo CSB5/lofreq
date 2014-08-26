@@ -623,7 +623,7 @@ main_uniq(int argc, char *argv[])
          if (vcf_file_seek(& uniq_conf.vcf_in, 0, SEEK_SET)) {
               LOG_FATAL("%s\n", "Couldn't rewind file to parse variants"
                         " after header parsing failed");
-              return -1;
+              return 1;
          }
     } else {
          vcf_header_add(&vcf_header, "##INFO=<ID=UNIQ,Number=0,Type=Flag,Description=\"Unique, i.e. not detectable in paired sample\">\n");
@@ -656,11 +656,11 @@ main_uniq(int argc, char *argv[])
 
     if (-1 == (num_vars = vcf_parse_vars(&vars, & uniq_conf.vcf_in, 1))) {
          LOG_FATAL("%s\n", "vcf_parse_vars() failed");
-         return -1;
+         return 1;
     }
     if (0 == num_vars) {
          LOG_WARN("%s\n", "Didn't find any variants in input");
-         return 1;
+         return 0;
     }
     if (! uniq_conf.uniq_filter.ntests) {
          uniq_conf.uniq_filter.ntests = num_vars;
