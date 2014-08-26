@@ -761,7 +761,7 @@ void compile_plp_col(plp_col_t *plp_col,
            */
           const bam_pileup1_t *p = plp + i;
           int nt4;
-          int mq, bq, baq; /* phred scores */
+          int mq=-1, bq, baq; /* phred scores */
           int iq = 0, dq = 0;
           int iaq = INT_MAX, daq = INT_MAX;
           int base_skip = 0; /* boolean */
@@ -781,11 +781,8 @@ void compile_plp_col(plp_col_t *plp_col,
            */
           uint8_t *bi = bam_aux_get(p->b, "BI"); /* GATK indels */
           uint8_t *bd = bam_aux_get(p->b, "BD"); /* GATK deletions */
-#if 0
-          /* FIXME: IAQ */
           uint8_t *ai = bam_aux_get(p->b, "AI");
           uint8_t *ad = bam_aux_get(p->b, "AD");
-#endif
           uint8_t *baq_aux = NULL; /* full baq value (not offset as "BQ"!) */
 
 #ifdef USE_SOURCEQUAL
@@ -996,13 +993,10 @@ void compile_plp_col(plp_col_t *plp_col,
                     }
                     ins_seq[j-1] = '\0';
 
-#if 0                 
-                    // FIXME: IAQ
                     if (ai) {
                          char *a = (char*)(ai+1);
                          iaq = a[p->qpos] - 33;
                     } 
-#endif
                      
                     //LOG_DEBUG("Insertion of %s at %d with iq %d iaq %d\n", 
                     //           ins_seq, pos, iq, iaq);
@@ -1042,13 +1036,11 @@ void compile_plp_col(plp_col_t *plp_col,
                          del_seq[j-1] = toupper(c);
                     }
                     del_seq[j-1] = '\0';
-#if 0
-                    // FIXME: IAQ
+
                     if (ad) {
                          char *a = (char*)(ad+1);
                          daq = a[p->qpos] - 33;
                     }
-#endif
                     //LOG_DEBUG("Deletion of %s at %d with dq %d daq %d\n", 
                     //           del_seq, pos, dq, daq);
 #ifdef USE_SOURCEQUAL
