@@ -1,12 +1,19 @@
 /* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*- */
-
-
 /*********************************************************************
  *
- * FIXME update license
+ * Copyright (C) 2011-2014 Genome Institute of Singapore
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
  *
  *********************************************************************/
-
 
 #include <stdio.h>
 #include <ctype.h>
@@ -25,8 +32,6 @@
 #include "multtest.h"
 #include "defaults.h"
 
-
-#define ENABLE_INDELS
 
 #if 1
 #define MYNAME "lofreq filter"
@@ -82,6 +87,8 @@ typedef struct {
      vcf_file_t vcf_in;
      vcf_file_t vcf_out;
      int print_only_passed;
+     int only_snvs;
+     int only_indels;
 
      /* each allowed to be NULL if not set */
      dp_filter_t dp_filter;
@@ -103,6 +110,8 @@ dump_filter_conf(const filter_conf_t *cfg)
 {
      fprintf(stderr, "filter_conf:\n");
      fprintf(stderr, "  print_only_passed=%d\n", cfg->print_only_passed);
+     fprintf(stderr, "  only_snvs=%d\n", cfg->only_snvs);
+     fprintf(stderr, "  only_indels=%d\n", cfg->only_indels);
 
      fprintf(stderr, "  dp_filter min=%d max=%d\n",
              cfg->dp_filter.min, cfg->dp_filter.max);
@@ -164,10 +173,12 @@ usage(const filter_conf_t* filter_conf)
 
      fprintf(stderr, "\n");
      fprintf(stderr, "  Misc.:\n");
+     fprintf(stderr, "       --only-indels          Keep InDels only\n");
+     fprintf(stderr, "       --only-snvs            Keep SNVs only\n");
+     fprintf(stderr, "       --only-passed          Only output passed variants (off by default)\n");
      fprintf(stderr, "       --no-defaults          Remove all default filter settings\n");
      fprintf(stderr, "       --verbose              Be verbose\n");
      fprintf(stderr, "       --debug                Enable debugging\n");
-     fprintf(stderr, "       --only-passed          Only output passed variants\n");
 }
 /* usage() */
 
@@ -713,6 +724,8 @@ main_filter(int argc, char *argv[])
      char *vcf_in = NULL, *vcf_out = NULL;
      static int print_only_passed = 0;
      static int no_compound_sb_filter = 0;
+     static int only_indels = 0;
+     static int only_snvs = 0;
      char *vcf_header = NULL;
      var_t **vars = NULL;
      long int num_vars = 0; /* isn't long overkill here ? */
@@ -728,9 +741,6 @@ main_filter(int argc, char *argv[])
      cfg.snvqual_filter.alpha = DEFAULT_SIG;
      cfg.indelqual_filter.alpha = DEFAULT_SIG;
 
-#ifdef ENABLE_INDELS
-         LOG_WARN("%s\n", "indel support enabled but untested");
-#endif
 
     /* keep in sync with long_opts_str and usage
      *
@@ -745,6 +755,8 @@ main_filter(int argc, char *argv[])
               {"debug", no_argument, &debug, 1},
               {"only-passed", no_argument, &print_only_passed, 1},
               {"no-defaults", no_argument, &no_defaults, 1},
+              {"only-indels", no_argument, &only_indels, 1},
+              {"only-snvs", no_argument, &only_snvs, 1},
 
               {"help", no_argument, NULL, 'h'},
               {"in", required_argument, NULL, 'i'},
@@ -923,8 +935,15 @@ main_filter(int argc, char *argv[])
          }
     }
     cfg.print_only_passed = print_only_passed;
+    cfg.only_indels = only_indels;
+    cfg.only_snvs = only_snvs;
     cfg.sb_filter.no_compound = no_compound_sb_filter;
 
+    if (cfg.only_indels && cfg.only_snvs) {
+         LOG_FATAL("%s\n", "Can't keep only indels and only snvs");
+         return 1;
+    }
+    
     if (! no_defaults) {
          if (cfg.sb_filter.mtc_type==MTC_NONE && ! cfg.sb_filter.thresh) {
               LOG_VERBOSE("%s\n", "Setting default SB filtering method to holm-bonf");
@@ -1015,7 +1034,7 @@ main_filter(int argc, char *argv[])
     /* print header
      */
     if (0 !=  vcf_parse_header(&vcf_header, & cfg.vcf_in)) {
-         LOG_WARN("%s\n", "vcf_parse_header() failed");
+         /* LOG_WARN("%s\n", "vcf_parse_header() failed"); */
          if (vcf_file_seek(& cfg.vcf_in, 0, SEEK_SET)) {
               LOG_FATAL("%s\n", "Couldn't rewind file to parse variants"
                         " after header parsing failed");
@@ -1055,15 +1074,15 @@ main_filter(int argc, char *argv[])
               break;
          }
 
-         is_indel = vcf_var_has_info_key(NULL, var, "INDEL");
+         is_indel = vcf_var_is_indel(var);
 
-#ifndef ENABLE_INDELS
-         if (is_indel) {
-              LOG_WARN("%s\n", "Skipping INDEL variants for now");
+         if (cfg.only_snvs && is_indel) {
+              free(var);
+              continue;
+         } else if (cfg.only_indels && ! is_indel) {
               free(var);
               continue;
          }
-#endif
 
          /* read all in, no matter if already filtered. we keep adding filters */
          num_vars +=1;

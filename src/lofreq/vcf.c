@@ -212,6 +212,16 @@ int vcf_var_filtered(const var_t *var)
      }
 }
 
+int vcf_var_is_indel(const var_t *var)
+{
+     if (strlen(var->ref)>1 ||
+         strlen(var->alt)>1 ||
+         vcf_var_has_info_key(NULL, var, "INDEL")) {
+          return 1;
+     } else {
+          return 0;
+     }
+}
 
 /* value for key will be stored in value if not NULL. value will NULL
  * if not found. Otherwise its allocated here and caller must free.
