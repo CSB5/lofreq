@@ -500,7 +500,6 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "- P-Values\n");                                          
      fprintf(stderr, "       -a | --sig                   P-Value cutoff / significance level [%f]\n", snvcall_conf->sig);
      fprintf(stderr, "       -b | --bonf                  Bonferroni factor. 'dynamic' (increase per actually performed test) or INT ['dynamic']\n");
-     /* don't mention auto: was misused by users and is deprecated anyway: 'auto' (infer from bed-file)*/
      fprintf(stderr, "- Misc.\n");                                           
 #ifdef USE_ALNERRPROF
      fprintf(stderr, "       -A | --map-prof FILE         Mapping error profile (produced with bamstats)\n");
@@ -528,7 +527,6 @@ main_call(int argc, char *argv[])
      static int no_default_filter = 0;
      static int dont_skip_n = 0;
      static int illumina_1_3 = 0;
-     int bonf_auto = 0;
      char *bam_file = NULL;
      char *bed_file = NULL;
      char *vcf_out = NULL; /* == - == stdout */
@@ -764,16 +762,10 @@ for cov in coverage_range:
               }
               break;
          case 'b': 
-              if (0 == strncmp(optarg, "auto", 4)) {
-                   bonf_auto = 1;
-                   snvcall_conf.bonf_dynamic = 0;
-
-              } else if (0 == strncmp(optarg, "dynamic", 7)) {
+              if (0 == strncmp(optarg, "dynamic", 7)) {
                    snvcall_conf.bonf_dynamic = 1;
-                   bonf_auto = 0;
                    
               } else {
-                   bonf_auto = 0;
                    snvcall_conf.bonf_dynamic = 0;
 
                    snvcall_conf.bonf = strtoll(optarg, (char **)NULL, 10); /* atol */ 
