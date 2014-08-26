@@ -2,6 +2,7 @@
 
 source lib.sh || exit 1
 
+KEEP_TMP=0
 REF=data/icgc-tcga-dream-support/Homo_sapiens_assembly19.fasta
 NORMAL=data/icgc-tcga-dream-indel_chr19/chr19.normal_didq_aq.bam
 TUMOR=data/icgc-tcga-dream-indel_chr19/chr19.tumor_didq_aq.bam
@@ -24,8 +25,9 @@ res=$($EVALUATOR -t $TRUTH -v ${outpref}somatic_final.snvs.vcf -m SNV | awk 'END
 echo $res | awk -F, '{prec=$1; rec=$2; if (prec<0.96 || rec<0.96) {status="ERROR"} else {status="OK"} printf "%s: precision=%f recall=%f\n", status, prec, rec > "/dev/stderr"} END {if (status!="OK") {exit 1}}';
 
 res=$($EVALUATOR -t $TRUTH -v ${outpref}somatic_final.indels.vcf -m INDEL | awk 'END {print $NF}') || exit
-echo $res | awk -F, '{prec=$1; rec=$2; if (prec<0.96 || rec<0.96) {status="ERROR"} else {status="OK"} printf "%s: precision=%f recall=%f\n", status, prec, rec > "/dev/stderr"} END {if (status!="OK) {exit 1}"}'
+echo $res | awk -F, '{prec=$1; rec=$2; if (prec<0.90 || rec<0.50) {status="ERROR"} else {status="OK"} printf "%s: precision=%f recall=%f\n", status, prec, rec > "/dev/stderr"} END {if (status!="OK") {exit 1}}'
 
+if [ $KEEP_TMP -ne 1 ]; then
+     test -d $outdir && rm -rf $outdir
+fi
 
-
-            
