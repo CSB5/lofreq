@@ -5,7 +5,7 @@
 
 __author__ = "Andreas Wilm, Niranjan Nagarajan"
 __email__ = "wilma@gis.a-star.edu.sg"
-__copyright__ = "2013 Genome Institute of Singapore"
+__copyright__ = "2013,2014 Genome Institute of Singapore"
 __license__ = "GPL2"
 
 

@@ -1,11 +1,7 @@
 #ifndef MULTTEST_H
 #define MULTTEST_H
 
-/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*-
- *
- * FIXME Copyright update
- *
- *********************************************************************/
+/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*- */
 
 typedef enum
 {

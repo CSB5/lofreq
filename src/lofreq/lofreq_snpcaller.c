@@ -1,9 +1,17 @@
 /* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*- */
-
-
 /*********************************************************************
  *
- * FIXME update license
+ * Copyright (C) 2011-2014 Genome Institute of Singapore
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
  *
  *********************************************************************/
 
@@ -43,7 +51,6 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 #include "utils.h"
 #include "log.h"
 #include "plp.h"
-#include "bed.h"
 #include "defaults.h"
 
 #if 1
@@ -934,37 +941,6 @@ for cov in coverage_range:
          free(ign_vcf);
     }
 #endif
-
-    if (bonf_auto && ! plp_summary_only) {
-         if (! bed_file) {
-              LOG_FATAL("%s\n", "Need bed-file for auto bonferroni correction.");
-              free(vcf_tmp_out);
-              return 1;
-         }
-
-#if 0
-         double cov_mean;
-         long long int num_non0cov_pos;
-         LOG_DEBUG("Automatically determining Bonferroni factor for bam=%s reg=%s bed=%s\n",
-                   bam_file, mplp_conf.reg, bed_file); 
-         if (depth_stats(&cov_mean, &num_non0cov_pos, bam_file, mplp_conf.reg, bed_file,
-                         &mplp_conf.minbq, &mplp_conf.min_mq)) {
-              LOG_FATAL("%s\n", "Couldn't determine Bonferroni factor automatically\n"); 
-              return 1;
-         }
-         snvcall_conf.bonf = num_non0cov_pos*3;
-#else
-
-         snvcall_conf.bonf = bonf_from_bedfile(bed_file);
-         if (snvcall_conf.bonf<1) {
-              LOG_FATAL("Automatically determining Bonferroni from bed"
-                        " regions listed in %s failed\n", bed_file);
-              return 1;
-         }
-
-#endif
-         LOG_VERBOSE("Automatically determined Bonferroni factor = %lld\n", snvcall_conf.bonf);
-    }
 
     if (debug) {
          dump_mplp_conf(& mplp_conf, stderr);

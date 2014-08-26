@@ -1,11 +1,25 @@
-/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*-
+/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*-/
+/*********************************************************************
  *
- * This file is partially based on samtools' bam_plcmd.c and very
+ * Copyright (C) 2011-2014 Genome Institute of Singapore
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ *********************************************************************/
+
+/* This file is partially based on samtools' bam_plcmd.c and very
  * likely needs an update whenever samtools/libbam is updated
  *
- * FIXME missing license
- *
  */
+
 #include <ctype.h>
 #include <assert.h>
 #include <errno.h>

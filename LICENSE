@@ -1,17 +1,14 @@
-Incorporation of LoFreq into commercial software is possible by
-obtaining a specially licensed version. Please contact Dr. Michael
-ROSSBACH <rossbachm@gis.a-star.edu.sg> for more info.
+LoFreq is mainly licensed under the GPL2 (see COPYING). Incorporation
+of LoFreq into commercial software is possible by obtaining a
+specially licensed version. Please contact Dr. Michael ROSSBACH
+<rossbachm@gis.a-star.edu.sg> for more info.
 
-LoFreq-Star consists of two parts:
-
-1. a compiled core program ('lofreq'), which is free for
-non-commercial use. External libraries used in the core are
+External libraries used in the core and/or appearing in the binary
+version of LoFreq are:
 - samtools/libbam (see src/libbam/COPYING and src/libbam/AUTHORS)
 - cdflib90 (see src/cdflib90.README)
-- zlib (see src/zlib.LICENSE)
 - uthash (see src/uthash/LICENSE)
-
-2. a set of Python scripts and modules, released under the GPL2.
+- zlib (see src/zlib.LICENSE)
 
 
 

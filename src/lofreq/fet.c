@@ -1,3 +1,4 @@
+/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*- */
 /* Taken from samtools 0.1.18 (r982:295) */
 
 #include <math.h>

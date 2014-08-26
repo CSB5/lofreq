@@ -9,7 +9,7 @@ prefix). The most important one ends in somatic_final.vcf
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
-__copyright__ = "2013 Genome Institute of Singapore"
+__copyright__ = "2013,2014 Genome Institute of Singapore"
 __license__ = "GPL2"
 
 
