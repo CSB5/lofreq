@@ -32,6 +32,7 @@ typedef struct {
      int capQ_thres;
      int max_depth;
      int min_plp_bq; /* use with caution: this makes lofreq blind to any bases below this value */
+     int min_plp_idq;
      int def_nm_q;
      char *reg;
      char *fa;
