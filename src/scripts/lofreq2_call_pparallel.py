@@ -662,6 +662,10 @@ def main():
         # if bonf was computed dynamically, use bonf sum
         sub_bonf = num_snv_tests
         indel_bonf = num_indel_tests
+        if sub_bonf==0:
+            sub_bonf=1
+        if indel_bonf==0:
+            indel_bonf=1
         sub_phredqual = prob_to_phredqual(sig_opt/float(sub_bonf))
         indel_phredqual = prob_to_phredqual(sig_opt/float(indel_bonf))
         cmd.extend(['--snvqual-thresh', "%s" % sub_phredqual])
