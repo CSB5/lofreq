@@ -48,7 +48,7 @@ typedef struct {
      char ref_base; /* uppercase reference base (given by fasta) */
      char cons_base[MAX_INDELSIZE]; /* uppercase consensus base according to base-counts, after read-level filtering. */
      int coverage; /* coverage after read-level filtering i.e. same as in samtools mpileup (n_plp) but without indels! */
-     int coverage_safe; /* original coverage for safe malloc */
+     int coverage_indel; /* original coverage for safe malloc */
 
      /* list of qualities: keeping them all here in one place so that
       * filtering can become separate step. alternative is to filter

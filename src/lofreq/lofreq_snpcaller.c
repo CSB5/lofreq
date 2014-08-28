@@ -221,7 +221,7 @@ report_cons_ins(const plp_col_t *p, snvcall_conf_t *conf) {
      }
      report_ins_ref[1] = report_ins_alt[j+1] = '\0';
      
-     float af = it_ins->count / (float)p->coverage;
+     float af = it_ins->count / (float)p->coverage_indel;
 
      dp4_counts_t dp4;
      dp4.ref_fw = p->non_ins_fw_rv[0];
@@ -258,7 +258,7 @@ report_cons_del(const plp_col_t *p, snvcall_conf_t *conf) {
      }
      report_del_ref[j+1] = report_del_alt[1] = '\0';
 
-     float af = it_del->count / (float)p->coverage;
+     float af = it_del->count / (float)p->coverage_indel;
      
      dp4_counts_t dp4;
      dp4.ref_fw = p->non_del_fw_rv[0];

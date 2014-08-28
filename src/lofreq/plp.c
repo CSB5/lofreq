@@ -116,7 +116,7 @@ plp_col_init(plp_col_t *p) {
     p->ref_base = '\0';
     p->cons_base[0] = 'N'; p->cons_base[1] = '\0';
     p->coverage = -INT_MAX;
-    p->coverage_safe = p->coverage;
+    p->coverage_indel = p->coverage;
     for (i=0; i<NUM_NT4; i++) {
          int_varray_init(& p->base_quals[i], grow_by_size);
          int_varray_init(& p->baq_quals[i], grow_by_size);
@@ -733,6 +733,7 @@ void compile_plp_col(plp_col_t *plp_col,
       * n_plp[i] - m
       */
      int num_skips = 0;
+     int num_skips_indel = 0;
 
      ref_base = (ref && pos < ref_len)? ref[pos] : 'N';
      
@@ -742,7 +743,7 @@ void compile_plp_col(plp_col_t *plp_col,
      plp_col->ref_base = toupper(ref_base);
      plp_col->coverage = n_plp;  /* this is coverage as in the original mpileup, 
                                    i.e. after read-level filtering */
-     plp_col->coverage_safe = n_plp;
+     plp_col->coverage_indel = n_plp;
      LOG_DEBUG("Processing %s:%d\n", plp_col->target, plp_col->pos+1);
      
      for (i = 0; i < n_plp; ++i) {
@@ -975,121 +976,130 @@ void compile_plp_col(plp_col_t *plp_col,
            * represents a deletion from the reference. The deleted
            * bases will be presented as ‘*’ in the following lines.
            */
-          
-          if (p->indel != 0) {
+     
+          if ( p->is_tail || 
+               iq < conf->min_plp_bq || dq < conf->min_plp_bq ) {
+               /* FIXME: conf->min_plp_indelq */
+               num_skips_indel += 1;
 
-               /* insertion (+)
-                */
-               if (p->indel > 0) {
-                    plp_col->num_ins += 1;
-                    plp_col->sum_ins += p->indel;
-                    
-                    /* get inserted sequence */
-                    char ins_seq[256];
-                    int j;
-                    for (j = 1; j <= p->indel; ++j) {
-                         int c = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos+j)];
-                         ins_seq[j-1] = toupper(c);
-                    }
-                    ins_seq[j-1] = '\0';
+          } else {
 
-                    if (ai) {
-                         char *a = (char*)(ai+1);
-                         iaq = a[p->qpos] - 33;
+               if (p->indel != 0) {
+
+                    /* insertion (+)
+                     */
+                    if (p->indel > 0) {
+                         plp_col->num_ins += 1;
+                         plp_col->sum_ins += p->indel;
+                         
+                         /* get inserted sequence */
+                         char ins_seq[256];
+                         int j;
+                         for (j = 1; j <= p->indel; ++j) {
+                              int c = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos+j)];
+                              ins_seq[j-1] = toupper(c);
+                         }
+                         ins_seq[j-1] = '\0';
+
+                         if (ai) {
+                              char *a = (char*)(ai+1);
+                              iaq = a[p->qpos] - 33;
+                         } 
+                          
+                         //LOG_DEBUG("Insertion of %s at %d with iq %d iaq %d\n", 
+                         //           ins_seq, pos, iq, iaq);
+#ifdef USE_SOURCEQUAL
+                         add_ins_sequence(&plp_col->ins_event_counts, 
+                              ins_seq, iq, iaq, mq, sq, 
+                              bam1_strand(p->b)? 1: 0);
+#else
+                         add_ins_sequence(&plp_col->ins_event_counts, 
+                              ins_seq, iq, iaq, mq, -1, 
+                              bam1_strand(p->b)? 1: 0);
+#endif
+                         
+                         PLP_COL_ADD_QUAL(& plp_col->del_quals, dq);
+                         PLP_COL_ADD_QUAL(& plp_col->del_map_quals, mq);
+#ifdef USE_SOURCEQUAL
+                         PLP_COL_ADD_QUAL(& plp_col->del_source_quals, sq);
+#endif
+                         del_nonevent_qual += dq;
+                         if (bam1_strand(p->b)) {
+                              plp_col->non_del_fw_rv[1] += 1;
+                         } else {
+                              plp_col->non_del_fw_rv[0] += 1;
+                         }
+
+                    /* deletion (-)
+                     */
+                    } else if (p->indel < 0) {
+                         plp_col->num_dels += 1;
+                         plp_col->sum_dels -= p->indel;
+                         
+                         /* get deleted sequence */
+                         char del_seq[256];
+                         int j;
+                         for (j = 1; j <= -p->indel; ++j) {
+                              int c =  (ref && (int)pos+j < ref_len)? ref[pos+j] : 'N';
+                              del_seq[j-1] = toupper(c);
+                         }
+                         del_seq[j-1] = '\0';
+
+                         if (ad) {
+                              char *a = (char*)(ad+1);
+                              daq = a[p->qpos] - 33;
+                         }
+                         //LOG_DEBUG("Deletion of %s at %d with dq %d daq %d\n", 
+                         //           del_seq, pos, dq, daq);
+#ifdef USE_SOURCEQUAL
+                         add_del_sequence(&plp_col->del_event_counts, 
+                              del_seq, dq, daq, mq, sq,
+                              bam1_strand(p->b)? 1: 0);
+#else
+                         add_del_sequence(&plp_col->del_event_counts, 
+                              del_seq, dq, daq, mq, -1,
+                              bam1_strand(p->b)? 1: 0);
+#endif
+                         PLP_COL_ADD_QUAL(& plp_col->ins_quals, iq);
+                         PLP_COL_ADD_QUAL(& plp_col->ins_map_quals, mq);
+#ifdef USE_SOURCEQUAL
+                         PLP_COL_ADD_QUAL(& plp_col->ins_source_quals, sq);
+#endif
+                         ins_nonevent_qual += iq;
+                         if (bam1_strand(p->b)) {
+                              plp_col->non_ins_fw_rv[1] += 1;
+                         } else {
+                              plp_col->non_ins_fw_rv[0] += 1;
+                         }
+                         
                     } 
-                     
-                    //LOG_DEBUG("Insertion of %s at %d with iq %d iaq %d\n", 
-                    //           ins_seq, pos, iq, iaq);
-#ifdef USE_SOURCEQUAL
-                    add_ins_sequence(&plp_col->ins_event_counts, 
-                         ins_seq, iq, iaq, mq, sq, 
-                         bam1_strand(p->b)? 1: 0);
-#else
-                    add_ins_sequence(&plp_col->ins_event_counts, 
-                         ins_seq, iq, iaq, mq, -1, 
-                         bam1_strand(p->b)? 1: 0);
-#endif
+                         
+               } else { /* if (p->indel != 0) ... */
                     
-                    PLP_COL_ADD_QUAL(& plp_col->del_quals, dq);
-                    PLP_COL_ADD_QUAL(& plp_col->del_map_quals, mq);
-#ifdef USE_SOURCEQUAL
-                    PLP_COL_ADD_QUAL(& plp_col->del_source_quals, sq);
-#endif
-                    del_nonevent_qual += dq;
-                    if (bam1_strand(p->b)) {
-                         plp_col->non_del_fw_rv[1] += 1;
-                    } else {
-                         plp_col->non_del_fw_rv[0] += 1;
-                    }
-
-               /* deletion (-)
-                */
-               } else if (p->indel < 0) {
-                    plp_col->num_dels += 1;
-                    plp_col->sum_dels -= p->indel;
-                    
-                    /* get deleted sequence */
-                    char del_seq[256];
-                    int j;
-                    for (j = 1; j <= -p->indel; ++j) {
-                         int c =  (ref && (int)pos+j < ref_len)? ref[pos+j] : 'N';
-                         del_seq[j-1] = toupper(c);
-                    }
-                    del_seq[j-1] = '\0';
-
-                    if (ad) {
-                         char *a = (char*)(ad+1);
-                         daq = a[p->qpos] - 33;
-                    }
-                    //LOG_DEBUG("Deletion of %s at %d with dq %d daq %d\n", 
-                    //           del_seq, pos, dq, daq);
-#ifdef USE_SOURCEQUAL
-                    add_del_sequence(&plp_col->del_event_counts, 
-                         del_seq, dq, daq, mq, sq,
-                         bam1_strand(p->b)? 1: 0);
-#else
-                    add_del_sequence(&plp_col->del_event_counts, 
-                         del_seq, dq, daq, mq, -1,
-                         bam1_strand(p->b)? 1: 0);
-#endif
                     PLP_COL_ADD_QUAL(& plp_col->ins_quals, iq);
                     PLP_COL_ADD_QUAL(& plp_col->ins_map_quals, mq);
-#ifdef USE_SOURCEQUAL
-                    PLP_COL_ADD_QUAL(& plp_col->ins_source_quals, sq);
-#endif
                     ins_nonevent_qual += iq;
                     if (bam1_strand(p->b)) {
                          plp_col->non_ins_fw_rv[1] += 1;
                     } else {
                          plp_col->non_ins_fw_rv[0] += 1;
                     }
-                    
-               } 
-                    
-          } else { /* if (p->indel != 0) ... */
-               
-               PLP_COL_ADD_QUAL(& plp_col->ins_quals, iq);
-               PLP_COL_ADD_QUAL(& plp_col->ins_map_quals, mq);
-               ins_nonevent_qual += iq;
-               if (bam1_strand(p->b)) {
-                    plp_col->non_ins_fw_rv[1] += 1;
-               } else {
-                    plp_col->non_ins_fw_rv[0] += 1;
-               }
 
-               PLP_COL_ADD_QUAL(& plp_col->del_quals, dq);
-               PLP_COL_ADD_QUAL(& plp_col->del_map_quals, mq);
-               del_nonevent_qual += dq;
-               if (bam1_strand(p->b)) {
-                    plp_col->non_del_fw_rv[1] += 1;
-               } else {
-                    plp_col->non_del_fw_rv[0] += 1;
+                    PLP_COL_ADD_QUAL(& plp_col->del_quals, dq);
+                    PLP_COL_ADD_QUAL(& plp_col->del_map_quals, mq);
+                    del_nonevent_qual += dq;
+                    if (bam1_strand(p->b)) {
+                         plp_col->non_del_fw_rv[1] += 1;
+                    } else {
+                         plp_col->non_del_fw_rv[0] += 1;
+                    }
                }
           }
           
      }  /* end: for (i = 0; i < n_plp; ++i) { */
 
-     plp_col->coverage -= num_skips; 
+     plp_col->coverage -= num_skips;
+     plp_col->coverage_indel -= num_skips_indel;
      
      /* ****************** FINDING CONSENSUS **************** */
      /* consensus is saved as a char array starting with '+' or '-' 

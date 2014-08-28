@@ -500,7 +500,7 @@ plp_to_ins_errprobs(double **err_probs, int *num_err_probs,
                     const plp_col_t *p, snvcall_conf_t *conf,
                     char key[MAX_INDELSIZE]){
 
-     if (NULL == ((*err_probs) = malloc(p->coverage_safe * sizeof(double)))) {
+     if (NULL == ((*err_probs) = malloc(p->coverage_indel * sizeof(double)))) {
           /* coverage = base-count after read level filtering */
           fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
                   __FILE__, __FUNCTION__, __LINE__);
@@ -563,7 +563,7 @@ void
 plp_to_del_errprobs(double **err_probs, int *num_err_probs, 
                     const plp_col_t *p, snvcall_conf_t *conf,
                     char key[MAX_INDELSIZE]){
-     if (NULL == ((*err_probs) = malloc(p->coverage_safe * sizeof(double)))) {
+     if (NULL == ((*err_probs) = malloc(p->coverage_indel * sizeof(double)))) {
           /* coverage = base-count after read level filtering */
           fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
                   __FILE__, __FUNCTION__, __LINE__);
