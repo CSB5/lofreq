@@ -146,6 +146,8 @@ plp_col_init(plp_col_t *p) {
 
     p->non_ins_fw_rv[0] = p->non_ins_fw_rv[1] = 0;
     p->non_del_fw_rv[0] = p->non_del_fw_rv[1] = 0;
+
+    p->has_indel_aqs = 0;
 }
 
 
@@ -1005,6 +1007,7 @@ void compile_plp_col(plp_col_t *plp_col,
                          if (ai) {
                               char *a = (char*)(ai+1);
                               iaq = a[p->qpos] - 33;
+                              plp_col->has_indel_aqs = 1;
                          } 
                           
                          //LOG_DEBUG("Insertion of %s at %d with iq %d iaq %d\n", 
@@ -1049,6 +1052,7 @@ void compile_plp_col(plp_col_t *plp_col,
                          if (ad) {
                               char *a = (char*)(ad+1);
                               daq = a[p->qpos] - 33;
+                         plp_col->has_indel_aqs = 1;
                          }
                          //LOG_DEBUG("Deletion of %s at %d with dq %d daq %d\n", 
                          //           del_seq, pos, dq, daq);

@@ -64,6 +64,7 @@ long long int num_snv_tests = 0;
 long long int num_indel_tests = 0;
 /* FIXME extend to keep some more stats, e.g. num_pos_with_cov etc */
 
+long int indel_calls_wo_aq = 0;
 
 
 
@@ -87,6 +88,11 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char *ref,
      vcf_new_var(&var);
      var->chrom = strdup(p->target);
      var->pos = p->pos;
+     
+     
+     if (is_indel && ! p->has_indel_aqs) {
+          indel_calls_wo_aq += 1;
+     }
      /* var->id = NA */
      var->ref = strdup(ref);
      var->alt = strdup(alt);
@@ -1161,11 +1167,9 @@ for cov in coverage_range:
          return 1;
     }
 
-
     if (! plp_summary_only & ! mplp_conf.fa) {
          LOG_WARN("%s\n", "Calling SNVs without reference\n"); 
     }
-
   
     /* if we don't apply a default filter and bonf is not dynamic then
      * we can directly write to requested output file. otherwise we
@@ -1255,6 +1259,11 @@ for cov in coverage_range:
          return rc;
     }
 
+    if (indel_calls_wo_aq) {
+         LOG_WARN("%ld indel calls (before filtering) were made without indel alignment-quality!"
+                  " Did you forget to indel alignment-quality to your bam-file?", indel_calls_wo_aq);
+    }
+
     vcf_file_close(& snvcall_conf.vcf_out);
 
     /* snv calling completed. now filter according to the following rules:
@@ -1305,7 +1314,7 @@ for cov in coverage_range:
          }
     }
 
-    if (! plp_summary_only) {
+    if (! plp_summary_only && rc==0) {
          /* output some stats. number of tests performed need for
           * multiple testing correction. line will be parse by
           * downstream script e.g. lofreq_somatic, so be careful when

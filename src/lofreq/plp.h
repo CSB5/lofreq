@@ -97,6 +97,11 @@ typedef struct {
      long int non_ins_fw_rv[2]; 
      long int non_del_fw_rv[2];
 
+     int has_indel_aqs; /* flag, which is only used to make sure that
+                           BAM contained alignment quality for indel calls 
+                           (all reads with indels should have those).
+                           indels are still predicted if missing, but overcalled. */  
+     
      /* changes here should be reflected in plp_col_init, plp_col_free etc. */
 } plp_col_t;
 
