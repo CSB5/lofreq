@@ -19,7 +19,7 @@ if ! eval $cmd > $log 2>&1; then
     echoerror "LoFreq failed. Check logfile $log. Command was $cmd"
     exit 1
 fi
-if ! awk '{if ($2=="1" && $4=="ACG" && $5=="A" && $8 ~ /AF=0.18/) {m=1; exit 0}} END {if (m) {exit 0} else {exit 1}}' $vcf; then
+if ! awk '{if ($2=="1" && $4=="ACG" && $5=="A" && $8 ~ /AF=0.5/) {m=1; exit 0}} END {if (m) {exit 0} else {exit 1}}' $vcf; then
     echoerror "Expected deletion of AF=0.5 not found in $vcf"
     let failed=failed+1
 fi
@@ -39,7 +39,7 @@ if ! eval $cmd > $log 2>&1; then
     exit 1
 fi
 if ! awk '{if ($2=="2" && $4=="C" && $5=="CAA" && $8 ~ /AF=0.5/) {m=1; exit 0}} END {if (m) {exit 0} else {exit 1}}' $vcf; then
-    echoerror "Expected insertion of AF=1.0 not found in $vcf"
+    echoerror "Expected insertion of AF=0.5 not found in $vcf"
     let failed=failed+1
 fi
 if ! awk '{if ($2=="2" && $4=="C" && $5=="G" && $8 ~ /AF=0.25/) {m=1; exit 0}} END {if (m) {exit 0} else {exit 1}}' $vcf; then

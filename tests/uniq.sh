@@ -22,7 +22,7 @@ fi
 rm $vcf_out
 
 
-vcf_in=data/vcf/denv2-10haplo-fake-filter-only-and-indels.vcf.gz
+vcf_in=data/vcf/denv2-10haplo-fake-filter-only.vcf.gz
 $LOFREQ uniq -v $vcf_in $bam -o $vcf_out || exit 1
 num_snvs=$(grep -cv '^#' $vcf_out)
 if [ "$num_snvs" -ne 0 ]; then
