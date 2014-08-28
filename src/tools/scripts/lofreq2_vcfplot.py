@@ -291,8 +291,8 @@ def violin_plot(ax, data):
         LOG.warn("calculation of kernel density for violin plot failed. skipping...")
         ax.text(0, 0.8, "gaussian_kde failed", size=14, ha='left', va="top")
         return
-    m = k.dataset.min() #lower bound of violin
-    M = k.dataset.max() #upper bound of violin
+    m = min(k.dataset) #lower bound of violin
+    M = max(k.dataset) #upper bound of violin
     x = np.arange(m, M, (M-m)/100.) # support for violin
     v = k.evaluate(x) # violin profile (density curve)
     if v.max():
