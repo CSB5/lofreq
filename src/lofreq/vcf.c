@@ -490,14 +490,14 @@ int vcf_get_dp4(dp4_counts_t *dp4, var_t *var)
 
 /* var->info allocated here. caller has to free */
 void vcf_var_sprintf_info(var_t *var,
-                         const int *dp, const float *af, const int *sb,
+                         const int dp, const float af, const int sb,
                          const dp4_counts_t *dp4,
                          const int indel, const int consvar)
 {
      char buf[LINE_BUF_SIZE];
      snprintf(buf, sizeof(buf)-32, /* leave some for INDEL and other flags below */
               "DP=%d;AF=%f;SB=%d;DP4=%d,%d,%d,%d",
-              *dp, *af, *sb, dp4->ref_fw, dp4->ref_rv, dp4->alt_fw, dp4->alt_rv);
+              dp, af, sb, dp4->ref_fw, dp4->ref_rv, dp4->alt_fw, dp4->alt_rv);
      if (indel) {
           sprintf(buf, "%s;INDEL", buf);
      }

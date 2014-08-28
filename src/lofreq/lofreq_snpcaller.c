@@ -155,7 +155,8 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char *ref,
 }
 */
 #endif
-     vcf_var_sprintf_info(var, &p->coverage, &af, &sb_qual,
+     int cover = p->coverage - p->num_tails;
+	vcf_var_sprintf_info(var, is_indel? cover : p->coverage, af, sb_qual,
                           dp4, is_indel, is_consvar);
 
      vcf_write_var(vcf_file, var);
@@ -309,7 +310,7 @@ call_alt_ins(const plp_col_t *p, double *bi_err_probs, int bi_num_err_probs,
                report_ins_alt[j+1] = it->key[j];
           }
           report_ins_ref[1] = report_ins_alt[j+1] = '\0';
-          float af = it->count / (float)p->coverage;
+          float af = it->count / (float)p->coverage_indel;
      
           dp4_counts_t dp4;
           dp4.ref_fw = p->non_ins_fw_rv[0];
@@ -367,7 +368,7 @@ int call_alt_del(const plp_col_t *p, double *bd_err_probs, int bd_num_err_probs,
           }
           report_del_ref[j+1] = report_del_alt[1] = '\0';
 
-          float af = it->count / (float)p->coverage;
+          float af = it->count / (float)p->coverage_indel;
           
           dp4_counts_t dp4;
           dp4.ref_fw = p->non_del_fw_rv[0];
