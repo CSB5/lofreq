@@ -527,7 +527,11 @@ plp_to_ins_errprobs(double **err_probs, int *num_err_probs,
           if (0 == strcmp(it->key, key)) {
                for (j = 0; j < it->ins_quals.n; j++) {
                     iq = it->ins_quals.data[j];
-                    aq = it->ins_aln_quals.data[j];
+                    if ((conf->flag & SNVCALL_USE_IDAQ)) {
+                         aq = it->ins_aln_quals.data[j];
+                    } else {
+                         aq = -1;
+                    }
                     mq = it->ins_map_quals.data[j];
 #ifdef USE_SOURCEQUAL
                     sq = it->ins_source_quals.data[j];
@@ -590,7 +594,11 @@ plp_to_del_errprobs(double **err_probs, int *num_err_probs,
           if (0 == strcmp(it->key, key)) {
                for (j = 0; j < it->del_quals.n; j++) {
                     dq = it->del_quals.data[j];
-                    aq = it->del_aln_quals.data[j];
+                    if ((conf->flag & SNVCALL_USE_IDAQ)) {
+                         aq = it->del_aln_quals.data[j];
+                    } else {
+                         aq = -1;
+                    }
                     mq = it->del_map_quals.data[j];
 #ifdef USE_SOURCEQUAL
                     sq = it->del_source_quals.data[j];
@@ -644,6 +652,7 @@ init_snvcall_conf(snvcall_conf_t *c)
      /* c->out = ; */
      c->flag |= SNVCALL_USE_MQ;
      c->flag |= SNVCALL_USE_BAQ;
+     c->flag |= SNVCALL_USE_IDAQ;
      c->only_indels = 0;
      c->no_indels = 0;
 }
@@ -670,6 +679,7 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
      fprintf(stream, "  flag & SNVCALL_USE_MQ      = %d\n", c->flag&SNVCALL_USE_MQ?1:0);
      fprintf(stream, "  flag & SNVCALL_USE_SQ      = %d\n", c->flag&SNVCALL_USE_SQ?1:0);
      fprintf(stream, "  flag & SNVCALL_CONS_AS_REF = %d\n", c->flag&SNVCALL_CONS_AS_REF?1:0);
+     fprintf(stream, "  flag & SNVCALL_USE_IDAQ    = %d\n", c->flag&SNVCALL_USE_IDAQ?1:0);
 #ifdef SCALE_MQ
      LOG_WARN("%s\n", "MQ scaling switched on!");
 #elif defined TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL

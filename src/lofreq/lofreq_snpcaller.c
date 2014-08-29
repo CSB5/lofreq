@@ -64,7 +64,7 @@ long long int num_snv_tests = 0;
 long long int num_indel_tests = 0;
 /* FIXME extend to keep some more stats, e.g. num_pos_with_cov etc */
 
-long int indel_calls_wo_aq = 0;
+long int indel_calls_wo_idaq = 0;
 
 
 
@@ -91,7 +91,7 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char *ref,
      
      
      if (is_indel && ! p->has_indel_aqs) {
-          indel_calls_wo_aq += 1;
+          indel_calls_wo_idaq += 1;
      }
      /* var->id = NA */
      var->ref = strdup(ref);
@@ -763,10 +763,11 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -J | --min-alt-jq INT        Skip alternate bases with joinedQ smaller than INT [%d]\n", snvcall_conf->min_alt_jq);
      fprintf(stderr, "       -K | --def-alt-jq INT        Overwrite joinedQs of alternate bases (that passed jq filter) with this value (-1: use median ref-bq; 0: keep) [%d]\n", snvcall_conf->def_alt_jq);
 
-     fprintf(stderr, "- Base-alignment quality (BAQ)\n");                      
+     fprintf(stderr, "- Base-alignment (BAQ) and indel-aligment (IDAQ) qualities\n");                      
      fprintf(stderr, "       -B | --no-baq                Disable use of base-alignment quality (BAQ)\n");
      fprintf(stderr, "       -D | --del-baq               Delete pre-existing BAQ values, i.e. compute even if already present in BAM\n");
      fprintf(stderr, "       -e | --no-ext-baq            Use 'normal' BAQ (samtools default) instead of extended BAQ (both computed on the fly if not already present in %s tag)\n", BAQ_TAG);
+     fprintf(stderr, "       -A | --no-idaq               Don't use IDAQ values\n");
 
      fprintf(stderr, "- Mapping quality\n");                                
      fprintf(stderr, "       -m | --min-mq INT            Skip reads with mapping quality smaller than INT [%d]\n", mplp_conf->min_mq);
@@ -791,6 +792,7 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -A | --map-prof FILE         Mapping error profile (produced with bamstats)\n");
 #endif
      fprintf(stderr, "       -C | --min-cov INT           Test only positions having at least this coverage [%d]\n", snvcall_conf->min_cov);
+     fprintf(stderr, "                                    (note: without --no-default-filter default filters (incl. coverage) kick in after predictions are done)\n");
      fprintf(stderr, "            --illumina-1.3          Assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
      fprintf(stderr, "            --dont-skip-n           Don't skip positions where refbase is N (will try to predict CONSVARs (only) at those positions)\n");
      fprintf(stderr, "            --use-orphan            Count anomalous read pairs (i.e. where mate is not aligned properly)\n");
@@ -890,6 +892,8 @@ for cov in coverage_range:
               {"no-baq", no_argument, NULL, 'B'},
               {"del-baq", no_argument, NULL, 'D'},
               {"no-ext-baq", no_argument, NULL, 'e'},
+
+              {"no-indel-aq", no_argument, NULL, 'A'},
                   
               {"min-mq", required_argument, NULL, 'm'},
               {"max-mq", required_argument, NULL, 'M'},
@@ -921,7 +925,7 @@ for cov in coverage_range:
          };
 
          /* keep in sync with long_opts and usage */
-         static const char *long_opts_str = "r:l:f:o:q:Q:R:j:J:K:BDem:M:NsS:T:a:b:A:C:h"; 
+         static const char *long_opts_str = "r:l:f:o:q:Q:R:j:J:K:BDeAm:M:NsS:T:a:b:A:C:h"; 
          
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
@@ -1006,6 +1010,10 @@ for cov in coverage_range:
 
          case 'e': 
               mplp_conf.flag &= ~MPLP_EXT_BAQ;
+              break;
+
+         case 'A': 
+              snvcall_conf.flag &= ~SNVCALL_USE_IDAQ; 
               break;
 
          case 'm': 
@@ -1259,9 +1267,9 @@ for cov in coverage_range:
          return rc;
     }
 
-    if (indel_calls_wo_aq) {
+    if (indel_calls_wo_idaq && snvcall_conf.flag & SNVCALL_USE_IDAQ) {
          LOG_WARN("%ld indel calls (before filtering) were made without indel alignment-quality!"
-                  " Did you forget to indel alignment-quality to your bam-file?", indel_calls_wo_aq);
+                  " Did you forget to indel alignment-quality to your bam-file?", indel_calls_wo_idaq);
     }
 
     vcf_file_close(& snvcall_conf.vcf_out);

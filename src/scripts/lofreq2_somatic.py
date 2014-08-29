@@ -278,6 +278,7 @@ class SomaticSNVCaller(object):
             cmd.append('--use-orphan')
             cmd.append('-B')# BAQ off
             cmd.append('-N')# MQ off
+            cmd.append('-A')# IDAQ off
             
             out_vcf = self.vcf_n_rlx
             out_log = self.vcf_n_rlx_log

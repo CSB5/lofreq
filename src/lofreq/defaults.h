@@ -43,10 +43,13 @@
    non-consensus bases */
 #define NUM_NONCONS_BASES 3
 
-#define SNVCALL_USE_BAQ     0x01
-#define SNVCALL_USE_MQ      0x02
-#define SNVCALL_USE_SQ      0x04
-#define SNVCALL_CONS_AS_REF 0x08
+#define SNVCALL_USE_BAQ     1
+#define SNVCALL_USE_MQ      2
+#define SNVCALL_USE_SQ      4
+#define SNVCALL_CONS_AS_REF 8
+/* indel alignment quality */
+#define SNVCALL_USE_IDAQ      16
+
 
 /* private tag for actual baq values: "l"ofreseq "b"ase-alignment */
 #define BAQ_TAG "lb"
