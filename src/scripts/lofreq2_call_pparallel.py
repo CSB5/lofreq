@@ -547,10 +547,28 @@ def main():
     # (e.g. using pybedtools or a lightweight alternative)
     # but for now we disallow regions (need it for ourselves; see above)
 
+    bam_bins = [Region._make(x) for x in bins_from_bamheader(bam)]
     if bed_file:
-        bins = [Region._make(x) for x in read_bed_coords(bed_file)]
+        bed_bins = [Region._make(x) for x in read_bed_coords(bed_file)]
+
+        # if the number of regions is huge and they are scattered
+        # across all major chromosomes/sequences, then it's much
+        # faster to use the bam_bins as region and bed as extra
+        # argument
+        bam_sqs = set([b[0] for b in bam_bins])
+        bed_sqs = set([b[0] for b in bed_bins])
+        if len(bed_bins) > 100*len(bam_bins) and len(bed_sqs) > len(bam_sqs)/10.0:
+            bed_sqs = set([b[0] for b in bed_bins])
+            bins = [b for b in bam_bins if b[0] in bed_sqs]
+            lofreq_call_args.extend(['-l', bed_file])
+        else:
+            bins = bed_bins
     else:
-        bins = [Region._make(x) for x in bins_from_bamheader(bam)]
+        bins = bam_bins
+
+    for (i, b) in enumerate(bins):
+        LOG.debug("initial bins: #%d %s %d %d len %d" % (
+            i, b.chrom, b.start, b.end, region_length(b)))
 
     # split greedily into bins such that nregions ~ 2*threads:
     # keep more bins than threads to make up for differences in regions
@@ -565,8 +583,10 @@ def main():
         bins = sorted(bins, key=lambda b: region_length(b))
         biggest = bins[-1]
         biggest_length = region_length(biggest) 
-        LOG.debug("biggest_length=%d  total_length/(2.0*num_threads)=%f" % (biggest_length, total_length/(2.0*num_threads)))
-        if biggest_length < total_length/(1.5*num_threads):
+
+        LOG.debug("biggest_length=%d total_length/(%d*num_threads)=%f" % (
+            biggest_length, BIN_PER_THREAD, total_length/(BIN_PER_THREAD*num_threads)))
+        if biggest_length < total_length/(BIN_PER_THREAD*num_threads):
             break
         elif biggest_length < 100:
             LOG.warn("Regions getting too small to be efficiently processed")
