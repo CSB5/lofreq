@@ -20,7 +20,7 @@ for f in $REF $TUMOR $NORMAL $TRUTH $EVALUATOR; do
     fi
 done
 out_pref=$(mktemp -t $(basename $0).XXXXXX)
-vcf_out=${out_pref}somatic_final.vcf
+vcf_out=${out_pref}somatic_final.snvs.vcf
 if [ $DEBUG -eq 1 ]; then
     cp ${BASE}/snvs/lofreq/beta-4-8-g7b8b334-dirty_somatic_final.vcf $vcf_out
 else
