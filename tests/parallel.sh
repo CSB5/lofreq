@@ -48,7 +48,7 @@ else
 fi
 #if [ $nup -ne 0 ] || [ $nus -ne 0 ] ; then
 # there are occasional differences possible likely due to BAQ effects on region ends
-if [ $nup -ne 1 ] || [ $nus -ne 1 ] ; then
+if [ $nup -gt 1 ] || [ $nus -gt 1 ] ; then
     echoerror "Observed some difference between parallel and single results. Check $outraw_parallel and $outraw_single"
     n_parallel=$(grep -vc '^#' $outraw_parallel)
     n_single=$(grep -vc '^#' $outraw_single)
