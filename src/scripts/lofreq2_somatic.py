@@ -94,8 +94,13 @@ class SomaticSNVCaller(object):
     DEFAULT_MTC_T = 'bonf'
     DEFAULT_MTC_ALPHA_T = 1
     DEFAULT_INDEL_MTC_T = 'bonf'
-    DEFAULT_INDEL_MTC_ALPHA_T = 0.01# optimized on DREAM indel test chr19
+    DEFAULT_INDEL_MTC_ALPHA_T = 0.01# conservative value reduces dep on dbsnp
 
+    DEFAULT_SNV_UNIQ_MTC = 'fdr'
+    DEFAULT_SNV_UNIQ_MTC_ALPHA = 0.001
+    DEFAULT_INDEL_UNIQ_MTC = 'fdr'
+    DEFAULT_INDEL_UNIQ_MTC_ALPHA = 0.0001
+    
     DEFAULT_NUM_THREADS = 1
     DEFAULT_DO_GERMLINE = False
 
@@ -176,6 +181,12 @@ class SomaticSNVCaller(object):
         self.mtc_alpha_t = self.DEFAULT_MTC_ALPHA_T
         self.indel_mtc_t = self.DEFAULT_MTC_T
         self.indel_mtc_alpha_t = self.DEFAULT_MTC_ALPHA_T
+
+        self.snv_uniq_mtc = self.DEFAULT_SNV_UNIQ_MTC
+        self.snv_uniq_mtc_alpha = self.DEFAULT_SNV_UNIQ_MTC_ALPHA
+        self.indel_uniq_mtc = self.DEFAULT_INDEL_UNIQ_MTC
+        self.indel_uniq_mtc_alpha = self.DEFAULT_INDEL_UNIQ_MTC_ALPHA
+        
         self.src_qual_on = self.DEFAULT_SRC_QUAL_ON
         self.src_qual_ign_vcf = self.DEFAULT_SRC_QUAL_IGN_VCF
         self.min_cov = self.DEFAULT_MIN_COV
@@ -409,9 +420,9 @@ class SomaticSNVCaller(object):
 
         vcfset_base_cmd =  [self.LOFREQ, 'vcfset', '-a', 'complement',
                             '-2', self.vcf_n_rlx, '-o', '-']
-        vcfset_snv_cmd = vcfset_base_cmd + ['-1', self.vcf_t_str,]
+        vcfset_snv_cmd = vcfset_base_cmd + ['-1', self.vcf_t_str, '--only-snvs']
         vcfset_indels_cmd = vcfset_base_cmd + ['-1', self.vcf_indels_t_str, 
-                                               '--only-pos']
+                                               '--only-pos', '--only-indels']
 
         for (vcf_out, cmd) in [(self.vcf_som_raw, vcfset_snv_cmd),
                                (self.vcf_indels_som_raw, vcfset_indels_cmd)]:
@@ -446,11 +457,16 @@ class SomaticSNVCaller(object):
         """Run LoFreq uniq as final check on somatic variants
         """
 
-        uniq_base_cmd = [self.LOFREQ, 'uniq', '--uni-freq', "0.5",
-                    '--uniq-mtc', "fdr", '--uniq-alpha', "0.001"]
-        uniq_snv_cmd = uniq_base_cmd + ["-v", self.vcf_som_raw]
-        uniq_indels_cmd = uniq_base_cmd + ["-v", self.vcf_indels_som_raw]
-
+        uniq_base_cmd = [self.LOFREQ, 'uniq', '--uni-freq', "0.5"]
+        
+        
+        uniq_snv_cmd = uniq_base_cmd + ["-v", self.vcf_som_raw,
+                                        '--uniq-mtc', self.snv_uniq_mtc,
+                                        '--uniq-alpha', "%s" % self.snv_uniq_mtc_alpha]
+        uniq_indels_cmd = uniq_base_cmd + ["-v", self.vcf_indels_som_raw,
+                                           '--uniq-mtc', self.indel_uniq_mtc, 
+                                           '--uniq-alpha', "%s" % self.indel_uniq_mtc_alpha]
+        
         for (vcf_out, cmd) in [(self.vcf_som_fin, uniq_snv_cmd),
                                (self.vcf_indels_som_fin, uniq_indels_cmd)]:
             
@@ -480,9 +496,9 @@ class SomaticSNVCaller(object):
                                '-a', 'complement',
                                '-2', self.dbsnp]
         complement_snv_cmd = complement_base_cmd + [
-            '-1', self.vcf_som_fin]
+            '-1', self.vcf_som_fin, '--only-snvs']
         complement_indels_cmd = complement_base_cmd + [
-            '-1', self.vcf_indels_som_fin, '--only-pos', ]
+            '-1', self.vcf_indels_som_fin, '--only-pos', '--only-indels']
 
         for (vcf_out, cmd) in [(self.vcf_som_fin_wo_dbsnp,  complement_snv_cmd),
                                (self.vcf_indels_som_fin_wo_dbsnp, complement_indels_cmd)]:
@@ -539,6 +555,8 @@ class SomaticSNVCaller(object):
 
         self.remove_normal()
         self.uniq()
+        if self.dbsnp:
+            self.remove_dbsnp()
 
         if self.do_germline:
             self.call_germline()
