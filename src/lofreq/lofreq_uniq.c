@@ -206,9 +206,13 @@ uniq_snv(const plp_col_t *p, void *confp)
      char *af_char = NULL;
      float af;
      int is_uniq = 0;
+     int is_indel;
+     int coverage;
+
+     is_indel =  vcf_var_is_indel(conf->var);
 
 #ifdef DISABLE_INDELS
-     if (vcf_var_has_info_key(NULL, conf->var, "INDEL")) {
+     if (is_indel) {
           LOG_WARN("uniq logic can't be applied to indels."
                    " Skipping indel var at %s %d\n",
                    conf->var->chrom, conf->var->pos+1);
@@ -222,8 +226,11 @@ uniq_snv(const plp_col_t *p, void *confp)
           return;
      }
 
-     /* no coverage usually means I won't be called, but just in case: */
-     if (0 == p->coverage) {
+     coverage = p->coverage;
+     if (is_indel) {
+          coverage -= p->num_tails;
+     }
+     if (1 > coverage) {
           return;
      }
 
@@ -274,12 +281,12 @@ uniq_snv(const plp_col_t *p, void *confp)
                           alt_bases, alt_counts, alt_raw_counts,
                           p, &snvcall_conf);
           LOG_DEBUG("at %s:%d with cov %d and num_err_probs %d\n", 
-              p->target, p->pos, p->coverage, num_err_probs);
+              p->target, p->pos, coverage, num_err_probs);
 
           /* Now pretend we see AF(SNV-to-test)*coverage variant
            * bases. Truncate to int, i.e err on the side of caution
            * during rounding (assume fewer alt bases) */
-          alt_counts[0] = af * num_err_probs; /* don't use p->coverage as that is before filtering */
+          alt_counts[0] = af * num_err_probs; /* don't use coverage as that is before filtering */
           alt_counts[1] = alt_counts[2] = 0;
 
           if (snpcaller(pvalues, err_probs, num_err_probs,
@@ -310,12 +317,11 @@ uniq_snv(const plp_col_t *p, void *confp)
           free(err_probs);
           
      } else {
-          /* FIXME no support for indels! */
           int alt_count;
           double pvalue;
           char info_str[128];
 
-          if (vcf_var_has_info_key(NULL, conf->var, "INDEL")) {
+          if (is_indel) {
                int ref_len = strlen(conf->var->ref);
                int alt_len = strlen(conf->var->alt);
                if (ref_len > alt_len) { /* deletion */
@@ -347,11 +353,11 @@ uniq_snv(const plp_col_t *p, void *confp)
 
 #ifdef DEBUG
           LOG_DEBUG("Now testing af=%f cov=%d alt_count=%d at %s %d for var:",
-                    af, p->coverage, alt_count, p->target, p->pos+1);
+                    af, coverage, alt_count, p->target, p->pos+1);
 #endif
           
           /* this is a one sided test */
-          if (0 != binom(&pvalue, NULL, p->coverage, alt_count, af)) {
+          if (0 != binom(&pvalue, NULL, coverage, alt_count, af)) {
                LOG_ERROR("%s\n", "binom() failed");
                return;
           }
@@ -362,7 +368,7 @@ uniq_snv(const plp_col_t *p, void *confp)
           LOG_DEBUG("%s %d %s>%s AF=%f | %s (p-value=%g) | BAM alt_count=%d cov=%d (freq=%f)\n",
                       conf->var->chrom, conf->var->pos+1, conf->var->ref, conf->var->alt, af,
                       is_uniq ? "unique" : "not necessarily unique", pvalue,
-                      alt_count, p->coverage, alt_count/(float)p->coverage);
+                      alt_count, coverage, alt_count/(float)coverage);
      }
 }
 
