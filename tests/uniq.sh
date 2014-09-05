@@ -62,8 +62,8 @@ if [ "$num_in" -le "$num_out" ]; then
 fi
 
 
-vcf_in=data/somatic/hg19_chr22_true_snv.vcf.gz
-bam=data/somatic/CHH966-tumor-100x-10pur-hg19.chr22-bed-only.bam
+vcf_in=data/somatic_CHH966_chr22/hg19_chr22_true_snv.vcf.gz
+bam=data/somatic_CHH966_chr22/CHH966-tumor-100x-10pur-hg19.chr22-bed-only.bam
 $LOFREQ uniq -v $vcf_in $bam -o $vcf_out || exit 1
 # previously 4, but now 2 true snvs in vcf_in, which both should be unique
 num_snvs=$(grep -cv '^#' $vcf_out)

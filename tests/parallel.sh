@@ -11,7 +11,7 @@ BAM=data/icgc-tcga-first10kperchrom-syn1/dream-icgc-tcga-first10kperchrom-synthe
 # don't bloody gzip your reference even though samtools happily indexes it
 REF=data/icgc-tcga-dream-support/Homo_sapiens_assembly19.fasta
 
-KEEP_TMP=1
+KEEP_TMP=0
 DEBUG=0
 SIMULATE=0
 
