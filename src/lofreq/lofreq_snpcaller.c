@@ -1269,7 +1269,7 @@ for cov in coverage_range:
 
     if (indel_calls_wo_idaq && snvcall_conf.flag & SNVCALL_USE_IDAQ) {
          LOG_WARN("%ld indel calls (before filtering) were made without indel alignment-quality!"
-                  " Did you forget to indel alignment-quality to your bam-file?", indel_calls_wo_idaq);
+                  " Did you forget to indel alignment-quality to your bam-file?\n", indel_calls_wo_idaq);
     }
 
     vcf_file_close(& snvcall_conf.vcf_out);
