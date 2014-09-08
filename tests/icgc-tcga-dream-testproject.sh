@@ -20,11 +20,16 @@ for f in $REF $TUMOR $NORMAL $TRUTH $EVALUATOR; do
     fi
 done
 out_pref=$(mktemp -t $(basename $0).XXXXXX)
+log=${out_pref}.exec.log
 vcf_out=${out_pref}somatic_final.snvs.vcf
 if [ $DEBUG -eq 1 ]; then
     cp ${BASE}/snvs/lofreq/beta-4-8-g7b8b334-dirty_somatic_final.vcf $vcf_out
 else
-    $LOFREQ somatic -l $BED -n $NORMAL -t $TUMOR -f $REF -o $out_pref --threads $threads || exit 1
+    cmd="$LOFREQ somatic -l $BED -n $NORMAL -t $TUMOR -f $REF -o $out_pref --threads $threads"
+    if ! eval $cmd > $log 2>&1; then
+        echoerror "LoFreq failed. Check log $log and files with prefix $out_pref"
+        exit 1
+    fi
     echoinfo "lofreq somatic run completed. now checking results"
 fi
 
