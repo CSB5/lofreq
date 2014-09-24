@@ -3,10 +3,10 @@
 # defaults. have to go before usage()
 threads=2
 var_thresh=0.01
-JAVA_EXTRA_ARGS='-Xmx4g'
+JAVA_EXTRA_ARGS='-Xmx8g'
 vcf=""
 
-GATK_DIR_DEFAULT=/mnt/software/stow/GenomeAnalysisTK-2.0.39/bin/
+GATK_DIR_DEFAULT=/mnt/software/stow/GenomeAnalysisTK-2.7-2-g6bda569/
 test -z "$GATK_DIR" && export GATK_DIR=$GATK_DIR_DEFAULT
 gatk_jar=$GATK_DIR/GenomeAnalysisTK.jar
 

@@ -1,6 +1,9 @@
 #ifndef LOFREQ_DEFAULTS_H
 #define LOFREQ_DEFAULTS_H
 
+/* FIXME temporary for main branch */
+#define DISABLE_INDELS 1
+
 /* mapping quality filters: applied to all reads. don't set too high as
  * this is a mapper dependent value
  * in case of BWA it's also dependent on the alignment command used.
@@ -33,6 +36,7 @@
 
 /* make lofreq blind to anything below this value */
 #define DEFAULT_MIN_PLP_BQ 3
+#define DEFAULT_MIN_PLP_IDQ 10
 
 #define DEFAULT_SIG 0.01
 
@@ -42,10 +46,13 @@
    non-consensus bases */
 #define NUM_NONCONS_BASES 3
 
-#define SNVCALL_USE_BAQ     0x01
-#define SNVCALL_USE_MQ      0x02
-#define SNVCALL_USE_SQ      0x04
-#define SNVCALL_CONS_AS_REF 0x08
+#define SNVCALL_USE_BAQ     1
+#define SNVCALL_USE_MQ      2
+#define SNVCALL_USE_SQ      4
+#define SNVCALL_CONS_AS_REF 8
+/* indel alignment quality */
+#define SNVCALL_USE_IDAQ      16
+
 
 /* private tag for actual baq values: "l"ofreseq "b"ase-alignment */
 #define BAQ_TAG "lb"

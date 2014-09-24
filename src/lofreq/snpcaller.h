@@ -1,3 +1,4 @@
+/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*- */
 #ifndef SNPCALLER_H
 #define SNPCALLER_H
 
@@ -21,10 +22,17 @@ typedef struct {
                         * caller! */
      int min_cov;
      int dont_skip_n;
-     long long int bonf; /* warning: changed dynamically ! */
+     long long int bonf_sub; /* warning: changed dynamically ! */
+     long long int bonf_indel;
      float sig;
      vcf_file_t vcf_out;
-     int flag;
+     int flag; /* FIXME doc? */
+
+     /* FIXME the following two logically don't belong her but
+      * would require a new structure */
+     int only_indels; 
+     int no_indels; 
+
 } snvcall_conf_t;
 
 
@@ -38,6 +46,15 @@ void
 plp_to_errprobs(double **err_probs, int *num_err_probs, 
                 int *alt_bases, int *alt_counts, int *alt_raw_counts,
                 const plp_col_t *p, snvcall_conf_t *conf);
+void 
+plp_to_ins_errprobs(double **err_probs, int *num_err_probs, 
+                    const plp_col_t *p, snvcall_conf_t *conf,
+                    char key[MAX_INDELSIZE]);
+
+void 
+plp_to_del_errprobs(double **err_probs, int *num_err_probs, 
+                    const plp_col_t *p, snvcall_conf_t *conf,
+                    char key[MAX_INDELSIZE]);
 
 void
 init_snvcall_conf(snvcall_conf_t *c);

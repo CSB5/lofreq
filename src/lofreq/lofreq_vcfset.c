@@ -54,6 +54,8 @@ typedef struct {
      vcfset_op_t vcf_setop;
      int only_passed; /* if 1, ignore any filtered variant */
      int only_pos; /* 0: allele aware. if 1, ignore ref and alt base during comparisons.  */
+     int only_snvs;
+     int only_indels;
 } vcfset_conf_t;
 
 
@@ -74,9 +76,11 @@ usage(const vcfset_conf_t* vcfset_conf)
              "                        intersect = vcf1 AND vcf2.\n"
 /*             "                        union = vcf1 OR vcf2.\n"*/
              "                        complement = vcf1 \\ vcf2.\n");
-     fprintf(stderr, "       --only-pos      Disable allele-awareness by using position only (ignoring bases) as key for storing and comparison\n");
      fprintf(stderr, "       --count-only     Don't print bases, just numbers\n");
+     fprintf(stderr, "       --only-pos       Disable allele-awareness by using position only (ignoring bases) as key for storing and comparison\n");
      fprintf(stderr, "       --only-passed    Ignore variants marked as filtered\n");
+     fprintf(stderr, "       --only-snvs      Ignore anything but SNVs in input files\n");
+     fprintf(stderr, "       --only-indels    Ignore anything but indels in input files\n");
      fprintf(stderr, "       --verbose        Be verbose\n");
      fprintf(stderr, "       --debug          Enable debugging\n");
 }
@@ -97,6 +101,8 @@ main_vcfset(int argc, char *argv[])
      var_hash_t *var_hash_vcf2 = NULL; /* must be declared NULL ! */
      static int only_passed = 0;
      static int only_pos = 0;
+     static int only_snvs = 0;
+     static int only_indels = 0;
      static int count_only = 0;
 
      vcf_in1 = vcf_in2 = vcf_out = NULL;
@@ -124,6 +130,8 @@ main_vcfset(int argc, char *argv[])
               {"debug", no_argument, &debug, 1},
               {"only-passed", no_argument, &only_passed, 1},
               {"only-pos", no_argument, &only_pos, 1},
+              {"only-indels", no_argument, &only_indels, 1},
+              {"only-snvs", no_argument, &only_snvs, 1},
               {"count-only", no_argument, &count_only, 1},
 
               {"vcf1", required_argument, NULL, '1'},
@@ -200,6 +208,13 @@ main_vcfset(int argc, char *argv[])
 
     vcfset_conf.only_passed = only_passed;
     vcfset_conf.only_pos = only_pos;
+    vcfset_conf.only_snvs = only_snvs;
+    vcfset_conf.only_indels = only_indels;
+
+    if (vcfset_conf.only_indels && vcfset_conf.only_snvs) {
+         LOG_FATAL("%s\n", "Can't take only indels *and* only snvs into account");
+         return 1;
+    }
 
 
     if (0 != argc - optind - 1) {
@@ -305,6 +320,8 @@ main_vcfset(int argc, char *argv[])
          var_t *var;
          char *key;
          int rc;
+         int is_indel = 0;
+
          vcf_new_var(&var);
          rc = vcf_parse_var(& vcfset_conf.vcf_in2, var);
          if (-1 == rc) {
@@ -314,6 +331,15 @@ main_vcfset(int argc, char *argv[])
          if (1 == rc) {/* EOF */
               free(var);
               break;
+         }
+
+         is_indel = vcf_var_is_indel(var);
+         if (vcfset_conf.only_snvs && is_indel) {
+              free(var);
+              continue;
+         } else if (vcfset_conf.only_indels && ! is_indel) {
+              free(var);
+              continue;
          }
 
          if (! vcfset_conf.only_passed || VCF_VAR_PASSES(var)) {
@@ -368,6 +394,7 @@ main_vcfset(int argc, char *argv[])
          char *key;
          var_hash_t *var_2;
          int rc;
+         int is_indel;
 
          vcf_new_var(&var_1);
          rc = vcf_parse_var(& vcfset_conf.vcf_in1, var_1);
@@ -378,6 +405,15 @@ main_vcfset(int argc, char *argv[])
          if (1 == rc) {/* EOF */
               free(var_1);
               break;
+         }
+
+         is_indel = vcf_var_is_indel(var_1);
+         if (vcfset_conf.only_snvs && is_indel) {
+              free(var_1);
+              continue;
+         } else if (vcfset_conf.only_indels && ! is_indel) {
+              free(var_1);
+              continue;
          }
 
          if (! vcfset_conf.only_pos && NULL != strchr(var_1->alt, ',')) {

@@ -9,7 +9,8 @@ source lib.sh || exit 1
 
 basedir=data/ecoli-clone/
 #bam=$basedir/Ecoli_K12_MG1655_NC_000913_bwa-sampe-unique-rg_recal.bam
-bam=$basedir/EAS20_8_bwamem_picard.mdups.realn.recal.bam
+#bam=$basedir/EAS20_8_bwamem_picard.mdups.realn.recal.bam
+bam=$basedir/EAS20_8_bwamem_picard.mdups.realn.recal.aq.bam
 reffa=$basedir/Ecoli_K12_MG1655_NC_000913.fa
 #truesnv=$basedir/denv2-pseudoclonal_true-snp.vcf
 
@@ -57,7 +58,8 @@ fi
 nus=$($LOFREQ vcfset -a complement -1 $outvcf_s -2 $outvcf_p --count-only)
 nup=$($LOFREQ vcfset -a complement -2 $outvcf_s -1 $outvcf_p --count-only)
 if [ $nus -ne 0 ] || [ $nup -ne 0 ]; then
-    echoerror "Observed differences between parallel and single results. Check $outvcf_p and $outvcf_s"
+    echoerror "Observed differences between parallel ($nup unique vars) and single ($nus unique vars) results. Check $outvcf_p and $outvcf_s"
+    exit 1
 fi                                    
 
 

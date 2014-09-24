@@ -222,6 +222,16 @@ int vcf_var_filtered(const var_t *var)
      }
 }
 
+int vcf_var_is_indel(const var_t *var)
+{
+     if (strlen(var->ref)>1 ||
+         strlen(var->alt)>1 ||
+         vcf_var_has_info_key(NULL, var, "INDEL")) {
+          return 1;
+     } else {
+          return 0;
+     }
+}
 
 /* value for key will be stored in value if not NULL. value will NULL
  * if not found. Otherwise its allocated here and caller must free.
@@ -490,14 +500,14 @@ int vcf_get_dp4(dp4_counts_t *dp4, var_t *var)
 
 /* var->info allocated here. caller has to free */
 void vcf_var_sprintf_info(var_t *var,
-                         const int *dp, const float *af, const int *sb,
+                         const int dp, const float af, const int sb,
                          const dp4_counts_t *dp4,
                          const int indel, const int consvar)
 {
      char buf[LINE_BUF_SIZE];
      snprintf(buf, sizeof(buf)-32, /* leave some for INDEL and other flags below */
               "DP=%d;AF=%f;SB=%d;DP4=%d,%d,%d,%d",
-              *dp, *af, *sb, dp4->ref_fw, dp4->ref_rv, dp4->alt_fw, dp4->alt_rv);
+              dp, af, sb, dp4->ref_fw, dp4->ref_rv, dp4->alt_fw, dp4->alt_rv);
      if (indel) {
           sprintf(buf, "%s;INDEL", buf);
      }
@@ -619,14 +629,15 @@ int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
      char *line_ptr;
      int field_no = 0;
      char *rc;
-
+     char *line_backup;
+     
      rc = vcf_file_gets(vcf_file, sizeof(line), line);
      if (NULL == rc || Z_NULL == rc) {
           return 1;
      }
      chomp(line);
      line_ptr = line;
-
+     line_backup = strdup(line);
 #if 0
      LOG_DEBUG("parsing line: %s\n", line);
 #endif
@@ -672,7 +683,7 @@ int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
           }
      }
      if (field_no<5) {
-          LOG_WARN("Parsing of variant incomplete. Only got %d fields. Need at least 5\n", field_no);
+          LOG_WARN("Parsing of variant incomplete. Only got %d fields. Need at least 5 (line=%s)\n", field_no, line_backup);
           return -1;
      }
      /* allow lenient parsing and fill in missing values*/
@@ -684,6 +695,7 @@ int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
           var->info[0] = VCF_MISSING_VAL_CHAR;
      }
 
+     free(line_backup);
      return 0;
 }
 

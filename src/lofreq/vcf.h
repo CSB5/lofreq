@@ -96,12 +96,13 @@ int vcf_skip_header(vcf_file_t *vcf_file);
 int vcf_parse_var(vcf_file_t *vcf_file, var_t *var);
 int vcf_parse_vars(var_t ***vars, vcf_file_t *vcf_file, int only_passed);
 
+int vcf_var_is_indel(const var_t *var);
 int vcf_var_has_info_key(char **value, const var_t *var, const char *key);
 int vcf_var_filtered(const var_t *var);
 char *vcf_var_add_to_filter(var_t *var, const char *filter_name);
 char *vcf_var_add_to_info(var_t *var, const char *info_str);
 void vcf_var_sprintf_info(var_t *var,
-                          const int *dp, const float *af, const int *sb,
+                          const int dp, const float af, const int sb,
                           const dp4_counts_t *dp4,
                           const int is_indel, const int is_consvar);
 void vcf_write_var(vcf_file_t *vcf_file, const var_t *var);

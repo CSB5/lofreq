@@ -4,31 +4,21 @@ High Prio:
 ==========
 
 - add normal and tumor plp info to somatic calls
-- fix license info in source and add external licenses for binary release
-- use bgzip instead of gzip for vcf compression and SQ fetch or releveant (region,bed) vars per chrom (tabix/bgzip)
+- use bgzip instead of gzip for vcf compression and SQ fetch or relevant (region,bed) vars per chrom (tabix/bgzip)
+  (rework vcfset afterwards)
 
 Med Prio:
 =========
 
-- replace uniq logic?
-- what to do at high coverages where X>cap? replace already read values  randomly?
-- profile code e.g.
-  $LOFREQ call -f mers_coronavirus_NC_019843.2.fa --verbose --debug NC_019843.2:2399-2399 dwgsim-ion-samba-mers-100kX-pool.bwamem.bam
+- what to do at high coverages where X>cap (e.g. Lewis' HepB)? replace already read values randomly?
 
 Low Prio:
 =========
 
+- upgrade to samtools 1.0
 - keep var info field with hash
-- use samtools hash functions instead of uhash?
-- (done?) support of indels during ignore vcf loading and source qual computation
-- make source quality allele aware once we can handle (multi character) indels
-- allow multiple ign vcf input
-- put external licenses into sep folder (incl zlib) for binary release
-- enable pthreads in libbam:
-    --- enable at compile time (http://stackoverflow.com/questions/1699113/autoconf-with-pthread)
-    --- how to set num_threads (only exposed to command line in view?)
-    --- test!
-- add internal sens test as in original version
+- support of indels during ignore vcf loading and source qual computation
+- support multiple ign vcf input
 - split lofreq_snpcaller cmd parsing: plp, snv, others (do they change argv?)
-- get rid of all FIXME's
-- gui?
+- profile code e.g.
+  $LOFREQ call -f mers_coronavirus_NC_019843.2.fa --verbose --debug NC_019843.2:2399-2399 dwgsim-ion-samba-mers-100kX-pool.bwamem.bam

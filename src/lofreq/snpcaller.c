@@ -380,7 +380,7 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
           avg_ref_bq = -1;
           for (i=0; i<NUM_NT4; i++) {
                int nt = bam_nt4_rev_table[i];
-               if (nt != p->cons_base) {
+               if (nt != p->cons_base[0]) {
                     continue;
                }
                if (p->base_quals[i].n) {
@@ -404,7 +404,7 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
           }
 
           is_alt_base = 0;
-          if (nt != p->cons_base) {
+          if (nt != p->cons_base[0]) {
                is_alt_base = 1;
                alt_idx += 1;
                alt_bases[alt_idx] = nt;
@@ -506,7 +506,139 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
      }
 }
 
+void 
+plp_to_ins_errprobs(double **err_probs, int *num_err_probs, 
+                    const plp_col_t *p, snvcall_conf_t *conf,
+                    char key[MAX_INDELSIZE]){
 
+     if (NULL == ((*err_probs) = malloc(p->coverage_indel * sizeof(double)))) {
+          /* coverage = base-count after read level filtering */
+          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
+                  __FILE__, __FUNCTION__, __LINE__);
+          free(err_probs);
+          return;
+     }
+
+     (*num_err_probs) = 0;
+     int i, j;
+     double final_err_prob;
+     int iq, aq, mq, sq;
+     iq = aq = mq = sq = -1;
+
+     for (i = 0; i < p->ins_quals.n; i++) {
+          int iq, mq;
+          iq = p->ins_quals.data[i];
+          mq = p->ins_map_quals.data[i];
+          final_err_prob = merge_srcq_mapq_baq_and_bq(-1, mq, -1, iq);
+          (*err_probs)[(*num_err_probs)++] = final_err_prob;
+     }
+     
+     ins_event *it, *it_tmp;
+     HASH_ITER(hh_ins, p->ins_event_counts, it, it_tmp) {
+          if (0 == strcmp(it->key, key)) {
+               for (j = 0; j < it->ins_quals.n; j++) {
+                    iq = it->ins_quals.data[j];
+                    if ((conf->flag & SNVCALL_USE_IDAQ)) {
+                         aq = it->ins_aln_quals.data[j];
+                    } else {
+                         aq = -1;
+                    }
+                    mq = it->ins_map_quals.data[j];
+#ifdef USE_SOURCEQUAL
+                    sq = it->ins_source_quals.data[j];
+#else
+                    sq = -1;
+#endif                    
+                    final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, iq);
+                    LOG_DEBUG("+%s IQ:%d IAQ:%d MQ:%d SQ:%d EP:%lg\n", 
+                         it->key, iq, aq, mq, sq, final_err_prob);
+                    (*err_probs)[(*num_err_probs)++] = final_err_prob;
+               }
+          } else {
+               for (j = 0; j < it->ins_quals.n; j++) {
+                    iq = it->ins_quals.data[j];
+                    mq = it->ins_map_quals.data[j];
+                    aq = -1;
+#ifdef USE_SOURCEQUAL
+                    sq = it->ins_source_quals.data[j];
+#else
+                    sq = -1;
+#endif
+                    final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, iq);
+                    LOG_DEBUG("+%s IQ:%d IAQ:%d MQ:%d SQ:%d EP:%lg\n", 
+                         it->key, iq, aq, mq, sq, final_err_prob);
+                    (*err_probs)[(*num_err_probs)++] = final_err_prob;
+               }
+          }
+     }
+
+}
+
+void 
+plp_to_del_errprobs(double **err_probs, int *num_err_probs, 
+                    const plp_col_t *p, snvcall_conf_t *conf,
+                    char key[MAX_INDELSIZE]){
+     if (NULL == ((*err_probs) = malloc(p->coverage_indel * sizeof(double)))) {
+          /* coverage = base-count after read level filtering */
+          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
+                  __FILE__, __FUNCTION__, __LINE__);
+          free(err_probs);
+          return;
+     }
+
+     (*num_err_probs) = 0;
+     int i, j;
+     double final_err_prob;
+     int dq, aq, mq, sq;
+     dq = aq = mq = sq = -1;
+
+     for (i = 0; i < p->del_quals.n; i++) {
+          dq = p->del_quals.data[i];
+          mq = p->del_map_quals.data[i];
+          final_err_prob = merge_srcq_mapq_baq_and_bq(-1, mq, -1, dq);
+          //LOG_DEBUG("#DQ:%d MQ:%d\n", dq, mq);
+          (*err_probs)[(*num_err_probs)++] = final_err_prob;
+     }
+
+     del_event *it, *it_tmp;
+     HASH_ITER(hh_del, p->del_event_counts, it, it_tmp) {
+          if (0 == strcmp(it->key, key)) {
+               for (j = 0; j < it->del_quals.n; j++) {
+                    dq = it->del_quals.data[j];
+                    if ((conf->flag & SNVCALL_USE_IDAQ)) {
+                         aq = it->del_aln_quals.data[j];
+                    } else {
+                         aq = -1;
+                    }
+                    mq = it->del_map_quals.data[j];
+#ifdef USE_SOURCEQUAL
+                    sq = it->del_source_quals.data[j];
+#else
+                    sq = -1;
+#endif
+                    final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, dq);
+                    LOG_DEBUG("+%s DQ:%d DAQ:%d MQ:%d SQ:%d EP:%lg\n", 
+                         it->key, dq, aq, mq, sq, final_err_prob);
+                    (*err_probs)[(*num_err_probs)++] = final_err_prob;
+               }
+          } else {
+               for (j = 0; j < it->del_quals.n; j++) {
+                    dq = it->del_quals.data[j];
+                    mq = it->del_map_quals.data[j];
+#ifdef USE_SOURCEQUAL
+                    sq = it->del_source_quals.data[j];
+#else
+                    sq = -1;
+#endif
+                    final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, dq);
+                    LOG_DEBUG("+%s DQ:%d DAQ:%d MQ:%d SQ:%d EP:%lg\n", 
+                         it->key, dq, aq, mq, sq, final_err_prob);
+                    (*err_probs)[(*num_err_probs)++] = final_err_prob;
+               }
+          }
+     }
+
+}
 
 /* initialize members of preallocated snvcall_conf */
 void
@@ -525,11 +657,15 @@ init_snvcall_conf(snvcall_conf_t *c)
      c->min_cov = DEFAULT_MIN_COV;
      c->dont_skip_n = 0;
      c->bonf_dynamic = 1;
-     c->bonf = 1;
+     c->bonf_sub = 1;
+     c->bonf_indel = 1;
      c->sig = DEFAULT_SIG;
      /* c->out = ; */
      c->flag |= SNVCALL_USE_MQ;
      c->flag |= SNVCALL_USE_BAQ;
+     c->flag |= SNVCALL_USE_IDAQ;
+     c->only_indels = 0;
+     c->no_indels = 0;
 }
 
 
@@ -545,7 +681,8 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
      fprintf(stream, "  def_alt_jq     = %d\n", c->def_alt_jq);
      fprintf(stream, "  min_cov        = %d\n", c->min_cov);
      fprintf(stream, "  dont_skip_n    = %d\n", c->dont_skip_n);
-     fprintf(stream, "  bonf           = %lld  (might get recalculated)\n", c->bonf);
+     fprintf(stream, "  bonf_sub       = %lld  (might get recalculated)\n", c->bonf_sub);
+     fprintf(stream, "  bonf_indel     = %lld  (might get recalculated)\n", c->bonf_indel);
      fprintf(stream, "  bonf_dynamic   = %d\n", c->bonf_dynamic);
      fprintf(stream, "  sig            = %f\n", c->sig);
 /*     fprintf(stream, "  out            = %p\n", (void*)c->out);*/
@@ -553,11 +690,14 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
      fprintf(stream, "  flag & SNVCALL_USE_MQ      = %d\n", c->flag&SNVCALL_USE_MQ?1:0);
      fprintf(stream, "  flag & SNVCALL_USE_SQ      = %d\n", c->flag&SNVCALL_USE_SQ?1:0);
      fprintf(stream, "  flag & SNVCALL_CONS_AS_REF = %d\n", c->flag&SNVCALL_CONS_AS_REF?1:0);
+     fprintf(stream, "  flag & SNVCALL_USE_IDAQ    = %d\n", c->flag&SNVCALL_USE_IDAQ?1:0);
 #ifdef SCALE_MQ
      LOG_WARN("%s\n", "MQ scaling switched on!");
 #elif defined TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
      LOG_WARN("%s\n", "MQ translation switched on!");
 #endif
+     fprintf(stream, "  only_indels    = %d\n", c->only_indels);
+     fprintf(stream, "  no_indels      = %d\n", c->no_indels);
 }
 
 

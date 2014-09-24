@@ -137,24 +137,32 @@ def total_num_tests_from_logs(log_files):
     returns their sum (for multiple testing correction)
     """
 
-    total_num_tests = 0
+    total_num_snv_tests = 0
+    total_num_indel_tests = 0
     for f in log_files:
         fh = open(f, 'r')
-        num_tests_found = False
+        num_snv_tests_found = False
+        num_indel_tests_found = False
 
         for line in fh:
             if line.startswith('Number of substitution tests performed'):
-                num_tests = int(line.split(':')[1])
-                total_num_tests += num_tests
-                num_tests_found = True
-                break
-        if not num_tests_found:
-            LOG.fatal("Didn't find number of tests in log-file %s" % (f))
-            return -1
+                num_snv_tests = int(line.split(':')[1])
+                total_num_snv_tests += num_snv_tests
+                num_snv_tests_found = True
+            if line.startswith('Number of indel tests performed'):
+                num_indel_tests = int(line.split(':')[1])
+                total_num_indel_tests += num_indel_tests
+                num_indel_tests_found = True
+        if not num_snv_tests_found:
+            LOG.fatal("Didn't find number of snv tests in log-file %s" % (f))
+            return (-1, -1)
+        if not num_indel_tests_found:
+            LOG.fatal("Didn't find number of indel tests in log-file %s" % (f))
+            return (-1, -1)
 
         fh.close()
 
-    return total_num_tests
+    return (total_num_snv_tests, total_num_indel_tests)
 
 
 def concat_vcf_files(vcf_files, vcf_concat, source=None):
@@ -539,10 +547,28 @@ def main():
     # (e.g. using pybedtools or a lightweight alternative)
     # but for now we disallow regions (need it for ourselves; see above)
 
+    bam_bins = [Region._make(x) for x in bins_from_bamheader(bam)]
     if bed_file:
-        bins = [Region._make(x) for x in read_bed_coords(bed_file)]
+        bed_bins = [Region._make(x) for x in read_bed_coords(bed_file)]
+
+        # if the number of regions is huge and they are scattered
+        # across all major chromosomes/sequences, then it's much
+        # faster to use the bam_bins as region and bed as extra
+        # argument
+        bam_sqs = set([b[0] for b in bam_bins])
+        bed_sqs = set([b[0] for b in bed_bins])
+        if len(bed_bins) > 100*len(bam_bins) and len(bed_sqs) > len(bam_sqs)/10.0:
+            bed_sqs = set([b[0] for b in bed_bins])
+            bins = [b for b in bam_bins if b[0] in bed_sqs]
+            lofreq_call_args.extend(['-l', bed_file])
+        else:
+            bins = bed_bins
     else:
-        bins = [Region._make(x) for x in bins_from_bamheader(bam)]
+        bins = bam_bins
+
+    for (i, b) in enumerate(bins):
+        LOG.debug("initial bins: #%d %s %d %d len %d" % (
+            i, b.chrom, b.start, b.end, region_length(b)))
 
     # split greedily into bins such that nregions ~ 2*threads:
     # keep more bins than threads to make up for differences in regions
@@ -557,10 +583,12 @@ def main():
         bins = sorted(bins, key=lambda b: region_length(b))
         biggest = bins[-1]
         biggest_length = region_length(biggest) 
-        LOG.debug("biggest_length=%d  total_length/(2.0*num_threads)=%f" % (biggest_length, total_length/(2.0*num_threads)))
-        if biggest_length < total_length/(1.5*num_threads):
+
+        LOG.debug("biggest_length=%d total_length/(%d*num_threads)=%f" % (
+            biggest_length, BIN_PER_THREAD, total_length/(BIN_PER_THREAD*num_threads)))
+        if biggest_length < total_length/(BIN_PER_THREAD*num_threads):
             break
-        elif biggest_length < 1000:
+        elif biggest_length < 100:
             LOG.warn("Regions getting too small to be efficiently processed")
             break
         
@@ -639,11 +667,12 @@ def main():
     #
     log_files = [os.path.join(tmp_dir, "%d.log" % no)
                  for no in range(len(cmd_list))]
-    num_tests = total_num_tests_from_logs(log_files)
-    if num_tests == -1:
+    num_snv_tests, num_indel_tests = total_num_tests_from_logs(log_files)
+    if num_snv_tests == -1 or num_indel_tests == -1:
         sys.exit(1)
     # same as in lofreq_snpcaller.c and used by lofreq2_somatic.py
-    sys.stderr.write("Number of substitution tests performed: %d\n" % num_tests)
+    sys.stderr.write("Number of substitution tests performed: %d\n" % num_snv_tests)
+    sys.stderr.write("Number of indel tests performed: %d\n" % num_indel_tests)
 
     cmd = ['lofreq', 'filter', '--only-passed', '-i', vcf_concat, '-o', final_vcf_out]
     if no_default_filter:
@@ -651,9 +680,16 @@ def main():
 
     if bonf_opt == 'dynamic':
         # if bonf was computed dynamically, use bonf sum
-        bonf = num_tests
-        phredqual = prob_to_phredqual(sig_opt/float(bonf))
-        cmd.extend(['--snvqual-thresh', "%s" % phredqual])
+        sub_bonf = num_snv_tests
+        indel_bonf = num_indel_tests
+        if sub_bonf==0:
+            sub_bonf=1
+        if indel_bonf==0:
+            indel_bonf=1
+        sub_phredqual = prob_to_phredqual(sig_opt/float(sub_bonf))
+        indel_phredqual = prob_to_phredqual(sig_opt/float(indel_bonf))
+        cmd.extend(['--snvqual-thresh', "%s" % sub_phredqual])
+        cmd.extend(['--indelqual-thresh', "%s" % indel_phredqual])
 
     elif bonf_opt == 'auto':
         raise NotImplementedError

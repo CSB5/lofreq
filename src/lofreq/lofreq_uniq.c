@@ -213,13 +213,19 @@ uniq_snv(const plp_col_t *p, void *confp)
      char *af_char = NULL;
      float af;
      int is_uniq = 0;
+     int is_indel;
+     int coverage;
 
-     if (vcf_var_has_info_key(NULL, conf->var, "INDEL")) {
+     is_indel =  vcf_var_is_indel(conf->var);
+
+#ifdef DISABLE_INDELS
+     if (is_indel) {
           LOG_WARN("uniq logic can't be applied to indels."
                    " Skipping indel var at %s %d\n",
                    conf->var->chrom, conf->var->pos+1);
           return;
      }
+#endif
 
      if (0 != strcmp(p->target, conf->var->chrom) || p->pos != conf->var->pos) {
           LOG_ERROR("wrong pileup for var. pileup for %s %d. var for %s %d\n",
@@ -227,8 +233,11 @@ uniq_snv(const plp_col_t *p, void *confp)
           return;
      }
 
-     /* no coverage usually means I won't be called, but just in case: */
-     if (0 == p->coverage) {
+     coverage = p->coverage;
+     if (is_indel) {
+          coverage -= p->num_tails;
+     }
+     if (1 > coverage) {
           return;
      }
 
@@ -241,9 +250,11 @@ uniq_snv(const plp_col_t *p, void *confp)
           af = strtof(af_char, (char **)NULL); /* atof */
           free(af_char);
           if (af < 0.0 || af > 1.0) {
+               float new_af;
+               new_af = af<0.0 ? 0.01 : 1.0;
                /* hard to catch error later */
-               LOG_FATAL("%s\n", "Couldn't parse AF (value out of bound) from variant");
-               return;
+               LOG_FATAL("Invalid (value out of bound) AF %f in variant. Resetting to %f\n", af, new_af);
+               af = new_af;
           }
 
      } else {
@@ -277,12 +288,12 @@ uniq_snv(const plp_col_t *p, void *confp)
                           alt_bases, alt_counts, alt_raw_counts,
                           p, &snvcall_conf);
           LOG_DEBUG("at %s:%d with cov %d and num_err_probs %d\n", 
-              p->target, p->pos, p->coverage, num_err_probs);
+              p->target, p->pos, coverage, num_err_probs);
 
           /* Now pretend we see AF(SNV-to-test)*coverage variant
            * bases. Truncate to int, i.e err on the side of caution
            * during rounding (assume fewer alt bases) */
-          alt_counts[0] = af * num_err_probs; /* don't use p->coverage as that is before filtering */
+          alt_counts[0] = af * num_err_probs; /* don't use coverage as that is before filtering */
           alt_counts[1] = alt_counts[2] = 0;
 
           if (snpcaller(pvalues, err_probs, num_err_probs,
@@ -313,18 +324,47 @@ uniq_snv(const plp_col_t *p, void *confp)
           free(err_probs);
           
      } else {
-          /* FIXME no support for indels! */
-          int alt_count = base_count(p, conf->var->alt[0]);
+          int alt_count;
           double pvalue;
           char info_str[128];
 
+          if (is_indel) {
+               int ref_len = strlen(conf->var->ref);
+               int alt_len = strlen(conf->var->alt);
+               if (ref_len > alt_len) { /* deletion */
+                    char del_key[256];
+                    strcpy(del_key, conf->var->ref+1);
+                    del_event *it_del = find_del_sequence(&p->del_event_counts, del_key);
+                    if (it_del) {
+                         alt_count = it_del->count;
+                    } else {
+                         alt_count = 0;
+                    }
+                    /* LOG_DEBUG("%s>%s k:%s c:%d\n", conf->var->ref, conf->var->alt, del_key, alt_count); */
+               } else { /* insertion */
+                    char ins_key[256];
+                    strcpy(ins_key, conf->var->alt+1);
+                    ins_event *it_ins = find_ins_sequence(&p->ins_event_counts, ins_key);
+                    if (it_ins) {
+                         alt_count = it_ins->count;
+                    } else {
+                         alt_count = 0;
+                    }
+                    /* LOG_DEBUG("%s>%s k:%s c:%d\n", conf->var->ref, conf->var->alt, ins_key, alt_count);*/
+               }
+
+          } else {
+               alt_count = base_count(p, conf->var->alt[0]);
+          }
+
+
 #ifdef DEBUG
           LOG_DEBUG("Now testing af=%f cov=%d alt_count=%d at %s %d for var:",
-                    af, p->coverage, alt_count, p->target, p->pos+1);
+                    af, coverage, alt_count, p->target, p->pos+1);
 #endif
           
           /* this is a one sided test */
-          if (0 != binom(&pvalue, NULL, p->coverage, alt_count, af)) {
+          if (0 != binom(&pvalue, NULL, coverage, alt_count, af)) {
                LOG_ERROR("%s\n", "binom() failed");
                return;
           }
@@ -335,7 +375,7 @@ uniq_snv(const plp_col_t *p, void *confp)
           LOG_DEBUG("%s %d %s>%s AF=%f | %s (p-value=%g) | BAM alt_count=%d cov=%d (freq=%f)\n",
                       conf->var->chrom, conf->var->pos+1, conf->var->ref, conf->var->alt, af,
                       is_uniq ? "unique" : "not necessarily unique", pvalue,
-                      alt_count, p->coverage, alt_count/(float)p->coverage);
+                      alt_count, coverage, alt_count/(float)coverage);
      }
 }
 
@@ -375,7 +415,6 @@ usage(const uniq_conf_t* uniq_conf)
 /* usage() */
 
 
-
 int
 main_uniq(int argc, char *argv[])
 {
@@ -401,7 +440,6 @@ main_uniq(int argc, char *argv[])
 
      uniq_conf.uniq_filter.mtc_type = MTC_FDR;
      uniq_conf.uniq_filter.alpha = 0.001;
-
 
      /* default pileup options */
      memset(&mplp_conf, 0, sizeof(mplp_conf_t));
@@ -596,7 +634,7 @@ main_uniq(int argc, char *argv[])
          if (vcf_file_seek(& uniq_conf.vcf_in, 0, SEEK_SET)) {
               LOG_FATAL("%s\n", "Couldn't rewind file to parse variants"
                         " after header parsing failed");
-              return -1;
+              return 1;
          }
     } else {
          vcf_header_add(&vcf_header, "##INFO=<ID=UNIQ,Number=0,Type=Flag,Description=\"Unique, i.e. not detectable in paired sample\">\n");
@@ -629,11 +667,11 @@ main_uniq(int argc, char *argv[])
 
     if (-1 == (num_vars = vcf_parse_vars(&vars, & uniq_conf.vcf_in, 1))) {
          LOG_FATAL("%s\n", "vcf_parse_vars() failed");
-         return -1;
+         return 1;
     }
     if (0 == num_vars) {
          LOG_WARN("%s\n", "Didn't find any variants in input");
-         return 1;
+         return 0;
     }
     if (! uniq_conf.uniq_filter.ntests) {
          uniq_conf.uniq_filter.ntests = num_vars;
@@ -654,22 +692,16 @@ main_uniq(int argc, char *argv[])
 
          LOG_DEBUG("pileup for var no %d at %s %d\n",
                    i+1, uniq_conf.var->chrom, uniq_conf.var->pos+1);
+#ifdef DISABLE_INDELS
          if (vcf_var_has_info_key(NULL, uniq_conf.var, "INDEL")) {
               LOG_WARN("Skipping indel var at %s %d\n",
                        uniq_conf.var->chrom, uniq_conf.var->pos+1);
               free(mplp_conf.reg);
               mplp_conf.reg = NULL;
               continue;
-
-#ifdef UNNECESSARY_BECAUSE_HANDLED_VIA_PARSE_VARS
-         } else if (vcf_var_filtered(uniq_conf.var)) {
-              LOG_VERBOSE("Skipping filtered var at %s %d\n",
-                       uniq_conf.var->chrom, uniq_conf.var->pos+1);
-              free(mplp_conf.reg);
-              mplp_conf.reg = NULL;
-              continue;
-#endif
          }
+#endif
+         /* no need to check for filter because done by parse_vars */
 
          rc = mpileup(&mplp_conf, plp_proc_func, (void*)&uniq_conf,
                       1, (const char **) argv + optind + 1);
@@ -695,6 +727,7 @@ main_uniq(int argc, char *argv[])
          /* all done */
          goto clean_and_exit;
     }
+
 
 
     if (uniq_conf.uniq_filter.mtc_type != MTC_NONE) {
@@ -731,4 +764,5 @@ clean_and_exit:
 
     return rc;
 }
-/* main_call */
+/* main_uniq */
+
