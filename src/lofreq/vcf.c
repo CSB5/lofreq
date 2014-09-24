@@ -619,14 +619,15 @@ int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
      char *line_ptr;
      int field_no = 0;
      char *rc;
-
+     char *line_backup;
+     
      rc = vcf_file_gets(vcf_file, sizeof(line), line);
      if (NULL == rc || Z_NULL == rc) {
           return 1;
      }
      chomp(line);
      line_ptr = line;
-
+     line_backup = strdup(line);
 #if 0
      LOG_DEBUG("parsing line: %s\n", line);
 #endif
@@ -672,7 +673,7 @@ int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
           }
      }
      if (field_no<5) {
-          LOG_WARN("Parsing of variant incomplete. Only got %d fields. Need at least 5\n", field_no);
+          LOG_WARN("Parsing of variant incomplete. Only got %d fields. Need at least 5 (line=%s)\n", field_no, line_backup);
           return -1;
      }
      /* allow lenient parsing and fill in missing values*/
@@ -684,6 +685,7 @@ int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
           var->info[0] = VCF_MISSING_VAL_CHAR;
      }
 
+     free(line_backup);
      return 0;
 }
 
