@@ -94,15 +94,32 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip
      int reflen;
     
      if (del_flag) {
-          uint8_t *old_nm = bam_aux_get(b, "NM");
-          uint8_t *old_mc = bam_aux_get(b, "MC");
-          uint8_t *old_md = bam_aux_get(b, "MD");
-          uint8_t *old_as = bam_aux_get(b, "AS");
+          uint8_t *old_nm;
+          uint8_t *old_mc;
+          uint8_t *old_md;
+          uint8_t *old_as;
 
-          if (old_nm) bam_aux_del(b, old_nm);
-          if (old_mc) bam_aux_del(b, old_mc);          
-          if (old_md) bam_aux_del(b, old_md);
-          if (old_as) bam_aux_del(b, old_as);
+          /* once you bam_aux_del b will change and all pointers to it, so don't use bam_aux_get again too early */
+          
+          old_nm = bam_aux_get(b, "NM");          
+          if (old_nm) {          
+               bam_aux_del(b, old_nm);
+          }
+
+          old_mc = bam_aux_get(b, "MC");          
+          if (old_mc) {          
+                bam_aux_del(b, old_mc);          
+          }
+
+          old_md = bam_aux_get(b, "MD");          
+          if (old_md) {          
+               bam_aux_del(b, old_md);
+          }
+          
+          old_as = bam_aux_get(b, "AS");                    
+          if (old_as) {
+               bam_aux_del(b, old_as);
+          }
      }
 
      if (c->flag & BAM_FUNMAP) {
