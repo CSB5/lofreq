@@ -129,8 +129,9 @@ plp_col_init(plp_col_t *p) {
     p->pos = -INT_MAX;
     p->ref_base = '\0';
     p->cons_base[0] = 'N'; p->cons_base[1] = '\0';
-    p->coverage = -INT_MAX;
-    p->coverage_indel = p->coverage;
+    p->coverage_subst = -INT_MAX;
+    p->coverage_indel = -INT_MAX;
+    p->coverage_indel_shadow = -INT_MAX;
     for (i=0; i<NUM_NT4; i++) {
          int_varray_init(& p->base_quals[i], grow_by_size);
          int_varray_init(& p->baq_quals[i], grow_by_size);
@@ -230,7 +231,7 @@ plp_col_mpileup_print(const plp_col_t *p, FILE *stream)
      int i, j;
      
      fprintf(stream, "%s\t%d\t%c\t%d\t", 
-             p->target, p->pos+1, p->ref_base,p->coverage);
+             p->target, p->pos+1, p->ref_base,p->coverage_subst);
      for (i=0; i<NUM_NT4; i++) {
           for (j=0; j<p->base_quals[i].n; j++) {
                fprintf(stream, "%c%c",
@@ -758,9 +759,10 @@ void compile_plp_col(plp_col_t *plp_col,
      plp_col->target = strdup(target_name);
      plp_col->pos = pos;
      plp_col->ref_base = toupper(ref_base);
-     plp_col->coverage = n_plp;  /* this is coverage as in the original mpileup, 
+     plp_col->coverage_subst = n_plp;  /* this is coverage as in the original mpileup, 
                                    i.e. after read-level filtering */
      plp_col->coverage_indel = n_plp;
+     plp_col->coverage_indel_shadow = 0;
      LOG_DEBUG("Processing %s:%d\n", plp_col->target, plp_col->pos+1);
      
      for (i = 0; i < n_plp; ++i) {
@@ -994,9 +996,12 @@ void compile_plp_col(plp_col_t *plp_col,
            * bases will be presented as ‘*’ in the following lines.
            */
      
-          if ( p->is_tail || 
-               iq < conf->min_plp_idq || dq < conf->min_plp_idq ) {
+          if ( p->is_tail) {
                num_skips_indel += 1;
+
+          } else if (iq < conf->min_plp_idq || dq < conf->min_plp_idq) {
+               num_skips_indel += 1;
+               plp_col->coverage_indel_shadow += 1;
 
           } else {
 
@@ -1116,7 +1121,7 @@ void compile_plp_col(plp_col_t *plp_col,
           
      }  /* end: for (i = 0; i < n_plp; ++i) { */
 
-     plp_col->coverage -= num_skips;
+     plp_col->coverage_subst -= num_skips;
      plp_col->coverage_indel -= num_skips_indel;
      
      /* ****************** FINDING CONSENSUS **************** */
@@ -1129,7 +1134,10 @@ void compile_plp_col(plp_col_t *plp_col,
       * events. otherwise, the consensus base is not an indel and is given
       * by the nucleotide with the greatest sum of qualities.
       * FIXME: check consensus indel against minimum consensus quality
-      * FIXME: merge indel qualities when determining consensus indel event */
+      * FIXME: merge indel qualities when determining consensus indel event 
+      *
+      * FIXME(AW): why are we using max qualities here and not errprob corrected counts?
+      */
      
      ins_event *ins_it, *ins_it_tmp;
      char *ins_maxevent_key = NULL;

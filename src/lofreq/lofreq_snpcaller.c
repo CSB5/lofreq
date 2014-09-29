@@ -168,8 +168,8 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char *ref,
 }
 */
 #endif
-     int cover = p->coverage - p->num_tails;
-	vcf_var_sprintf_info(var, is_indel? cover : p->coverage, af, sb_qual,
+     /* FIXME doesn't account for indel coverage */ 
+     vcf_var_sprintf_info(var, is_indel? p->coverage_indel : p->coverage_subst, af, sb_qual,
                           dp4, is_indel, is_consvar);
 
      vcf_write_var(vcf_file, var);
@@ -190,7 +190,7 @@ report_cons_sub(const plp_col_t *p, snvcall_conf_t *conf){
      const int is_indel = 0;
      const int is_consvar = 1;
      const int qual = -1;
-     float af = base_count(p, p->cons_base[0]) / (float)p->coverage;
+     float af = base_count(p, p->cons_base[0]) / (float)p->coverage_subst;
 
      char report_ref[2];
      report_ref[0] = p->ref_base;
@@ -207,7 +207,7 @@ report_cons_sub(const plp_col_t *p, snvcall_conf_t *conf){
      dp4.alt_fw = p->fw_counts[alt_nt4];
      dp4.alt_rv = p->rv_counts[alt_nt4];
 
-     LOG_DEBUG("cons var snp: %s %d %c>%c\n",
+     LOG_DEBUG("cons var snp: %s %d %c>%s\n",
                p->target, p->pos+1, p->ref_base, p->cons_base);          
      report_var(& conf->vcf_out, p, report_ref, p->cons_base, 
                 af, qual, is_indel, is_consvar, &dp4);
@@ -505,10 +505,10 @@ call_vars(const plp_col_t *p, void *confp)
 
      /* don't call if no coverage or if we don't know what to call
       * against */
-     if (p->coverage == 0 || p->cons_base[0] == 'N') {          
+     if (p->coverage_subst == 0 || p->cons_base[0] == 'N') {          
           return;
      }
-     if (p->coverage < conf->min_cov) {          
+     if (p->coverage_subst < conf->min_cov) {          
           return;
      }
      if (! conf->dont_skip_n && p->ref_base == 'N') {
@@ -579,8 +579,16 @@ call_vars(const plp_col_t *p, void *confp)
 
      /* call snvs
       */
-     /* don't call snvs if indels only or consensus indel (FIXME: the latter is in theory possible but has messy downstream effects) */
-     if (! conf->only_indels && ! ((p->cons_base[0] == '+' || p->cons_base[0] == '-'))) {
+     /* don't call snvs if indels only or consensus indel (the latter is in theory
+      * possible but has messy downstream effects). in some cases we might not have
+      * an official indel consensus (AQ, BI/BD missing). Catch those by simply
+      * not calling anyhthing if the indel coverage is higher than the
+      * 'substitution' coverage
+      */
+     if (! conf->only_indels && \
+         ! ((p->cons_base[0] == '+' || p->cons_base[0] == '-')) && \
+         ! (p->coverage_indel+p->coverage_indel_shadow > p->coverage_subst)) {/* consensus indel actually there but not officially predicted because e.g. indel qualities were missing */
+
           /* FIXME make function */
 
           /* 
@@ -705,7 +713,7 @@ call_vars(const plp_col_t *p, void *confp)
                if (pvalue * (double)conf->bonf_sub < conf->sig) {
                     const int is_indel = 0;
                     const int is_consvar = 0;
-                    float af = alt_raw_count/(float)p->coverage;
+                    float af = alt_raw_count/(float)p->coverage_subst;
 
                     char report_ref[2];
                     char report_alt[2];
@@ -731,7 +739,7 @@ call_vars(const plp_col_t *p, void *confp)
                               " counts-raw:%d/%d=%.6f counts-filt:%d/%d=%.6f\n",
                               p->target, p->pos+1, p->cons_base[0], alt_base,
                               pvalue, PROB_TO_PHREDQUAL(pvalue),
-                              /* counts-raw */ alt_raw_count, p->coverage, alt_raw_count/(float)p->coverage,
+                              /* counts-raw */ alt_raw_count, p->coverage_subst, alt_raw_count/(float)p->coverage_subst,
                               /* counts-filt */ alt_count, bc_num_err_probs, alt_count/(float)bc_num_err_probs);
                }
      #if 0

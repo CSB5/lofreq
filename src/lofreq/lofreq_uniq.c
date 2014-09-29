@@ -233,7 +233,8 @@ uniq_snv(const plp_col_t *p, void *confp)
           return;
      }
 
-     coverage = p->coverage;
+     /* FIXME: indels are not in coverage! */
+     coverage = p->coverage_subst;
      if (is_indel) {
           coverage -= p->num_tails;
      }

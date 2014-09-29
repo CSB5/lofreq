@@ -48,9 +48,9 @@ typedef struct {
      int pos; /* position */
      char ref_base; /* uppercase reference base (given by fasta) */
      char cons_base[MAX_INDELSIZE]; /* uppercase consensus base according to base-counts, after read-level filtering. */
-     int coverage; /* coverage after read-level filtering i.e. same as in samtools mpileup (n_plp) but without indels! */
+     int coverage_subst; /* coverage after read-level filtering i.e. same as in samtools mpileup (n_plp) but without indels! */
      int coverage_indel; /* original coverage for safe malloc */
-
+     int coverage_indel_shadow; /* a hack: indels often get filtered because of low quality of missing qualities in bam file. we need to know nevertheless they are present. this is the count of all "ignored" indels */
      /* list of qualities: keeping them all here in one place so that
       * filtering can become separate step. alternative is to filter
       * during pileup. the latter doesn't work if you want to filter

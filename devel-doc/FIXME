@@ -3,7 +3,8 @@ Todos:
 High Prio:
 ==========
 
-- add normal and tumor plp info to somatic calls
+- fix af computation which is entirely off and close to broken
+- add normal and tumor plp info to somatic calls. normal could be added in uniq
 - use bgzip instead of gzip for vcf compression and SQ fetch or relevant (region,bed) vars per chrom (tabix/bgzip)
   (rework vcfset afterwards)
 
@@ -11,11 +12,11 @@ Med Prio:
 =========
 
 - what to do at high coverages where X>cap (e.g. Lewis' HepB)? replace already read values randomly?
+- speed up vcfset (tabix; sorting only won't work against dbsnp)
 
 Low Prio:
 =========
 
-- upgrade to samtools 1.0
 - keep var info field with hash
 - support of indels during ignore vcf loading and source qual computation
 - support multiple ign vcf input

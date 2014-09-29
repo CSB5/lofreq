@@ -367,7 +367,7 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
      int alt_idx;
      int avg_ref_bq = -1;
 
-     if (NULL == ((*err_probs) = malloc(p->coverage * sizeof(double)))) {
+     if (NULL == ((*err_probs) = malloc(p->coverage_subst * sizeof(double)))) {
           /* coverage = base-count after read level filtering */
           fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
                   __FILE__, __FUNCTION__, __LINE__);
