@@ -1133,6 +1133,28 @@ void compile_plp_col(plp_col_t *plp_col,
       * deletion event is greater than the sum of qualities for all non-deletion
       * events. otherwise, the consensus base is not an indel and is given
       * by the nucleotide with the greatest sum of qualities.
+      *
+      *
+      * YHT 2/10/14: """the idea is to find the event which has the highest probability of 
+      * occurring the number of times it was observed. For example, if I see
+      * 2 +A events at a position, the probability that those 2 events are real
+      * and occurred together is (1 - the probability that the +A event occurred
+      * due to error for the first supporting read)*(1 - the probability that the
+      * +A event occurred due to error for the second supporting read). I keep
+      * track of this for each insertion event, for e.g. +AA, +T etc. at that
+      * position. I guess in theory this should incorporate errors from other sources. 
+      *
+      * I also find the probability of seeing n number of non-insertions at that
+      * position, which is the product of (1 - the probability of seeing an insertion
+      * error at that position for each of those reads). 
+      *
+      * I then compare the probabilities of each of these events. It turns out that
+      * comparing the products of (1 - error probability) is the same as comparing
+      * the log sum of the qualities, because qualities are the negative log of the
+      * error probabilities."""
+      *
+      *
+      *
       * FIXME: check consensus indel against minimum consensus quality
       * FIXME: merge indel qualities when determining consensus indel event 
       *
