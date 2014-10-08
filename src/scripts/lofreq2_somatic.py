@@ -678,6 +678,7 @@ def cmdline_parser():
     
     experts_only = parser.add_argument_group('Experts only')
     experts_only.add_argument("--use-orphan",
+                              action="store_true",
                               help="Use orphaned/anomalous reads from pairs"
                               " in all samples")
 
