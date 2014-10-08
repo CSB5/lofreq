@@ -7,6 +7,7 @@ High Prio:
 - add normal and tumor plp info to somatic calls. normal could be added in uniq
 - use bgzip instead of gzip for vcf compression and SQ fetch or relevant (region,bed) vars per chrom (tabix/bgzip)
   (rework vcfset afterwards)
+- unify snv and indel call logic (call simultaneously)
 
 Med Prio:
 =========
