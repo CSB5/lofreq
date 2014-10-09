@@ -932,7 +932,7 @@ for cov in coverage_range:
               {"min-cov", required_argument, NULL, 'C'},
               /*{"maxdepth", required_argument, NULL, 'd'},*/
 
-              {"dont-skip-n", required_argument, &dont_skip_n, 1},
+              {"dont-skip-n", no_argument, &dont_skip_n, 1},
               {"illumina-1.3", no_argument, &illumina_1_3, 1},
               {"use-orphan", no_argument, &use_orphan, 1},
               {"plp-summary-only", no_argument, &plp_summary_only, 1},
