@@ -805,6 +805,15 @@ void compile_plp_col(plp_col_t *plp_col,
           uint8_t *ad = bam_aux_get(p->b, AD_TAG);
           uint8_t *baq_aux = NULL; /* full baq value (not offset as "BQ"!) */
 
+          /* FIXME temporary fix preventing problems due to the fact that we changed AI AD to ai ad 
+           * to be deleted soon
+           */
+          if (! ai) {
+               ai = bam_aux_get(p->b, "AI");
+          }
+          if (! ad) {
+               ad = bam_aux_get(p->b, "AD");
+          }
 #ifdef USE_SOURCEQUAL
           if (conf->flag & MPLP_USE_SQ) {
                sq = bam_aux2i(bam_aux_get(p->b, SRC_QUAL_TAG)); /* lofreq internally computed on the fly */
