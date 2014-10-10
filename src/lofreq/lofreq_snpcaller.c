@@ -785,17 +785,17 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -B | --no-baq                Disable use of base-alignment quality (BAQ)\n");
      fprintf(stderr, "       -D | --del-baq               Delete pre-existing BAQ values, i.e. compute even if already present in BAM\n");
      fprintf(stderr, "       -e | --no-ext-baq            Use 'normal' BAQ (samtools default) instead of extended BAQ (both computed on the fly if not already present in %s tag)\n", BAQ_TAG);
-     fprintf(stderr, "       -A | --no-idaq               Don't use IDAQ values\n");
+     fprintf(stderr, "       -A | --no-idaq               Don't use IDAQ values (NOT recommended under ANY circumstances other than debugging)\n");
 
      fprintf(stderr, "- Mapping quality\n");                                
      fprintf(stderr, "       -m | --min-mq INT            Skip reads with mapping quality smaller than INT [%d]\n", mplp_conf->min_mq);
      fprintf(stderr, "       -M | --max-mq INT            Cap mapping quality at INT [%d]\n", mplp_conf->max_mq);
      fprintf(stderr, "       -N | --no-mq                 Don't merge mapping quality in LoFreq's model\n");
 
-#ifdef DISABLE_INDELS
-     fprintf(stderr, "- Indels\n");                                
+#ifdef HIDDEN_TO_AVERAGE_USER
+     fprintf(stderr, "- Indels\n");
+     fprintf(stderr, "            --call-indels           Enable indel calls (note: preprocess your file to include indel alignment qualities!)\n");     
      fprintf(stderr, "            --only-indels           Only call indels; no SNVs\n");
-     fprintf(stderr, "            --no-indels             Don't call indels; only SNVs\n");
 #endif
 
 #ifdef USE_SOURCEQUAL                                     
@@ -832,7 +832,7 @@ main_call(int argc, char *argv[])
      static int use_orphan = 0;
      static int cons_as_ref = 0;
      static int only_indels = 0;
-     static int no_indels = 0;
+     static int no_indels = 1;
 
      static int plp_summary_only = 0;
      static int no_default_filter = 0;
@@ -896,7 +896,7 @@ for cov in coverage_range:
               
               {"ref", required_argument, NULL, 'f'},
               {"cons-as-ref", no_argument, &cons_as_ref, 1},
-              {"no-indels", no_argument, &no_indels, 1},
+              {"call-indels", no_argument, &no_indels, 0},
               {"only-indels", no_argument, &only_indels, 1},
 
               {"out", required_argument, NULL, 'o'}, /* NOTE changes here must be reflected in pseudo_parallel code as well */

@@ -1,9 +1,6 @@
 #ifndef LOFREQ_DEFAULTS_H
 #define LOFREQ_DEFAULTS_H
 
-/* FIXME temporary for main branch */
-#define DISABLE_INDELS 1
-
 /* mapping quality filters: applied to all reads. don't set too high as
  * this is a mapper dependent value
  * in case of BWA it's also dependent on the alignment command used.
