@@ -70,7 +70,7 @@
 
 const char *uniq_flag = "UNIQ";
 
-const char *uniq_phred_tag = "UQ";
+const char *uniq_phred_tag = "uq";
 
 
 typedef struct {

@@ -65,4 +65,8 @@
 #define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
 #endif
 
+
+#define AI_TAG "ai"
+#define AD_TAG "ad"
+
 #endif

@@ -801,8 +801,8 @@ void compile_plp_col(plp_col_t *plp_col,
            */
           uint8_t *bi = bam_aux_get(p->b, "BI"); /* GATK indels */
           uint8_t *bd = bam_aux_get(p->b, "BD"); /* GATK deletions */
-          uint8_t *ai = bam_aux_get(p->b, "AI");
-          uint8_t *ad = bam_aux_get(p->b, "AD");
+          uint8_t *ai = bam_aux_get(p->b, AI_TAG);
+          uint8_t *ad = bam_aux_get(p->b, AD_TAG);
           uint8_t *baq_aux = NULL; /* full baq value (not offset as "BQ"!) */
 
 #ifdef USE_SOURCEQUAL
