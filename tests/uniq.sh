@@ -51,7 +51,7 @@ fi
 
 # UQ= present even with --output-all
 cmd="$LOFREQ uniq -v $vcf_in $bam --output-all -o -"
-eval $cmd | grep -q 'UQ=' || echoerror "No UQ markup found"
+eval $cmd | grep -q 'uq=' || echoerror "No UQ markup found"
 
 # in gt out in default mode
 num_in=$(zgrep -cv '^#' $vcf_in)
