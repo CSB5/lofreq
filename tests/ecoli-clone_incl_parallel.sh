@@ -10,7 +10,8 @@ source lib.sh || exit 1
 basedir=data/ecoli-clone/
 #bam=$basedir/Ecoli_K12_MG1655_NC_000913_bwa-sampe-unique-rg_recal.bam
 #bam=$basedir/EAS20_8_bwamem_picard.mdups.realn.recal.bam
-bam=$basedir/EAS20_8_bwamem_picard.mdups.realn.recal.aq.bam
+#bam=$basedir/EAS20_8_bwamem_picard.mdups.realn.recal.aq.bam
+bam=$basedir/EAS20_8_bwamem_picard.mdups.realn.recal.aq.F0x800.bam
 reffa=$basedir/Ecoli_K12_MG1655_NC_000913.fa
 #truesnv=$basedir/denv2-pseudoclonal_true-snp.vcf
 
