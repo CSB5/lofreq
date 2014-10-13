@@ -256,7 +256,7 @@ class SomaticSNVCaller(object):
         return (num_subst_tests, num_indel_tests)
 
 
-    def call_rlx(self, sample_type, call_rlx_extra_args=None):
+    def call_rlx(self, sample_type):
         """Relaxed calling of variants in normal or tumor. Calls indels and
         substitutions! Can be prevented by setting call_rlx_extra_args
         accordingly.
@@ -280,7 +280,7 @@ class SomaticSNVCaller(object):
             cmd.extend(['-l', self.bed])
 
         if self.call_rlx_extra_args:
-            cmd.extend(call_rlx_extra_args)
+            cmd.extend(self.call_rlx_extra_args)
         
         # sample type specific arguments
         #
@@ -684,7 +684,7 @@ def cmdline_parser():
 
     experts_only.add_argument("--call-rlx-extra-args",
                               dest="call_rlx_extra_args",
-                              help="Extra arguments to call_rlx")
+                              help="Extra arguments to call_rlx (replace dashes with @)")
 
     experts_only.add_argument("--continue",
                               dest="continue_interrupted",
@@ -747,7 +747,7 @@ def main():
     else:
         somatic_snv_caller.use_orphan = False
     if args.call_rlx_extra_args:
-        somatic_snv_caller.call_rlx_extra_args = args.call_rlx_extra_args.split(" ")
+        somatic_snv_caller.call_rlx_extra_args = args.call_rlx_extra_args.replace('@', '-').split(" ")
 
     if args.no_src_qual:
         somatic_snv_caller.src_qual_on = False
