@@ -70,7 +70,7 @@
 
 const char *uniq_flag = "UNIQ";
 
-const char *uniq_phred_tag = "uq";
+const char *uniq_phred_tag = "UQ";
 
 
 typedef struct {
@@ -233,8 +233,7 @@ uniq_snv(const plp_col_t *p, void *confp)
           return;
      }
 
-     /* FIXME: indels are not in coverage! */
-     coverage = p->coverage_subst;
+     coverage = p->coverage_plp;
      if (is_indel) {
           coverage -= p->num_tails;
      }
