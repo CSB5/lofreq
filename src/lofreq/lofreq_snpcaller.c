@@ -454,12 +454,8 @@ call_vars(const plp_col_t *p, void *confp)
      int got_alt_bases = 0;
      int cons_as_ref = conf->flag & SNVCALL_CONS_AS_REF;
 
-     /* don't call if no coverage or if we don't know what to call
-      * against */
-     if (p->coverage_plp == 0 || p->cons_base[0] == 'N') {          
-          return;
-     }
-     if (p->coverage_plp < conf->min_cov) {          
+     /* don't call if we don't know what to call against */
+     if (p->cons_base[0] == 'N') {          
           return;
      }
      if (! conf->dont_skip_n && p->ref_base == 'N') {
@@ -470,7 +466,9 @@ call_vars(const plp_col_t *p, void *confp)
      /* call indels
       */
      if (! conf->no_indels) {
-          /* FIXME make function */
+          if (p->num_non_indels + p->num_ins + p->num_dels < conf->min_cov) {          
+               return;
+          }
 
           /* Report consensus indel
            * FIXME: call other indels/substitutions with respect to consensus indel */
@@ -546,6 +544,10 @@ call_vars(const plp_col_t *p, void *confp)
          ! (p->num_ins + p->num_dels + p->num_ign_indels > p->num_bases)) {/* consensus indel actually there but not officially predicted because e.g. indel qualities were missing */
 
           /* FIXME make function */
+
+          if (p->num_bases < conf->min_cov) {          
+               return;
+          }
 
           /* 
            * as snv-ref we always report what the user wanted (given

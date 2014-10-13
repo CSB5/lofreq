@@ -132,6 +132,7 @@ plp_col_init(plp_col_t *p) {
     p->coverage_plp = 0;
     p->num_bases = 0;
     p->num_ign_indels = 0;
+    p->num_non_indels = 0;
     for (i=0; i<NUM_NT4; i++) {
          int_varray_init(& p->base_quals[i], grow_by_size);
          int_varray_init(& p->baq_quals[i], grow_by_size);
@@ -760,6 +761,7 @@ void compile_plp_col(plp_col_t *plp_col,
                                     i.e. after read-level filtering */
      plp_col->num_bases = 0;
      plp_col->num_ign_indels = 0;
+     plp_col->num_non_indels = 0;
      LOG_DEBUG("Processing %s:%d\n", plp_col->target, plp_col->pos+1);
      
      for (i = 0; i < n_plp; ++i) {
@@ -1076,7 +1078,7 @@ check_indel:
                     } 
                          
                } else { /* if (p->indel != 0) ... */
-
+                    plp_col->num_non_indels += 1;
                     /* neither deletion, nor insertion. need the qualities anyway */
                     PLP_COL_ADD_QUAL(& plp_col->ins_quals, iq);
                     PLP_COL_ADD_QUAL(& plp_col->ins_map_quals, mq);

@@ -82,6 +82,8 @@ typedef struct {
       * sequence of the indel event. See utils.h for the data structure for storing
       * indel qualities if an indel event is observed. */
 
+     int num_non_indels;/* non-indel events for which we have indel qualities */
+
      int num_ins, sum_ins;
      int_varray_t ins_quals; 
      int_varray_t ins_map_quals;
