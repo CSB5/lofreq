@@ -89,7 +89,8 @@ class SomaticSNVCaller(object):
     DEFAULT_SRC_QUAL_IGN_VCF = None
     DEFAULT_MIN_COV = 10
     DEFAULT_USE_ORPHAN = False# on for normal anyway
-
+    DEFAULT_BAQ_OFF = False# off for normal anyway
+    
     # stringent parameters (also used for normal stringent)
     DEFAULT_MTC_T = 'bonf'
     DEFAULT_MTC_ALPHA_T = 1
@@ -191,6 +192,7 @@ class SomaticSNVCaller(object):
         self.src_qual_ign_vcf = self.DEFAULT_SRC_QUAL_IGN_VCF
         self.min_cov = self.DEFAULT_MIN_COV
         self.use_orphan = self.DEFAULT_USE_ORPHAN
+        self.baq_off = self.DEFAULT_BAQ_OFF
         self.num_threads = self.DEFAULT_NUM_THREADS
         self.do_germline = self.DEFAULT_DO_GERMLINE
 
@@ -299,6 +301,8 @@ class SomaticSNVCaller(object):
             cmd.extend(['-a', "%f" % self.alpha_t])
             if self.use_orphan:
                 cmd.append('--use-orphan')
+            if self.baq_off:
+                cmd.append('-B')
             cmd.extend(['-C', "%d" % self.min_cov])
             if self.src_qual_on:
                 cmd.append('-s')
@@ -681,7 +685,9 @@ def cmdline_parser():
                               action="store_true",
                               help="Use orphaned/anomalous reads from pairs"
                               " in all samples")
-
+    experts_only.add_argument("--baq-off",
+                              action="store_true",    
+                              help="Switch use of BAQ off in all samples")
     experts_only.add_argument("--call-rlx-extra-args",
                               dest="call_rlx_extra_args",
                               help="Extra arguments to call_rlx (replace dashes with @)")
@@ -742,6 +748,10 @@ def main():
     somatic_snv_caller.indel_mtc_t = args.indel_tumor_mtc
     somatic_snv_caller.indel_mtc_alpha_t = args.indel_tumor_mtc_alpha
     somatic_snv_caller.num_threads = args.num_threads
+    if args.baq_off:
+        somatic_snv_caller.baq_off = True
+    else:
+        somatic_snv_caller.baq_off = False
     if args.use_orphan:
         somatic_snv_caller.use_orphan = True
     else:
