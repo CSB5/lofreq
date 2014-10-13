@@ -129,9 +129,9 @@ plp_col_init(plp_col_t *p) {
     p->pos = -INT_MAX;
     p->ref_base = '\0';
     p->cons_base[0] = 'N'; p->cons_base[1] = '\0';
-    p->coverage_subst = -INT_MAX;
-    p->coverage_indel = -INT_MAX;
-    p->coverage_indel_shadow = -INT_MAX;
+    p->coverage_plp = 0;
+    p->num_bases = 0;
+    p->num_ign_indels = 0;
     for (i=0; i<NUM_NT4; i++) {
          int_varray_init(& p->base_quals[i], grow_by_size);
          int_varray_init(& p->baq_quals[i], grow_by_size);
@@ -231,7 +231,7 @@ plp_col_mpileup_print(const plp_col_t *p, FILE *stream)
      int i, j;
      
      fprintf(stream, "%s\t%d\t%c\t%d\t", 
-             p->target, p->pos+1, p->ref_base,p->coverage_subst);
+             p->target, p->pos+1, p->ref_base,p->coverage_plp);
      for (i=0; i<NUM_NT4; i++) {
           for (j=0; j<p->base_quals[i].n; j++) {
                fprintf(stream, "%c%c",
@@ -750,19 +750,16 @@ void compile_plp_col(plp_col_t *plp_col,
       *   else if (bam1_qual(p->b)[p->qpos] < bq) ++m
       * n_plp[i] - m
       */
-     int num_skips = 0;
-     int num_skips_indel = 0;
-
      ref_base = (ref && pos < ref_len)? ref[pos] : 'N';
      
      plp_col_init(plp_col);
      plp_col->target = strdup(target_name);
      plp_col->pos = pos;
      plp_col->ref_base = toupper(ref_base);
-     plp_col->coverage_subst = n_plp;  /* this is coverage as in the original mpileup, 
-                                   i.e. after read-level filtering */
-     plp_col->coverage_indel = n_plp;
-     plp_col->coverage_indel_shadow = 0;
+     plp_col->coverage_plp = n_plp;  /* this is coverage as in the original mpileup, 
+                                    i.e. after read-level filtering */
+     plp_col->num_bases = 0;
+     plp_col->num_ign_indels = 0;
      LOG_DEBUG("Processing %s:%d\n", plp_col->target, plp_col->pos+1);
      
      for (i = 0; i < n_plp; ++i) {
@@ -948,8 +945,8 @@ void compile_plp_col(plp_col_t *plp_col,
 check_indel:
           
           /* for post read- and base-level coverage. FIXME review */
-          if (p->is_del || p->is_refskip || 1 == base_skip) {
-               num_skips += 1;
+          if (! (p->is_del || p->is_refskip || 1 == base_skip)) {
+               plp_col->num_bases += 1;
           }
           
           if (bi) {
@@ -980,24 +977,10 @@ check_indel:
                dq = t[p->qpos] - 33;
           } /* else default to 0 */
           
-          /* A pattern \+[0-9]+[ACGTNacgtn]+' indicates there is an
-           * insertion between this reference position and the next
-           * reference position. The length of the insertion is given
-           * by the integer in the pattern, followed by the inserted
-           * sequence. Similarly, a pattern -[0-9]+[ACGTNacgtn]+
-           * represents a deletion from the reference. The deleted
-           * bases will be presented as ‘*’ in the following lines.
-           */
      
-          if ( p->is_tail) {
-               num_skips_indel += 1;
-               /* FIXME this will skip tail deletions? why not head as well? */
-               
-          } else if (iq < conf->min_plp_idq || dq < conf->min_plp_idq) {
-               num_skips_indel += 1;
-               
+          if (iq < conf->min_plp_idq || dq < conf->min_plp_idq) {
                if (p->indel != 0) {
-                  plp_col->coverage_indel_shadow += 1;
+                  plp_col->num_ign_indels += 1;
                }
           } else {
 
@@ -1093,7 +1076,8 @@ check_indel:
                     } 
                          
                } else { /* if (p->indel != 0) ... */
-                    
+
+                    /* neither deletion, nor insertion. need the qualities anyway */
                     PLP_COL_ADD_QUAL(& plp_col->ins_quals, iq);
                     PLP_COL_ADD_QUAL(& plp_col->ins_map_quals, mq);
                     ins_nonevent_qual += iq;
@@ -1116,8 +1100,6 @@ check_indel:
           
      }  /* end: for (i = 0; i < n_plp; ++i) { */
 
-     plp_col->coverage_subst -= num_skips;
-     plp_col->coverage_indel -= num_skips_indel;
      
      /* ****************** FINDING CONSENSUS **************** */
      /* consensus is saved as a char array starting with '+' or '-' 

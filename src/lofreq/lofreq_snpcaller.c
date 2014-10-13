@@ -84,13 +84,6 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char *ref,
      var_t *var;
      double sb_left_pv, sb_right_pv, sb_two_pv;
      int sb_qual;
-#if MQ_BIAS_FIXME
-     int *ref_mq = NULL, *alt_mq = NULL;
-     long int num_ref;
-     long int num_alt;
-     int ref_nt4 = bam_nt4_table[(int)ref];
-     int alt_nt4 = bam_nt4_table[(int)alt];
-#endif
 
      vcf_new_var(&var);
      var->chrom = strdup(p->target);
@@ -127,50 +120,8 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char *ref,
                             &sb_left_pv, &sb_right_pv, &sb_two_pv);
      sb_qual = PROB_TO_PHREDQUAL_SAFE(sb_two_pv);
 
-#if MQ_BIAS_FIXME
-     /* mq bias
-      */
-     assert (p->map_quals[ref_nt4].n == p->base_quals[ref_nt4].n);
-     assert (p->map_quals[alt_nt4].n == p->base_quals[alt_nt4].n);
-     /* FIXME intro of n_alt and n_ref would make things easier here */
-     if (NULL == (ref_mq = malloc(num_ref * sizeof(int)))) {
-          /* coverage = base-count after read level filtering */
-          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
-                  __FILE__, __FUNCTION__, __LINE__);
-          return;
-     }
-     if (NULL == (alt_mq = malloc(num_alt * sizeof(int)))) {
-          /* coverage = base-count after read level filtering */
-          fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
-                  __FILE__, __FUNCTION__, __LINE__);
-          return;
-     }
-/*
-     for (i=0; i<p->map_quals[ref_nt4].n; j++) {
-          mq = p->map_quals[i].data[j];
-     }
-     for (i=0; i<p->map_quals[alt_nt4].n; j++) {
-          mq = p->map_quals[i].data[j];
-     }
-*/
-/* FIXME mq bias
-   see mann_whitney_1947 in samtools
-   need NUM_NT4 altbase
-   need NUM_NT4 refbase
-
-   LOG_FIXME("%s\n", "mq and bq filtering should be done here but needs conf");
-   
-   for (i=0; i<NUM_NT4; i++) {
-     int nt = bam_nt4_rev_table[i];
-     for (j=0; j<p->map_quals[i].n; j++) {
-          mq = p->map_quals[i].data[j];
-     }
-}
-*/
-#endif
-     /* FIXME doesn't account for indel coverage */ 
-     vcf_var_sprintf_info(var, is_indel? p->coverage_indel : p->coverage_subst, af, sb_qual,
-                          dp4, is_indel, is_consvar);
+     vcf_var_sprintf_info(var, is_indel? p->coverage_plp - p->num_tails : p->coverage_plp,
+                          af, sb_qual, dp4, is_indel, is_consvar);
 
      vcf_write_var(vcf_file, var);
      vcf_free_var(&var);
@@ -190,7 +141,7 @@ report_cons_sub(const plp_col_t *p, snvcall_conf_t *conf){
      const int is_indel = 0;
      const int is_consvar = 1;
      const int qual = -1;
-     float af = base_count(p, p->cons_base[0]) / (float)p->coverage_subst;
+     float af = base_count(p, p->cons_base[0]) / (float)p->coverage_plp;
 
      char report_ref[2];
      report_ref[0] = p->ref_base;
@@ -235,7 +186,7 @@ report_cons_ins(const plp_col_t *p, snvcall_conf_t *conf) {
      }
      report_ins_ref[1] = report_ins_alt[j+1] = '\0';
      
-     float af = it_ins->count / (float)p->coverage_indel;
+     float af = it_ins->count / ((float)p->coverage_plp-p->num_tails);
 
      dp4_counts_t dp4;
      dp4.ref_fw = p->non_ins_fw_rv[0];
@@ -272,7 +223,7 @@ report_cons_del(const plp_col_t *p, snvcall_conf_t *conf) {
      }
      report_del_ref[j+1] = report_del_alt[1] = '\0';
 
-     float af = it_del->count / (float)p->coverage_indel;
+     float af = it_del->count / ((float)p->coverage_plp - p->num_tails);
      
      dp4_counts_t dp4;
      dp4.ref_fw = p->non_del_fw_rv[0];
@@ -323,7 +274,7 @@ call_alt_ins(const plp_col_t *p, double *bi_err_probs, int bi_num_err_probs,
                report_ins_alt[j+1] = it->key[j];
           }
           report_ins_ref[1] = report_ins_alt[j+1] = '\0';
-          float af = it->count / (float)p->coverage_indel;
+          float af = it->count / ((float)p->coverage_plp - p->num_tails);
      
           dp4_counts_t dp4;
           dp4.ref_fw = p->non_ins_fw_rv[0];
@@ -381,7 +332,7 @@ int call_alt_del(const plp_col_t *p, double *bd_err_probs, int bd_num_err_probs,
           }
           report_del_ref[j+1] = report_del_alt[1] = '\0';
 
-          float af = it->count / (float)p->coverage_indel;
+          float af = it->count / ((float)p->coverage_plp - p->num_tails);
           
           dp4_counts_t dp4;
           dp4.ref_fw = p->non_del_fw_rv[0];
@@ -505,10 +456,10 @@ call_vars(const plp_col_t *p, void *confp)
 
      /* don't call if no coverage or if we don't know what to call
       * against */
-     if (p->coverage_subst == 0 || p->cons_base[0] == 'N') {          
+     if (p->coverage_plp == 0 || p->cons_base[0] == 'N') {          
           return;
      }
-     if (p->coverage_subst < conf->min_cov) {          
+     if (p->coverage_plp < conf->min_cov) {          
           return;
      }
      if (! conf->dont_skip_n && p->ref_base == 'N') {
@@ -585,10 +536,14 @@ call_vars(const plp_col_t *p, void *confp)
       * not calling anyhthing if the indel coverage is higher than the
       * 'substitution' coverage
       */
-     /* LOG_WARN("p->cons_base[0]=%c p->coverage_indel=%d p->coverage_indel_shadow=%d > p->coverage_subst=%d\n", p->cons_base[0], p->coverage_indel, p->coverage_indel_shadow, p->coverage_subst); */
+     if (p->num_ins + p->num_dels + p->num_ign_indels > p->num_bases) {
+          LOG_WARN("p->cons_base[0]=%c p->num_ins=%d p->num_dels=%d p->num_ign_indels=%d p->num_bases=%d p->coverage_plp=%d\n", 
+                   p->cons_base[0], p->num_ins, p->num_dels, p->num_ign_indels, p->num_bases, p->coverage_plp);
+     }
+
      if (! conf->only_indels && \
          ! ((p->cons_base[0] == '+' || p->cons_base[0] == '-')) && \
-         ! (p->coverage_indel+p->coverage_indel_shadow > p->coverage_subst)) {/* consensus indel actually there but not officially predicted because e.g. indel qualities were missing */
+         ! (p->num_ins + p->num_dels + p->num_ign_indels > p->num_bases)) {/* consensus indel actually there but not officially predicted because e.g. indel qualities were missing */
 
           /* FIXME make function */
 
@@ -714,7 +669,7 @@ call_vars(const plp_col_t *p, void *confp)
                if (pvalue * (double)conf->bonf_sub < conf->sig) {
                     const int is_indel = 0;
                     const int is_consvar = 0;
-                    float af = alt_raw_count/(float)p->coverage_subst;
+                    float af = alt_raw_count/(float)p->coverage_plp;
 
                     char report_ref[2];
                     char report_alt[2];
@@ -740,7 +695,7 @@ call_vars(const plp_col_t *p, void *confp)
                               " counts-raw:%d/%d=%.6f counts-filt:%d/%d=%.6f\n",
                               p->target, p->pos+1, p->cons_base[0], alt_base,
                               pvalue, PROB_TO_PHREDQUAL(pvalue),
-                              /* counts-raw */ alt_raw_count, p->coverage_subst, alt_raw_count/(float)p->coverage_subst,
+                              /* counts-raw */ alt_raw_count, p->coverage_plp, alt_raw_count/(float)p->coverage_plp,
                               /* counts-filt */ alt_count, bc_num_err_probs, alt_count/(float)bc_num_err_probs);
                }
      #if 0
