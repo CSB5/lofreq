@@ -797,7 +797,7 @@ void compile_plp_col(plp_col_t *plp_col,
            * example)". See
            * http://www.broadinstitute.org/gatk/guide/article?id=44
            * and
-           * http://gatkforums.broadinstitute.org/discussion/1619/baserecalibratorprintreads-bd-and-bi-flags
+           * http2://gatkforums.broadinstitute.org/discussion/1619/baserecalibratorprintreads-bd-and-bi-flags
            */
           uint8_t *bi = bam_aux_get(p->b, "BI"); /* GATK indels */
           uint8_t *bd = bam_aux_get(p->b, "BD"); /* GATK deletions */
@@ -837,7 +837,7 @@ void compile_plp_col(plp_col_t *plp_col,
                     bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos)],
                     p->is_del, p->is_refskip, p->indel, p->is_head, p->is_tail);
 #endif
-
+          /* p->is_del mean there was a deletion (already printed before this column). */
           if (! p->is_del) {
                double count_incr;
 
@@ -943,27 +943,11 @@ void compile_plp_col(plp_col_t *plp_col,
                }
                 
           } /* ! p->is_del */
+          /* else {deletion (already printed before this column), i.e. we got physical coverage (if no terminal indels are allowed} */
           
-#if 0
-          /* FIXME so what happens if is_del?
-           *
-           * special case p->is_refskip is
-           * possible see ('spliced alignment'?)
-           *
-           * Observation: if indel<0 == del then they are followed by
-           * is_del's. shouldn't that rather happen for ins? 
-           */
-          if (p->is_del || p->indel) {
-               fflush(stdout); fflush(stderr);
-               LOG_FIXME("At %s:%d p->is_del=%d p->is_refskip=%d p->indel=%d\n", 
-                         plp_col->target, plp_col->pos+1, p->is_del, p->is_refskip, p->indel);
-               fflush(stdout); fflush(stderr);
-          }
-#endif     
+check_indel:
           
-     check_indel:
-          
-          /* for post read- and base-level coverage */
+          /* for post read- and base-level coverage. FIXME review */
           if (p->is_del || p->is_refskip || 1 == base_skip) {
                num_skips += 1;
           }
@@ -1007,15 +991,17 @@ void compile_plp_col(plp_col_t *plp_col,
      
           if ( p->is_tail) {
                num_skips_indel += 1;
-
+               /* FIXME this will skip tail deletions? why not head as well? */
+               
           } else if (iq < conf->min_plp_idq || dq < conf->min_plp_idq) {
                num_skips_indel += 1;
-               plp_col->coverage_indel_shadow += 1;
-
+               
+               if (p->indel != 0) {
+                  plp_col->coverage_indel_shadow += 1;
+               }
           } else {
 
                if (p->indel != 0) {
-
                     /* insertion (+)
                      */
                     if (p->indel > 0) {

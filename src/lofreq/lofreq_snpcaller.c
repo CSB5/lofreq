@@ -585,6 +585,7 @@ call_vars(const plp_col_t *p, void *confp)
       * not calling anyhthing if the indel coverage is higher than the
       * 'substitution' coverage
       */
+     /* LOG_WARN("p->cons_base[0]=%c p->coverage_indel=%d p->coverage_indel_shadow=%d > p->coverage_subst=%d\n", p->cons_base[0], p->coverage_indel, p->coverage_indel_shadow, p->coverage_subst); */
      if (! conf->only_indels && \
          ! ((p->cons_base[0] == '+' || p->cons_base[0] == '-')) && \
          ! (p->coverage_indel+p->coverage_indel_shadow > p->coverage_subst)) {/* consensus indel actually there but not officially predicted because e.g. indel qualities were missing */
