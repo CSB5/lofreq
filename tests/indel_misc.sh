@@ -10,7 +10,7 @@ BAM=data/denv2-dpcr-validated/CTTGTA_2_remap_razers-i92_peakrem_corr.bam
 
 log=$outdir/log.txt
 vcf=$outdir/out.vcf
-cmd="$LOFREQ call --no-default-filter --only-indels -f $REF -o $vcf $BAM"
+cmd="$LOFREQ call --no-default-filter --only-indels --call-indels -f $REF -o $vcf $BAM"
 if ! eval $cmd > $log 2>&1; then
     echoerror "LoFreq failed. Check logfile $log. Command was $cmd"
     exit 1
