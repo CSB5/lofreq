@@ -1,4 +1,4 @@
-/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*-
+/* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*- */
 /*********************************************************************
  *
  * Copyright (C) 2011-2014 Genome Institute of Singapore
