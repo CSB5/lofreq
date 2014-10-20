@@ -58,7 +58,8 @@ fi
 
 nus=$($LOFREQ vcfset -a complement -1 $outvcf_s -2 $outvcf_p --count-only)
 nup=$($LOFREQ vcfset -a complement -2 $outvcf_s -1 $outvcf_p --count-only)
-if [ $nus -ne 0 ] || [ $nup -ne 0 ]; then
+# allowing one border line difference
+if [ $nus -gt 1 ] || [ $nup -gt 1 ]; then
     echoerror "Observed differences between parallel ($nup unique vars) and single ($nus unique vars) results. Check $outvcf_p and $outvcf_s"
     exit 1
 fi                                    
