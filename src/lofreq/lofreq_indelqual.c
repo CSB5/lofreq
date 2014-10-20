@@ -23,7 +23,7 @@
 #include "sam.h" 
 #include "log.h"
 #include "utils.h"
-#include "lofreq_indel_quality.h"
+#include "lofreq_indelqual.h"
 
 
 char DINDELQ[] = "!MMMLKEC@=<;:988776"; /* 1-based 18 */
@@ -257,33 +257,31 @@ int add_dindel(const char *bam_in, const char *bam_out, const char *ref)
 static void
 usage()
 {
-     const char *myname = "lofreq indel_quality";
-     fprintf(stderr,
-             "%s: Insert indel qualities into BAM file (required for indel predictions)." \
-             "\n\n"  \
-             "The preferred way of doing this is via GATK's BQSR!" \
-             " If that's not possible, use this subcommand.\n"  \
-             "The command has two modes: 'uniform' and 'dindel':\n" \
-             "- 'uniform' will assign a given value uniformly, whereas\n"  \
-             "- 'dindel' will insert indel qualities based on Dindel (PMID 20980555).\n\n", myname);
-
-     fprintf(stderr,"Usage: %s [options] in.bam\n\n", myname);
+     const char *myname = "lofreq indelqual";
+     fprintf(stderr, "%s: Insert indel qualities into BAM file (required for indel predictions)\n\n", myname);
+     fprintf(stderr, "Usage: %s [options] in.bam\n", myname);
      fprintf(stderr,"Options:\n");
      fprintf(stderr, "  -u | --uniform INT  Add this indel quality uniformly to all bases");
      fprintf(stderr, " (clashes with --dindel)\n");
      fprintf(stderr, "       --dindel       Add Dindel's indel qualities");
      fprintf(stderr, " (clashes with -u; needs --ref)\n");
-     fprintf(stderr, "  -f | --ref          Reference sequence used for mapping");
+     fprintf(stderr, "  -f | --ref          Reference sequence used for mapping\n");
      fprintf(stderr, "  -o | --out FILE     Output BAM file [- = stdout = default]\n");
      fprintf(stderr, "       --verbose      Be verbose\n");
-     fprintf(stderr, "\n\n");
-     fprintf(stderr, "Do not realign your BAM file after this!\n");
+     fprintf(stderr, "\n");
+     fprintf(stderr,
+             "The preferred way of inserting indel qualities should be via GATK's BQSR (>=2)" \
+             " If that's not possible, use this subcommand.\n"  \
+             "The command has two modes: 'uniform' and 'dindel':\n" \
+             "- 'uniform' will assign a given value uniformly, whereas\n"  \
+             "- 'dindel' will insert indel qualities based on Dindel (PMID 20980555).\n");
+     fprintf(stderr, "Do not realign your BAM file afterwards!\n");
      fprintf(stderr, "\n");
 }
 
 
 
-int main_indel_quality(int argc, char *argv[])
+int main_indelqual(int argc, char *argv[])
 {
      char *bam_in = NULL;
      char *bam_out = NULL; /* - == stdout */
@@ -346,7 +344,8 @@ int main_indel_quality(int argc, char *argv[])
           }
      }
      if (1 != argc - optind - 1) {
-          fprintf(stderr, "Need exactly one BAM file as last argument\n");
+          fprintf(stderr, "FATAL: Need exactly one BAM file as last argument\n");
+          usage();
           return 1;
      }
      bam_in = (argv + optind + 1)[0];

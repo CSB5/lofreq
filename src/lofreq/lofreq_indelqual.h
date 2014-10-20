@@ -13,9 +13,9 @@
  * General Public License for more details.
  *
  *********************************************************************/
-#ifndef LOFREQ_INDEL_QUALITY
-#define LOFREQ_INDEL_QUALITY
+#ifndef LOFREQ_INDELQUAL
+#define LOFREQ_INDELQUAL
 
-int main_indel_quality(int argc, char *argv[]);
+int main_indelqual(int argc, char *argv[]);
 
 #endif

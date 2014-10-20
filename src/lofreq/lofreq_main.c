@@ -33,7 +33,7 @@
 #include "lofreq_uniq.h"
 #include "lofreq_vcfset.h"
 #include "lofreq_index.h"
-#include "lofreq_indel_quality.h"
+#include "lofreq_indelqual.h"
 #include "lofreq_viterbi.h"
 
 #ifndef __DATE__
@@ -68,82 +68,66 @@ static void prepend_dir_to_path(const char *dir_to_add)
  * make sure that package works even without properly installing it
  * and that the binary can repeatedly can call itself it necessary
  */
-void 
+void
 add_local_dir_to_path(char *argv0) {
      char argv0_resolved[PATH_MAX];
      char *dirname_argv0 = NULL;
-     char *lofreq_script_abs = NULL;
-     char *lofreq_tools_abs = NULL;
-     char lofreq_script_rel[] = "../scripts/lofreq2_somatic.py";
-     char lofreq_tools_rel[] ="../tools/scripts/lofreq2_vcfplot.py";
-     char *add_dir = NULL;
+     int i;
+     char *extra_scripts[] = {/* used to determine directories to add */
+          "../scripts/lofreq2_somatic.py", "../tools/scripts/lofreq2_vcfplot.py", "../lofreq_alnqual/lofreq2_alnqual", 
+          NULL};
+     
 
-     /* add lofreq dir 
+     /* add lofreq dir
       */
      if (NULL == realpath(argv0, argv0_resolved)) {
-          return;          
+          return;
      }
      if (NULL == (dirname_argv0 = strdup(dirname(argv0_resolved)))) {
           return;
-     }     
+     }
      prepend_dir_to_path(dirname_argv0);
+     LOG_DEBUG("Adding %s to PATH\n", dirname_argv0);
 
 
-     /* add local script dir if present
-      */
-     if (NULL == (lofreq_script_abs = strdup(dirname_argv0))) {
-          free(dirname_argv0);
-          return;
-     }
-     if (NULL == join_paths(&lofreq_script_abs, lofreq_script_rel)) {
+     i=0;
+     while (extra_scripts[i]) {
+          char *abs_path = NULL;
+          char *rel_path = extra_scripts[i];
+          char *add_dir = NULL;
+          i++;
+
+          /* add local script dir if present
+           */
+          if (NULL == (abs_path = strdup(dirname_argv0))) {
+               free(dirname_argv0);
+               return;
+          }
+
+          if (NULL == join_paths(&abs_path, rel_path)) {
 #if 0
-          LOG_WARN("join_paths %s and %s failed\n", lofreq_script_abs, lofreq_script_rel);
+               LOG_WARN("join_paths %s and %s failed\n", abs_path, rel_path);
 #endif
-          free(lofreq_script_abs);
-          free(dirname_argv0);
-          return;          
-     }
-     if (! file_exists(lofreq_script_abs)) {
+               free(abs_path);
+               break;
+          }
+          if (! file_exists(abs_path)) {
 #if 0
-          LOG_WARN("%s doesnt' exist\n", lofreq_script_abs);
+               LOG_WARN("%s doesnt' exist\n", abs_path);
 #endif
-          free(lofreq_script_abs);
-          free(dirname_argv0);
-          return;
-     }
-     add_dir = strdup(dirname(lofreq_script_abs));
-     prepend_dir_to_path(add_dir);
-     free(lofreq_script_abs);
-     free(add_dir);
+               free(abs_path);
+               break;
+          }
+
+          add_dir = strdup(dirname(abs_path));
+          LOG_DEBUG("Adding %s to PATH\n", add_dir);
+          prepend_dir_to_path(add_dir);
 
 
-     /* add local tools dir if present
-      */
-     if (NULL == (lofreq_tools_abs = strdup(dirname_argv0))) {
-          free(dirname_argv0);
-          return;
+          free(abs_path);
+          free(add_dir);
      }
-     if (NULL == join_paths(&lofreq_tools_abs, lofreq_tools_rel)) {
-#if 0
-          LOG_WARN("join_paths %s and %s failed\n", lofreq_tools_abs, lofreq_tools_rel);
-#endif
-          free(lofreq_tools_abs);
-          free(dirname_argv0);
-          return;          
-     }
-     if (! file_exists(lofreq_tools_abs)) {
-#if 0
-          LOG_WARN("%s doesnt' exist\n", lofreq_tools_abs);
-#endif
-          free(lofreq_tools_abs);
-          free(dirname_argv0);
-          return;
-     }
-     add_dir = strdup(dirname(lofreq_tools_abs));
-     prepend_dir_to_path(add_dir);
-     free(lofreq_tools_abs);
-     free(add_dir);
-
+     
      free(dirname_argv0);
 }
 
@@ -160,27 +144,30 @@ static void usage(const char *myname)
      fprintf(stderr, "    call-parallel : Call variants in parallel\n");
      fprintf(stderr, "    somatic       : Call somatic variants\n");
      fprintf(stderr, "\n");
+     fprintf(stderr, "  Preprocessing Commands\n");
+     fprintf(stderr, "    viterbi       : Viterbi realignment\n");
+     fprintf(stderr, "    indelqual     : Insert indel qualities\n");
+     fprintf(stderr, "    alnqual       : Insert base and indel alignment qualities\n");
+     fprintf(stderr, "\n");
      fprintf(stderr, "  Other Commands:\n");
      fprintf(stderr, "    checkref      : Check that reference fasta and BAM file match\n");
      fprintf(stderr, "    filter        : Filter variants in VCF file\n");
      fprintf(stderr, "    uniq          : Test whether variants predicted in only one sample really are unique\n");
-     fprintf(stderr, "    plpsummary    : Print pileup summary per position\n"); 
+     fprintf(stderr, "    plpsummary    : Print pileup summary per position\n");
 #ifdef USE_ALNERRPROF
      fprintf(stderr, "    bamstats      : Collect BAM statistics\n");
 #endif
      fprintf(stderr, "    vcfset        : VCF set operations\n");
-     fprintf(stderr, "    viterbi       : Viterbi realignment\n");
-     fprintf(stderr, "    indel_quality : Insert indel qualities\n"); 				
-  
+
      fprintf(stderr, "    version       : Print version info\n");
-     fprintf(stderr, "\n");
-     fprintf(stderr, "  Extra Tools (if installed):\n");
-     fprintf(stderr, "    vcfplot       : Plot VCF statistics\n");
-     fprintf(stderr, "    cluster       : Cluster variants in VCF file (supports legacy SNP format)\n");
      fprintf(stderr, "\n");
      fprintf(stderr, "  Samtools Clones:\n");
      fprintf(stderr, "    index         : Create index for BAM file\n");
      fprintf(stderr, "    idxstats      : Print stats for indexed BAM file\n");
+     fprintf(stderr, "\n");
+     fprintf(stderr, "  Extra Tools (if installed):\n");
+     fprintf(stderr, "    vcfplot       : Plot VCF statistics\n");
+     fprintf(stderr, "    cluster       : Cluster variants in VCF file (supports legacy SNP format)\n");
      fprintf(stderr, "\n");
 
      fprintf(stderr, "\n");
@@ -212,15 +199,15 @@ int main(int argc, char *argv[])
      } else if (strcmp(argv[1], "index") == 0)  {
           return main_index(argc, argv);
 
-     } else if (strcmp(argv[1], "indel_quality") == 0){
-          return main_indel_quality(argc, argv);
+     } else if (strcmp(argv[1], "indelqual") == 0){
+          return main_indelqual(argc, argv);
 
      } else if (strcmp(argv[1], "idxstats") == 0)  {
           return main_idxstats(argc, argv);
 
      } else if (strcmp(argv[1], "checkref") == 0) {
           return main_checkref(argc, argv);
-          
+
      } else if (strcmp(argv[1], "info") == 0) {
           LOG_FIXME("%s\n", "NOT IMPLEMENTED YET: has BI, has BD, readlen, has extra BAQ. is_paired. all based on first, say, 10k read\n");
           return 1;
@@ -234,6 +221,7 @@ int main(int argc, char *argv[])
 
      } else if (strcmp(argv[1], "somatic") == 0 ||
                 strcmp(argv[1], "vcfplot") == 0 ||
+                strcmp(argv[1], "alnqual") == 0 ||
                 strcmp(argv[1], "call-parallel") == 0 ||
                 strcmp(argv[1], "cluster") == 0) {
           char **argv_execvp = calloc(argc, sizeof(char*));
@@ -243,6 +231,7 @@ int main(int argc, char *argv[])
           char *vcfset_script = "lofreq2_vcfset.py";
           char *vcfplot_script = "lofreq2_vcfplot.py";
           char *cluster_script = "lofreq2_cluster.py";
+          char *alnqual_binary = "lofreq2_alnqual";
           char *script_to_call;
 
           if (strcmp(argv[1], "somatic") == 0) {
@@ -255,6 +244,8 @@ int main(int argc, char *argv[])
                script_to_call = vcfplot_script;
           } else if (strcmp(argv[1], "cluster") == 0) {
                script_to_call = cluster_script;
+          } else if (strcmp(argv[1], "alnqual") == 0) {
+               script_to_call = alnqual_binary;
           } else {
                LOG_FATAL("Internal error: unknown option: %s\n", argv[1]);
                return 1;
@@ -284,7 +275,7 @@ int main(int argc, char *argv[])
           char plp_summary_arg[] = "--plp-summary-only";
           /*char bam_stats_arg[] = "--bam-stats";*/
           char *call_arg = NULL;
-     
+
           if (strcmp(argv[1], "plpsummary") == 0) {
                call_arg = plp_summary_arg;
           } else {
@@ -293,7 +284,7 @@ int main(int argc, char *argv[])
           }
 
           LOG_VERBOSE("'%s' is just an alias for %s call %s"
-                      "  (ignoring all the snv-call specific options)\n", 
+                      "  (ignoring all the snv-call specific options)\n",
                       argv[1], BASENAME(argv[0]), call_arg);
           argv_tmp[0] = argv[0];
           argv_tmp[1] = "call";

@@ -1,0 +1,10 @@
+# backup files
+*~
+*#
+
+# objects
+*.o
+lofreq2_alnqual
+
+Makefile
+.deps

@@ -210,6 +210,7 @@ AC_CONFIG_FILES(Makefile
         src/lofreq/Makefile
         src/uthash/Makefile
         src/scripts/Makefile        
+        src/lofreq_alnqual/Makefile        
         src/tools/setup_conf.py        
         src/tools/Makefile
         )

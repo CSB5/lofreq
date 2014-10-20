@@ -9,7 +9,7 @@ lofreq_index.c lofreq_index.h \
 lofreq_uniq.h lofreq_uniq.c \
 lofreq_bamstats.h lofreq_bamstats.c \
 lofreq_checkref.h lofreq_checkref.c \
-lofreq_indel_quality.h lofreq_indel_quality.c \
+lofreq_indelqual.h lofreq_indelqual.c \
 lofreq_main.c \
 lofreq_viterbi.c lofreq_viterbi.h \
 lofreq_vcfset.c lofreq_vcfset.h \
