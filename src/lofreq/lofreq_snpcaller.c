@@ -101,17 +101,6 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char *ref,
      }
      /* var->filter = NA */ 
 
-#if MQ_BIAS_FIXME
-     /* FIXME: this will not work for indel calling...what are these being used for? */
-     assert (p->map_quals[ref_nt4].n == p->fw_counts[ref_nt4] + p->rv_counts[ref_nt4]);
-     assert (p->map_quals[alt_nt4].n == p->fw_counts[alt_nt4] + p->rv_counts[alt_nt4]);
-     num_alt = p->map_quals[alt_nt4].n;
-     num_ref = p->map_quals[ref_nt4].n;
-#endif
-#if 0
-     LOG_FIXME("%s\n", "fisher's test on unfiltered counts. Is that wanted?");
-     LOG_FIXME("%s\n", "Hand down filtered quals/counts might solve fisher and mq bias problems. DP4 is supposed to be filtered version anyway");
-#endif
      /* strand bias
       */
      /* double sb_prob = kt... Assignment removed to shut up clang static analyzer */
@@ -125,11 +114,6 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char *ref,
 
      vcf_write_var(vcf_file, var);
      vcf_free_var(&var);
-
-#if MQ_BIAS_FIXME
-     free(ref_mq);
-     free(alt_mq);
-#endif
 }
 /* report_var() */
 
@@ -1091,6 +1075,12 @@ for cov in coverage_range:
 #ifdef DISABLE_INDELS
     snvcall_conf.no_indels = 1;
 #endif
+    if (! snvcall_conf.no_indels) {
+         LOG_WARN("%s\n", "This is an experimental feature! Please make sure you did the following:");
+         LOG_WARN("%s\n", "- You added indel qualities to your BAM file, e.g. by running GATK's BQSR (version>=2)");
+         LOG_WARN("%s\n", "- You added indel alignment qualities (using lofreq alnqual) otherwise specificy drops dramatically");
+         LOG_WARN("%s\n", "Every time you ignore the advice above a kitten will die!");
+    }
 
     if (illumina_1_3) {
          mplp_conf.flag |= MPLP_ILLUMINA13; 
