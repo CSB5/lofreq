@@ -1,4 +1,5 @@
 /* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*- */
+
 /* This is an almost one to one copy of the corresponding bits in
  * samtools' bam_index.c */
 
