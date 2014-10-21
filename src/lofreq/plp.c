@@ -633,6 +633,8 @@ mplp_func(void *data, bam1_t *b)
           }
 #endif
 
+#ifdef BAQ_ON_THE_FLY
+          /* FIXME also computes AQ. don't if already done or if not required */
           if (has_ref && (ma->conf->flag & MPLP_BAQ)) {
                if (bam_prob_realn_core_ext(b, ma->ref,
                                            ma->conf->flag & MPLP_EXT_BAQ ? 2 : 0 /* FIXME hardcoded values */)) {
@@ -642,6 +644,7 @@ mplp_func(void *data, bam1_t *b)
                LOG_FATAL("%s\n", "Can't compute BAQ without reference sequence");
                exit(1);
           }
+#endif
 
 #if 0
         {
@@ -812,6 +815,7 @@ void compile_plp_col(plp_col_t *plp_col,
                /* should have been recomputed already */
                if (! baq_aux) {
                     LOG_FATAL("BAQ tag %s missing but BAQ was supposed to be used (at %s:%d)\n", BAQ_TAG, plp_col->target, plp_col->pos+1);
+                    LOG_FATAL("%s\n", "Please pre-process your BAM file with lofreq alnqual first");
                     exit(1);
                }
                baq_aux++; /* first char is type (same for bd and bi done below) */
