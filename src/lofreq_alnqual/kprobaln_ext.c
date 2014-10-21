@@ -72,6 +72,8 @@ kpa_ext_par_t kpa_ext_par_lofreq = { 0.00001, 0.4, 10};
    lower two bits can be 0 (an alignment match) or 1 (an
    insertion). q[i] gives the phred scaled posterior probability of
    state[i] being wrong.
+
+   LoFreq extension not used if pd == NULL
  */
 int kpa_ext_glocal(const uint8_t *_ref, int l_ref, const uint8_t *_query, int l_query, 
      const uint8_t *iqual, const kpa_ext_par_t *c, int *state, uint8_t *q, double **pd,
@@ -80,24 +82,30 @@ int kpa_ext_glocal(const uint8_t *_ref, int l_ref, const uint8_t *_query, int l_
 	double **f, **b = 0, *s, m[9], sI, sM, bI, bM, pb;
 	float *qual, *_qual;
 	const uint8_t *ref, *query;
-	int bw, bw2, i, k, is_diff = 0, Pr;
+	int bw, bw2, i, k, is_diff = 0, is_backward = 1, Pr;
 
     if ( l_ref<=0 || l_query<=0 ) return 0; // FIXME: this may not be an ideal fix, just prevents sefgault
 
 	/*** initialization ***/
+    is_backward = state && q? 1 : 0;
+    if (pd) {
+         is_backward = 1;
+    }
 	ref = _ref - 1; query = _query - 1; // change to 1-based coordinate
 	bw = l_ref > l_query? l_ref : l_query;
 	if (bw > c->bw) bw = c->bw;
 	if (bw < abs(l_ref - l_query)) bw = abs(l_ref - l_query);
-     *ret_bw = bw;
+    if (pd) {
+         *ret_bw = bw;
+    }
      bw2 = bw * 2 + 1;
 	// allocate the forward and backward matrices f[][] and b[][] and the scaling array s[]
-	f = calloc(l_query+1, sizeof(double*));
-     b = calloc(l_query+1, sizeof(double*));
+	f = calloc(l_query+1, sizeof(void*));
+    if (is_backward) b = calloc(l_query+1, sizeof(void*));
 	for (i = 0; i <= l_query; ++i) {    // FIXME: this will lead in segfault for l_query==0
 		f[i] = calloc(bw2 * 3 + 6, sizeof(double)); // FIXME: this is over-allocated for very short seqs
-		b[i] = calloc(bw2 * 3 + 6, sizeof(double));
-		pd[i] = calloc(bw2 * 3 + 6, sizeof(double));
+        if (is_backward) b[i] = calloc(bw2 * 3 + 6, sizeof(double));
+        if (pd) pd[i] = calloc(bw2 * 3 + 6, sizeof(double));
 	}
 	s = calloc(l_query+2, sizeof(double)); // s[] is the scaling factor to avoid underflow
 	// initialize qual
@@ -173,6 +181,11 @@ int kpa_ext_glocal(const uint8_t *_ref, int l_ref, const uint8_t *_query, int l_
 		}
 		Pr1 += -4.343 * log(p * l_ref * l_query);
 		Pr = (int)(Pr1 + .499);
+        if (!is_backward) { // skip backward and MAP
+             for (i = 0; i <= l_query; ++i) free(f[i]);
+             free(f); free(s); free(_qual);
+             return Pr;
+        }
 	}
 	/*** backward ***/
 	// b[l_query] (b[l_query+1][0]=1 and thus \tilde{b}[][]=1/s[l_query+1]; this is where s[l_query+1] comes from)
@@ -220,8 +233,10 @@ int kpa_ext_glocal(const uint8_t *_ref, int l_ref, const uint8_t *_query, int l_
 	is_diff = fabs(pb - 1.) > 1e-7? 1 : 0;
 	/*** MAP ***/
 	for (i = 1; i <= l_query; ++i) {
-		double sum = 0., *fi = f[i], *bi = b[i], *pdi = pd[i], max = 0.;
+		double sum = 0., *fi = f[i], *bi = b[i], max = 0.;
 		int beg = 1, end = l_ref, x, max_k = -1;
+        double *pdi = NULL;
+        if (pd) pdi = pd[i];
 		x = i - bw; beg = beg > x? beg : x;
 		x = i + bw; end = end < x? end : x;
 		for (k = beg; k <= end; ++k) {
@@ -230,10 +245,12 @@ int kpa_ext_glocal(const uint8_t *_ref, int l_ref, const uint8_t *_query, int l_
 			set_u(u, bw, i, k);
 			z = fi[u+0] * bi[u+0]; if (z > max) max = z, max_k = (k-1)<<2 | 0; sum += z;
 			z = fi[u+1] * bi[u+1]; if (z > max) max = z, max_k = (k-1)<<2 | 1; sum += z;
+            if (pd) {
                pdi[u+0] = fi[u+0] * bi[u+0] * s[i];
                pdi[u+1] = fi[u+1] * bi[u+1] * s[i];
                pdi[u+2] = fi[u+2] * bi[u+2] * s[i];
                //fprintf(stderr, "(%d,%d,%d) %lg %lg %lg\n", i, k, u, pdi[u+0], pdi[u+1], pdi[u+2]);
+            }
 		}
 		max /= sum; sum *= s[i]; // if everything works as is expected, sum == 1.0
 		if (state) state[i-1] = max_k;
