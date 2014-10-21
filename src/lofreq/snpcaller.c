@@ -44,7 +44,7 @@
 */
 #define MQ0_ERRPROB 0.66
 
-#define LOGZERO -1e100 
+#define LOGZERO -1e100
 /* FIXME shouldn't we use something from float.h ? */
 
 
@@ -64,12 +64,12 @@
  * Y = 254.0/60.0 * MQ * (MQ**X)/(60**X)
  *
  * if 20 should stay 20
- * 20 = 254/60.0 * 20 * (20**X)/(60**X) 
+ * 20 = 254/60.0 * 20 * (20**X)/(60**X)
  * 60/254.0 = (20**X)/(60**X)
  * (20/60.0)**X = 60/254.0
  * since a**x = y equals log_a(y) = x
  * x = log_a(60/254.0); a=20/60.0;
- * x = 1.3134658329243962 
+ * x = 1.3134658329243962
  */
 #if 0
 #define SCALE_MQ 1
@@ -151,7 +151,7 @@ double log_diff(double log_a, double log_b);
 double probvec_tailsum(const double *probvec, int tail_startindex,
                        int probvec_len);
 double *naive_calc_prob_dist(const double *err_probs, int N, int K);
-double *pruned_calc_prob_dist(const double *err_probs, int N, int K, 
+double *pruned_calc_prob_dist(const double *err_probs, int N, int K,
                       long long int bonf_factor, double sig_level);
 
 
@@ -159,7 +159,7 @@ static int mq_trans_range_violation_printed = 0;
 
 int mq_trans(int mq) {
      if (mq<=60 && mq>=0) {
-          return MQ_TRANS_TABLE[mq]; 
+          return MQ_TRANS_TABLE[mq];
 
      } else if (mq!=255) {
           if (! mq_trans_range_violation_printed) {
@@ -178,7 +178,7 @@ int mq_trans(int mq) {
    PS = source/genome err.prob.
    PS = mapping error profile prop.
    PB = base err.prob.
-   
+
    Or in simple English:
    either this is a mapping error
    or
@@ -187,7 +187,7 @@ int mq_trans(int mq) {
    not mapping error and not genome/source error but a aligner error
    or
    not mapping error and not genome/source error and not aligner error but a base error
-   
+
  * NOTE: for mq the standard says that 255 means NA. In this function we
  * use -1 instead, and treat 255 as valid phred-score so you might want
  * to change mq before calling this functio
@@ -197,7 +197,7 @@ double
 merge_srcq_baseq_mapq_and_alnq(const int sq, const int bq, const int mq, const int aq)
 {
      double sp, bp, mp, ap, jp; /* corresponding probs */
-     
+
 
      bp = PHREDQUAL_TO_PROB(bq);
 
@@ -232,64 +232,6 @@ merge_srcq_baseq_mapq_and_alnq(const int sq, const int bq, const int mq, const i
 #endif
 
 
-/* PJ = PM  +  (1-PM) * PS  +  (1-PM) * (1-PS) * PB, where
- * PJ = joined error probability
- * PM = mapping err.prob.
- * PS = source/genome err.prob.
- * PB = base err.prob.
- *  
- * Or in plain English:
- * either this is a mapping error
- * or
- * not a mapping error, but a genome/source error
- * or
- * not mapping error and not a genome/source error, but a base-error
- *
- * In theory PS should go first but the rest is hard to compute then.
- * Using PM things get tractable and it intrinsically takes care of
- * PS.
- * 
- * NOTE: the standard says that MQ=255 means NA. In this function we
- * use -1 instead for all unknown values, and treat 255 as valid
- * phred-score so you might want to change mq before.
- *
- * FIXME do calculations in log space and return Q instead of p
- */
-double
-merge_srcq_baseq_and_mapq(const int sq, const int bq, const int mq)
-{
-     double sp, mp, bp, jp; /* corresponding probs */
-     
-     if (-1 == sq) {
-          sp = 0.0;
-     } else {
-          sp = PHREDQUAL_TO_PROB(sq);
-     }
-
-     if (-1 == bq) {
-          bp = 0.0;
-     } else {
-          bp = PHREDQUAL_TO_PROB(bq);
-     }
-
-     if (-1 == mq) {
-          mp = 0.0;
-     } else if (0 == mq) {
-          mp = MQ0_ERRPROB;
-     } else {
-          mp = PHREDQUAL_TO_PROB(mq);
-     }
-
-     jp = mp + (1.0 - mp) * sp + (1-mp) * (1-sp) * bp;
-#ifdef DEBUG
-     LOG_DEBUG("jp = %g  =  mp=%g  +  (1.0 - mp=%g) * sp=%g  +  (1-mp=%g) * (1-sp=%g) * bp=%g\n", jp, mp, mp, sp, mp, sp, bp);
-#endif
-
-     return jp;
-}
-
-
-
 
 /* PJ = PM + (1-PM)*PS + (1-PM)*(1-PS)*PA + (1-PM)*(1-PS)*(1-PA)*PB, where
  * PJ = joined error prob
@@ -309,7 +251,7 @@ merge_srcq_baseq_and_mapq(const int sq, const int bq, const int mq)
  * In theory PS should go first but the rest is hard to compute then.
  * Using PM things get tractable and it intrinsically takes care of
  * PS.
- * 
+ *
  * NOTE: the standard says that MQ=255 means NA. In this function we
  * use -1 instead for all unknown values, and treat 255 as valid
  * phred-score so you might want to change mq before.
@@ -319,7 +261,7 @@ double
 merge_srcq_mapq_baq_and_bq(const int sq, const int mq, const int baq, const int bq)
 {
      double sp, mp, bap, bp, jp; /* corresponding probs */
-     
+
      if (-1 == sq) {
           sp = 0.0;
      } else {
@@ -350,7 +292,7 @@ merge_srcq_mapq_baq_and_bq(const int sq, const int mq, const int baq, const int 
      jp = mp + (1.0-mp)*sp + (1-mp)*(1-sp)*bap + (1-mp)*(1-sp)*(1-bap)*bp;
 
 #if 0
-     LOG_DEBUG("sq=%d|%f mq=%d|%f baq=%d|%f bq=%d|%f. returning %f\n", 
+     LOG_DEBUG("sq=%d|%f mq=%d|%f baq=%d|%f bq=%d|%f. returning %f\n",
               sq, sp, mq, mp, baq, bap, bq, bp, jp);
 #endif
      return jp;
@@ -359,7 +301,7 @@ merge_srcq_mapq_baq_and_bq(const int sq, const int mq, const int baq, const int 
 
 
 void
-plp_to_errprobs(double **err_probs, int *num_err_probs, 
+plp_to_errprobs(double **err_probs, int *num_err_probs,
                 int *alt_bases, int *alt_counts, int *alt_raw_counts,
                 const plp_col_t *p, snvcall_conf_t *conf)
 {
@@ -437,14 +379,14 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                          alt_raw_counts[alt_idx] += 1;
                          /* ignore altogether if below alt bq threshold */
                          if (bq < conf->min_alt_bq) {
-                              continue; 
+                              continue;
                          } else if (-1 == conf->def_alt_bq)  {
                               bq = avg_ref_bq;
                          } else if (0 != conf->def_alt_bq)  {
                               bq = conf->def_alt_bq;
                          }
                          /* 0: keep original */
-                    } 
+                    }
                }
 
                if ((conf->flag & SNVCALL_USE_BAQ) && p->baq_quals[i].n) {
@@ -460,33 +402,31 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
 #ifdef SCALE_MQ
                     mq = 254/60.0*mq * pow(mq, SCALE_MQ_FAC)/pow(60, SCALE_MQ_FAC);
 #elif defined(TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL)
-                    mq = mq_trans(mq); 
+                    mq = mq_trans(mq);
 #endif
                }
 
-#ifdef USE_SOURCEQUAL
                if ((conf->flag & SNVCALL_USE_SQ) && p->source_quals[i].n) {
                     sq = p->source_quals[i].data[j];
                }
-#endif
 
                merged_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, baq, bq);
                merged_qual =  PROB_TO_PHREDQUAL_SAFE(merged_err_prob);
 
                /* min merged q filtering for all */
                if (merged_qual < conf->min_jq) {
-                    continue; 
+                    continue;
                }
 
                if (is_alt_base) {
 #if 0
-                    LOG_debug("alt_base %d: bq=%d merged q=%d p=%f\n", 
+                    LOG_debug("alt_base %d: bq=%d merged q=%d p=%f\n",
                               alt_idx, bq, PROB_TO_PHREDQUAL_SAFE(merged_err_prob), merged_err_prob);
 #endif
                     /* apply alt merged qual threshold and overwrite if needed
                      */
                     if (merged_qual < conf->min_alt_jq) {
-                         continue; 
+                         continue;
                     } else if (-1 == conf->def_alt_jq)  {
                          LOG_FATAL("%s\n", "median off ref joined q not implemented yet (FIXME)");
                          exit(1);
@@ -506,8 +446,8 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
      }
 }
 
-void 
-plp_to_ins_errprobs(double **err_probs, int *num_err_probs, 
+void
+plp_to_ins_errprobs(double **err_probs, int *num_err_probs,
                     const plp_col_t *p, snvcall_conf_t *conf,
                     char key[MAX_INDELSIZE]){
 
@@ -532,7 +472,7 @@ plp_to_ins_errprobs(double **err_probs, int *num_err_probs,
           final_err_prob = merge_srcq_mapq_baq_and_bq(-1, mq, -1, iq);
           (*err_probs)[(*num_err_probs)++] = final_err_prob;
      }
-     
+
      ins_event *it, *it_tmp;
      HASH_ITER(hh_ins, p->ins_event_counts, it, it_tmp) {
           if (0 == strcmp(it->key, key)) {
@@ -544,13 +484,10 @@ plp_to_ins_errprobs(double **err_probs, int *num_err_probs,
                          aq = -1;
                     }
                     mq = it->ins_map_quals.data[j];
-#ifdef USE_SOURCEQUAL
                     sq = it->ins_source_quals.data[j];
-#else
-                    sq = -1;
-#endif                    
+
                     final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, iq);
-                    LOG_DEBUG("+%s IQ:%d IAQ:%d MQ:%d SQ:%d EP:%lg\n", 
+                    LOG_DEBUG("+%s IQ:%d IAQ:%d MQ:%d SQ:%d EP:%lg\n",
                          it->key, iq, aq, mq, sq, final_err_prob);
                     (*err_probs)[(*num_err_probs)++] = final_err_prob;
                }
@@ -559,13 +496,9 @@ plp_to_ins_errprobs(double **err_probs, int *num_err_probs,
                     iq = it->ins_quals.data[j];
                     mq = it->ins_map_quals.data[j];
                     aq = -1;
-#ifdef USE_SOURCEQUAL
                     sq = it->ins_source_quals.data[j];
-#else
-                    sq = -1;
-#endif
                     final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, iq);
-                    LOG_DEBUG("+%s IQ:%d IAQ:%d MQ:%d SQ:%d EP:%lg\n", 
+                    LOG_DEBUG("+%s IQ:%d IAQ:%d MQ:%d SQ:%d EP:%lg\n",
                          it->key, iq, aq, mq, sq, final_err_prob);
                     (*err_probs)[(*num_err_probs)++] = final_err_prob;
                }
@@ -574,8 +507,8 @@ plp_to_ins_errprobs(double **err_probs, int *num_err_probs,
 
 }
 
-void 
-plp_to_del_errprobs(double **err_probs, int *num_err_probs, 
+void
+plp_to_del_errprobs(double **err_probs, int *num_err_probs,
                     const plp_col_t *p, snvcall_conf_t *conf,
                     char key[MAX_INDELSIZE]){
      if (NULL == ((*err_probs) = malloc(p->coverage_plp * sizeof(double)))) {
@@ -611,13 +544,9 @@ plp_to_del_errprobs(double **err_probs, int *num_err_probs,
                          aq = -1;
                     }
                     mq = it->del_map_quals.data[j];
-#ifdef USE_SOURCEQUAL
                     sq = it->del_source_quals.data[j];
-#else
-                    sq = -1;
-#endif
                     final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, dq);
-                    LOG_DEBUG("+%s DQ:%d DAQ:%d MQ:%d SQ:%d EP:%lg\n", 
+                    LOG_DEBUG("+%s DQ:%d DAQ:%d MQ:%d SQ:%d EP:%lg\n",
                          it->key, dq, aq, mq, sq, final_err_prob);
                     (*err_probs)[(*num_err_probs)++] = final_err_prob;
                }
@@ -625,13 +554,9 @@ plp_to_del_errprobs(double **err_probs, int *num_err_probs,
                for (j = 0; j < it->del_quals.n; j++) {
                     dq = it->del_quals.data[j];
                     mq = it->del_map_quals.data[j];
-#ifdef USE_SOURCEQUAL
                     sq = it->del_source_quals.data[j];
-#else
-                    sq = -1;
-#endif
                     final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, dq);
-                    LOG_DEBUG("+%s DQ:%d DAQ:%d MQ:%d SQ:%d EP:%lg\n", 
+                    LOG_DEBUG("+%s DQ:%d DAQ:%d MQ:%d SQ:%d EP:%lg\n",
                          it->key, dq, aq, mq, sq, final_err_prob);
                     (*err_probs)[(*num_err_probs)++] = final_err_prob;
                }
@@ -642,7 +567,7 @@ plp_to_del_errprobs(double **err_probs, int *num_err_probs,
 
 /* initialize members of preallocated snvcall_conf */
 void
-init_snvcall_conf(snvcall_conf_t *c) 
+init_snvcall_conf(snvcall_conf_t *c)
 {
      memset(c, 0, sizeof(snvcall_conf_t));
 
@@ -670,7 +595,7 @@ init_snvcall_conf(snvcall_conf_t *c)
 
 
 void
-dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream) 
+dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
 {
      fprintf(stream, "snvcall options\n");
      fprintf(stream, "  min_bq         = %d\n", c->min_bq);
@@ -771,9 +696,9 @@ naive_calc_prob_dist(const double *err_probs, int N, int K)
      double *probvec = NULL;
      double *probvec_prev = NULL;
      double *probvec_swp = NULL;
-     
+
      int n;
-     fprintf(stderr, "CRITICAL(%s:%s:%d): Possibly buggy code. Use pruned_calc_prob_dist instead of me\n", 
+     fprintf(stderr, "CRITICAL(%s:%s:%d): Possibly buggy code. Use pruned_calc_prob_dist instead of me\n",
              __FILE__, __FUNCTION__, __LINE__);
      exit(1);
 
@@ -797,15 +722,15 @@ naive_calc_prob_dist(const double *err_probs, int N, int K)
         double log_pn, log_1_pn;
         double pn = err_probs[n-1];
 
-        
+
         /* if pn=0 log(on) will fail. likewise if pn=1 (Q0) then
          * log1p(-pn) = log(1-1) = log(0) will fail. therefore test */
-        if (fabs(pn) < DBL_EPSILON) {             
+        if (fabs(pn) < DBL_EPSILON) {
              log_pn = log(DBL_EPSILON);
         } else {
              log_pn = log(pn);
         }
-        if (fabs(pn-1.0) < DBL_EPSILON) {             
+        if (fabs(pn-1.0) < DBL_EPSILON) {
              log_1_pn = log1p(-pn+DBL_EPSILON);
         } else {
              log_1_pn = log1p(-pn);
@@ -835,7 +760,7 @@ naive_calc_prob_dist(const double *err_probs, int N, int K)
     }
 
 
-    free(probvec_prev);    
+    free(probvec_prev);
     return probvec;
 }
 /* naive_prob_dist */
@@ -848,7 +773,7 @@ naive_calc_prob_dist(const double *err_probs, int N, int K)
  *
  */
 double *
-pruned_calc_prob_dist(const double *err_probs, int N, int K, 
+pruned_calc_prob_dist(const double *err_probs, int N, int K,
                       long long int bonf_factor, double sig_level)
 {
     double *probvec = NULL;
@@ -889,19 +814,19 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
 
         /* if pn=0 log(on) will fail. likewise if pn=1 (Q0) then
          * log1p(-pn) = log(1-1) = log(0) will fail. therefore test */
-        if (fabs(pn) < DBL_EPSILON) {             
+        if (fabs(pn) < DBL_EPSILON) {
              log_pn = log(DBL_EPSILON);
         } else {
              log_pn = log(pn);
         }
-        if (fabs(pn-1.0) < DBL_EPSILON) {             
+        if (fabs(pn-1.0) < DBL_EPSILON) {
              log_1_pn = log1p(-pn+DBL_EPSILON);
         } else {
              log_1_pn = log1p(-pn);/* 0.0 = log(1.0) */
         }
-        
+
 #ifdef TRACE
-		fprintf(stderr, "DEBUG(%s:%s:%d): n=%d err_probs[n-1]=%g pn=%g log_pn=%g log_1_pn=%g\n", 
+		fprintf(stderr, "DEBUG(%s:%s:%d): n=%d err_probs[n-1]=%g pn=%g log_pn=%g log_1_pn=%g\n",
                 __FILE__, __FUNCTION__, __LINE__, n, err_probs[n-1], pn, log_pn, log_1_pn);
 #endif
 
@@ -912,7 +837,7 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
         for (k=MIN(n,K-1); k>=1; k--) {
             assert(probvec_prev[k]<=0.0 && probvec_prev[k-1]<=0.0);
             probvec[k] = log_sum(probvec_prev[k] + log_1_pn,
-                                 probvec_prev[k-1] + log_pn);            
+                                 probvec_prev[k-1] + log_pn);
         }
         k = 0;
         assert(probvec_prev[k]<=0.0);
@@ -920,11 +845,11 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
 
 #ifdef TRACE
         for (k=0; k<=MIN(n, K-1); k++) {
-            fprintf(stderr, "DEBUG(%s:%s:%d): probvec[k=%d] = %g\n", 
+            fprintf(stderr, "DEBUG(%s:%s:%d): probvec[k=%d] = %g\n",
                     __FILE__, __FUNCTION__, __LINE__, k, probvec[k]);
         }
         for (k=0; k<=MIN(n,K-1); k++) {
-            fprintf(stderr, "DEBUG(%s:%s:%d): probvec_prev[k=%d] = %g\n", 
+            fprintf(stderr, "DEBUG(%s:%s:%d): probvec_prev[k=%d] = %g\n",
                     __FILE__, __FUNCTION__, __LINE__, k, probvec_prev[k]);
         }
 #endif
@@ -933,7 +858,7 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
              probvec[K] = probvec_prev[K-1] + log_pn;
              /* FIXME prune here as well? */
 
-        } else if (n > K) { 
+        } else if (n > K) {
              long double pvalue;
              int errsv = 0;
              /*LOG_FIXME("probvec_prev[K=%d]=%g probvec_prev[K=%d -1]=%g\n", K, probvec_prev[K], K, probvec_prev[K-1]);*/
@@ -944,11 +869,11 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
              errno = 0;
              feclearexcept(FE_ALL_EXCEPT);
 
-             pvalue = expl(probvec[K]);             
+             pvalue = expl(probvec[K]);
 
              errsv = errno;
              if (errsv || fetestexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW)) {
-                  if (pvalue < DBL_EPSILON) { 
+                  if (pvalue < DBL_EPSILON) {
                        pvalue = LDBL_MIN;/* to zero but prevent actual 0 value */
                   } else {
                        pvalue = LDBL_MAX; /* might otherwise be set to 1 which might pass filters */
@@ -969,7 +894,7 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
              */
              if (pvalue * (double)bonf_factor > sig_level) {
 #ifdef DEBUG
-                  fprintf(stderr, "DEBUG(%s:%s:%d): early exit at n=%d K=%d with pvalue %Lg\n", 
+                  fprintf(stderr, "DEBUG(%s:%s:%d): early exit at n=%d K=%d with pvalue %Lg\n",
                           __FILE__, __FUNCTION__, __LINE__, n, K, pvalue);
 #endif
                   free(probvec_prev);
@@ -996,7 +921,7 @@ pruned_calc_prob_dist(const double *err_probs, int N, int K,
 /* binomial test using poissbin. only good for high n and small prob.
  * returns -1 on error */
 int
-pseudo_binomial(long double *pvalue, 
+pseudo_binomial(long double *pvalue,
                 int num_success, int num_trials, double succ_prob)
 {
      const long long int bonf = 1.0;
@@ -1014,7 +939,7 @@ pseudo_binomial(long double *pvalue,
 
      for (i=0; i<num_trials; i++) {
           probs[i] = succ_prob;
-     }     
+     }
 
      probvec = poissbin(pvalue, probs,
                         num_trials, num_success,
@@ -1035,11 +960,11 @@ pseudo_binomial(long double *pvalue,
  * default pvalue is DBL_MAX (1 might still be significant).
  *
  *  note: pvalues > sig/bonf are not computed properly
- */       
+ */
 double *
 poissbin(long double *pvalue, const double *err_probs,
-         const int num_err_probs, const int num_failures, 
-         const long long int bonf, const double sig) 
+         const int num_err_probs, const int num_failures,
+         const long long int bonf, const double sig)
 {
     double *probvec = NULL;
     int errsv;
@@ -1057,7 +982,7 @@ poissbin(long double *pvalue, const double *err_probs,
                                     num_failures);
 #else
     probvec = pruned_calc_prob_dist(err_probs, num_err_probs,
-                                    num_failures, bonf, sig);    
+                                    num_failures, bonf, sig);
 #endif
 #if TIMING
     msec = (clock() - start) * 1000 / CLOCKS_PER_SEC;
@@ -1071,7 +996,7 @@ poissbin(long double *pvalue, const double *err_probs,
 
     errsv = errno;
     if (errsv || fetestexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW)) {
-         if (*pvalue < DBL_EPSILON) { 
+         if (*pvalue < DBL_EPSILON) {
               *pvalue = LDBL_MIN;/* to zero but prevent actual 0 value */
          } else {
               *pvalue = LDBL_MAX; /* otherwise set to 1 which might pass filters */
@@ -1085,16 +1010,16 @@ poissbin(long double *pvalue, const double *err_probs,
 
 /**
  * @brief
- * 
+ *
  * pvalues computed for each of the NUM_NONCONS_BASES noncons_counts
  * will be written to snp_pvalues in the same order. If pvalue was not
  * computed (always insignificant) its value will be set to LDBL_MAX
- * 
+ *
  */
 int
-snpcaller(long double *snp_pvalues, 
-          const double *err_probs, const int num_err_probs, 
-          const int *noncons_counts, 
+snpcaller(long double *snp_pvalues,
+          const double *err_probs, const int num_err_probs,
+          const int *noncons_counts,
           const long long int bonf_factor, const double sig_level)
 {
     double *probvec = NULL;
@@ -1110,8 +1035,8 @@ snpcaller(long double *snp_pvalues,
 #endif
 
 #ifdef DEBUG
-    fprintf(stderr, "DEBUG(%s:%s():%d): num_err_probs=%d noncons_counts=%d,%d,%d bonf_factor=%lld sig_level=%f\n", 
-            __FILE__, __FUNCTION__, __LINE__, 
+    fprintf(stderr, "DEBUG(%s:%s():%d): num_err_probs=%d noncons_counts=%d,%d,%d bonf_factor=%lld sig_level=%f\n",
+            __FILE__, __FUNCTION__, __LINE__,
             num_err_probs, noncons_counts[0], noncons_counts[1], noncons_counts[2],
             bonf_factor, sig_level);
 #endif
@@ -1120,7 +1045,7 @@ snpcaller(long double *snp_pvalues,
     for (i=0; i<NUM_NONCONS_BASES; i++) {
         snp_pvalues[i] = LDBL_MAX;
     }
-    
+
     /* determine max non-consensus count */
     for (i=0; i<NUM_NONCONS_BASES; i++) {
         if (noncons_counts[i] > max_noncons_count) {
@@ -1137,17 +1062,17 @@ snpcaller(long double *snp_pvalues,
                        max_noncons_count, bonf_factor, sig_level);
 
 #if 0
-    for (i=1; i<max_noncons_count+1; i++) {        
-        fprintf(stderr, "DEBUG(%s:%s():%d): prob for count %d=%Lg\n", 
-                __FILE__, __FUNCTION__, __LINE__, 
+    for (i=1; i<max_noncons_count+1; i++) {
+        fprintf(stderr, "DEBUG(%s:%s():%d): prob for count %d=%Lg\n",
+                __FILE__, __FUNCTION__, __LINE__,
                 i, expl(probvec[i]));
     }
 #endif
 
     if (pvalue * (double)bonf_factor > sig_level) {
 #ifdef DEBUG
-        fprintf(stderr, "DEBUG(%s:%s():%d): Most frequent SNV candidate already gets not signifcant pvalue of %g * %lld >= %g\n", 
-                __FILE__, __FUNCTION__, __LINE__, 
+        fprintf(stderr, "DEBUG(%s:%s():%d): Most frequent SNV candidate already gets not signifcant pvalue of %g * %lld >= %g\n",
+                __FILE__, __FUNCTION__, __LINE__,
                 pvalue, bonf_factor, sig_level);
 #endif
         goto free_and_exit;
@@ -1156,7 +1081,7 @@ snpcaller(long double *snp_pvalues,
 
     /* report p-value for each non-consensus base
      */
-    for (i=0; i<NUM_NONCONS_BASES; i++) { 
+    for (i=0; i<NUM_NONCONS_BASES; i++) {
         if (0 != noncons_counts[i]) {
              int errsv;
              errno = 0;
@@ -1172,8 +1097,8 @@ snpcaller(long double *snp_pvalues,
                    * and 1.0 might vreate problems with high Bonf/Sig
                    * factors so we need to return a high value
                    * (LDBL_MAX)
-                   */ 
-                 if (pvalue < DBL_EPSILON) { 
+                   */
+                 if (pvalue < DBL_EPSILON) {
                        pvalue = LDBL_MIN;/* to zero but prevent actual 0 value */
                   } else {
                        pvalue = LDBL_MAX; /* otherwise set to 1 which might pass filters */
@@ -1181,9 +1106,9 @@ snpcaller(long double *snp_pvalues,
              }
             snp_pvalues[i] = pvalue;
 #ifdef DEBUG
-            fprintf(stderr, "DEBUG(%s:%s():%d): i=%d noncons_counts=%d max_noncons_count=%d pvalue=%Lg\n", 
-                    __FILE__, __FUNCTION__, __LINE__, 
-                    i, noncons_counts[i], max_noncons_count, pvalue);                  
+            fprintf(stderr, "DEBUG(%s:%s():%d): i=%d noncons_counts=%d max_noncons_count=%d pvalue=%Lg\n",
+                    __FILE__, __FUNCTION__, __LINE__,
+                    i, noncons_counts[i], max_noncons_count, pvalue);
 #endif
         }
     }
@@ -1201,19 +1126,19 @@ snpcaller(long double *snp_pvalues,
 #ifdef SNPCALLER_MAIN
 
 
-/* 
+/*
  * gcc -pedantic -Wall -g -std=gnu99 -O2 -DSNPCALLER_MAIN -o snpcaller snpcaller.c utils.c log.c
  * newer versions need the convoluted
  * gcc -Wall -g -std=gnu99 -O2 -DSNPCALLER_MAIN [-DUSE_SNPCALLER] -o snpcaller -I../uthash/ -I../libbam/ snpcaller.c utils.c log.c   plp.c samutils.c ../libbam/libbam.a -lm -lz -lpthread -DNDEBUG
- * 
+ *
 
  Could use poibin for testing but parameter choice there is unclear
 
  library(poibin)
  # if pnorm is missing also do library(stats)
- 
+
  pp=c(0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001)
- nerrs = 1 
+ nerrs = 1
  # convert to success probabilities
  pp=1-pp
  > dpoibin(kk=length(pp)-nerrs, pp=pp)
@@ -1223,26 +1148,26 @@ snpcaller(long double *snp_pvalues,
  # no approximation seems to work better:
  > ppoibin(kk=length(pp)-nerrs, pp=pp, method="NA")
  [1] 4.732391e-07
- 
+
  ./snpcaller 10 1 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001num_trials=10 num_errs=1
  0.00896408
 
  ?!
 
 
- 
- $ ./snpcaller 957 9  $(cat eprobs.txt) 
+
+ $ ./snpcaller 957 9  $(cat eprobs.txt)
  num_trials=957 num_errs=9
  1.77668e-05
 
- p = read.table('scratch/errprobs') 
+ p = read.table('scratch/errprobs')
  pp = c(p)$V1
  nerrs = 9
  > ppoibin(kk=957-9, pp=1-pp)
  [1] 0.000262769
  > ppoibin(kk=957-9, pp=1-pp, method="NA")
  [1] 1.162356e-05
- 
+
  ?!
 
  *
@@ -1277,7 +1202,7 @@ int main(int argc, char *argv[]) {
 
 #ifdef PSEUDO_BINOMIAL
      {
-          if (-1 == pseudo_binomial(&pvalue, 
+          if (-1 == pseudo_binomial(&pvalue,
                                     num_success, num_trials, succ_prob)) {
                LOG_ERROR("%s\n", "pseudo_binomial() failed");
                return -1;

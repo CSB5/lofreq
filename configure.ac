@@ -195,7 +195,6 @@ AC_SUBST([AM_CFLAGS])
 AC_SUBST([AM_LDFLAGS])
 
 AC_DEFINE([_USE_KNETFILE], [1], [KNETFILE for samtools])
-AC_DEFINE([USE_SOURCEQUAL], [1], [support source quality in LoFreq])
 AC_DEFINE([SOURCEQUAL_IGNORES_INDELS], [1], [ignore indels in SQ computation as long as we can't predict them])
 
 

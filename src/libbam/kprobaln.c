@@ -43,7 +43,6 @@ static float g_qual2prob[256];
 
 kpa_par_t kpa_par_def = { 0.001, 0.1, 10 };
 kpa_par_t kpa_par_alt = { 0.0001, 0.01, 10 };
-kpa_par_t kpa_par_lofreq = { 0.00001, 0.4, 10};
 
 /*
   The topology of the profile HMM:
@@ -69,12 +68,9 @@ kpa_par_t kpa_par_lofreq = { 0.00001, 0.4, 10};
    lower two bits can be 0 (an alignment match) or 1 (an
    insertion). q[i] gives the phred scaled posterior probability of
    state[i] being wrong.
-
-   lofreq alignment quality extension introduced pd & ret_bw. enabled if pd != NULL
  */
 int kpa_glocal(const uint8_t *_ref, int l_ref, const uint8_t *_query, int l_query, const uint8_t *iqual,
-			   const kpa_par_t *c, int *state, uint8_t *q, 
-               double **pd, int *ret_bw)
+			   const kpa_par_t *c, int *state, uint8_t *q)
 {
 	double **f, **b = 0, *s, m[9], sI, sM, bI, bM, pb;
 	float *qual, *_qual;
@@ -84,17 +80,11 @@ int kpa_glocal(const uint8_t *_ref, int l_ref, const uint8_t *_query, int l_quer
     if ( l_ref<=0 || l_query<=0 ) return 0; // FIXME: this may not be an ideal fix, just prevents sefgault
 
 	/*** initialization ***/
-    is_backward = state && q? 1 : 0;
-    if (pd) {
-      is_backward = 1;
-    }
+	is_backward = state && q? 1 : 0;
 	ref = _ref - 1; query = _query - 1; // change to 1-based coordinate
 	bw = l_ref > l_query? l_ref : l_query;
 	if (bw > c->bw) bw = c->bw;
 	if (bw < abs(l_ref - l_query)) bw = abs(l_ref - l_query);
-    if (pd) {
-      *ret_bw = bw;
-    }
 	bw2 = bw * 2 + 1;
 	// allocate the forward and backward matrices f[][] and b[][] and the scaling array s[]
 	f = calloc(l_query+1, sizeof(void*));
@@ -102,7 +92,6 @@ int kpa_glocal(const uint8_t *_ref, int l_ref, const uint8_t *_query, int l_quer
 	for (i = 0; i <= l_query; ++i) {    // FIXME: this will lead in segfault for l_query==0
 		f[i] = calloc(bw2 * 3 + 6, sizeof(double)); // FIXME: this is over-allocated for very short seqs
 		if (is_backward) b[i] = calloc(bw2 * 3 + 6, sizeof(double));
-		if (pd) pd[i] = calloc(bw2 * 3 + 6, sizeof(double));
 	}
 	s = calloc(l_query+2, sizeof(double)); // s[] is the scaling factor to avoid underflow
 	// initialize qual
@@ -231,8 +220,6 @@ int kpa_glocal(const uint8_t *_ref, int l_ref, const uint8_t *_query, int l_quer
 	/*** MAP ***/
 	for (i = 1; i <= l_query; ++i) {
 		double sum = 0., *fi = f[i], *bi = b[i], max = 0.;
-        double *pdi = NULL;
-        if (pd) pdi = pd[i];
 		int beg = 1, end = l_ref, x, max_k = -1;
 		x = i - bw; beg = beg > x? beg : x;
 		x = i + bw; end = end < x? end : x;
@@ -242,12 +229,6 @@ int kpa_glocal(const uint8_t *_ref, int l_ref, const uint8_t *_query, int l_quer
 			set_u(u, bw, i, k);
 			z = fi[u+0] * bi[u+0]; if (z > max) max = z, max_k = (k-1)<<2 | 0; sum += z;
 			z = fi[u+1] * bi[u+1]; if (z > max) max = z, max_k = (k-1)<<2 | 1; sum += z;
-            if (pd) {
-               pdi[u+0] = fi[u+0] * bi[u+0] * s[i];
-               pdi[u+1] = fi[u+1] * bi[u+1] * s[i];
-               pdi[u+2] = fi[u+2] * bi[u+2] * s[i];
-               //fprintf(stderr, "(%d,%d,%d) %lg %lg %lg\n", i, k, u, pdi[u+0], pdi[u+1], pdi[u+2]);
-            }
 		}
 		max /= sum; sum *= s[i]; // if everything works as is expected, sum == 1.0
 		if (state) state[i-1] = max_k;

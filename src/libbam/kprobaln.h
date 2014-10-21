@@ -38,13 +38,12 @@ extern "C" {
 #endif
 
 	int kpa_glocal(const uint8_t *_ref, int l_ref, const uint8_t *_query, int l_query, const uint8_t *iqual,
-				   const kpa_par_t *c, int *state, uint8_t *q,
-                   double **pd, int *ret_bw);
+				   const kpa_par_t *c, int *state, uint8_t *q);
 
 #ifdef __cplusplus
 }
 #endif
 
-extern kpa_par_t kpa_par_def, kpa_par_alt, kpa_par_lofreq;
+extern kpa_par_t kpa_par_def, kpa_par_alt;
 
 #endif

@@ -483,7 +483,6 @@ count_cigar_ops(int *counts, int **quals, const bam1_t *b,
                          continue;
                     }
 
-#ifdef USE_SOURCEQUAL
                     /* for mismatches only */
                     if (target && actual_op == OP_MISMATCH) {
                          var_t fake_var;
@@ -500,7 +499,6 @@ count_cigar_ops(int *counts, int **quals, const bam1_t *b,
                               continue;
                          } 
                     }
-#endif 
 
 #ifdef TRACE
                     fprintf(stderr, "TRACE(%s): adding [M]MATCH qpos,tpos,ref,read,bq = %d,%d,%c,%c,%d\n", bam1_qname(b), qpos, tpos, ref_nt, read_nt, bq);
@@ -516,7 +514,6 @@ count_cigar_ops(int *counts, int **quals, const bam1_t *b,
 
           } else if (op == BAM_CINS || op == BAM_CDEL) {
 
-#ifdef USE_SOURCEQUAL
                if (target) {
                     /* vcf: 
                      * indel at tpos 1 means, that qpos 2 is an insertion  (e.g. A to AT)
@@ -539,7 +536,6 @@ count_cigar_ops(int *counts, int **quals, const bam1_t *b,
                          continue;
                     }
                }
-#endif
 
 #ifdef TRACE
                fprintf(stderr, "TRACE(%s): adding %c qpos,tpos = %d,%d\n", bam1_qname(b), op==BAM_CINS?'I':'D', qpos, tpos);

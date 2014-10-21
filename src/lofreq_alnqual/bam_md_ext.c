@@ -1,7 +1,7 @@
 /* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*- */
 /*
-  This is part of LoFreq Star and largely based on samtools' bam_md.c (0.1.19) which was originally published 
-  under the MIT License.
+  This is part of LoFreq Star and largely based on samtools' bam_md.c
+  (0.1.19) which was originally published under the MIT License.
   
   Copyright (c) 2003-2006, 2008-2010, by Heng Li <lh3lh3@live.co.uk>
   
@@ -59,59 +59,47 @@
 int bam_aux_drop_other(bam1_t *b, uint8_t *s);
 
 
+/* this is lofreq's target function which was heavily modified to accomodate our needs:
+ * 1. compute indel alignment qualities on top of base alignment qualities
+ * 2. keep base alignment qualities separates, i.e. don't mix with base-qualities
+ */
 static int bam_prob_realn_core(bam1_t *b, const char *ref, int flag)
 {
-	int k, i, bw, x, y, z, yb, ye, xb, xe, apply_baq = flag&1, extend_baq = flag>>1&1, redo_baq = flag&4;
+    int k, i, bw, x, y, z, yb, ye, xb, xe, extend_baq = flag>>1&1;
+    /* unused: int apply_baq = flag&1 */
+    int redo = 1;  /* = flag&4; */
 	uint32_t *cigar = bam1_cigar(b);
 	bam1_core_t *c = &b->core;
-    const int update_ai_and_ad = 1;/* FIXME hardcoded */
 	kpa_ext_par_t conf = kpa_ext_par_lofreq;
-	uint8_t *bq = 0, *zq = 0, *qual = bam1_qual(b);
+	/*uint8_t *bq = 0, *zq = 0, *qual = bam1_qual(b);*/
+	uint8_t *qual = bam1_qual(b);
+
+    /* WARNING/FIXME: redo always on so that baq and ai/ad always get recomputed */
+
 	if ((c->flag & BAM_FUNMAP) || b->core.l_qseq == 0) return -1; // do nothing
 	// test if BQ or ZQ is present
 
 
-    redo_baq = 1;/* FIXME hardcoded: always on: to make sure A[ID] are computed even if BAQ is present */
-    /*fprintf(stderr, "%s:%s:%d before update_ai_and_ad=%d\n", __FILE__, __FUNCTION__, __LINE__, update_ai_and_ad);*/
-    if (update_ai_and_ad) {/* delete existing AI and AD tags */
-      uint8_t *ai = NULL;
-      uint8_t *ad = NULL;
-      if ((ai =  bam_aux_get(b, AI_TAG)) != 0) {
-        bam_aux_del(b, ai);
-        ai=0;
-      }
-      if ((ad =  bam_aux_get(b, AD_TAG)) != 0) {
-        bam_aux_del(b, ad);
-        ad=0;
-      }
+    if (redo) {/* if BAQ is present and redo is not set do nothing. note: also means AQ will not be computed */
+         uint8_t *bq = NULL; /* pointer to precomputed baq values */
+         uint8_t *ai = NULL;
+         uint8_t *ad = NULL;
+
+         if ((bq = bam_aux_get(b, BAQ_TAG)) != 0 && *bq == 'Z') {
+              bam_aux_del(b, bq);
+         }
+         if ((ai = bam_aux_get(b, AI_TAG)) != 0 && *ai == 'Z') {
+              bam_aux_del(b, ai);
+         }
+         if ((ad =  bam_aux_get(b, AD_TAG)) != 0 && *ad == 'Z') {
+              bam_aux_del(b, ad);
+         }
     }
 
 
-	if ((bq = bam_aux_get(b, "BQ")) != 0) ++bq;
-	if ((zq = bam_aux_get(b, "ZQ")) != 0 && *zq == 'Z') ++zq;
-	if (bq && redo_baq)
-	{
-	    bam_aux_del(b, bq-1);
-	    bq = 0;
-	}
-	if (bq && zq) { // remove the ZQ tag
-		bam_aux_del(b, zq-1);
-		zq = 0;
-	}
-	if (bq || zq) {
-		if ((apply_baq && zq) || (!apply_baq && bq)) return -3; // in both cases, do nothing
-		if (bq && apply_baq) { // then convert BQ to ZQ
-			for (i = 0; i < c->l_qseq; ++i)
-				qual[i] = qual[i] + 64 < bq[i]? 0 : qual[i] - ((int)bq[i] - 64);
-			*(bq - 3) = 'Z';
-		} else if (zq && !apply_baq) { // then convert ZQ to BQ
-			for (i = 0; i < c->l_qseq; ++i)
-				qual[i] += (int)zq[i] - 64;
-			*(zq - 3) = 'B';
-		}
-		return 0;
-	}
-    /*fprintf(stderr, "%s:%s:%d find the start and end of the alignment\n", __FILE__, __FUNCTION__, __LINE__);*/
+    /* block for reuse of BQ/ZQ deleted */
+
+
 	// find the start and end of the alignment	
 	x = c->pos, y = 0, yb = ye = xb = xe = -1;
 	for (k = 0; k < c->n_cigar; ++k) {
@@ -150,21 +138,23 @@ static int bam_prob_realn_core(bam1_t *b, const char *ref, int flag)
 		state = calloc(c->l_qseq, sizeof(int));
 		q = calloc(c->l_qseq, 1);
           
-          double **pd = 0;
-          pd = calloc(c->l_qseq+1, sizeof(double*));
-
+        double **pd = 0;
+        pd = calloc(c->l_qseq+1, sizeof(double*));
+          
 #ifdef DEBUG
-          fprintf(stderr, "processing read %s\n", bam1_qname(b));
+        fprintf(stderr, "processing read %s\n", bam1_qname(b));
 #endif
-          int bw;
-          kpa_ext_glocal(r, xe-xb, s, c->l_qseq, qual, &conf, state, q, pd, &bw);
+        int bw;
+        kpa_ext_glocal(r, xe-xb, s, c->l_qseq, qual, &conf, state, q, pd, &bw);
 
-          /***************************************************************/
+        /***************************************************************
+         * AQ MAGIC START
+         */
 
           // count the number of indels and compute posterior probability
           uint8_t *iaq = 0, *daq = 0;
           int n_ins = 0, n_del = 0;
-		iaq = calloc(c->l_qseq + 1, 1);
+          iaq = calloc(c->l_qseq + 1, 1);
           daq = calloc(c->l_qseq + 1, 1);
 
           for (k = 0; k < c->l_qseq; k++) {
@@ -280,7 +270,9 @@ static int bam_prob_realn_core(bam1_t *b, const char *ref, int flag)
           for (i = 0; i<=c->l_qseq; ++i) free(pd[i]);
           free(pd); 
           
-          /**************************************************************/
+          /*
+           * AQ MAGIC END
+           ***************************************************************/
 		
           if (!extend_baq) { // in this block, bq[] is capped by base quality qual[]
 			for (k = 0, x = c->pos, y = 0; k < c->n_cigar; ++k) {
@@ -288,13 +280,21 @@ static int bam_prob_realn_core(bam1_t *b, const char *ref, int flag)
 				if (op == BAM_CMATCH || op == BAM_CEQUAL || op == BAM_CDIFF) {
 					for (i = y; i < y + l; ++i) {
 						if ((state[i]&3) != 0 || state[i]>>2 != x - xb + (i - y)) bq[i] = 0;
+#ifdef ORIG_BAQ
 						else bq[i] = bq[i] < q[i]? bq[i] : q[i];
+#else
+                        /* keep the actual values and don't cap by base quality */
+                        bq[i] = q[i];
+#endif
 					}
 					x += l; y += l;
 				} else if (op == BAM_CSOFT_CLIP || op == BAM_CINS) y += l;
 				else if (op == BAM_CDEL) x += l;
 			}
+#ifdef ORIG_BAQ
 			for (i = 0; i < c->l_qseq; ++i) bq[i] = qual[i] - bq[i] + 64; // finalize BQ
+#endif
+
 		} else { // in this block, bq[] is BAQ that can be larger than qual[] (different from the above!)
 			uint8_t *left, *rght;
 			left = calloc(c->l_qseq, 1); rght = calloc(c->l_qseq, 1);
@@ -313,20 +313,37 @@ static int bam_prob_realn_core(bam1_t *b, const char *ref, int flag)
 				} else if (op == BAM_CSOFT_CLIP || op == BAM_CINS) y += l;
 				else if (op == BAM_CDEL) x += l;
 			}
+#ifdef ORIG_BAQ
 			for (i = 0; i < c->l_qseq; ++i) bq[i] = 64 + (qual[i] <= bq[i]? 0 : qual[i] - bq[i]); // finalize BQ
+#endif
 			free(left); free(rght);
 		}
+
+#ifndef ORIG_BAQ
+          /* need to cap to phred max to be able to store it */
+          for (i = 0; i < c->l_qseq; ++i) {
+               if (bq[i] > 93) {
+                    bq[i] = 93;
+               }
+               bq[i] += 33;
+          }
+#endif
+
+#ifdef ORIG_BAQ
 		if (apply_baq) {
 			for (i = 0; i < c->l_qseq; ++i) qual[i] -= bq[i] - 64; // modify qual
 			bam_aux_append(b, "ZQ", 'Z', c->l_qseq + 1, bq);
 		} else bam_aux_append(b, "BQ", 'Z', c->l_qseq + 1, bq);
+#else
+        bam_aux_append(b, BAQ_TAG, 'Z', c->l_qseq + 1, bq);
+#endif
+        free(bq); free(s); free(r); free(q); free(state);
 
         /*fprintf(stderr, "%s:%s:%d n_ins=%d n_del=%d\n", __FILE__, __FUNCTION__, __LINE__, n_ins, n_del);*/
-          if (n_ins) bam_aux_append(b, "AI", 'Z', c->l_qseq+1, iaq);
-          if (n_del) bam_aux_append(b, "AD", 'Z', c->l_qseq+1, daq);
+        if (n_ins) bam_aux_append(b, AI_TAG, 'Z', c->l_qseq+1, iaq);
+        if (n_del) bam_aux_append(b, AD_TAG, 'Z', c->l_qseq+1, daq);
 		
-          free(bq); free(s); free(r); free(q); free(state);
-          free(iaq); free(daq);
+        free(iaq); free(daq);
 	}
 	return 0;
 }
@@ -398,7 +415,7 @@ int main(int argc, char *argv[])
 	fp = samopen(argv[optind], mode_r, 0);
 	if (fp == 0) return 1;
 	if (is_sam_in && (fp->header == 0 || fp->header->n_targets == 0)) {
-		fprintf(stderr, "[bam_fillmd] input SAM does not have header. Abort!\n");
+         fprintf(stderr, "%s: input SAM does not have header. Abort!\n", MYNAME);
 		return 1;
 	}
 	fpout = samopen("-", mode_w, fp->header);
@@ -412,17 +429,10 @@ int main(int argc, char *argv[])
 				ref = fai_fetch(fai, fp->header->target_name[b->core.tid], &len);
 				tid = b->core.tid;
 				if (ref == 0)
-					fprintf(stderr, "[bam_fillmd] fail to find sequence '%s' in the reference.\n",
-							fp->header->target_name[tid]);
+					fprintf(stderr, "%s fail to find sequence '%s' in the reference.\n",
+							MYNAME, fp->header->target_name[tid]);
 			}
 			if (is_realn) bam_prob_realn_core(b, ref, baq_flag);
-#if 0
-			if (capQ > 10) {
-				int q = bam_cap_mapQ(b, ref, capQ);
-				if (b->core.qual > q) b->core.qual = q;
-			}
-			if (ref) bam_fillmd1_core(b, ref, flt_flag, max_nm);
-#endif
 		}
 		samwrite(fpout, b);
 	}
