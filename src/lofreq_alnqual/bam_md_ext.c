@@ -38,16 +38,8 @@
 #include "kaln.h"
 #include "kprobaln_ext.h"
 #include "defaults.h"
+#include "bam_md_ext.h"
 
-#define USE_EQUAL 1
-#define DROP_TAG  2
-#define BIN_QUAL  4
-#define UPDATE_NM 8
-#define UPDATE_MD 16
-#define HASH_QNM  32
-
-
-#define MYNAME "lofreq alnqual"		
 
 
 #define set_u(u, b, i, k) { int x=(i)-(b); x=x>0?x:0; (u)=((k)-x+1)*3; }
@@ -63,7 +55,7 @@ int bam_aux_drop_other(bam1_t *b, uint8_t *s);
  * 1. compute indel alignment qualities on top of base alignment qualities
  * 2. keep base alignment qualities separates, i.e. don't mix with base-qualities
  */
-static int bam_prob_realn_core(bam1_t *b, const char *ref, int flag)
+int bam_prob_realn_core_ext(bam1_t *b, const char *ref, int flag)
 {
 /*#define ORIG_BAQ 1*/
     int k, i, bw, x, y, z, yb, ye, xb, xe, extend_baq = flag>>1&1;
@@ -361,98 +353,3 @@ static int bam_prob_realn_core(bam1_t *b, const char *ref, int flag)
 	return 0;
 }
 
-
-int main(int argc, char *argv[])
-{
-	int c, flt_flag, tid = -2, ret, len, is_bam_out, is_sam_in, is_uncompressed, max_nm, is_realn, capQ, baq_flag;
-	samfile_t *fp, *fpout = 0;
-	faidx_t *fai;
-	char *ref = 0, mode_w[8], mode_r[8];
-	bam1_t *b;
-
-	flt_flag = UPDATE_NM | UPDATE_MD;
-	is_bam_out = is_sam_in = is_uncompressed = is_realn = max_nm = capQ = baq_flag = 0;
-	mode_w[0] = mode_r[0] = 0;
-	strcpy(mode_r, "r"); strcpy(mode_w, "w");
-	
-	is_realn = 1;
-	baq_flag |= 2; /* ext baq */
-	while ((c = getopt(argc, argv, "buSe")) >= 0) {
-		switch (c) {
-#if 0
-		case 'r': is_realn = 1; break;
-		case 'e': flt_flag |= USE_EQUAL; break;
-		case 'A': baq_flag |= 1; break;
-		case 'd': flt_flag |= DROP_TAG; break;
-		case 'q': flt_flag |= BIN_QUAL; break;
-		case 'h': flt_flag |= HASH_QNM; break;
-		case 'N': flt_flag &= ~(UPDATE_MD|UPDATE_NM); break;
-		case 'n': max_nm = atoi(optarg); break;
-		case 'C': capQ = atoi(optarg); break;
-#endif
-		case 'b': is_bam_out = 1; break;
-		case 'u': is_uncompressed = is_bam_out = 1; break;
-		case 'S': is_sam_in = 1; break;
-		/* FIXME: ext should be default */
-		case 'e': baq_flag &= ~2; break;
-		default: fprintf(stderr, "%s unrecognized option '-%c'\n", MYNAME, c); return 1;
-		}
-	}
-	if (!is_sam_in) strcat(mode_r, "b");
-	if (is_bam_out) strcat(mode_w, "b");
-	else strcat(mode_w, "h");
-	if (is_uncompressed) strcat(mode_w, "u");
-	if (optind + 1 >= argc) {
-#if 0
-  		/* donwannah */
-		fprintf(stderr, "Usage:   samtools calmd [-eubrS] <aln.bam> <ref.fasta>\n\n");
-		fprintf(stderr, "Options: -e       change identical bases to '='\n");		
-		fprintf(stderr, "         -A       modify the quality string\n");
-		/* default */
-		fprintf(stderr, "         -r       compute the BQ tag (without -A) or cap baseQ by BAQ (with -A)\n");
-#else
-		fprintf(stderr, "%s: add base- and indel-alignment qualities (BAQ, IDAQ) to BAM file\n\n", MYNAME);
-		fprintf(stderr, "Usage:   %s [options] <aln.bam> <ref.fasta>\n", MYNAME);
-		fprintf(stderr, "Options:\n");
-		fprintf(stderr, "         -u       uncompressed BAM output (for piping)\n");
-		fprintf(stderr, "         -b       compressed BAM output\n");
-		fprintf(stderr, "         -S       the input is SAM with header\n");
-		fprintf(stderr, "         -e       use default instead of extended BAQ (the latter gives better sensitivity but lower specificity)\n\n");		
-		fprintf(stderr, "- Output will be written to stdout.\n");				
-		fprintf(stderr, "- Only reads containing indels will contain indel-alignment qualities (tags: %s and %s).\n", AI_TAG, AD_TAG);
-		fprintf(stderr, "- Do not change the alignmnent after running this, i.e. use this as last postprocessing step!\n");
-		fprintf(stderr, "- This program is based on samtools. BAQ was introduced by Heng Li PMID:21320865\n\n");
-#endif
-		return 1;
-	}
-	fp = samopen(argv[optind], mode_r, 0);
-	if (fp == 0) return 1;
-	if (is_sam_in && (fp->header == 0 || fp->header->n_targets == 0)) {
-         fprintf(stderr, "%s: input SAM does not have header. Abort!\n", MYNAME);
-		return 1;
-	}
-	fpout = samopen("-", mode_w, fp->header);
-	fai = fai_load(argv[optind+1]);
-
-	b = bam_init1();
-	while ((ret = samread(fp, b)) >= 0) {
-		if (b->core.tid >= 0) {
-			if (tid != b->core.tid) {
-				free(ref);
-				ref = fai_fetch(fai, fp->header->target_name[b->core.tid], &len);
-				tid = b->core.tid;
-				if (ref == 0)
-					fprintf(stderr, "%s fail to find sequence '%s' in the reference.\n",
-							MYNAME, fp->header->target_name[tid]);
-			}
-			if (is_realn) bam_prob_realn_core(b, ref, baq_flag);
-		}
-		samwrite(fpout, b);
-	}
-	bam_destroy1(b);
-
-	free(ref);
-	fai_destroy(fai);
-	samclose(fp); samclose(fpout);
-	return 0;
-}

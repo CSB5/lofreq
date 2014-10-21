@@ -25,5 +25,5 @@ viterbi.c viterbi.h
 
 
 # note: order matters
-lofreq_LDADD = ../libbam/libbam.a ../cdflib90/libcdf.a
+lofreq_LDADD = ../libbam/libbam.a ../cdflib90/libcdf.a ../lofreq_alnqual/bam_md_ext.o ../lofreq_alnqual/kprobaln_ext.o
 

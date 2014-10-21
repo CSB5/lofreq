@@ -205,11 +205,11 @@ AC_DEFINE([SOURCEQUAL_IGNORES_INDELS], [1], [ignore indels in SQ computation as 
 
 AC_CONFIG_FILES(Makefile
         src/cdflib90/Makefile   
-        src/libbam/Makefile
-        src/lofreq/Makefile
         src/uthash/Makefile
-        src/scripts/Makefile        
+        src/libbam/Makefile
         src/lofreq_alnqual/Makefile        
+        src/lofreq/Makefile
+        src/scripts/Makefile        
         src/tools/setup_conf.py        
         src/tools/Makefile
         )

@@ -725,10 +725,8 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "- Base-alignment (BAQ) and indel-aligment (IDAQ) qualities:\n");
      fprintf(stderr, "       -B | --no-baq                Disable use of base-alignment quality (BAQ)\n");
      fprintf(stderr, "       -A | --no-idaq               Don't use IDAQ values (NOT recommended under ANY circumstances other than debugging)\n");
-#ifdef BAQ_ON_THE_FLY
      fprintf(stderr, "       -D | --del-baq               Delete pre-existing BAQ values, i.e. compute even if already present in BAM\n");
      fprintf(stderr, "       -e | --no-ext-baq            Use 'normal' BAQ (samtools default) instead of extended BAQ (both computed on the fly if not already present in %s tag)\n", BAQ_TAG);
-#endif
      fprintf(stderr, "- Mapping quality:\n");
      fprintf(stderr, "       -m | --min-mq INT            Skip reads with mapping quality smaller than INT [%d]\n", mplp_conf->min_mq);
      fprintf(stderr, "       -M | --max-mq INT            Cap mapping quality at INT [%d]\n", mplp_conf->max_mq);
@@ -848,10 +846,8 @@ for cov in coverage_range:
               {"min-jq", required_argument, NULL, 'j'},
               {"min-alt-jq", required_argument, NULL, 'J'},
               {"def-alt-jq", required_argument, NULL, 'K'},
-#ifdef BAQ_ON_THE_FLY
               {"del-baq", no_argument, NULL, 'D'},
               {"no-ext-baq", no_argument, NULL, 'e'},
-#endif
               {"no-baq", no_argument, NULL, 'B'},
               {"no-indel-aq", no_argument, NULL, 'A'},
 
@@ -884,7 +880,6 @@ for cov in coverage_range:
 
          /* keep in sync with long_opts and usage */
          static const char *long_opts_str = "r:l:f:o:q:Q:R:j:J:K:BDeAm:M:NsS:T:a:b:A:C:h";
-
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
          c = getopt_long(argc-1, argv+1, /* skipping 'lofreq', just leaving 'command', i.e. call */
@@ -962,7 +957,6 @@ for cov in coverage_range:
               snvcall_conf.flag &= ~SNVCALL_USE_BAQ;
               break;
 
-#ifdef BAQ_ON_THE_FLY
          case 'D':
               mplp_conf.flag |= MPLP_REDO_BAQ;
               break;
@@ -970,7 +964,6 @@ for cov in coverage_range:
          case 'e':
               mplp_conf.flag &= ~MPLP_EXT_BAQ;
               break;
-#endif
          case 'A':
               snvcall_conf.flag &= ~SNVCALL_USE_IDAQ;
               break;
@@ -1061,10 +1054,10 @@ for cov in coverage_range:
     snvcall_conf.no_indels = 1;
 #endif
     if (! snvcall_conf.no_indels) {
-         LOG_WARN("%s\n", "This is an experimental feature! Please make sure you did the following:");
+         LOG_WARN("%s\n", "Indel calling is still considered an unstable feature! Please make sure you did the following:");
          LOG_WARN("%s\n", "- You added indel qualities to your BAM file, e.g. by running GATK's BQSR (version>=2)");
          LOG_WARN("%s\n", "- You added indel alignment qualities (using lofreq alnqual) otherwise specificy drops dramatically");
-         LOG_WARN("%s\n", "Every time you ignore the advice above a kitten will die!");
+         LOG_WARN("%s\n", "Every time you ignore this advice, a kitten will die!");
     }
 
     if (illumina_1_3) {

@@ -560,7 +560,7 @@ free_and_exit:
 static int
 mplp_func(void *data, bam1_t *b)
 {
-     /*extern int bam_prob_realn_core(bam1_t *b, const char *ref, int);*/
+     extern int bam_prob_realn_core_ext(bam1_t *b, const char *ref, int baq_flag);
      extern int bam_cap_mapQ(bam1_t *b, char *ref, int thres);
      mplp_aux_t *ma = (mplp_aux_t*)data;
      int ret, skip = 0;
@@ -633,18 +633,15 @@ mplp_func(void *data, bam1_t *b)
           }
 #endif
 
-#ifdef BAQ_ON_THE_FLY
-          LOG_FATAL("%s\n", "FIXME this should be using the equivalent of lofreq_alnqual");
           if (has_ref && (ma->conf->flag & MPLP_BAQ)) {
-               if (bam_prob_realn_core(b, ma->ref,
-                                       (ma->conf->flag & MPLP_EXT_BAQ))) {
+               if (bam_prob_realn_core_ext(b, ma->ref,
+                                           ma->conf->flag & MPLP_EXT_BAQ ? 2 : 0 /* FIXME hardcoded values */)) {
                     LOG_ERROR("bam_prob_realn_core() failed for %s\n", bam1_qname(b));
                }
           } else if (ma->conf->flag & MPLP_BAQ) {
                LOG_FATAL("%s\n", "Can't compute BAQ without reference sequence");
                exit(1);
           }
-#endif
 
 #if 0
         {

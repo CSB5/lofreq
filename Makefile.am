@@ -12,7 +12,7 @@ endif
 LICENSES = LICENSE src/cdflib90.README src/zlib.LICENSE src/libbam/AUTHORS src/libbam/COPYING src/uthash/LICENSE
 EXTRA_DIST = binary_installer.sh $(LICENSES)
 
-SUBDIRS = src/cdflib90 src/libbam src/lofreq src/scripts src/uthash src/lofreq_alnqual $(TOOLS) 
+SUBDIRS = src/cdflib90 src/uthash src/libbam src/lofreq_alnqual src/lofreq src/scripts $(TOOLS) 
 bug-tests: all
 	cd tests && $(SHELL) run_all.sh;
 
