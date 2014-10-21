@@ -46,10 +46,60 @@
 #define prob_to_sangerq(p) (p < 0.0 + DBL_EPSILON ? 126+1 : ((int)(-10 * log10(p))+33))
 #define encode_q(q) (uint8_t)(q < 33 ? '!' : (q > 126 ? '~' : q))
 
-/*const char bam_nt16_nt4_table[] = { 4, 0, 1, 4, 2, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4 };*/
 
-int bam_aux_drop_other(bam1_t *b, uint8_t *s);
+#if 0
+/* based on  bam_prob_realn_core */
+int prob_realn(bam1_t *b, const char *ref, 
+               int baq_or_idaq, int redo, int ext_baq) {
+{
+     int k, i, bw, x, y, z, yb, ye, xb, xe;
+     uint32_t *cigar = bam1_cigar(b);
+     bam1_core_t *c = &b->core;
+     uint8_t *qual = bam1_qual(b);
+     kpa_ext_par_t conf;
+     const int BAQ=1;
+     const int IDAQ=2;
 
+     if (baq_or_idaq==BAQ) {
+          conf = kpa_ext_par_def;
+     } else if (baq_or_idaq==IDAQ) {
+          conf = kpa_ext_par_lofreq;
+     } else {
+          LOG_FATAL("INTERNAL ERROR: invalid value for baq_or_idaq=%d\n", baq_or_idaq);
+          exit(1);
+     }
+
+     /* if not aligned: do nothing */
+	if ((c->flag & BAM_FUNMAP) || b->core.l_qseq == 0) return -1;
+
+    if (baq_or_idaq==BAQ) {
+         uint8_t *p = NULL;
+         if ((p = bam_aux_get(b, BAQ_TAG)) != 0 && *p == 'Z') {
+              if (redo) {
+                   bam_aux_del(b, p);
+              } else {
+                   return -2;
+              }
+         }
+    } else if (baq_or_idaq==IDAQ) {
+         FIXME need to now if indel is present first */
+         if ((p = bam_aux_get(b, AI_TAG)) != 0 && *p == 'Z') {
+              if (redo) {
+                   bam_aux_del(b, p);
+              } else {
+                   FIXME
+              }
+         }
+         if ((p = bam_aux_get(b, AD_TAG)) != 0 && *p == 'Z') {
+              if (redo) {
+                   bam_aux_del(b, p);
+              } else {
+                   FIXME
+              }
+         }
+    }
+}
+#endif
 
 /* this is lofreq's target function which was heavily modified to accomodate our needs:
  * 1. compute indel alignment qualities on top of base alignment qualities
