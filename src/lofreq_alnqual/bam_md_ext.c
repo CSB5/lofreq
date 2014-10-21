@@ -65,6 +65,7 @@ int bam_aux_drop_other(bam1_t *b, uint8_t *s);
  */
 static int bam_prob_realn_core(bam1_t *b, const char *ref, int flag)
 {
+/*#define ORIG_BAQ 1*/
     int k, i, bw, x, y, z, yb, ye, xb, xe, extend_baq = flag>>1&1;
     /* unused: int apply_baq = flag&1 */
     int redo = 1;  /* = flag&4; */
@@ -74,7 +75,10 @@ static int bam_prob_realn_core(bam1_t *b, const char *ref, int flag)
 	/*uint8_t *bq = 0, *zq = 0, *qual = bam1_qual(b);*/
 	uint8_t *qual = bam1_qual(b);
 
-    /* WARNING/FIXME: redo always on so that baq and ai/ad always get recomputed */
+    /* WARNING/FIXME: 
+     * - redo always on so that baq and ai/ad always get recomputed 
+     * - BAQ and A[ID] computed in one function but should be separate (using different configs anyway)
+     */
 
 	if ((c->flag & BAM_FUNMAP) || b->core.l_qseq == 0) return -1; // do nothing
 	// test if BQ or ZQ is present
@@ -274,6 +278,14 @@ static int bam_prob_realn_core(bam1_t *b, const char *ref, int flag)
            * AQ MAGIC END
            ***************************************************************/
 		
+          /* running glocal again with samtools default parameters to get identical BAQ values 
+           * FIXME this should be made a function
+           */
+          bw = conf.bw;
+          conf = kpa_ext_par_def;
+          conf.bw = bw;
+          kpa_ext_glocal(r, xe-xb, s, c->l_qseq, qual, &conf, state, q, NULL, &bw);
+
           if (!extend_baq) { // in this block, bq[] is capped by base quality qual[]
 			for (k = 0, x = c->pos, y = 0; k < c->n_cigar; ++k) {
 				int op = cigar[k]&0xf, l = cigar[k]>>4;
@@ -329,6 +341,7 @@ static int bam_prob_realn_core(bam1_t *b, const char *ref, int flag)
           }
 #endif
 
+/*#undef ORIG_BAQ*/
 #ifdef ORIG_BAQ
 		if (apply_baq) {
 			for (i = 0; i < c->l_qseq; ++i) qual[i] -= bq[i] - 64; // modify qual
