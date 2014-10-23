@@ -20,7 +20,7 @@ log=$outdir/log.txt
 
 cmd="$LOFREQ somatic -f $REF --threads $threads -n $NORMAL -t $TUMOR -o $outpref -l $BED -d $DBSNP --verbose"
 # only needed as long as indels are disabled by default
-cmd="$cmd --call-rlx-extra-args @@call-indels"
+cmd="$cmd --call-indels"
 echodebug "cmd=$cmd"
 if ! eval $cmd > $log 2>&1; then
     echoerror "LoFreq failed. Check logfile $log. Command was $cmd"

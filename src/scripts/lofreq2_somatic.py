@@ -90,7 +90,7 @@ class SomaticSNVCaller(object):
     DEFAULT_MIN_COV = 10
     DEFAULT_USE_ORPHAN = False# on for normal anyway
     DEFAULT_BAQ_OFF = False# off for normal anyway
-    
+
     # stringent parameters (also used for normal stringent)
     DEFAULT_MTC_T = 'bonf'
     DEFAULT_MTC_ALPHA_T = 1
@@ -101,7 +101,9 @@ class SomaticSNVCaller(object):
     DEFAULT_SNV_UNIQ_MTC_ALPHA = 0.001
     DEFAULT_INDEL_UNIQ_MTC = 'fdr'
     DEFAULT_INDEL_UNIQ_MTC_ALPHA = 0.0001
-    
+
+    DEFAULT_CALL_INDELS = False
+
     DEFAULT_NUM_THREADS = 1
     DEFAULT_DO_GERMLINE = False
 
@@ -166,9 +168,9 @@ class SomaticSNVCaller(object):
         self.outfiles = []
         self.outfiles = [self.vcf_n_rlx, self.vcf_n_rlx_log, self.vcf_n_str, self.vcf_indels_n_str,
                          self.vcf_t_rlx, self.vcf_t_rlx_log, self.vcf_t_str, self.vcf_indels_t_str,
-                         self.vcf_som_raw, self.vcf_som_fin, 
-                         self.vcf_indels_som_raw, self.vcf_indels_som_fin, 
-                         self.vcf_som_fin_wo_dbsnp, self.vcf_indels_som_fin_wo_dbsnp, 
+                         self.vcf_som_raw, self.vcf_som_fin,
+                         self.vcf_indels_som_raw, self.vcf_indels_som_fin,
+                         self.vcf_som_fin_wo_dbsnp, self.vcf_indels_som_fin_wo_dbsnp,
                          self.vcf_germl]
         if not self.continue_interrupted:
             for f in self.outfiles:
@@ -187,13 +189,14 @@ class SomaticSNVCaller(object):
         self.snv_uniq_mtc_alpha = self.DEFAULT_SNV_UNIQ_MTC_ALPHA
         self.indel_uniq_mtc = self.DEFAULT_INDEL_UNIQ_MTC
         self.indel_uniq_mtc_alpha = self.DEFAULT_INDEL_UNIQ_MTC_ALPHA
-        
+
         self.src_qual_on = self.DEFAULT_SRC_QUAL_ON
         self.src_qual_ign_vcf = self.DEFAULT_SRC_QUAL_IGN_VCF
         self.min_cov = self.DEFAULT_MIN_COV
         self.use_orphan = self.DEFAULT_USE_ORPHAN
         self.baq_off = self.DEFAULT_BAQ_OFF
         self.num_threads = self.DEFAULT_NUM_THREADS
+        self.call_indels = self.DEFAULT_CALL_INDELS
         self.do_germline = self.DEFAULT_DO_GERMLINE
 
 
@@ -272,7 +275,7 @@ class SomaticSNVCaller(object):
         if self.num_threads < 2:
             cmd = [self.LOFREQ, 'call']
         else:
-            cmd = [self.LOFREQ, 'call-parallel', 
+            cmd = [self.LOFREQ, 'call-parallel',
                    '--pp-threads', "%d" % self.num_threads]
         cmd.extend(['-f', self.ref])
         cmd.append('--verbose')
@@ -281,9 +284,11 @@ class SomaticSNVCaller(object):
         if self.bed:
             cmd.extend(['-l', self.bed])
 
+        if self.call_indels:
+            cmd.append("--call-indels")
         if self.call_rlx_extra_args:
             cmd.extend(self.call_rlx_extra_args)
-        
+
         # sample type specific arguments
         #
         if sample_type == "normal":
@@ -292,11 +297,11 @@ class SomaticSNVCaller(object):
             cmd.append('-B')# BAQ off
             cmd.append('-N')# MQ off
             cmd.append('-A')# IDAQ off
-            
+
             out_vcf = self.vcf_n_rlx
             out_log = self.vcf_n_rlx_log
             cmd.append(self.bam_n)
-            
+
         elif sample_type == "tumor":
             cmd.extend(['-a', "%f" % self.alpha_t])
             if self.use_orphan:
@@ -315,7 +320,7 @@ class SomaticSNVCaller(object):
         else:
             raise ValueError(sample_type)
 
-        # out_vcf now set 
+        # out_vcf now set
         cmd.extend(['-o', out_vcf])
 
 
@@ -425,7 +430,7 @@ class SomaticSNVCaller(object):
         vcfset_base_cmd =  [self.LOFREQ, 'vcfset', '-a', 'complement',
                             '-2', self.vcf_n_rlx, '-o', '-']
         vcfset_snv_cmd = vcfset_base_cmd + ['-1', self.vcf_t_str, '--only-snvs']
-        vcfset_indels_cmd = vcfset_base_cmd + ['-1', self.vcf_indels_t_str, 
+        vcfset_indels_cmd = vcfset_base_cmd + ['-1', self.vcf_indels_t_str,
                                                '--only-pos', '--only-indels']
 
         for (vcf_out, cmd) in [(self.vcf_som_raw, vcfset_snv_cmd),
@@ -437,7 +442,7 @@ class SomaticSNVCaller(object):
                 assert not os.path.exists(vcf_out), (
                     "%s already exists. Please remove or"
                     " run me with --continue if you want to reuse this file" % vcf_out)
-            
+
             if vcf_out[-3:] == ".gz":
                 vcf_out_fh = gzip.open(vcf_out, 'w')
             else:
@@ -462,18 +467,18 @@ class SomaticSNVCaller(object):
         """
 
         uniq_base_cmd = [self.LOFREQ, 'uniq', '--uni-freq', "0.5"]
-        
-        
+
+
         uniq_snv_cmd = uniq_base_cmd + ["-v", self.vcf_som_raw,
                                         '--uniq-mtc', self.snv_uniq_mtc,
                                         '--uniq-alpha', "%s" % self.snv_uniq_mtc_alpha]
         uniq_indels_cmd = uniq_base_cmd + ["-v", self.vcf_indels_som_raw,
-                                           '--uniq-mtc', self.indel_uniq_mtc, 
+                                           '--uniq-mtc', self.indel_uniq_mtc,
                                            '--uniq-alpha', "%s" % self.indel_uniq_mtc_alpha]
-        
+
         for (vcf_out, cmd) in [(self.vcf_som_fin, uniq_snv_cmd),
                                (self.vcf_indels_som_fin, uniq_indels_cmd)]:
-            
+
             if self.continue_interrupted and os.path.exists(vcf_out):
                 LOG.info('Reusing %s' % vcf_out)
                 continue
@@ -520,7 +525,7 @@ class SomaticSNVCaller(object):
             cmd.extend(["-o", vcf_out])
             self.subprocess_wrapper(cmd)
 
-            
+
     def run(self):
         """Run the whole somatic SNV calling pipeline
         """
@@ -599,7 +604,7 @@ def cmdline_parser():
                         help="BED file listing regions to restrict analysis to")
     basic.add_argument("-d", "--dbsnp",
                         help="vcf-file (gzip supported) containing known germline variants")
-    
+
     default = SomaticSNVCaller.DEFAULT_NUM_THREADS
     basic.add_argument("--threads",
                         type=int,
@@ -608,6 +613,9 @@ def cmdline_parser():
                         help="Use this many threads for each call")
 
     advanced = parser.add_argument_group('Advanced Options')
+    advanced.add_argument("--call-indels",
+                        action="store_true",
+                        help="Also call indels")
 
     default = SomaticSNVCaller.DEFAULT_ALPHA_T
     advanced.add_argument("--tumor-alpha",
@@ -679,14 +687,14 @@ def cmdline_parser():
                           action="store_true",
                           help="Enable debugging")
 
-    
+
     experts_only = parser.add_argument_group('Experts only')
     experts_only.add_argument("--use-orphan",
                               action="store_true",
                               help="Use orphaned/anomalous reads from pairs"
                               " in all samples")
     experts_only.add_argument("--baq-off",
-                              action="store_true",    
+                              action="store_true",
                               help="Switch use of BAQ off in all samples")
     experts_only.add_argument("--call-rlx-extra-args",
                               dest="call_rlx_extra_args",
@@ -756,6 +764,8 @@ def main():
         somatic_snv_caller.use_orphan = True
     else:
         somatic_snv_caller.use_orphan = False
+    if args.call_indels:
+        somatic_snv_caller.call_indels = True
     if args.call_rlx_extra_args:
         somatic_snv_caller.call_rlx_extra_args = args.call_rlx_extra_args.replace('@', '-').split(" ")
 
@@ -772,7 +782,7 @@ def main():
                 somatic_snv_caller.src_qual_ign_vcf = args.ign_vcf
 
     somatic_snv_caller.do_germline = args.germline
-        
+
     try:
         somatic_snv_caller.run()
     except:
