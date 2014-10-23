@@ -38,7 +38,8 @@ echo "Using $prefix as installation prefix"
 
 echo "Installing binaries"
 test -d "$prefix/bin" || mkdir -p $prefix/bin || exit 1
-for f in ./src/lofreq/lofreq src/scripts/lofreq2_call_pparallel.py src/scripts/lofreq2_somatic.py; do
+BINARIES="./src/lofreq/lofreq src/scripts/lofreq2_call_pparallel.py src/scripts/lofreq2_somatic.py src/lofreq_alnqual/lofreq2_alnqual"
+for f in $BINARIES; do
     if [ ! -s $f ]; then
         echo "FATAL: can't find $f" 1>&2
         exit 1
