@@ -865,8 +865,8 @@ void compile_plp_col(plp_col_t *plp_col,
                 * automatically as this would indicate a problem with
                 * the input and it's also unclear what the BAQ then means
                 */
-               if (bq > 93) {
-                    /* bq = 93; /@ Sanger/Phred max */
+               if (bq > SANGER_PHRED_MAX) {
+                    /* bq = SANGER_PHRED_MAX; /@ Sanger/Phred max */
                     LOG_FATAL("Base qualitiy above allowed maximum detected (%d)\n", bq);
                     exit(1);
                }

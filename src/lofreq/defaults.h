@@ -17,6 +17,8 @@
  *********************************************************************/
 
 
+#define SANGER_PHRED_MAX 93
+
 /* mapping quality filters: applied to all reads. don't set too high as
  * this is a mapper dependent value
  * in case of BWA it's also dependent on the alignment command used.
