@@ -27,7 +27,8 @@
 #define BAM_MD_EXT_H
 
 
-int bam_prob_realn_core_ext(bam1_t *b, const char *ref, int flag);
+int bam_prob_realn_core_ext(bam1_t *b, const char *ref, 
+                            int baq_flag, int ext_baq, int aq_flag);
 
 
 #endif

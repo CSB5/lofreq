@@ -104,49 +104,58 @@ int prob_realn(bam1_t *b, const char *ref,
 /* this is lofreq's target function which was heavily modified to accomodate our needs:
  * 1. compute indel alignment qualities on top of base alignment qualities
  * 2. keep base alignment qualities separates, i.e. don't mix with base-qualities
+ *
+ * baq_flag: 0 off, 1 on, 2 redo
+ * aq_flag: 0 off, 1 on, 2 redo
  */
-int bam_prob_realn_core_ext(bam1_t *b, const char *ref, int flag)
+int bam_prob_realn_core_ext(bam1_t *b, const char *ref, 
+                            int baq_flag, int baq_extended,
+                            int aq_flag)
 {
 /*#define ORIG_BAQ 1*/
-    int k, i, bw, x, y, z, yb, ye, xb, xe, extend_baq = flag>>1&1;
-    /* unused: int apply_baq = flag&1 */
-    int redo = 1;  /* = flag&4; */
+     int k, i, bw, x, y, z, yb, ye, xb, xe;
 	uint32_t *cigar = bam1_cigar(b);
 	bam1_core_t *c = &b->core;
 	kpa_ext_par_t conf = kpa_ext_par_lofreq;
 	/*uint8_t *bq = 0, *zq = 0, *qual = bam1_qual(b);*/
 	uint8_t *qual = bam1_qual(b);
+    uint8_t *prec_ai, *prec_ad, *prec_baq;
 
-    /* WARNING/FIXME: 
-     * - redo always on so that baq and ai/ad always get recomputed 
-     * - BAQ and A[ID] computed in one function but should be separate (using different configs anyway)
+
+    /* nothing to do ? */
+    if (! baq_flag && ! aq_flag) {
+         return -1;
+    }
+
+    /* no alignment? */
+	if ((c->flag & BAM_FUNMAP) || b->core.l_qseq == 0) {
+         return -1;
+    }
+
+    fprintf(stderr, "incomplete\n"); exit(1);
+
+    /* get existing tags. delete if existing and redo is on
      */
-
-	if ((c->flag & BAM_FUNMAP) || b->core.l_qseq == 0) return -1; // do nothing
-	// test if BQ or ZQ is present
-
-
-    if (redo) {/* if BAQ is present and redo is not set do nothing. note: also means AQ will not be computed */
-         uint8_t *bq = NULL; /* pointer to precomputed baq values */
-         uint8_t *ai = NULL;
-         uint8_t *ad = NULL;
-
-         if ((bq = bam_aux_get(b, BAQ_TAG)) != 0 && *bq == 'Z') {
-              bam_aux_del(b, bq);
+    if ((prec_baq = bam_aux_get(b, BAQ_TAG)) != 0 && *prec_baq == 'Z') {
+         if (baq_flag==2) {
+              bam_aux_del(b, prec_baq);
+              prec_baq = NULL;
          }
-         if ((ai = bam_aux_get(b, AI_TAG)) != 0 && *ai == 'Z') {
-              bam_aux_del(b, ai);
+    }
+    if ((prec_ai = bam_aux_get(b, AI_TAG)) != 0 && *prec_ai == 'Z') {
+         if (aq_flag==2) {
+              bam_aux_del(b, prec_ai);
+              prec_ai = NULL;
          }
-         if ((ad =  bam_aux_get(b, AD_TAG)) != 0 && *ad == 'Z') {
-              bam_aux_del(b, ad);
+    }
+    if ((prec_ad = bam_aux_get(b, AI_TAG)) != 0 && *prec_ad == 'Z') {
+         if (aq_flag==2) {
+              bam_aux_del(b, prec_ad);
+              prec_ad = NULL;
          }
     }
 
-
-    /* block for reuse of BQ/ZQ deleted */
-
-
-	// find the start and end of the alignment	
+	/* find the start and end of the alignment */
 	x = c->pos, y = 0, yb = ye = xb = xe = -1;
 	for (k = 0; k < c->n_cigar; ++k) {
 		int op, l;
@@ -158,9 +167,10 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref, int flag)
 			x += l; y += l;
 		} else if (op == BAM_CSOFT_CLIP || op == BAM_CINS) y += l;
 		else if (op == BAM_CDEL) x += l;
-		else if (op == BAM_CREF_SKIP) return -1; // do nothing if there is a reference skip
+		else if (op == BAM_CREF_SKIP) return -1; /* do nothing if there is a reference skip */
 	}
-	// set bandwidth and the start and the end
+
+	/* set bandwidth and the start and the end */
 	bw = 7;
 	if (abs((xe - xb) - (ye - yb)) > bw)
 		bw = abs((xe - xb) - (ye - yb)) + 3;
@@ -169,9 +179,12 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref, int flag)
 	xe += c->l_qseq - ye + bw/2;
 	if (xe - xb - c->l_qseq > bw)
 		xb += (xe - xb - c->l_qseq - bw) / 2, xe -= (xe - xb - c->l_qseq - bw) / 2;
-	{ // glocal
+	{ /* glocal */
 		uint8_t *s, *r, *q, *seq = bam1_seq(b), *bq;
 		int *state;
+        double **pd = 0;
+        int bw;
+
 		bq = calloc(c->l_qseq + 1, 1);
 		memcpy(bq, qual, c->l_qseq);
 		s = calloc(c->l_qseq, 1);
@@ -182,15 +195,12 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref, int flag)
 			r[i-xb] = bam_nt16_nt4_table[bam_nt16_table[(int)ref[i]]];
 		}
 		state = calloc(c->l_qseq, sizeof(int));
-		q = calloc(c->l_qseq, 1);
-          
-        double **pd = 0;
-        pd = calloc(c->l_qseq+1, sizeof(double*));
-          
-#ifdef DEBUG
-        fprintf(stderr, "processing read %s\n", bam1_qname(b));
-#endif
-        int bw;
+		q = calloc(c->l_qseq, 1);          
+        if (aq_flag) {
+             pd = calloc(c->l_qseq+1, sizeof(double*));
+        } else {
+             pd = NULL;
+        }
         kpa_ext_glocal(r, xe-xb, s, c->l_qseq, qual, &conf, state, q, pd, &bw);
 
         /***************************************************************
@@ -321,14 +331,16 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref, int flag)
            ***************************************************************/
 		
           /* running glocal again with samtools default parameters to get identical BAQ values 
-           * FIXME this should be made a function
+           *
+           * - FIXME this should be made a function
+           * - FIXME run before AQ (if no ins or del no need to run AQ)
            */
           bw = conf.bw;
           conf = kpa_ext_par_def;
           conf.bw = bw;
           kpa_ext_glocal(r, xe-xb, s, c->l_qseq, qual, &conf, state, q, NULL, &bw);
 
-          if (!extend_baq) { // in this block, bq[] is capped by base quality qual[]
+          if (!baq_extended) { // in this block, bq[] is capped by base quality qual[]
 			for (k = 0, x = c->pos, y = 0; k < c->n_cigar; ++k) {
 				int op = cigar[k]&0xf, l = cigar[k]>>4;
 				if (op == BAM_CMATCH || op == BAM_CEQUAL || op == BAM_CDIFF) {

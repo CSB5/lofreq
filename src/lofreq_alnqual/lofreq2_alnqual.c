@@ -43,97 +43,120 @@
 #define MYNAME "lofreq alnqual"		
 
 
+void usage()
+{
+     fprintf(stderr, "%s: add base- and indel-alignment qualities (BAQ, IDAQ) to BAM file\n\n", MYNAME);
+     fprintf(stderr, "Usage:   %s [options] <aln.bam> <ref.fasta>\n", MYNAME);
+     fprintf(stderr, "Options:\n");
+     fprintf(stderr, "         -b       Compressed BAM output\n");
+     fprintf(stderr, "         -u       Uncompressed BAM output (for piping)\n");
+     fprintf(stderr, "         -S       The input is SAM with header\n");
+     fprintf(stderr, "         -e       Use default instead of extended BAQ (the latter gives better sensitivity but lower specificity)\n\n");		
+     fprintf(stderr, "         -B       Don't compute base alignment qualities\n");
+     fprintf(stderr, "         -A       Don't compute indel alignment qualities\n");
+     fprintf(stderr, "         -r       Recompute i.e. overwrite existing values\n");
+     fprintf(stderr, "- Output BAM will be written to stdout.\n");				
+     fprintf(stderr, "- Only reads containing indels will contain indel-alignment qualities (tags: %s and %s).\n", AI_TAG, AD_TAG);
+     fprintf(stderr, "- Do not change the alignmnent after running this, i.e. use this as last postprocessing step!\n");
+     fprintf(stderr, "- This program is based on samtools. BAQ was introduced by Heng Li PMID:21320865\n\n");
+
+}
+
 
 int main(int argc, char *argv[])
 {
-	int c, flt_flag, tid = -2, ret, len, is_bam_out, is_sam_in, is_uncompressed, max_nm, is_realn, capQ, baq_flag;
-	samfile_t *fp, *fpout = 0;
-	faidx_t *fai;
-	char *ref = 0, mode_w[8], mode_r[8];
-	bam1_t *b;
+     int c, tid = -2, ret, len, is_bam_out, is_sam_in, is_uncompressed;
+     samfile_t *fp, *fpout = 0;
+     faidx_t *fai;
+     char *ref = 0, mode_w[8], mode_r[8];
+     bam1_t *b;
+     int baq_flag = 1;
+     int ext_baq = 1;
+     int aq_flag = 1;
+     int redo = 0;
 
-	flt_flag = UPDATE_NM | UPDATE_MD;
-	is_bam_out = is_sam_in = is_uncompressed = is_realn = max_nm = capQ = baq_flag = 0;
-	mode_w[0] = mode_r[0] = 0;
-	strcpy(mode_r, "r"); strcpy(mode_w, "w");
+     is_bam_out = is_sam_in = is_uncompressed = 0;
+     mode_w[0] = mode_r[0] = 0;
+     strcpy(mode_r, "r"); strcpy(mode_w, "w");
 	
-	is_realn = 1;
-	baq_flag |= 2; /* ext baq */
-	while ((c = getopt(argc, argv, "buSe")) >= 0) {
-		switch (c) {
-#if 0
-		case 'r': is_realn = 1; break;
-		case 'e': flt_flag |= USE_EQUAL; break;
-		case 'A': baq_flag |= 1; break;
-		case 'd': flt_flag |= DROP_TAG; break;
-		case 'q': flt_flag |= BIN_QUAL; break;
-		case 'h': flt_flag |= HASH_QNM; break;
-		case 'N': flt_flag &= ~(UPDATE_MD|UPDATE_NM); break;
-		case 'n': max_nm = atoi(optarg); break;
-		case 'C': capQ = atoi(optarg); break;
-#endif
-		case 'b': is_bam_out = 1; break;
-		case 'u': is_uncompressed = is_bam_out = 1; break;
-		case 'S': is_sam_in = 1; break;
-		case 'e': baq_flag &= ~2; break;
-		default: fprintf(stderr, "%s unrecognized option '-%c'\n", MYNAME, c); return 1;
-		}
-	}
-	if (!is_sam_in) strcat(mode_r, "b");
-	if (is_bam_out) strcat(mode_w, "b");
-	else strcat(mode_w, "h");
-	if (is_uncompressed) strcat(mode_w, "u");
-	if (optind + 1 >= argc) {
-#if 0
-  		/* donwannah */
-		fprintf(stderr, "Usage:   samtools calmd [-eubrS] <aln.bam> <ref.fasta>\n\n");
-		fprintf(stderr, "Options: -e       change identical bases to '='\n");		
-		fprintf(stderr, "         -A       modify the quality string\n");
-		/* default */
-		fprintf(stderr, "         -r       compute the BQ tag (without -A) or cap baseQ by BAQ (with -A)\n");
-#else
-		fprintf(stderr, "%s: add base- and indel-alignment qualities (BAQ, IDAQ) to BAM file\n\n", MYNAME);
-		fprintf(stderr, "Usage:   %s [options] <aln.bam> <ref.fasta>\n", MYNAME);
-		fprintf(stderr, "Options:\n");
-		fprintf(stderr, "         -u       uncompressed BAM output (for piping)\n");
-		fprintf(stderr, "         -b       compressed BAM output\n");
-		fprintf(stderr, "         -S       the input is SAM with header\n");
-		fprintf(stderr, "         -e       use default instead of extended BAQ (the latter gives better sensitivity but lower specificity)\n\n");		
-		fprintf(stderr, "- Output will be written to stdout.\n");				
-		fprintf(stderr, "- Only reads containing indels will contain indel-alignment qualities (tags: %s and %s).\n", AI_TAG, AD_TAG);
-		fprintf(stderr, "- Do not change the alignmnent after running this, i.e. use this as last postprocessing step!\n");
-		fprintf(stderr, "- This program is based on samtools. BAQ was introduced by Heng Li PMID:21320865\n\n");
-#endif
-		return 1;
-	}
-	fp = samopen(argv[optind], mode_r, 0);
-	if (fp == 0) return 1;
-	if (is_sam_in && (fp->header == 0 || fp->header->n_targets == 0)) {
-         fprintf(stderr, "%s: input SAM does not have header. Abort!\n", MYNAME);
-		return 1;
-	}
-	fpout = samopen("-", mode_w, fp->header);
-	fai = fai_load(argv[optind+1]);
+     while ((c = getopt(argc, argv, "buSeBAr")) >= 0) {
+          switch (c) {
+          case 'b': is_bam_out = 1; break;
+          case 'u': is_uncompressed = is_bam_out = 1; break;
+          case 'S': is_sam_in = 1; break;
+          case 'e': ext_baq = 0; break;
+          case 'B': baq_flag = 0; break;
+          case 'A': aq_flag = 0; break;
+          case 'r': redo = 1; break;
+          default: 
+               fprintf(stderr, "FATAL: %s unrecognized option '-%c'\n", MYNAME, c); 
+               return 1;
+          }
+     }
+     if (optind + 1 >= argc) {
+          usage();
+          return 1;
+     }
 
-	b = bam_init1();
-	while ((ret = samread(fp, b)) >= 0) {
-		if (b->core.tid >= 0) {
-			if (tid != b->core.tid) {
-				free(ref);
-				ref = fai_fetch(fai, fp->header->target_name[b->core.tid], &len);
-				tid = b->core.tid;
-				if (ref == 0)
-					fprintf(stderr, "%s fail to find sequence '%s' in the reference.\n",
-							MYNAME, fp->header->target_name[tid]);
-			}
-			if (is_realn) bam_prob_realn_core_ext(b, ref, baq_flag);
-		}
-		samwrite(fpout, b);
-	}
-	bam_destroy1(b);
+     if (!is_sam_in) strcat(mode_r, "b");
+     if (is_bam_out) {
+          strcat(mode_w, "b");
+     } else{
+          strcat(mode_w, "h");
+     }
+     if (is_uncompressed) strcat(mode_w, "u");
+     
+     if (redo) {
+          if (baq_flag) {
+               baq_flag = 2;
+          }
+          if (aq_flag) {
+               aq_flag = 2;
+          }
+     }
 
-	free(ref);
-	fai_destroy(fai);
-	samclose(fp); samclose(fpout);
-	return 0;
+     if (! baq_flag && ! aq_flag) {
+          fprintf(stderr, "FATAL: %s: Nothing to do: BAQ and IDAQ off\n", MYNAME); 
+          return 1;
+     }
+
+     fp = samopen(argv[optind], mode_r, 0);
+     if (fp == 0) return 1;
+     if (is_sam_in && (fp->header == 0 || fp->header->n_targets == 0)) {
+          fprintf(stderr, "FATAL: %s: input SAM does not have header\n", MYNAME);
+          return 1;
+     }
+     fpout = samopen("-", mode_w, fp->header);
+
+     fai = fai_load(argv[optind+1]);
+     if (! fai) {
+          fprintf(stderr, "FATAL: %s: failed to load fai index\n", MYNAME);
+          return 1;
+     }
+
+     b = bam_init1();
+     while ((ret = samread(fp, b)) >= 0) {
+          if (b->core.tid >= 0) {
+               if (tid != b->core.tid) {
+                    free(ref);
+                    ref = fai_fetch(fai, fp->header->target_name[b->core.tid], &len);
+                    tid = b->core.tid;
+                    if (ref == 0) {
+                         fprintf(stderr, "FATAL: %s failed to find sequence '%s' in the reference.\n",
+                                   MYNAME, fp->header->target_name[tid]);
+                         return 1;
+                    }
+               }
+               
+               bam_prob_realn_core_ext(b, ref, baq_flag, ext_baq, aq_flag);
+          }
+          samwrite(fpout, b);
+     }
+     bam_destroy1(b);
+     
+     free(ref);
+     fai_destroy(fai);
+     samclose(fp); 
+     samclose(fpout);
+     return 0;
 }
