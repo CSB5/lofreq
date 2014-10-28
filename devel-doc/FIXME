@@ -3,11 +3,12 @@ Todos:
 High Prio:
 ==========
 
-- fix indel af computation which seems
+- fix indel af computation
 - add normal and tumor plp info to somatic calls. normal could be added in uniq
 - use bgzip instead of gzip for vcf compression and SQ fetch or relevant (region,bed) vars per chrom (tabix/bgzip)
   (rework vcfset afterwards)
 - unify snv and indel call logic (call simultaneously)
+- multiprocessing version of alnqual (best per chrom as we get overlapping reads if run per bin)
 - split idaq and baq calling logic and also enable on the fly
 
 Med Prio:
