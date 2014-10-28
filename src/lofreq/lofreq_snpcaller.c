@@ -516,11 +516,6 @@ call_vars(const plp_col_t *p, void *confp)
       * not calling anyhthing if the indel coverage is higher than the
       * 'substitution' coverage
       */
-     if (p->num_ins + p->num_dels + p->num_ign_indels > p->num_bases) {
-          LOG_WARN("p->cons_base[0]=%c p->num_ins=%d p->num_dels=%d p->num_ign_indels=%d p->num_bases=%d p->coverage_plp=%d\n",
-                   p->cons_base[0], p->num_ins, p->num_dels, p->num_ign_indels, p->num_bases, p->coverage_plp);
-     }
-
      if (! conf->only_indels && \
          ! ((p->cons_base[0] == '+' || p->cons_base[0] == '-')) && \
          ! (p->num_ins + p->num_dels + p->num_ign_indels > p->num_bases)) {/* consensus indel actually there but not officially predicted because e.g. indel qualities were missing */
@@ -746,9 +741,6 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -b | --bonf                  Bonferroni factor. 'dynamic' (increase per actually performed test) or INT ['dynamic']\n");
 
      fprintf(stderr, "- Misc.:\n");
-#ifdef USE_ALNERRPROF
-     fprintf(stderr, "       -A | --map-prof FILE         Mapping error profile (produced with bamstats)\n");
-#endif
      fprintf(stderr, "       -C | --min-cov INT           Test only positions having at least this coverage [%d]\n", snvcall_conf->min_cov);
      fprintf(stderr, "                                    (note: without --no-default-filter default filters (incl. coverage) kick in after predictions are done)\n");
      fprintf(stderr, "            --illumina-1.3          Assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
@@ -856,13 +848,10 @@ for cov in coverage_range:
               {"no-mq", no_argument, NULL, 'N'},
               {"src-qual", no_argument, NULL, 's'},
               {"ign-vcf", required_argument, NULL, 'S'},
-              {"def-nm-q", required_argument, NULL, 'R'},
+              {"def-nm-q", required_argument, NULL, 'T'},
               {"sig", required_argument, NULL, 'a'},
               {"bonf", required_argument, NULL, 'b'}, /* NOTE changes here must be reflected in pseudo_parallel code as well */
 
-#ifdef USE_ALNERRPROF
-              {"map-prof", required_argument, NULL, 'A'},
-#endif
               {"min-cov", required_argument, NULL, 'C'},
               /*{"maxdepth", required_argument, NULL, 'd'},*/
 
@@ -879,7 +868,7 @@ for cov in coverage_range:
          };
 
          /* keep in sync with long_opts and usage */
-         static const char *long_opts_str = "r:l:f:o:q:Q:R:j:J:K:BDeAm:M:NsS:T:a:b:A:C:h";
+         static const char *long_opts_str = "r:l:f:o:q:Q:R:j:J:K:DeBAm:M:NsS:T:a:b:A:C:h";
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
          c = getopt_long(argc-1, argv+1, /* skipping 'lofreq', just leaving 'command', i.e. call */
@@ -967,6 +956,7 @@ for cov in coverage_range:
 
          case 'A':
               snvcall_conf.flag &= ~SNVCALL_USE_IDAQ;
+              mplp_conf.flag &= ~MPLP_IDAQ;
               break;
 
          case 'm':
@@ -1015,13 +1005,6 @@ for cov in coverage_range:
                    }
               }
               break;
-
-
-#ifdef USE_ALNERRPROF
-         case 'A':
-              mplp_conf.alnerrprof_file = strdup(optarg);
-              break;
-#endif
 
          case 'C':
               snvcall_conf.min_cov = atoi(optarg);

@@ -104,7 +104,7 @@ void init_mplp_conf(mplp_conf_t *c)
      c->min_plp_idq = DEFAULT_MIN_PLP_IDQ;
      c->capQ_thres = 0;
      c->max_depth = DEFAULT_MAX_PLP_DEPTH;
-     c->flag = MPLP_NO_ORPHAN | MPLP_BAQ | MPLP_EXT_BAQ;
+     c->flag = MPLP_NO_ORPHAN | MPLP_BAQ | MPLP_EXT_BAQ | MPLP_IDAQ;
 }
 
 
@@ -560,7 +560,7 @@ free_and_exit:
 static int
 mplp_func(void *data, bam1_t *b)
 {
-     extern int bam_prob_realn_core_ext(bam1_t *b, const char *ref, int baq_flag);
+     extern int bam_prob_realn_core_ext(bam1_t *b, const char *ref, int baq_flag, int baq_ext, int aq_flag);
      extern int bam_cap_mapQ(bam1_t *b, char *ref, int thres);
      mplp_aux_t *ma = (mplp_aux_t*)data;
      int ret, skip = 0;
@@ -608,69 +608,44 @@ mplp_func(void *data, bam1_t *b)
 
           skip = 0;
 
-#if 0
+#if 1
           {
-               uint8_t *baq_aux = bam_aux_get(b, BAQ_TAG);
-               uint8_t *qual = bam1_qual(b);
-               int i;
-               fprintf(stderr, "BQ before: baq=%p qual=%p id=%s\n",
-                       baq, qual, bam1_qname(b));
-               if (baq_aux) baq_aux++;
-               for (i = 0; i < b->core.l_qseq; ++i) {
-                    fprintf(stderr, " pos %d: Q=%d BAQ=%d\n",
-                            i, qual[i], baq_aux ? baq_aux[i]-33 : -1);
-               }
-               fprintf(stderr, "\n");
-          }
-#endif
-
-#if 0
-          {
-               fprintf(stdout, "before realn\n");
+               fprintf(stderr, "before realn\n");
                samfile_t *fp = samopen("-", "w",  ma->h);
                samwrite(fp, b);
                fflush(stdout);
           }
 #endif
 
-#ifdef BAQ_ON_THE_FLY
-          /* FIXME also computes AQ. don't if already done or if not required */
-          if (has_ref && (ma->conf->flag & MPLP_BAQ)) {
-               if (bam_prob_realn_core_ext(b, ma->ref,
-                                           ma->conf->flag & MPLP_EXT_BAQ ? 2 : 0 /* FIXME hardcoded values */)) {
+          if (ma->conf->flag & MPLP_BAQ || ma->conf->flag & MPLP_IDAQ) {
+               int baq_flag = 0;
+               int baq_ext =  ma->conf->flag & MPLP_EXT_BAQ;
+               int idaq_flag = ma->conf->flag & MPLP_IDAQ;
+
+               if (! has_ref) {
+                    LOG_FATAL("%s\n", "Can't compute BAQ or IDAQ without reference sequence");
+                    exit(1);
+               }
+               if (ma->conf->flag & MPLP_BAQ) {
+                    baq_flag = 1;
+                    if (ma->conf->flag & MPLP_REDO_BAQ) {
+                         baq_flag = 2;
+                    }                    
+               }
+
+               if (bam_prob_realn_core_ext(b, ma->ref, baq_flag, baq_ext, idaq_flag)) {
                     LOG_ERROR("bam_prob_realn_core() failed for %s\n", bam1_qname(b));
                }
-          } else if (ma->conf->flag & MPLP_BAQ) {
-               LOG_FATAL("%s\n", "Can't compute BAQ without reference sequence");
-               exit(1);
           }
-#endif
 
-#if 0
-        {
-             uint8_t *baq_aux = bam_aux_get(b, BAQ_TAG);
-             uint8_t *qual = bam1_qual(b);
-             int i;
-             if (baq_aux) {/* zero if -B */
-                 fprintf(stderr, "BQ after: baq=%p qual=%p id=%s\n",
-                         baq_aux, qual, bam1_qname(b));
-                 baq_aux++;
-                 for (i = 0; i < b->core.l_qseq; ++i) {
-                      fprintf(stderr, " pos %d : Q=%d BAQ=%d\n",
-                              i, qual[i], baq_aux ? baq_aux[i]-33 : -1);
-                 }
-                 fprintf(stderr, "\n");
-            }
-        }
-#endif
-
-#if 0
-        {
-           fprintf(stdout, "after realn\n");
-           samfile_t *fp = samopen("-", "w",  ma->h);
-           samwrite(fp, b);
-           fflush(stdout);
-        }
+#if 1     
+          {
+               fprintf(stdout, "after realn\n");
+               samfile_t *fp = samopen("-", "w",  ma->h);
+               samwrite(fp, b);
+               fflush(stdout);
+          }
+      
 #endif
 
         if (has_ref && ma->conf->capQ_thres > 10) {
@@ -865,8 +840,8 @@ void compile_plp_col(plp_col_t *plp_col,
                 * automatically as this would indicate a problem with
                 * the input and it's also unclear what the BAQ then means
                 */
-               if (bq > 93) {
-                    /* bq = 93; /@ Sanger/Phred max */
+               if (bq > SANGER_PHRED_MAX) {
+                    /* bq = SANGER_PHRED_MAX; /@ Sanger/Phred max */
                     LOG_FATAL("Base qualitiy above allowed maximum detected (%d)\n", bq);
                     exit(1);
                }

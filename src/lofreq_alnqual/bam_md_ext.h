@@ -28,7 +28,7 @@
 
 
 int bam_prob_realn_core_ext(bam1_t *b, const char *ref, 
-                            int baq_flag, int ext_baq, int aq_flag);
+                            int baq_flag, int ext_baq, int idaq_flag);
 
 
 #endif
