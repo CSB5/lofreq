@@ -432,7 +432,6 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                          exit(1);
                     } else if (0 != conf->def_alt_jq)  {
                          merged_err_prob = PHREDQUAL_TO_PROB(conf->def_alt_jq);
-                         merged_qual = conf->def_alt_jq;
                     }
                     /* 0: keep original */
                     alt_counts[alt_idx] += 1;
@@ -466,7 +465,6 @@ plp_to_ins_errprobs(double **err_probs, int *num_err_probs,
      iq = aq = mq = sq = -1;
 
      for (i = 0; i < p->ins_quals.n; i++) {
-          int iq, mq;
           iq = p->ins_quals.data[i];
           mq = p->ins_map_quals.data[i];
           final_err_prob = merge_srcq_mapq_baq_and_bq(-1, mq, -1, iq);
