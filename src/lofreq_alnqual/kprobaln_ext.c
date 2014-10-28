@@ -82,7 +82,7 @@ int kpa_ext_glocal(const uint8_t *_ref, int l_ref, const uint8_t *_query, int l_
 	double **f, **b = 0, *s, m[9], sI, sM, bI, bM, pb;
 	float *qual, *_qual;
 	const uint8_t *ref, *query;
-	int bw, bw2, i, k, is_diff = 0, is_backward = 1, Pr;
+	int bw, bw2, i, k, /* is_diff = 0, */ is_backward = 1, Pr;
 
     if ( l_ref<=0 || l_query<=0 ) return 0; // FIXME: this may not be an ideal fix, just prevents sefgault
 
@@ -100,8 +100,8 @@ int kpa_ext_glocal(const uint8_t *_ref, int l_ref, const uint8_t *_query, int l_
     }
      bw2 = bw * 2 + 1;
 	// allocate the forward and backward matrices f[][] and b[][] and the scaling array s[]
-	f = calloc(l_query+1, sizeof(void*));
-    if (is_backward) b = calloc(l_query+1, sizeof(void*));
+	f = calloc(l_query+1, sizeof(double*));
+    if (is_backward) b = calloc(l_query+1, sizeof(double*));
 	for (i = 0; i <= l_query; ++i) {    // FIXME: this will lead in segfault for l_query==0
 		f[i] = calloc(bw2 * 3 + 6, sizeof(double)); // FIXME: this is over-allocated for very short seqs
         if (is_backward) b[i] = calloc(bw2 * 3 + 6, sizeof(double));
@@ -230,7 +230,7 @@ int kpa_ext_glocal(const uint8_t *_ref, int l_ref, const uint8_t *_query, int l_
 		set_u(k, bw, 0, 0);
 		pb = b[0][k] = sum / s[0]; // if everything works as is expected, pb == 1.0
 	}
-	is_diff = fabs(pb - 1.) > 1e-7? 1 : 0;
+	/* never used? is_diff = fabs(pb - 1.) > 1e-7? 1 : 0; */
 	/*** MAP ***/
 	for (i = 1; i <= l_query; ++i) {
 		double sum = 0., *fi = f[i], *bi = b[i], max = 0.;

@@ -33,8 +33,8 @@ const int BQ2_DEFAULT = 20;
 
 int left_align_indels(char *sref, char *squery, int slen, char *new_state_seq) {
 
-     char ref[slen];
-     char query[slen];
+     char ref[slen+1];
+     char query[slen+1];
      strcpy(ref, sref);
      strcpy(query, squery);
      
