@@ -261,6 +261,8 @@ dump_mplp_conf(const mplp_conf_t *c, FILE *stream)
      fprintf(stream, "  flag & MPLP_BAQ        = %d\n", c->flag & MPLP_BAQ ? 1:0);
      fprintf(stream, "  flag & MPLP_REDO_BAQ   = %d\n", c->flag & MPLP_REDO_BAQ ? 1:0);
      fprintf(stream, "  flag & MPLP_EXT_BAQ    = %d\n", c->flag & MPLP_EXT_BAQ ? 1:0);
+     fprintf(stream, "  flag & MPLP_IDAQ       = %d\n", c->flag & MPLP_IDAQ ? 1:0);
+     fprintf(stream, "  flag & MPLP_REDO_IDAQ = %d\n", c->flag & MPLP_REDO_IDAQ ? 1:0);
      fprintf(stream, "  flag & MPLP_USE_SQ     = %d\n", c->flag & MPLP_USE_SQ ? 1:0);
      fprintf(stream, "  flag & MPLP_ILLUMINA13 = %d\n", c->flag & MPLP_ILLUMINA13 ? 1:0);
 
@@ -608,7 +610,7 @@ mplp_func(void *data, bam1_t *b)
 
           skip = 0;
 
-#if 1
+#if 0
           {
                fprintf(stderr, "before realn\n");
                samfile_t *fp = samopen("-", "w",  ma->h);
@@ -638,7 +640,7 @@ mplp_func(void *data, bam1_t *b)
                }
           }
 
-#if 1     
+#if 0
           {
                fprintf(stdout, "after realn\n");
                samfile_t *fp = samopen("-", "w",  ma->h);

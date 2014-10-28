@@ -28,7 +28,7 @@
 #define MPLP_BAQ         0x20
 #define MPLP_REDO_BAQ    0x40
 #define MPLP_EXT_BAQ     0x80
-#define MPLP_IDAQ    0x100
+#define MPLP_IDAQ        0x100
 #define MPLP_REDO_IDAQ   0x200
 #define MPLP_USE_SQ      0x400
 #define MPLP_ILLUMINA13  0x800

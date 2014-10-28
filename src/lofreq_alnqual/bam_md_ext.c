@@ -269,7 +269,7 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref,
               skip = 0;
          }
          if (skip) {
-              fprintf(stderr, "Skippping!\n");
+              /*fprintf(stderr, "Reusing all alignment quality values for read %s!\n");*/
               return 0;
          }
     }

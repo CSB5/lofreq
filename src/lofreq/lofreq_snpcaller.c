@@ -743,6 +743,7 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "- Misc.:\n");
      fprintf(stderr, "       -C | --min-cov INT           Test only positions having at least this coverage [%d]\n", snvcall_conf->min_cov);
      fprintf(stderr, "                                    (note: without --no-default-filter default filters (incl. coverage) kick in after predictions are done)\n");
+     fprintf(stderr, "       -d | --max-depth INT         Cap coverage at this depth [%d]\n", mplp_conf->max_depth);
      fprintf(stderr, "            --illumina-1.3          Assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
      fprintf(stderr, "            --dont-skip-n           Don't skip positions where refbase is N (will try to predict CONSVARs (only) at those positions)\n");
      fprintf(stderr, "            --use-orphan            Count anomalous read pairs (i.e. where mate is not aligned properly)\n");
@@ -853,7 +854,7 @@ for cov in coverage_range:
               {"bonf", required_argument, NULL, 'b'}, /* NOTE changes here must be reflected in pseudo_parallel code as well */
 
               {"min-cov", required_argument, NULL, 'C'},
-              /*{"maxdepth", required_argument, NULL, 'd'},*/
+              {"maxdepth", required_argument, NULL, 'd'},
 
               {"dont-skip-n", no_argument, &dont_skip_n, 1},
               {"illumina-1.3", no_argument, &illumina_1_3, 1},
@@ -868,7 +869,7 @@ for cov in coverage_range:
          };
 
          /* keep in sync with long_opts and usage */
-         static const char *long_opts_str = "r:l:f:o:q:Q:R:j:J:K:DeBAm:M:NsS:T:a:b:A:C:h";
+         static const char *long_opts_str = "r:l:f:o:q:Q:R:j:J:K:DeBAm:M:NsS:T:a:b:C:d:h";
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
          c = getopt_long(argc-1, argv+1, /* skipping 'lofreq', just leaving 'command', i.e. call */
@@ -941,17 +942,17 @@ for cov in coverage_range:
               }
               break;
 
-         case 'B':
-              mplp_conf.flag &= ~MPLP_BAQ;
-              snvcall_conf.flag &= ~SNVCALL_USE_BAQ;
-              break;
-
          case 'D':
               mplp_conf.flag |= MPLP_REDO_BAQ;
               break;
 
          case 'e':
               mplp_conf.flag &= ~MPLP_EXT_BAQ;
+              break;
+
+         case 'B':
+              mplp_conf.flag &= ~MPLP_BAQ;
+              snvcall_conf.flag &= ~SNVCALL_USE_BAQ;
               break;
 
          case 'A':
@@ -1008,6 +1009,10 @@ for cov in coverage_range:
 
          case 'C':
               snvcall_conf.min_cov = atoi(optarg);
+              break;
+
+         case 'd':
+              mplp_conf.max_depth = atoi(optarg);
               break;
 
          case 'h':
