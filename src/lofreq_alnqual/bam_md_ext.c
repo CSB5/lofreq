@@ -47,63 +47,8 @@
 #define encode_q(q) (uint8_t)(q < 33 ? '!' : (q > 126 ? '~' : q))
 
 
-#if 0
-/* based on  bam_prob_realn_core */
-int prob_realn(bam1_t *b, const char *ref, 
-               int baq_or_idaq, int redo, int ext_baq) {
-{
-     int k, i, bw, x, y, z, yb, ye, xb, xe;
-     uint32_t *cigar = bam1_cigar(b);
-     bam1_core_t *c = &b->core;
-     uint8_t *qual = bam1_qual(b);
-     kpa_ext_par_t conf;
-     const int BAQ=1;
-     const int IDAQ=2;
 
-     if (baq_or_idaq==BAQ) {
-          conf = kpa_ext_par_def;
-     } else if (baq_or_idaq==IDAQ) {
-          conf = kpa_ext_par_lofreq;
-     } else {
-          LOG_FATAL("INTERNAL ERROR: invalid value for baq_or_idaq=%d\n", baq_or_idaq);
-          exit(1);
-     }
-
-     /* if not aligned: do nothing */
-	if ((c->flag & BAM_FUNMAP) || b->core.l_qseq == 0) return -1;
-
-    if (baq_or_idaq==BAQ) {
-         uint8_t *p = NULL;
-         if ((p = bam_aux_get(b, BAQ_TAG)) != 0 && *p == 'Z') {
-              if (redo) {
-                   bam_aux_del(b, p);
-              } else {
-                   return -2;
-              }
-         }
-    } else if (baq_or_idaq==IDAQ) {
-         FIXME need to now if indel is present first */
-         if ((p = bam_aux_get(b, AI_TAG)) != 0 && *p == 'Z') {
-              if (redo) {
-                   bam_aux_del(b, p);
-              } else {
-                   FIXME
-              }
-         }
-         if ((p = bam_aux_get(b, AD_TAG)) != 0 && *p == 'Z') {
-              if (redo) {
-                   bam_aux_del(b, p);
-              } else {
-                   FIXME
-              }
-         }
-    }
-}
-#endif
-
-
-
-void aq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
+void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
 {
 	uint32_t *cigar = bam1_cigar(b);
 	bam1_core_t *c = &b->core;
@@ -241,54 +186,58 @@ void aq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
 /* this is lofreq's target function which was heavily modified to accomodate our needs:
  * 1. compute indel alignment qualities on top of base alignment qualities
  * 2. keep base alignment qualities separates, i.e. don't mix with base-qualities
+ *
+ * baq_flag: 0 off, 1 on, 2 redo
+ * aq_flag: 0 off, 1 on, 2 redo
  */
-int bam_prob_realn_core_ext(bam1_t *b, const char *ref, int flag)
+int bam_prob_realn_core_ext(bam1_t *b, const char *ref, 
+                            int baq_flag, int baq_extended,
+                            int idaq_flag)
 {
 /*#define ORIG_BAQ 1*/
-    int k, i, bw, x, y, yb, ye, xb, xe, extend_baq = flag>>1&1;
-    /* unused: int apply_baq = flag&1 */
-    int redo = 1;  /* = flag&4; */
-    int do_aq = 1; /* FIXME const */
-	uint32_t *cigar = bam1_cigar(b);
-	bam1_core_t *c = &b->core;
-	kpa_ext_par_t conf = kpa_ext_par_lofreq;
-	/*uint8_t *bq = 0, *zq = 0, *qual = bam1_qual(b);*/
-	uint8_t *qual = bam1_qual(b);
-    double **pd = 0;
+     int k, i, bw, x, y, yb, ye, xb, xe;
+     uint32_t *cigar = bam1_cigar(b);
+     bam1_core_t *c = &b->core;
+     kpa_ext_par_t conf = kpa_ext_par_lofreq;
+     /*uint8_t *bq = 0, *zq = 0, *qual = bam1_qual(b);*/
+     uint8_t *qual = bam1_qual(b);
+     uint8_t *prec_ai, *prec_ad, *prec_baq;
+     int has_ins = 0, has_del = 0;
+     double **pd = 0;
 
-    /* WARNING/FIXME: 
-     * - redo always on so that baq and ai/ad always get recomputed 
-     * - BAQ and A[ID] always computed
-     */
+     /* nothing to do ? */
+     if (! baq_flag && ! idaq_flag) {
+          return 0;
+     }
 
-	if ((c->flag & BAM_FUNMAP) || b->core.l_qseq == 0) return -1; // do nothing
-	// test if BQ or ZQ is present
+     /* no alignment? */
+     if ((c->flag & BAM_FUNMAP) || b->core.l_qseq == 0) {
+          return 0;
+     }
+     
+     /* get existing tags. delete if existing and redo is on
+      */
+     if ((prec_baq = bam_aux_get(b, BAQ_TAG)) != 0 && *prec_baq == 'Z') {
+          if (baq_flag==2) {
+               bam_aux_del(b, prec_baq);
+               prec_baq = NULL;
+          }
+     }
+     if ((prec_ai = bam_aux_get(b, AI_TAG)) != 0 && *prec_ai == 'Z') {
+          if (idaq_flag==2) {
+               bam_aux_del(b, prec_ai);
+               prec_ai = NULL;
+          }
+     }
+     if ((prec_ad = bam_aux_get(b, AI_TAG)) != 0 && *prec_ad == 'Z') {
+          if (idaq_flag==2) {
+               bam_aux_del(b, prec_ad);
+               prec_ad = NULL;
+          }
+     }
 
-    if (redo) {/* if BAQ is present and redo is not set do nothing. note: also means AQ will not be computed */
-         uint8_t *bq = NULL; /* pointer to precomputed baq values */
-         uint8_t *ai = NULL;
-         uint8_t *ad = NULL;
 
-         if ((bq = bam_aux_get(b, BAQ_TAG)) != 0 && *bq == 'Z') {
-              bam_aux_del(b, bq);
-         }
-         if ((ai = bam_aux_get(b, AI_TAG)) != 0 && *ai == 'Z') {
-              bam_aux_del(b, ai);
-         }
-         if ((ad =  bam_aux_get(b, AD_TAG)) != 0 && *ad == 'Z') {
-              bam_aux_del(b, ad);
-         }
-    }
-
-    if (do_aq) {
-        pd = calloc(c->l_qseq+1, sizeof(double*));
-    }
-
-
-    /* FIXME block for reuse of BQ/ZQ deleted */
-
-
-	// find the start and end of the alignment	
+	/* find the start and end of the alignment */
 	x = c->pos, y = 0, yb = ye = xb = xe = -1;
 	for (k = 0; k < c->n_cigar; ++k) {
 		int op, l;
@@ -298,12 +247,41 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref, int flag)
 			if (xb < 0) xb = x;
 			ye = y + l; xe = x + l;
 			x += l; y += l;
-		} else if (op == BAM_CSOFT_CLIP || op == BAM_CINS) y += l;
-		else if (op == BAM_CDEL) x += l;
-		else if (op == BAM_CREF_SKIP) return -1; // do nothing if there is a reference skip
+		} else if (op == BAM_CSOFT_CLIP || op == BAM_CINS) {
+             y += l;
+             if (op == BAM_CINS) {
+                  has_ins = 1;
+             }
+		} else if (op == BAM_CDEL) {
+             has_del = 1;
+             x += l;
+        }
+		else if (op == BAM_CREF_SKIP) return 0; /* do nothing if there is a reference skip */
 	}
 
-	// set bandwidth and the start and the end
+    /* don't do anything if everything's there already */
+    if (baq_flag==0 || prec_baq) {
+         int skip = 1;
+         if (has_del && ! prec_ad) {
+              skip = 0;
+         }
+         if (has_ins && ! prec_ai) {
+              skip = 0;
+         }
+         if (skip) {
+              /*fprintf(stderr, "Reusing all alignment quality values for read %s!\n");*/
+              return 0;
+         }
+    }
+
+    if (has_ins || has_del) {
+         pd = calloc(c->l_qseq+1, sizeof(double*));
+    }
+
+    /* either need to compute BAQ or IDAQ 
+     */
+
+	/* set bandwidth and the start and the end */
 	bw = 7;
 	if (abs((xe - xb) - (ye - yb)) > bw)
 		bw = abs((xe - xb) - (ye - yb)) + 3;
@@ -314,7 +292,7 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref, int flag)
 		xb += (xe - xb - c->l_qseq - bw) / 2, xe -= (xe - xb - c->l_qseq - bw) / 2;
 
 
-	{ // glocal
+	{ /* glocal */
 		uint8_t *s, *r, *q, *seq = bam1_seq(b), *bq;
 		int *state;
         int bw;
@@ -335,80 +313,81 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref, int flag)
 #ifdef DEBUG
         fprintf(stderr, "processing read %s\n", bam1_qname(b));
 #endif
-        /* WARN if pd is zero, aq specific bits are switched off in kpa_ext_glocal which also means bw is not updated. shouldn't matter as we have a local bw here */
         kpa_ext_glocal(r, xe-xb, s, c->l_qseq, qual, &conf, state, q, pd, &bw);
 
-	   
-        if (!extend_baq) { // in this block, bq[] is capped by base quality qual[]
-             for (k = 0, x = c->pos, y = 0; k < c->n_cigar; ++k) {
-                  int op = cigar[k]&0xf, l = cigar[k]>>4;
-                  if (op == BAM_CMATCH || op == BAM_CEQUAL || op == BAM_CDIFF) {
-                       for (i = y; i < y + l; ++i) {
-                            if ((state[i]&3) != 0 || state[i]>>2 != x - xb + (i - y)) bq[i] = 0;
+        if (baq_flag && ! prec_baq) {
+             if (! baq_extended) { // in this block, bq[] is capped by base quality qual[]
+                  for (k = 0, x = c->pos, y = 0; k < c->n_cigar; ++k) {
+                       int op = cigar[k]&0xf, l = cigar[k]>>4;
+                       if (op == BAM_CMATCH || op == BAM_CEQUAL || op == BAM_CDIFF) {
+                            for (i = y; i < y + l; ++i) {
+                                 if ((state[i]&3) != 0 || state[i]>>2 != x - xb + (i - y)) bq[i] = 0;
 #ifdef ORIG_BAQ
-                            else bq[i] = bq[i] < q[i]? bq[i] : q[i];
+                                 else bq[i] = bq[i] < q[i]? bq[i] : q[i];
 #else
-                            /* keep the actual values and don't cap by base quality */
-                            bq[i] = q[i];
+                                 /* keep the actual values and don't cap by base quality */
+                                 bq[i] = q[i];
 #endif
-                       }
-                       x += l; y += l;
-                  } else if (op == BAM_CSOFT_CLIP || op == BAM_CINS) y += l;
-                  else if (op == BAM_CDEL) x += l;
-             }
+                            }
+                            x += l; y += l;
+                       } else if (op == BAM_CSOFT_CLIP || op == BAM_CINS) y += l;
+                       else if (op == BAM_CDEL) x += l;
+                  }
 #ifdef ORIG_BAQ
-             for (i = 0; i < c->l_qseq; ++i) bq[i] = qual[i] - bq[i] + 64; // finalize BQ
+                  for (i = 0; i < c->l_qseq; ++i) bq[i] = qual[i] - bq[i] + 64; // finalize BQ
+#endif
+                  
+             } else { // in this block, bq[] is BAQ that can be larger than qual[] (different from the above!)
+                  uint8_t *left, *rght;
+                  left = calloc(c->l_qseq, 1); rght = calloc(c->l_qseq, 1);
+                  for (k = 0, x = c->pos, y = 0; k < c->n_cigar; ++k) {
+                       int op = cigar[k]&0xf, l = cigar[k]>>4;
+                       if (op == BAM_CMATCH || op == BAM_CEQUAL || op == BAM_CDIFF) {
+                            for (i = y; i < y + l; ++i)
+                                 bq[i] = ((state[i]&3) != 0 || state[i]>>2 != x - xb + (i - y))? 0 : q[i];
+                            for (left[y] = bq[y], i = y + 1; i < y + l; ++i)
+                                 left[i] = bq[i] > left[i-1]? bq[i] : left[i-1];
+                            for (rght[y+l-1] = bq[y+l-1], i = y + l - 2; i >= y; --i)
+                                 rght[i] = bq[i] > rght[i+1]? bq[i] : rght[i+1];
+                            for (i = y; i < y + l; ++i)
+                                 bq[i] = left[i] < rght[i]? left[i] : rght[i];
+                            x += l; y += l;
+                       } else if (op == BAM_CSOFT_CLIP || op == BAM_CINS) y += l;
+                       else if (op == BAM_CDEL) x += l;
+                  }
+#ifdef ORIG_BAQ
+                  for (i = 0; i < c->l_qseq; ++i) bq[i] = 64 + (qual[i] <= bq[i]? 0 : qual[i] - bq[i]); // finalize BQ
+#endif
+                  free(left); free(rght);
+             }
+             
+#ifndef ORIG_BAQ
+             /* need to cap to phred max to be able to store it */
+             for (i = 0; i < c->l_qseq; ++i) {
+                  if (bq[i] > SANGER_PHRED_MAX) {
+                       bq[i] = SANGER_PHRED_MAX;
+                  }
+                  bq[i] += 33;
+             }
 #endif
              
-		} else { // in this block, bq[] is BAQ that can be larger than qual[] (different from the above!)
-             uint8_t *left, *rght;
-             left = calloc(c->l_qseq, 1); rght = calloc(c->l_qseq, 1);
-             for (k = 0, x = c->pos, y = 0; k < c->n_cigar; ++k) {
-                  int op = cigar[k]&0xf, l = cigar[k]>>4;
-                  if (op == BAM_CMATCH || op == BAM_CEQUAL || op == BAM_CDIFF) {
-                       for (i = y; i < y + l; ++i)
-                            bq[i] = ((state[i]&3) != 0 || state[i]>>2 != x - xb + (i - y))? 0 : q[i];
-                       for (left[y] = bq[y], i = y + 1; i < y + l; ++i)
-                            left[i] = bq[i] > left[i-1]? bq[i] : left[i-1];
-                       for (rght[y+l-1] = bq[y+l-1], i = y + l - 2; i >= y; --i)
-                            rght[i] = bq[i] > rght[i+1]? bq[i] : rght[i+1];
-                       for (i = y; i < y + l; ++i)
-                            bq[i] = left[i] < rght[i]? left[i] : rght[i];
-                       x += l; y += l;
-                  } else if (op == BAM_CSOFT_CLIP || op == BAM_CINS) y += l;
-                  else if (op == BAM_CDEL) x += l;
-             }
-#ifdef ORIG_BAQ
-             for (i = 0; i < c->l_qseq; ++i) bq[i] = 64 + (qual[i] <= bq[i]? 0 : qual[i] - bq[i]); // finalize BQ
-#endif
-             free(left); free(rght);
-		}
-        
-#ifndef ORIG_BAQ
-        /* need to cap to phred max to be able to store it */
-        for (i = 0; i < c->l_qseq; ++i) {
-             if (bq[i] > SANGER_PHRED_MAX) {
-                  bq[i] = SANGER_PHRED_MAX;
-             }
-             bq[i] += 33;
-        }
-#endif
-        
 /*#undef ORIG_BAQ*/
 #ifdef ORIG_BAQ
-		if (apply_baq) {
-             for (i = 0; i < c->l_qseq; ++i) qual[i] -= bq[i] - 64; // modify qual
-             bam_aux_append(b, "ZQ", 'Z', c->l_qseq + 1, bq);
-		} else bam_aux_append(b, "BQ", 'Z', c->l_qseq + 1, bq);
+             if (apply_baq) {
+                  for (i = 0; i < c->l_qseq; ++i) qual[i] -= bq[i] - 64; // modify qual
+                  bam_aux_append(b, "ZQ", 'Z', c->l_qseq + 1, bq);
+             } else bam_aux_append(b, "BQ", 'Z', c->l_qseq + 1, bq);
 #else
-        bam_aux_append(b, BAQ_TAG, 'Z', c->l_qseq + 1, bq);
+             bam_aux_append(b, BAQ_TAG, 'Z', c->l_qseq + 1, bq);
 #endif
-        
-        
-        if (do_aq && pd) {
-             aq(b, ref, pd, xe, xb, bw);
         }
-
+        /* no baq */
+        
+        
+        if (idaq_flag && pd) {/* pd served as previous check to see if ai or ad actually need to be computed */
+             idaq(b, ref, pd, xe, xb, bw);
+        }
+        
         if (pd) {
              for (i = 0; i<=c->l_qseq; ++i) free(pd[i]);
              free(pd); 

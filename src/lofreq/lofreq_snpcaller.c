@@ -516,11 +516,6 @@ call_vars(const plp_col_t *p, void *confp)
       * not calling anyhthing if the indel coverage is higher than the
       * 'substitution' coverage
       */
-     if (p->num_ins + p->num_dels + p->num_ign_indels > p->num_bases) {
-          LOG_WARN("p->cons_base[0]=%c p->num_ins=%d p->num_dels=%d p->num_ign_indels=%d p->num_bases=%d p->coverage_plp=%d\n",
-                   p->cons_base[0], p->num_ins, p->num_dels, p->num_ign_indels, p->num_bases, p->coverage_plp);
-     }
-
      if (! conf->only_indels && \
          ! ((p->cons_base[0] == '+' || p->cons_base[0] == '-')) && \
          ! (p->num_ins + p->num_dels + p->num_ign_indels > p->num_bases)) {/* consensus indel actually there but not officially predicted because e.g. indel qualities were missing */
@@ -725,10 +720,8 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "- Base-alignment (BAQ) and indel-aligment (IDAQ) qualities:\n");
      fprintf(stderr, "       -B | --no-baq                Disable use of base-alignment quality (BAQ)\n");
      fprintf(stderr, "       -A | --no-idaq               Don't use IDAQ values (NOT recommended under ANY circumstances other than debugging)\n");
-#ifdef BAQ_ON_THE_FLY
      fprintf(stderr, "       -D | --del-baq               Delete pre-existing BAQ values, i.e. compute even if already present in BAM\n");
      fprintf(stderr, "       -e | --no-ext-baq            Use 'normal' BAQ (samtools default) instead of extended BAQ (both computed on the fly if not already present in %s tag)\n", BAQ_TAG);
-#endif
      fprintf(stderr, "- Mapping quality:\n");
      fprintf(stderr, "       -m | --min-mq INT            Skip reads with mapping quality smaller than INT [%d]\n", mplp_conf->min_mq);
      fprintf(stderr, "       -M | --max-mq INT            Cap mapping quality at INT [%d]\n", mplp_conf->max_mq);
@@ -748,11 +741,9 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -b | --bonf                  Bonferroni factor. 'dynamic' (increase per actually performed test) or INT ['dynamic']\n");
 
      fprintf(stderr, "- Misc.:\n");
-#ifdef USE_ALNERRPROF
-     fprintf(stderr, "       -A | --map-prof FILE         Mapping error profile (produced with bamstats)\n");
-#endif
      fprintf(stderr, "       -C | --min-cov INT           Test only positions having at least this coverage [%d]\n", snvcall_conf->min_cov);
      fprintf(stderr, "                                    (note: without --no-default-filter default filters (incl. coverage) kick in after predictions are done)\n");
+     fprintf(stderr, "       -d | --max-depth INT         Cap coverage at this depth [%d]\n", mplp_conf->max_depth);
      fprintf(stderr, "            --illumina-1.3          Assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
      fprintf(stderr, "            --dont-skip-n           Don't skip positions where refbase is N (will try to predict CONSVARs (only) at those positions)\n");
      fprintf(stderr, "            --use-orphan            Count anomalous read pairs (i.e. where mate is not aligned properly)\n");
@@ -848,10 +839,8 @@ for cov in coverage_range:
               {"min-jq", required_argument, NULL, 'j'},
               {"min-alt-jq", required_argument, NULL, 'J'},
               {"def-alt-jq", required_argument, NULL, 'K'},
-#ifdef BAQ_ON_THE_FLY
               {"del-baq", no_argument, NULL, 'D'},
               {"no-ext-baq", no_argument, NULL, 'e'},
-#endif
               {"no-baq", no_argument, NULL, 'B'},
               {"no-indel-aq", no_argument, NULL, 'A'},
 
@@ -860,15 +849,12 @@ for cov in coverage_range:
               {"no-mq", no_argument, NULL, 'N'},
               {"src-qual", no_argument, NULL, 's'},
               {"ign-vcf", required_argument, NULL, 'S'},
-              {"def-nm-q", required_argument, NULL, 'R'},
+              {"def-nm-q", required_argument, NULL, 'T'},
               {"sig", required_argument, NULL, 'a'},
               {"bonf", required_argument, NULL, 'b'}, /* NOTE changes here must be reflected in pseudo_parallel code as well */
 
-#ifdef USE_ALNERRPROF
-              {"map-prof", required_argument, NULL, 'A'},
-#endif
               {"min-cov", required_argument, NULL, 'C'},
-              /*{"maxdepth", required_argument, NULL, 'd'},*/
+              {"maxdepth", required_argument, NULL, 'd'},
 
               {"dont-skip-n", no_argument, &dont_skip_n, 1},
               {"illumina-1.3", no_argument, &illumina_1_3, 1},
@@ -883,7 +869,7 @@ for cov in coverage_range:
          };
 
          /* keep in sync with long_opts and usage */
-         static const char *long_opts_str = "r:l:f:o:q:Q:R:j:J:K:BDeAm:M:NsS:T:a:b:A:C:h";
+         static const char *long_opts_str = "r:l:f:o:q:Q:R:j:J:K:DeBAm:M:NsS:T:a:b:C:d:h";
          /* getopt_long stores the option index here. */
          int long_opts_index = 0;
          c = getopt_long(argc-1, argv+1, /* skipping 'lofreq', just leaving 'command', i.e. call */
@@ -956,12 +942,6 @@ for cov in coverage_range:
               }
               break;
 
-         case 'B':
-              mplp_conf.flag &= ~MPLP_BAQ;
-              snvcall_conf.flag &= ~SNVCALL_USE_BAQ;
-              break;
-
-#ifdef BAQ_ON_THE_FLY
          case 'D':
               mplp_conf.flag |= MPLP_REDO_BAQ;
               break;
@@ -969,10 +949,15 @@ for cov in coverage_range:
          case 'e':
               mplp_conf.flag &= ~MPLP_EXT_BAQ;
               break;
-#endif
+
+         case 'B':
+              mplp_conf.flag &= ~MPLP_BAQ;
+              snvcall_conf.flag &= ~SNVCALL_USE_BAQ;
+              break;
 
          case 'A':
               snvcall_conf.flag &= ~SNVCALL_USE_IDAQ;
+              mplp_conf.flag &= ~MPLP_IDAQ;
               break;
 
          case 'm':
@@ -1022,15 +1007,12 @@ for cov in coverage_range:
               }
               break;
 
-
-#ifdef USE_ALNERRPROF
-         case 'A':
-              mplp_conf.alnerrprof_file = strdup(optarg);
-              break;
-#endif
-
          case 'C':
               snvcall_conf.min_cov = atoi(optarg);
+              break;
+
+         case 'd':
+              mplp_conf.max_depth = atoi(optarg);
               break;
 
          case 'h':
