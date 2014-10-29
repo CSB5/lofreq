@@ -447,20 +447,20 @@ call_vars(const plp_col_t *p, void *confp)
 
      /* call indels
       */
-     if (! conf->no_indels) {
+     for (;! conf->no_indels;) {/* for so that we can exit loop with break */
           if (p->num_non_indels + p->num_ins + p->num_dels < conf->min_cov) {
-               return;
+               break;
           }
 
           /* Report consensus indel
            * FIXME: call other indels/substitutions with respect to consensus indel */
           if (p->cons_base[0] == '+') {
                report_cons_ins(p, conf);
-               return;
+               break;
           }
           if (p->cons_base[0] == '-') {
                report_cons_del(p, conf);
-               return;
+               break;
           }
           /* Call indels */
           if (p->num_dels || p->num_ins) {
@@ -483,7 +483,7 @@ call_vars(const plp_col_t *p, void *confp)
                          num_indel_tests += 1;
                          if (call_alt_ins(p, bi_err_probs, bi_num_err_probs, conf, it)) {
                               free(bi_err_probs);
-                              return;
+                              break;
                          }
                          free(bi_err_probs);
                     }
@@ -500,7 +500,7 @@ call_vars(const plp_col_t *p, void *confp)
                          num_indel_tests += 1;
                          if (call_alt_del(p, bd_err_probs, bd_num_err_probs, conf, it)) {
                               free(bd_err_probs);
-                              return;
+                              break;
                          }
                          free(bd_err_probs);
                     }
