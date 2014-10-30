@@ -1043,10 +1043,10 @@ for cov in coverage_range:
     snvcall_conf.no_indels = 1;
 #endif
     if (! snvcall_conf.no_indels) {
-         LOG_WARN("%s\n", "Indel calling is still considered an unstable feature! Please make sure you did the following:");
-         LOG_WARN("%s\n", "- You added indel qualities to your BAM file, e.g. by running GATK's BQSR (version>=2)");
-         LOG_WARN("%s\n", "- You added indel alignment qualities (using lofreq alnqual) otherwise specificy drops dramatically");
-         LOG_WARN("%s\n", "Every time you ignore this advice, a kitten will die!");
+         LOG_WARN("%s\n", "Indel calling is still considered an unstable feature!");
+         LOG_WARN("%s\n", "Please make sure you added indel qualities to your BAM file");
+         LOG_WARN("%s\n", "This can be achieved by running GATK's BQSR (version>=2) or lofreq indelqual (the former is preferred)");
+         LOG_WARN("%s\n", "Otherwise no indels will be called!");
     }
 
     if (illumina_1_3) {
