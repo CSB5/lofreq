@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
      bam1_t *b;
      int baq_flag = 1;
      int ext_baq = 1;
-     int aq_flag = 1;
+     int idaq_flag = 1;
      int redo = 0;
 
      is_bam_out = is_sam_in = is_uncompressed = 0;
@@ -86,7 +86,7 @@ int main(int argc, char *argv[])
           case 'S': is_sam_in = 1; break;
           case 'e': ext_baq = 0; break;
           case 'B': baq_flag = 0; break;
-          case 'A': aq_flag = 0; break;
+          case 'A': idaq_flag = 0; break;
           case 'r': redo = 1; break;
           default: 
                fprintf(stderr, "FATAL: %s unrecognized option '-%c'\n", MYNAME, c); 
@@ -110,12 +110,12 @@ int main(int argc, char *argv[])
           if (baq_flag) {
                baq_flag = 2;
           }
-          if (aq_flag) {
-               aq_flag = 2;
+          if (idaq_flag) {
+               idaq_flag = 2;
           }
      }
 
-     if (! baq_flag && ! aq_flag) {
+     if (! baq_flag && ! idaq_flag) {
           fprintf(stderr, "FATAL: %s: Nothing to do: BAQ and IDAQ off\n", MYNAME); 
           return 1;
      }
@@ -148,7 +148,7 @@ int main(int argc, char *argv[])
                     }
                }
                
-               bam_prob_realn_core_ext(b, ref, baq_flag, ext_baq, aq_flag);
+               bam_prob_realn_core_ext(b, ref, baq_flag, ext_baq, idaq_flag);
           }
           samwrite(fpout, b);
      }
