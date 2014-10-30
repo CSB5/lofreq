@@ -409,6 +409,255 @@ warn_old_fai(const char *fa)
 }
 
 
+void 
+call_indels(const plp_col_t *p, snvcall_conf_t *conf)
+{
+
+     double *bi_err_probs, *bd_err_probs; /* error probs for indel calling */
+     int bi_num_err_probs, bd_num_err_probs;
+
+     /* call indels
+      */
+     if (p->num_non_indels + p->num_ins + p->num_dels < conf->min_cov) {
+          return;
+     }
+
+      /* Report consensus indel
+       * FIXME: call other indels/substitutions with respect to consensus indel */
+      if (p->cons_base[0] == '+') {
+           report_cons_ins(p, conf);
+           return;
+      }
+      if (p->cons_base[0] == '-') {
+           report_cons_del(p, conf);
+           return;
+      }
+      /* Call indels */
+      if (p->num_dels || p->num_ins) {
+           /*
+           LOG_FIXME("%s:%d (p->num_dels=%d p->del_quals=%d"
+                     " p->num_ins=%d p->ins_quals.n=%d\n",
+                     p->target, p->pos+1, p->num_dels, p->del_quals.n,
+                     p->num_ins, p->ins_quals.n);
+           */
+
+           if (p->num_ins && p->ins_quals.n) {
+                ins_event *it, *it_tmp;
+                HASH_ITER(hh_ins, p->ins_event_counts, it, it_tmp) {
+                     plp_to_ins_errprobs(&bi_err_probs, &bi_num_err_probs,
+                          p, conf, it->key);
+                     qsort(bi_err_probs, bi_num_err_probs, sizeof(double), dbl_cmp);
+                     if (conf->bonf_dynamic) {
+                          conf->bonf_indel += 1;
+                     }
+                     num_indel_tests += 1;
+                     if (call_alt_ins(p, bi_err_probs, bi_num_err_probs, conf, it)) {
+                          free(bi_err_probs);
+                          return;
+                     }
+                     free(bi_err_probs);
+                }
+           }
+           if (p->num_dels && p->del_quals.n) {
+                del_event *it, *it_tmp;
+                HASH_ITER(hh_del, p->del_event_counts, it, it_tmp) {
+                     plp_to_del_errprobs(&bd_err_probs, &bd_num_err_probs,
+                          p, conf, it->key);
+                     qsort(bd_err_probs, bd_num_err_probs, sizeof(double), dbl_cmp);
+                     if (conf->bonf_dynamic) {
+                          conf->bonf_indel += 1;
+                     }
+                     num_indel_tests += 1;
+                     if (call_alt_del(p, bd_err_probs, bd_num_err_probs, conf, it)) {
+                          free(bd_err_probs);
+                          return;
+                     }
+                     free(bd_err_probs);
+                }
+           }
+      }
+}
+
+
+void
+call_snvs(const plp_col_t *p, snvcall_conf_t *conf)
+{
+     double *bc_err_probs; /* error probs (qualities) passed down to snpcaller */
+     int bc_num_err_probs; /* #elements in bc_err_probs */
+     int cons_as_ref = conf->flag & SNVCALL_CONS_AS_REF;
+     int i;
+     /* 4 bases ignoring N, -1 reference/consensus base makes 3 */
+     long double pvalues[NUM_NONCONS_BASES]; /* pvalues reported back from snpcaller */
+     int alt_counts[NUM_NONCONS_BASES]; /* counts for alt bases handed down to snpcaller */
+     int alt_raw_counts[NUM_NONCONS_BASES]; /* raw, unfiltered alt-counts */
+     int alt_bases[NUM_NONCONS_BASES];/* actual alt bases */
+     int got_alt_bases = 0;
+
+     if (p->num_bases < conf->min_cov) {
+          return;
+     }
+
+     /*
+      * as snv-ref we always report what the user wanted (given
+      * ref or determined cons if corresponding flag was given).
+      * we always use the determined cons for calculating a quality though.
+      *
+      *  Example with given ref A and cons/alt C
+      *  Alt bases are all non-cons bases: A(!), T, G
+      *
+      *  if cons_as_ref:
+  *   C>A tested as A vs C
+       *   C>T tested as T vs C
+       *   C>G tested as G vs C
+       *   (no CONSVARs possible by definition)
+       *
+       *  else (ref):
+       *   A>C tested as NIL (CONSVAR A vs C)
+       *   A>T tested as T vs C
+       *   A>G tested as G vs C
+       *   (A>A obviously not possible)
+       *
+       * First branch is "default" i.e. doesn't need exception checking
+       */
+
+      /* CONSVAR, i.e. the consensus determined here is different from
+       * the reference coming from a fasta file
+       */
+      if (p->ref_base != p->cons_base[0] && !cons_as_ref) {/* && p->ref_base != 'N') {*/
+           if (p->cons_base[0] != '+' && p->cons_base[0] != '-') {/* redundant */
+                report_cons_sub(p, conf);
+           }
+      }
+
+      /* no point continuing we're calling against a reference (not
+       * consensus) and ref nt is an n. only consvars should be
+       * predicted then (see above) */
+      if (p->ref_base == 'N' && !cons_as_ref) {
+           return;
+      }
+
+      plp_to_errprobs(&bc_err_probs, &bc_num_err_probs,
+                      alt_bases, alt_counts, alt_raw_counts,
+                      p, conf);
+
+ #if 0
+      for (i=0; i<NUM_NONCONS_BASES; i++) {
+           LOG_FIXME("NUM_NONCONS_BASES=%d alt_counts=%d alt_raw_counts=%d\n", i, alt_counts[i], alt_raw_counts[i]);
+      }
+ #endif
+
+      for (i=0; i<NUM_NONCONS_BASES; i++) {
+           if (alt_counts[i]) {
+                got_alt_bases = 1;
+                break;
+           }
+      }
+      if (! got_alt_bases) {
+           LOG_DEBUG("%s %d: only cons bases left after filtering.\n",
+                     p->target, p->pos+1);
+           /* ...and CONSVAR already reported */
+           free(bc_err_probs);
+           return;
+      }
+
+      /* sorting in ascending order should in theory be numerically
+       * more stable and also make snpcaller faster */
+      qsort(bc_err_probs, bc_num_err_probs, sizeof(double), dbl_cmp);
+
+ #ifdef TRACE
+      {
+           int i=0;
+           for (i=0; i<bc_num_err_probs; i++) {
+                LOG_FATAL("after sorting i=%d err_prob=%g\n", i, bc_err_probs[i]);
+           }
+      }
+ #endif
+      if (conf->bonf_dynamic) {
+           if (1 == conf->bonf_sub) {
+                conf->bonf_sub = NUM_NONCONS_BASES; /* otherwise we start with 1+NUM_NONCONS_BASES */
+           } else {
+                conf->bonf_sub += NUM_NONCONS_BASES; /* will do one test per non-cons nuc */
+           }
+      }
+      num_snv_tests += NUM_NONCONS_BASES;
+
+      LOG_DEBUG("%s %d: passing down %d quals with noncons_counts"
+                " (%d, %d, %d) to snpcaller(num_snv_tests=%lld conf->bonf=%lld, conf->sig=%f)\n", p->target, p->pos+1,
+                bc_num_err_probs, alt_counts[0], alt_counts[1], alt_counts[2], num_snv_tests, conf->bonf_sub, conf->sig);
+
+      if (snpcaller(pvalues, bc_err_probs, bc_num_err_probs,
+                   alt_counts, conf->bonf_sub, conf->sig)) {
+           fprintf(stderr, "FATAL: snpcaller() failed at %s:%s():%d\n",
+                   __FILE__, __FUNCTION__, __LINE__);
+           free(bc_err_probs);
+           return;
+      }
+
+      /* for all alt-bases, i.e. non-cons bases (which might include
+       * the ref-base!) */
+      for (i=0; i<NUM_NONCONS_BASES; i++) {
+           int alt_base = alt_bases[i];
+           int alt_count = alt_counts[i];
+           int alt_raw_count = alt_raw_counts[i];
+           long double pvalue = pvalues[i];
+           int reported_snv_ref = cons_as_ref ? p->cons_base[0] : p->ref_base;
+
+           if (alt_base==reported_snv_ref) { /* p->ref_base && !cons_as_ref) {*/
+                /* self comparison */
+ #if DEBUG
+                LOG_DEBUG("%s\n", "continue because self comparison")
+ #endif
+                continue;
+           }
+           if (p->ref_base==alt_base && !cons_as_ref) {
+ #if DEBUG
+                LOG_DEBUG("%s\n", "continue because: p->ref_base==alt_base && !cons_as_ref")
+ #endif
+                continue;
+           }
+
+           if (pvalue * (double)conf->bonf_sub < conf->sig) {
+                const int is_indel = 0;
+                const int is_consvar = 0;
+                float af = alt_raw_count/(float)p->coverage_plp;
+
+                char report_ref[2];
+                char report_alt[2];
+                report_ref[0] = reported_snv_ref;
+                report_alt[0] = alt_base;
+                report_ref[1] = report_alt[1] = '\0';
+
+                int ref_nt4;
+                int alt_nt4;
+                ref_nt4 = bam_nt4_table[(int)report_ref[0]];
+                alt_nt4 = bam_nt4_table[(int)report_alt[0]];
+
+                dp4_counts_t dp4;
+                dp4.ref_fw = p->fw_counts[ref_nt4];
+                dp4.ref_rv = p->rv_counts[ref_nt4];
+                dp4.alt_fw = p->fw_counts[alt_nt4];
+                dp4.alt_rv = p->rv_counts[alt_nt4];
+
+                report_var(& conf->vcf_out, p, report_ref, report_alt,
+                           af, PROB_TO_PHREDQUAL(pvalue),
+                           is_indel, is_consvar, &dp4);
+                LOG_DEBUG("low freq snp: %s %d %c>%c pv-prob:%Lg;pv-qual:%d"
+                          " counts-raw:%d/%d=%.6f counts-filt:%d/%d=%.6f\n",
+                          p->target, p->pos+1, p->cons_base[0], alt_base,
+                          pvalue, PROB_TO_PHREDQUAL(pvalue),
+                          /* counts-raw */ alt_raw_count, p->coverage_plp, alt_raw_count/(float)p->coverage_plp,
+                          /* counts-filt */ alt_count, bc_num_err_probs, alt_count/(float)bc_num_err_probs);
+           }
+ #if 0
+           else {
+                LOG_DEBUG("non sig: pvalue=%Lg * (double)conf->bonf=%lld < conf->sig=%f\n", pvalue, conf->bonf, conf->sig);
+           }
+ #endif
+      }
+      free(bc_err_probs);
+}
+
+
 /* low-freq vars always called against cons_base, which might be
  * different from ref_base. if cons_base != ref_base then it's a
  * cons-var.
@@ -421,20 +670,7 @@ warn_old_fai(const char *fa)
 void
 call_vars(const plp_col_t *p, void *confp)
 {
-     double *bc_err_probs; /* error probs (qualities) passed down to snpcaller */
-     int bc_num_err_probs; /* #elements in bc_err_probs */
-     double *bi_err_probs, *bd_err_probs; /* error probs for indel calling */
-     int bi_num_err_probs, bd_num_err_probs;
-     int i;
-
      snvcall_conf_t *conf = (snvcall_conf_t *)confp;
-     /* 4 bases ignoring N, -1 reference/consensus base makes 3 */
-     long double pvalues[NUM_NONCONS_BASES]; /* pvalues reported back from snpcaller */
-     int alt_counts[NUM_NONCONS_BASES]; /* counts for alt bases handed down to snpcaller */
-     int alt_raw_counts[NUM_NONCONS_BASES]; /* raw, unfiltered alt-counts */
-     int alt_bases[NUM_NONCONS_BASES];/* actual alt bases */
-     int got_alt_bases = 0;
-     int cons_as_ref = conf->flag & SNVCALL_CONS_AS_REF;
 
      /* don't call if we don't know what to call against */
      if (p->cons_base[0] == 'N') {
@@ -444,68 +680,8 @@ call_vars(const plp_col_t *p, void *confp)
           return;
      }
 
-
-     /* call indels
-      */
-     for (;! conf->no_indels;) {/* for so that we can exit loop with break */
-          if (p->num_non_indels + p->num_ins + p->num_dels < conf->min_cov) {
-               break;
-          }
-
-          /* Report consensus indel
-           * FIXME: call other indels/substitutions with respect to consensus indel */
-          if (p->cons_base[0] == '+') {
-               report_cons_ins(p, conf);
-               break;
-          }
-          if (p->cons_base[0] == '-') {
-               report_cons_del(p, conf);
-               break;
-          }
-          /* Call indels */
-          if (p->num_dels || p->num_ins) {
-               /*
-               LOG_FIXME("%s:%d (p->num_dels=%d p->del_quals=%d"
-                         " p->num_ins=%d p->ins_quals.n=%d\n",
-                         p->target, p->pos+1, p->num_dels, p->del_quals.n,
-                         p->num_ins, p->ins_quals.n);
-               */
-
-               if (p->num_ins && p->ins_quals.n) {
-                    ins_event *it, *it_tmp;
-                    HASH_ITER(hh_ins, p->ins_event_counts, it, it_tmp) {
-                         plp_to_ins_errprobs(&bi_err_probs, &bi_num_err_probs,
-                              p, conf, it->key);
-                         qsort(bi_err_probs, bi_num_err_probs, sizeof(double), dbl_cmp);
-                         if (conf->bonf_dynamic) {
-                              conf->bonf_indel += 1;
-                         }
-                         num_indel_tests += 1;
-                         if (call_alt_ins(p, bi_err_probs, bi_num_err_probs, conf, it)) {
-                              free(bi_err_probs);
-                              break;
-                         }
-                         free(bi_err_probs);
-                    }
-               }
-               if (p->num_dels && p->del_quals.n) {
-                    del_event *it, *it_tmp;
-                    HASH_ITER(hh_del, p->del_event_counts, it, it_tmp) {
-                         plp_to_del_errprobs(&bd_err_probs, &bd_num_err_probs,
-                              p, conf, it->key);
-                         qsort(bd_err_probs, bd_num_err_probs, sizeof(double), dbl_cmp);
-                         if (conf->bonf_dynamic) {
-                              conf->bonf_indel += 1;
-                         }
-                         num_indel_tests += 1;
-                         if (call_alt_del(p, bd_err_probs, bd_num_err_probs, conf, it)) {
-                              free(bd_err_probs);
-                              break;
-                         }
-                         free(bd_err_probs);
-                    }
-               }
-          }
+     if (! conf->no_indels) {
+          call_indels(p, conf);
      }
 
      /* call snvs
@@ -520,170 +696,7 @@ call_vars(const plp_col_t *p, void *confp)
          ! ((p->cons_base[0] == '+' || p->cons_base[0] == '-')) && \
          ! (p->num_ins + p->num_dels + p->num_ign_indels > p->num_bases)) {/* consensus indel actually there but not officially predicted because e.g. indel qualities were missing */
 
-          /* FIXME make function */
-
-          if (p->num_bases < conf->min_cov) {
-               return;
-          }
-
-          /*
-           * as snv-ref we always report what the user wanted (given
-           * ref or determined cons if corresponding flag was given).
-           * we always use the determined cons for calculating a quality though.
-           *
-           *  Example with given ref A and cons/alt C
-           *  Alt bases are all non-cons bases: A(!), T, G
-           *
-           *  if cons_as_ref:
-           *   C>A tested as A vs C
-           *   C>T tested as T vs C
-           *   C>G tested as G vs C
-           *   (no CONSVARs possible by definition)
-           *
-           *  else (ref):
-           *   A>C tested as NIL (CONSVAR A vs C)
-           *   A>T tested as T vs C
-           *   A>G tested as G vs C
-           *   (A>A obviously not possible)
-           *
-           * First branch is "default" i.e. doesn't need exception checking
-           */
-
-          /* CONSVAR, i.e. the consensus determined here is different from
-           * the reference coming from a fasta file
-           */
-          if (p->ref_base != p->cons_base[0] && !cons_as_ref) {/* && p->ref_base != 'N') {*/
-               if (p->cons_base[0] != '+' && p->cons_base[0] != '-') {/* redundant */
-                    report_cons_sub(p, conf);
-               }
-          }
-
-          /* no point continuing we're calling against a reference (not
-           * consensus) and ref nt is an n. only consvars should be
-           * predicted then (see above) */
-          if (p->ref_base == 'N' && !cons_as_ref) {
-               return;
-          }
-
-          plp_to_errprobs(&bc_err_probs, &bc_num_err_probs,
-                          alt_bases, alt_counts, alt_raw_counts,
-                          p, conf);
-
-     #if 0
-          for (i=0; i<NUM_NONCONS_BASES; i++) {
-               LOG_FIXME("NUM_NONCONS_BASES=%d alt_counts=%d alt_raw_counts=%d\n", i, alt_counts[i], alt_raw_counts[i]);
-          }
-     #endif
-
-          for (i=0; i<NUM_NONCONS_BASES; i++) {
-               if (alt_counts[i]) {
-                    got_alt_bases = 1;
-                    break;
-               }
-          }
-          if (! got_alt_bases) {
-               LOG_DEBUG("%s %d: only cons bases left after filtering.\n",
-                         p->target, p->pos+1);
-               /* ...and CONSVAR already reported */
-               free(bc_err_probs);
-               return;
-          }
-
-          /* sorting in ascending order should in theory be numerically
-           * more stable and also make snpcaller faster */
-          qsort(bc_err_probs, bc_num_err_probs, sizeof(double), dbl_cmp);
-
-     #ifdef TRACE
-          {
-               int i=0;
-               for (i=0; i<bc_num_err_probs; i++) {
-                    LOG_FATAL("after sorting i=%d err_prob=%g\n", i, bc_err_probs[i]);
-               }
-          }
-     #endif
-          if (conf->bonf_dynamic) {
-               if (1 == conf->bonf_sub) {
-                    conf->bonf_sub = NUM_NONCONS_BASES; /* otherwise we start with 1+NUM_NONCONS_BASES */
-               } else {
-                    conf->bonf_sub += NUM_NONCONS_BASES; /* will do one test per non-cons nuc */
-               }
-          }
-          num_snv_tests += NUM_NONCONS_BASES;
-
-          LOG_DEBUG("%s %d: passing down %d quals with noncons_counts"
-                    " (%d, %d, %d) to snpcaller(num_snv_tests=%lld conf->bonf=%lld, conf->sig=%f)\n", p->target, p->pos+1,
-                    bc_num_err_probs, alt_counts[0], alt_counts[1], alt_counts[2], num_snv_tests, conf->bonf_sub, conf->sig);
-
-          if (snpcaller(pvalues, bc_err_probs, bc_num_err_probs,
-                       alt_counts, conf->bonf_sub, conf->sig)) {
-               fprintf(stderr, "FATAL: snpcaller() failed at %s:%s():%d\n",
-                       __FILE__, __FUNCTION__, __LINE__);
-               free(bc_err_probs);
-               return;
-          }
-
-          /* for all alt-bases, i.e. non-cons bases (which might include
-           * the ref-base!) */
-          for (i=0; i<NUM_NONCONS_BASES; i++) {
-               int alt_base = alt_bases[i];
-               int alt_count = alt_counts[i];
-               int alt_raw_count = alt_raw_counts[i];
-               long double pvalue = pvalues[i];
-               int reported_snv_ref = cons_as_ref ? p->cons_base[0] : p->ref_base;
-
-               if (alt_base==reported_snv_ref) { /* p->ref_base && !cons_as_ref) {*/
-                    /* self comparison */
-     #if DEBUG
-                    LOG_DEBUG("%s\n", "continue because self comparison")
-     #endif
-                    continue;
-               }
-               if (p->ref_base==alt_base && !cons_as_ref) {
-     #if DEBUG
-                    LOG_DEBUG("%s\n", "continue because: p->ref_base==alt_base && !cons_as_ref")
-     #endif
-                    continue;
-               }
-
-               if (pvalue * (double)conf->bonf_sub < conf->sig) {
-                    const int is_indel = 0;
-                    const int is_consvar = 0;
-                    float af = alt_raw_count/(float)p->coverage_plp;
-
-                    char report_ref[2];
-                    char report_alt[2];
-                    report_ref[0] = reported_snv_ref;
-                    report_alt[0] = alt_base;
-                    report_ref[1] = report_alt[1] = '\0';
-
-                    int ref_nt4;
-                    int alt_nt4;
-                    ref_nt4 = bam_nt4_table[(int)report_ref[0]];
-                    alt_nt4 = bam_nt4_table[(int)report_alt[0]];
-
-                    dp4_counts_t dp4;
-                    dp4.ref_fw = p->fw_counts[ref_nt4];
-                    dp4.ref_rv = p->rv_counts[ref_nt4];
-                    dp4.alt_fw = p->fw_counts[alt_nt4];
-                    dp4.alt_rv = p->rv_counts[alt_nt4];
-
-                    report_var(& conf->vcf_out, p, report_ref, report_alt,
-                               af, PROB_TO_PHREDQUAL(pvalue),
-                               is_indel, is_consvar, &dp4);
-                    LOG_DEBUG("low freq snp: %s %d %c>%c pv-prob:%Lg;pv-qual:%d"
-                              " counts-raw:%d/%d=%.6f counts-filt:%d/%d=%.6f\n",
-                              p->target, p->pos+1, p->cons_base[0], alt_base,
-                              pvalue, PROB_TO_PHREDQUAL(pvalue),
-                              /* counts-raw */ alt_raw_count, p->coverage_plp, alt_raw_count/(float)p->coverage_plp,
-                              /* counts-filt */ alt_count, bc_num_err_probs, alt_count/(float)bc_num_err_probs);
-               }
-     #if 0
-               else {
-                    LOG_DEBUG("non sig: pvalue=%Lg * (double)conf->bonf=%lld < conf->sig=%f\n", pvalue, conf->bonf, conf->sig);
-               }
-     #endif
-          }
-          free(bc_err_probs);
+          call_snvs(p, conf);
      }
 
 }
@@ -1049,10 +1062,9 @@ for cov in coverage_range:
          mplp_conf.flag &= ~MPLP_IDAQ;
     }
     if (! snvcall_conf.no_indels) {
-         LOG_WARN("%s\n", "Indel calling is still considered an unstable feature!");
-         LOG_WARN("%s\n", "Please make sure you added indel qualities to your BAM file");
+         LOG_WARN("%s\n", "Indel calling is still considered an unstable feature in LoFreq.");
+         LOG_WARN("%s\n", "Please make sure you added indel qualities to your BAM file, otherwise no indels will be called.");
          LOG_WARN("%s\n", "This can be achieved by running GATK's BQSR (version>=2) or lofreq indelqual (the former is preferred)");
-         LOG_WARN("%s\n", "Otherwise no indels will be called!");
     }
 
     if (illumina_1_3) {
