@@ -47,6 +47,26 @@
 #define encode_q(q) (uint8_t)(q < 33 ? '!' : (q > 126 ? '~' : q))
 
 
+#if TRACE
+/* from char *bam_format1_core(const bam_header_t *header, const
+ * bam1_t *b, int of) 
+ */
+static char *
+cigar_str_from_bam(const bam1_t *b)
+{
+     const bam1_core_t *c = &b->core;
+     kstring_t str;
+     int i;
+     str.l = str.m = 0; str.s = 0;
+     for (i = 0; i < c->n_cigar; ++i) {
+          kputw(bam1_cigar(b)[i]>>BAM_CIGAR_SHIFT, &str);
+          kputc("MIDNSHP=X"[bam1_cigar(b)[i]&BAM_CIGAR_MASK], &str);
+     }
+     return str.s;
+}
+/* cigar_str_from_bam() */
+#endif
+
 
 void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
 {
@@ -56,6 +76,10 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
     uint8_t *iaq = 0, *daq = 0;
     int n_ins = 0, n_del = 0;
     int k, x, y, z;
+
+#if 0    
+    fprintf(stderr, "Running idaq on %s with cigar %s\n", bam1_qname(b), cigar_str_from_bam(b));
+#endif
 
     iaq = calloc(c->l_qseq + 1, 1);
     daq = calloc(c->l_qseq + 1, 1);
@@ -158,10 +182,10 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
 #endif
               }
               ap = 1 - ap; // probability of alignment error
-                       iaq[qpos-1] = encode_q(prob_to_sangerq(ap));
+              iaq[qpos-1] = encode_q(prob_to_sangerq(ap));
 #ifdef DEBUG
-                       fprintf(stderr, "INS %s %d %lg %c %s\n", 
-                               ins_seq, ins_rep+1, ap, iaq[qpos-1], bam1_qname(b));
+              fprintf(stderr, "INS %s %d %lg %c %s\n", 
+                      ins_seq, ins_rep+1, ap, iaq[qpos-1], bam1_qname(b));
 #endif
          } else if (op == BAM_CSOFT_CLIP) {
               for (j = 0; j < oplen; j++) {
@@ -229,7 +253,7 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref,
                prec_ai = NULL;
           }
      }
-     if ((prec_ad = bam_aux_get(b, AI_TAG)) != 0 && *prec_ad == 'Z') {
+     if ((prec_ad = bam_aux_get(b, AD_TAG)) != 0 && *prec_ad == 'Z') {
           if (idaq_flag==2) {
                bam_aux_del(b, prec_ad);
                prec_ad = NULL;
@@ -259,6 +283,10 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref,
 		else if (op == BAM_CREF_SKIP) return 0; /* do nothing if there is a reference skip */
 	}
 
+#if 0
+    fprintf(stderr, "%s with cigar %s: baq_flag=%d prec_baq=%p has_del=%d prec_ad=%p has_ins=%d prec_ai=%p, idaq_flag=%d\n", 
+            bam1_qname(b), cigar_str_from_bam(b),  baq_flag, prec_baq, has_del, prec_ad, has_ins, prec_ai, idaq_flag);
+#endif
     /* don't do anything if everything's there already */
     if (baq_flag==0 || prec_baq) {
          int skip = 1;
@@ -269,7 +297,9 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref,
               skip = 0;
          }
          if (skip) {
-              /*fprintf(stderr, "Reusing all alignment quality values for read %s!\n");*/
+#if 0
+              fprintf(stderr, "Reusing all alignment quality values for read %s!\n", bam1_qname(b));
+#endif
               return 0;
          }
     }
