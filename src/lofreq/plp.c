@@ -562,7 +562,7 @@ free_and_exit:
 static int
 mplp_func(void *data, bam1_t *b)
 {
-     extern int bam_prob_realn_core_ext(bam1_t *b, const char *ref, int baq_flag, int baq_ext, int aq_flag);
+     extern int bam_prob_realn_core_ext(bam1_t *b, const char *ref, int baq_flag, int baq_ext, int idaq_flag);
      extern int bam_cap_mapQ(bam1_t *b, char *ref, int thres);
      mplp_aux_t *ma = (mplp_aux_t*)data;
      int ret, skip = 0;
@@ -620,20 +620,17 @@ mplp_func(void *data, bam1_t *b)
 #endif
 
           if (ma->conf->flag & MPLP_BAQ || ma->conf->flag & MPLP_IDAQ) {
-               int baq_flag = 0;
-               int baq_ext =  ma->conf->flag & MPLP_EXT_BAQ;
-               int idaq_flag = ma->conf->flag & MPLP_IDAQ;
+               int baq_flag = ma->conf->flag & MPLP_BAQ ? 1 : 0;
+               int baq_ext =  ma->conf->flag & MPLP_EXT_BAQ ? 1 : 0;
+               int idaq_flag = ma->conf->flag & MPLP_IDAQ ? 1 : 0;
 
                if (! has_ref) {
                     LOG_FATAL("%s\n", "Can't compute BAQ or IDAQ without reference sequence");
                     exit(1);
                }
-               if (ma->conf->flag & MPLP_BAQ) {
-                    baq_flag = 1;
-                    if (ma->conf->flag & MPLP_REDO_BAQ) {
-                         baq_flag = 2;
-                    }                    
-               }
+               if (baq_flag && ma->conf->flag & MPLP_REDO_BAQ) {
+                    baq_flag = 2;
+               }                    
 
                if (bam_prob_realn_core_ext(b, ma->ref, baq_flag, baq_ext, idaq_flag)) {
                     LOG_ERROR("bam_prob_realn_core() failed for %s\n", bam1_qname(b));
