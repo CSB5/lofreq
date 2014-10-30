@@ -26,12 +26,14 @@
   SOFTWARE.
 */
 
+#include <stdio.h>
 #include <stdlib.h>
-#include "faidx.h"
+#include "htslib/faidx.h"
 #include "sam.h"
 #include "bam_md_ext.h"
 #include "defaults.h"
 
+extern const char bam_nt16_nt4_table[];
 
 #define USE_EQUAL 1
 #define DROP_TAG  2

@@ -16,7 +16,7 @@
 #ifndef SAMUTILS_H
 #define SAMUTILS_H
 
-#include "sam.h"
+#include "htslib/sam.h"
 
 
 /* FIXME should become shared const MAX_READ_LEN. values <10k might not be enough for pacbio */

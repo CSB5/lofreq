@@ -146,7 +146,8 @@ int is_dir(const char *path)
 
 }
 
-
+/* also exists in htslib. see http://en.wikipedia.org/wiki/Weak_symbol */
+#pragma weak file_exists
 int file_exists(const char *fname) 
 {
      /* from 

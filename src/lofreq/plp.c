@@ -24,13 +24,21 @@
 #include <errno.h>
 #include <fenv.h>
 
-#include "kstring.h"
+#include "htslib/kstring.h"
 #include "sam.h"
+
 #include "log.h"
 #include "plp.h"
 #include "vcf.h"
 #include "samutils.h"
 #include "snpcaller.h"
+#include "../lofreq_alnqual/bam_md_ext.h"
+
+/* bam_md.c
+const char bam_nt16_nt4_table[] = { 4, 0, 1, 4, 2, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4 };
+*/
+extern const char bam_nt16_nt4_table[];
+const char *bam_nt4_rev_table = "ACGTN";
 
 
 /* from bedidx.c */
@@ -51,7 +59,6 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
  * tp, therefore disabled */
 #undef MERGEQ_FOR_CONS_CALL
 
-const char *bam_nt4_rev_table = "ACGTN";
 
 const unsigned char bam_nt4_table[256] = {
      4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
@@ -102,7 +109,6 @@ void init_mplp_conf(mplp_conf_t *c)
      c->def_nm_q = DEFAULT_DEF_NM_QUAL;
      c->min_plp_bq = DEFAULT_MIN_PLP_BQ;/* note: different from DEFAULT_MIN_BQ */
      c->min_plp_idq = DEFAULT_MIN_PLP_IDQ;
-     c->capQ_thres = 0;
      c->max_depth = DEFAULT_MAX_PLP_DEPTH;
      c->flag = MPLP_NO_ORPHAN | MPLP_BAQ | MPLP_EXT_BAQ | MPLP_IDAQ;
 }
@@ -266,7 +272,6 @@ dump_mplp_conf(const mplp_conf_t *c, FILE *stream)
      fprintf(stream, "  flag & MPLP_USE_SQ     = %d\n", c->flag & MPLP_USE_SQ ? 1:0);
      fprintf(stream, "  flag & MPLP_ILLUMINA13 = %d\n", c->flag & MPLP_ILLUMINA13 ? 1:0);
 
-     fprintf(stream, "  capQ_thres   = %d\n", c->capQ_thres);
      fprintf(stream, "  max_depth    = %d\n", c->max_depth);
      fprintf(stream, "  min_plp_bq   = %d\n", c->min_plp_bq);
      fprintf(stream, "  min_plp_idq  = %d\n", c->min_plp_idq);
@@ -562,8 +567,6 @@ free_and_exit:
 static int
 mplp_func(void *data, bam1_t *b)
 {
-     extern int bam_prob_realn_core_ext(bam1_t *b, const char *ref, int baq_flag, int baq_ext, int aq_flag);
-     extern int bam_cap_mapQ(bam1_t *b, char *ref, int thres);
      mplp_aux_t *ma = (mplp_aux_t*)data;
      int ret, skip = 0;
 
@@ -650,14 +653,7 @@ mplp_func(void *data, bam1_t *b)
       
 #endif
 
-        if (has_ref && ma->conf->capQ_thres > 10) {
-            int q = bam_cap_mapQ(b, ma->ref, ma->conf->capQ_thres);
-            if (q < 0) {
-                 skip = 1;
-            } else if (b->core.qual > q) {
-                 b->core.qual = q;
-            }
-        } else if (b->core.qual > ma->conf->max_mq) {
+        if (b->core.qual > ma->conf->max_mq) {
              b->core.qual = ma->conf->max_mq;
         } else if (b->core.qual < ma->conf->min_mq) {
              skip = 1;

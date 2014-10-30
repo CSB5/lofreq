@@ -446,7 +446,6 @@ main_uniq(int argc, char *argv[])
      mplp_conf.max_mq = DEFAULT_MAX_MQ;
      mplp_conf.min_mq = 1;
      mplp_conf.min_plp_bq = DEFAULT_MIN_PLP_BQ;
-     mplp_conf.capQ_thres = 0;
      mplp_conf.max_depth = DEFAULT_MAX_PLP_DEPTH;
      mplp_conf.flag = MPLP_NO_ORPHAN;
 

@@ -22,7 +22,7 @@
 #include <getopt.h>
 #include <stdlib.h>
 
-#include "faidx.h"
+#include "htslib/faidx.h"
 #include "sam.h"
 #include "viterbi.h"
 #include "log.h"

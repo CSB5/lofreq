@@ -19,7 +19,7 @@
 #include <stdio.h>
 #include <getopt.h>
 
-#include "faidx.h"
+#include "htslib/faidx.h"
 #include "sam.h" 
 #include "log.h"
 #include "utils.h"

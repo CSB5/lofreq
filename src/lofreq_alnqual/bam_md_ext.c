@@ -27,19 +27,25 @@
 */
 
 #include <unistd.h>
+#include <stdio.h>
 #include <assert.h>
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
 #include <float.h>
-#include "faidx.h"
-#include "sam.h"
-#include "kstring.h"
+
+#include "htslib/sam.h"
+#include "bam.h"
+#include "htslib/faidx.h"
+#include "htslib/kstring.h"
 #include "kaln.h"
+
 #include "kprobaln_ext.h"
 #include "defaults.h"
 #include "bam_md_ext.h"
 
+/* bam_md.c */
+const char bam_nt16_nt4_table[] = { 4, 0, 1, 4, 2, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4 };
 
 
 #define set_u(u, b, i, k) { int x=(i)-(b); x=x>0?x:0; (u)=((k)-x+1)*3; }

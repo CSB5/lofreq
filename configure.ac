@@ -189,6 +189,18 @@ else
     # Could set -O3 but that should be a user choice (env var CFLAGS)
 fi
 
+# currently samtools/libbam and htslib are not properly installed by default
+# so we use an envvar to point us to the directory
+#AC_LIB_LINKFLAGS([hts])
+#AC_LIB_LINKFLAGS([bam])
+AC_ARG_VAR(SAMTOOLS, [Path to samtools directory])
+if test x"$SAMTOOLS" = x""; then
+   AC_MSG_ERROR([Samtools directory not define. Please use SAMTOOLS=/path/to/samtoolsdir/])
+fi
+AC_ARG_VAR(HTSLIB, [Path to htslib directory])
+if test x"$HTSLIB" = x""; then
+   AC_MSG_ERROR([Htslib directory not define. Please use HTSLIB=/path/to/htslibdir/])
+fi
 
 
 AC_SUBST([AM_CFLAGS])
@@ -206,7 +218,6 @@ AC_DEFINE([SOURCEQUAL_IGNORES_INDELS], [1], [ignore indels in SQ computation as 
 AC_CONFIG_FILES(Makefile
         src/cdflib90/Makefile   
         src/uthash/Makefile
-        src/libbam/Makefile
         src/lofreq_alnqual/Makefile        
         src/lofreq/Makefile
         src/scripts/Makefile        
