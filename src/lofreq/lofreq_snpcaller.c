@@ -1042,6 +1042,12 @@ for cov in coverage_range:
 #ifdef DISABLE_INDELS
     snvcall_conf.no_indels = 1;
 #endif
+    /* if indels are not to be called, switch off idaq computation to
+     * save some time */
+    if (snvcall_conf.no_indels) {
+         snvcall_conf.flag &= ~SNVCALL_USE_IDAQ;
+         mplp_conf.flag &= ~MPLP_IDAQ;
+    }
     if (! snvcall_conf.no_indels) {
          LOG_WARN("%s\n", "Indel calling is still considered an unstable feature! Please make sure you did the following:");
          LOG_WARN("%s\n", "- You added indel qualities to your BAM file, e.g. by running GATK's BQSR (version>=2)");
@@ -1144,6 +1150,7 @@ for cov in coverage_range:
          if (vcf_file_open(& snvcall_conf.vcf_out, vcf_tmp_out,
                            HAS_GZIP_EXT(vcf_tmp_out), 'w')) {
               LOG_ERROR("Couldn't open %s\n", vcf_tmp_out);
+              free(vcf_tmp_out);
               return 1;
          }
     }
@@ -1161,17 +1168,9 @@ for cov in coverage_range:
          mplp_conf.bed = bed_read(bed_file);
          if (! mplp_conf.bed) {
               LOG_ERROR("Couldn't read %s\n", bed_file);
+              free(vcf_tmp_out);
               return 1;
          }
-    }
-
-    if (ign_vcf) {
-         /* FIXME ignore variants outside given region (on top of bed as well) */
-         if (source_qual_load_ign_vcf(ign_vcf, mplp_conf.bed)) {
-              LOG_FATAL("Loading of ignore positions from %s failed.", optarg);
-              return 1;
-         }
-         free(ign_vcf);
     }
 
     if (debug) {
@@ -1179,13 +1178,25 @@ for cov in coverage_range:
          dump_snvcall_conf(& snvcall_conf, stderr);
     }
 
+    if (ign_vcf) {
+         /* FIXME also ignore variants outside given region on top of bed */
+         if (source_qual_load_ign_vcf(ign_vcf, mplp_conf.bed)) {
+              LOG_FATAL("Loading of ignore positions from %s failed.", optarg);
+              free(vcf_tmp_out);
+              return 1;
+         }
+         free(ign_vcf);
+    }
 #if 0
     LOG_FIXME("%s\n", "Loading hardcoded vcf file to ignore for source_qual()");
     if (source_qual_load_ign_vcf("./tests/schmock.vcf")) {
          LOG_FATAL("Loading of ignore positions from %s failed.", "FIXME");
+         free(vcf_tmp_out);
          return 1;
     }
 #endif
+
+
 
     if (plp_summary_only) {
          plp_proc_func = &plp_summary;
@@ -1200,6 +1211,7 @@ for cov in coverage_range:
     rc = mpileup(&mplp_conf, plp_proc_func, (void*)&snvcall_conf,
                  1, (const char **) argv + optind + 1);
     if (rc) {
+         free(vcf_tmp_out);
          return rc;
     }
 
