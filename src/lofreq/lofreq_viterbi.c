@@ -22,7 +22,7 @@
 #include <getopt.h>
 #include <stdlib.h>
 
-#include "faidx.h"
+#include "htslib/faidx.h"
 #include "sam.h"
 #include "viterbi.h"
 #include "log.h"
@@ -326,7 +326,6 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip
      return 0;
 }
 
-/* renamed the main function */
 int main_viterbi(int argc, char *argv[])
 {
      tmpstruct_t tmp = {0};

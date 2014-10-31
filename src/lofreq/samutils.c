@@ -22,7 +22,7 @@
 
 /* samtools includes */
 #include "sam.h"
-#include "kstring.h"
+#include "htslib/kstring.h"
 
 /* lofreq includes */
 #include "log.h"

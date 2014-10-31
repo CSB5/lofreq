@@ -36,9 +36,9 @@
 #include <stdlib.h>
 
 /* libbam includes */
-#include "faidx.h"
+#include "htslib/faidx.h"
 #include "sam.h"
-#include "kstring.h"
+#include "htslib/kstring.h"
 /* from bedidx.c */
 void *bed_read(const char *fn);
 void bed_destroy(void *_h);
@@ -61,7 +61,6 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 
 
 #define BUF_SIZE 1<<16
-
 
 
 /* number of tests performed (CONSVAR doesn't count). for downstream

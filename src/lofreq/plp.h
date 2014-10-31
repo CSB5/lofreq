@@ -17,7 +17,7 @@
 #ifndef PLP_H
 #define PLP_H
 
-#include "faidx.h"
+#include "htslib/faidx.h"
 #include "utils.h"
 #include "vcf.h"
 #include "utils.h"
@@ -45,7 +45,6 @@ extern const unsigned char bam_nt4_table[256];
 typedef struct {
      int max_mq, min_mq;
      int flag; /* tag: shared */
-     int capQ_thres;
      int max_depth;
      int min_plp_bq; /* use with caution: this makes lofreq blind to any bases below this value */
      int min_plp_idq;

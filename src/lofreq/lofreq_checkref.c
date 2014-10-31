@@ -29,7 +29,7 @@
 
 #define MYNAME "lofreq checkref"
 
-void
+static void
 usage()
 {
      fprintf(stderr,
