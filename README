@@ -4,8 +4,8 @@ See https://sourceforge.net/p/lofreq/wiki/LoFreq-Star/ for more info
 
 ## Installing/Compiling a repository clone
 
-After cloning the repository, run bootstrap which will set up things such
-that you can use ./configure
+After cloning the repository, run `bootstrap`, which will set up things such
+that you can use `./configure`
 
 After that you can proceed as in 'Installing/Compiling the source distribution'
 
@@ -22,6 +22,6 @@ make install
 
 Depending on the used prefix you might need to adjust your PATH (and PYTHONPATH).
 
-After that simply type  `lofreq` to get more help
+After that simply type `lofreq` to get more help
 
 
