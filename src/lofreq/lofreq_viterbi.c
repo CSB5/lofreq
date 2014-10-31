@@ -326,7 +326,6 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip
      return 0;
 }
 
-/* renamed the main function */
 int main_viterbi(int argc, char *argv[])
 {
      tmpstruct_t tmp = {0};

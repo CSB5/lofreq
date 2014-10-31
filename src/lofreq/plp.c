@@ -32,7 +32,7 @@
 #include "vcf.h"
 #include "samutils.h"
 #include "snpcaller.h"
-#include "../lofreq_alnqual/bam_md_ext.h"
+#include "bam_md_ext.h"
 
 /* bam_md.c
 const char bam_nt16_nt4_table[] = { 4, 0, 1, 4, 2, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4 };

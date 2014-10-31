@@ -45,7 +45,7 @@ extern const char bam_nt16_nt4_table[];
 #define MYNAME "lofreq alnqual"		
 
 
-void usage()
+static void usage()
 {
      fprintf(stderr, "%s: add base- and indel-alignment qualities (BAQ, IDAQ) to BAM file\n\n", MYNAME);
      fprintf(stderr, "Usage:   %s [options] <aln.bam> <ref.fasta>\n", MYNAME);
@@ -65,7 +65,7 @@ void usage()
 }
 
 
-int main(int argc, char *argv[])
+int main_alnqual(int argc, char *argv[])
 {
      int c, tid = -2, ret, len, is_bam_out, is_sam_in, is_uncompressed;
      samfile_t *fp, *fpout = 0;
@@ -90,9 +90,11 @@ int main(int argc, char *argv[])
           case 'B': baq_flag = 0; break;
           case 'A': aq_flag = 0; break;
           case 'r': redo = 1; break;
-          default: 
-               fprintf(stderr, "FATAL: %s unrecognized option '-%c'\n", MYNAME, c); 
+          case '?': 
+               fprintf(stderr, "FATAL: %s unrecognized arguments found. Exiting...\n");
                return 1;
+          default: 
+               break;
           }
      }
      if (optind + 1 >= argc) {

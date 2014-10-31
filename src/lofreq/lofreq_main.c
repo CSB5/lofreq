@@ -27,13 +27,14 @@
 #ifdef USE_ALNERRPROF
 #include "lofreq_bamstats.h"
 #endif
+#include "lofreq_alnqual.h"
 #include "lofreq_checkref.h"
 #include "lofreq_filter.h"
+#include "lofreq_index.h"
+#include "lofreq_indelqual.h"
 #include "lofreq_snpcaller.h"
 #include "lofreq_uniq.h"
 #include "lofreq_vcfset.h"
-#include "lofreq_index.h"
-#include "lofreq_indelqual.h"
 #include "lofreq_viterbi.h"
 
 #ifndef __DATE__
@@ -74,7 +75,7 @@ add_local_dir_to_path(char *argv0) {
      char *dirname_argv0 = NULL;
      int i;
      char *extra_scripts[] = {/* used to determine directories to add */
-          "../scripts/lofreq2_somatic.py", "../tools/scripts/lofreq2_vcfplot.py", "../lofreq_alnqual/lofreq2_alnqual", 
+          "../scripts/lofreq2_somatic.py", "../tools/scripts/lofreq2_vcfplot.py", 
           NULL};
      
 
@@ -202,6 +203,9 @@ int main(int argc, char *argv[])
      } else if (strcmp(argv[1], "indelqual") == 0){
           return main_indelqual(argc, argv);
 
+     } else if (strcmp(argv[1], "alnqual") == 0)  {
+          return main_alnqual(argc-1, argv+1);
+
      } else if (strcmp(argv[1], "idxstats") == 0)  {
           return main_idxstats(argc, argv);
 
@@ -221,7 +225,6 @@ int main(int argc, char *argv[])
 
      } else if (strcmp(argv[1], "somatic") == 0 ||
                 strcmp(argv[1], "vcfplot") == 0 ||
-                strcmp(argv[1], "alnqual") == 0 ||
                 strcmp(argv[1], "call-parallel") == 0 ||
                 strcmp(argv[1], "cluster") == 0) {
           char **argv_execvp = calloc(argc, sizeof(char*));
