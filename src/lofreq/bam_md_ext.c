@@ -41,6 +41,7 @@
 #include "kaln.h"
 
 #include "kprobaln_ext.h"
+#include "samutils.h"
 #include "defaults.h"
 #include "bam_md_ext.h"
 
@@ -53,26 +54,6 @@ const char bam_nt16_nt4_table[] = { 4, 0, 1, 4, 2, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4,
 #define encode_q(q) (uint8_t)(q < 33 ? '!' : (q > 126 ? '~' : q))
 
 
-#if TRACE
-/* from char *bam_format1_core(const bam_header_t *header, const
- * bam1_t *b, int of) 
- */
-static char *
-cigar_str_from_bam(const bam1_t *b)
-{
-     const bam1_core_t *c = &b->core;
-     kstring_t str;
-     int i;
-     str.l = str.m = 0; str.s = 0;
-     for (i = 0; i < c->n_cigar; ++i) {
-          kputw(bam1_cigar(b)[i]>>BAM_CIGAR_SHIFT, &str);
-          kputc("MIDNSHP=X"[bam1_cigar(b)[i]&BAM_CIGAR_MASK], &str);
-     }
-     return str.s;
-}
-/* cigar_str_from_bam() */
-#endif
-
 
 void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
 {
@@ -83,7 +64,7 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
     int n_ins = 0, n_del = 0;
     int k, x, y, z;
 
-#if 0    
+#if 0
     fprintf(stderr, "Running idaq on %s with cigar %s\n", bam1_qname(b), cigar_str_from_bam(b));
 #endif
 
