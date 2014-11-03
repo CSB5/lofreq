@@ -54,7 +54,7 @@ if [ $nup -gt 1 ] || [ $nus -gt 1 ] ; then
     n_single=$(grep -vc '^#' $outraw_single)
 
     n_overlap=$($LOFREQ vcfset -a intersect -1 $outraw_parallel -2 $outraw_single --count-only)
-    echoerror "$outraw_parallel has $n_parallel and $outraw_single has $n_single SNVS. Both overlap by $n_overlap"
+    echoerror "$outraw_parallel has $n_parallel and $outraw_single has $n_single SNVS (both overlap by $n_overlap). Make sure these are all right now the --snvqual-thresh value."
     exit 1
 else
     echook "Parallel and single run give identical results."
