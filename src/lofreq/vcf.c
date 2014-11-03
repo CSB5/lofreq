@@ -25,6 +25,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+
+#include "htslib/bgzf.h"
+#include "htslib/kstring.h"
+#include "htslib/kseq.h"
+#include "htslib/tbx.h"
+
 #include "uthash.h"
 
 #include "log.h"
@@ -112,11 +118,30 @@ vcf_var_key_pos_only(char **key, var_t *var)
 }
 
 
+int vcf_printf(vcf_file_t *f, char *fmt, ...)
+{
+/* there is no gzvprintf therefore we can't make this a function. this
+ * way howver you won't know how many chars were written if any.
+ * could add extra variable...
+ */
+     char buf[LINE_BUF_SIZE];
+     va_list args;
+     va_start(args, fmt);
+     vsprintf(buf, fmt, args);    
+     va_end(args);
+
+     if (f->is_bgz) {
+          return bgzf_write(f->fh_bgz, buf, strlen(buf));
+     } else {
+          return fputs(buf, f->fh);
+     }
+}
+
 int
 vcf_file_seek(vcf_file_t *f, long int offset, int whence) 
 {
-     if (f->gz) {
-          return gzseek(f->fh_gz, offset, whence);
+     if (f->is_bgz) {
+          return bgzf_seek(f->fh_bgz, offset, whence);
      } else {
           return fseek(f->fh, offset, whence);
      }
@@ -125,12 +150,8 @@ vcf_file_seek(vcf_file_t *f, long int offset, int whence)
 
 /* returns 0 on success. non-zero otherwise */
 int
-vcf_file_open(vcf_file_t *f, const char *path, const int gzip, char mode) 
+vcf_file_open(vcf_file_t *f, const char *path, const int bgzip, char mode) 
 {
-     /* gzip in/out should be mode b, right? if not, the code can be
-      * simplified
-      */
-
      if (mode!='r' && mode!='w') {
           LOG_FATAL("Internal error: unknown mode %c\n", mode);
           return -1;
@@ -143,22 +164,24 @@ vcf_file_open(vcf_file_t *f, const char *path, const int gzip, char mode)
           }
      }
 
-     if (gzip) {
+     f->path = strdup(path);
+
+     if (bgzip) {
           if (path[0] == '-') {
-               LOG_FIXME("%s\n", "gzip support for stdin/stdout not implemented yet");
+               LOG_FIXME("%s\n", "bgzip support for stdin/stdout not implemented yet");
                return -1;
           }
-          f->gz = 1;
+          f->is_bgz = 1;
           f->fh = NULL;
           if (mode=='r') {
-               f->fh_gz = gzopen(path, "rb");
+               f->fh_bgz = bgzf_open(path, "rb");
           } else if (mode=='w') {
-               f->fh_gz = gzopen(path, "wb");
+               f->fh_bgz = bgzf_open(path, "wb");
           }
 
      } else {
-          f->gz = 0;
-          f->fh_gz = NULL;
+          f->is_bgz = 0;
+          f->fh_bgz = NULL;
           if (mode=='r') {
                if (path[0] == '-') {
                     f->fh = stdin;
@@ -174,7 +197,7 @@ vcf_file_open(vcf_file_t *f, const char *path, const int gzip, char mode)
           }
      }     
 
-     if (! f->fh && ! f->fh_gz) {
+     if (! f->fh && ! f->fh_bgz) {
           return -1;
      } else {
           return 0;
@@ -182,26 +205,53 @@ vcf_file_open(vcf_file_t *f, const char *path, const int gzip, char mode)
 }
 
 
+/* note: tries to tabix index and also frees path */
 int
 vcf_file_close(vcf_file_t *f) 
 {
-     if (f->gz) {          
-          return gzclose(f->fh_gz);
+     int rc = 0;
+     if (f->is_bgz) {          
+          rc = bgzf_close(f->fh_bgz);
+          if (rc==0 && f->path && f->path[0] != '-') {
+               int min_shift = -1;
+               tbx_conf_t conf = tbx_conf_vcf;
+               rc = tbx_index_build(f->path, min_shift, &conf);
+               if (rc) {
+                    LOG_WARN("indexing of %s failed\n", f->path);
+               }
+          }
      } else {
           if (f->fh!=stdout) {
-               return fclose(f->fh);
+               rc = fclose(f->fh);
           } else {
-               return 0;
+               rc = 0;
           }
      }
+     free(f->path);
+     return rc;
 }
 
 
 char *
 vcf_file_gets(vcf_file_t *f, int len, char *line) 
 {
-     if (f->gz) {
-          return gzgets(f->fh_gz, line, len);
+     if (f->is_bgz) {
+          kstring_t str = {0, 0, 0};
+          if (bgzf_getline(f->fh_bgz, '\n', &str) > 0) {
+               if (str.l > len) {
+                    fprintf(stderr, "WARN(%s|%s): line parsed from %s larger then buffer (%lu>%d)\n",
+                            __FILE__, __FUNCTION__, f->path, str.l, len);
+               }
+               strncpy(line, str.s, len-1);
+               /* behave like fgets: keep newline */
+               line[strlen(line)] = '\n';
+               line[strlen(line)+1] = '\0';
+               
+               free(str.s);
+               return line;
+          } else {
+               return NULL;
+          }
 
      } else {
           return fgets(line, len, f->fh);
@@ -364,30 +414,30 @@ void vcf_write_var(vcf_file_t *vcf_file, const var_t *var)
 {
      /* in theory all values are optional */
 
-     VCF_PRINTF(vcf_file, "%s\t%ld\t%s\t%s\t%s\t",
+     vcf_printf(vcf_file, "%s\t%ld\t%s\t%s\t%s\t",
              NULL == var->chrom ? VCF_MISSING_VAL_STR : var->chrom,
              var->pos + 1,
              NULL == var->id ? VCF_MISSING_VAL_STR : var->id,
              var->ref,
              var->alt);
      if (var->qual>-1) {
-          VCF_PRINTF(vcf_file, "%d", var->qual);
+          vcf_printf(vcf_file, "%d", var->qual);
      } else {
-          VCF_PRINTF(vcf_file, "%c", VCF_MISSING_VAL_CHAR);
+          vcf_printf(vcf_file, "%c", VCF_MISSING_VAL_CHAR);
      }
 
-     VCF_PRINTF(vcf_file, "\t%s\t%s",
+     vcf_printf(vcf_file, "\t%s\t%s",
              var->filter ? var->filter : VCF_MISSING_VAL_STR,
              var->info ? var->info : VCF_MISSING_VAL_STR);
 
      if (var->format) {
           int i=0;
-          VCF_PRINTF(vcf_file, "\t%s", var->format);
+          vcf_printf(vcf_file, "\t%s", var->format);
           for (i=0; i<var->num_samples; i++) {
-               VCF_PRINTF(vcf_file, "\t%s", var->samples[i]);
+               vcf_printf(vcf_file, "\t%s", var->samples[i]);
           }
      }
-     VCF_PRINTF(vcf_file, "\n");
+     vcf_printf(vcf_file, "\n");
 }
 
 
@@ -523,7 +573,7 @@ void vcf_var_sprintf_info(var_t *var,
 
 void vcf_write_header(vcf_file_t *vcf_file, const char *header)
 {
-     VCF_PRINTF(vcf_file, "%s", header);
+     vcf_printf(vcf_file, "%s", header);
 }
 
 
@@ -540,21 +590,21 @@ void vcf_write_new_header(vcf_file_t *vcf_file, const char *src, const char *ref
      localtime_r(&t, &tm);
      strftime(tbuf, 9, "%Y%m%d", &tm);
 
-     VCF_PRINTF(vcf_file, "##fileformat=VCFv4.0\n");
-     VCF_PRINTF(vcf_file, "##fileDate=%s\n", tbuf);
+     vcf_printf(vcf_file, "##fileformat=VCFv4.0\n");
+     vcf_printf(vcf_file, "##fileDate=%s\n", tbuf);
      if (src) {
-          VCF_PRINTF(vcf_file, "##source=%s\n", src);
+          vcf_printf(vcf_file, "##source=%s\n", src);
      }
      if (reffa) {
-          VCF_PRINTF(vcf_file, "##reference=%s\n", reffa);
+          vcf_printf(vcf_file, "##reference=%s\n", reffa);
      }
-     VCF_PRINTF(vcf_file, "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Raw Depth\">\n");
-     VCF_PRINTF(vcf_file, "##INFO=<ID=AF,Number=1,Type=Float,Description=\"Allele Frequency\">\n");
-     VCF_PRINTF(vcf_file, "##INFO=<ID=SB,Number=1,Type=Integer,Description=\"Phred-scaled strand bias at this position\">\n");
-     VCF_PRINTF(vcf_file, "##INFO=<ID=DP4,Number=4,Type=Integer,Description=\"Counts for ref-forward bases, ref-reverse, alt-forward and alt-reverse bases\">\n");
-     VCF_PRINTF(vcf_file, "##INFO=<ID=INDEL,Number=0,Type=Flag,Description=\"Indicates that the variant is an INDEL.\">\n");
-     VCF_PRINTF(vcf_file, "##INFO=<ID=CONSVAR,Number=0,Type=Flag,Description=\"Indicates that the variant is a consensus variant (as opposed to a low frequency variant).\">\n");
-     VCF_PRINTF(vcf_file, "%s\n", VCF_HEADER);
+     vcf_printf(vcf_file, "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Raw Depth\">\n");
+     vcf_printf(vcf_file, "##INFO=<ID=AF,Number=1,Type=Float,Description=\"Allele Frequency\">\n");
+     vcf_printf(vcf_file, "##INFO=<ID=SB,Number=1,Type=Integer,Description=\"Phred-scaled strand bias at this position\">\n");
+     vcf_printf(vcf_file, "##INFO=<ID=DP4,Number=4,Type=Integer,Description=\"Counts for ref-forward bases, ref-reverse, alt-forward and alt-reverse bases\">\n");
+     vcf_printf(vcf_file, "##INFO=<ID=INDEL,Number=0,Type=Flag,Description=\"Indicates that the variant is an INDEL.\">\n");
+     vcf_printf(vcf_file, "##INFO=<ID=CONSVAR,Number=0,Type=Flag,Description=\"Indicates that the variant is a consensus variant (as opposed to a low frequency variant).\">\n");
+     vcf_printf(vcf_file, "%s\n", VCF_HEADER);
 }
 
 
@@ -582,7 +632,7 @@ int vcf_parse_header(char **header, vcf_file_t *vcf_file)
           if (NULL == rc || Z_NULL == rc) {
                break;
           }
-#ifdef TRACE
+#if 0
           fprintf(stderr, "Got line %s\n", line);
 #endif
           (*header) = realloc((*header), (strlen(*header) + strlen(line) + 1 /* '\0' */) * sizeof(char));
@@ -618,23 +668,14 @@ int vcf_skip_header(vcf_file_t *vcf_file)
 }
 
 
-/* parse one variant from stream. returns +1 on EOF and -1 on error.
- * note, multi-allelic entries are not treated specially
- */
-int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
+int vcf_parse_var_from_line(char *line, var_t *var)
 {
      const char delimiter[] = "\t";
      char *token;
-     char line[LINE_BUF_SIZE];
      char *line_ptr;
      int field_no = 0;
-     char *rc;
      char *line_backup;
-     
-     rc = vcf_file_gets(vcf_file, sizeof(line), line);
-     if (NULL == rc || Z_NULL == rc) {
-          return 1;
-     }
+
      chomp(line);
      line_ptr = line;
      line_backup = strdup(line);
@@ -696,7 +737,24 @@ int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
      }
 
      free(line_backup);
+
      return 0;
+}
+
+
+/* parse one variant from stream. returns +1 on EOF and -1 on error.
+ * note, multi-allelic entries are not treated specially
+ */
+int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
+{
+     char line[LINE_BUF_SIZE];
+     char *rc;
+
+     rc = vcf_file_gets(vcf_file, sizeof(line), line);
+     if (NULL == rc) {
+          return 1;
+     }
+     return vcf_parse_var_from_line(line, var);
 }
 
 
@@ -710,7 +768,7 @@ int vcf_parse_vars(var_t ***vars, vcf_file_t *vcf_file, int only_passed)
 
      (*vars) = malloc(1 * sizeof(var_t*));
 
-     while (! VCF_EOF(vcf_file)) { 
+     while (1) { 
           var_t *var;
           vcf_new_var(&var);
           rc = vcf_parse_var(vcf_file, var);

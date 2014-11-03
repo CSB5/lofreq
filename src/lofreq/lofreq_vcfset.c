@@ -24,6 +24,8 @@
 #include <getopt.h>
 #include <stdlib.h>
 
+#include "htslib/kstring.h"
+#include "htslib/tbx.h"
 
 /* lofreq includes */
 #include "lofreq_vcfset.h"
@@ -104,6 +106,8 @@ main_vcfset(int argc, char *argv[])
      static int only_snvs = 0;
      static int only_indels = 0;
      static int count_only = 0;
+     tbx_t *vcf2_tbx = NULL; /* index for second vcf file */
+     htsFile *vcf2_hts = NULL;
 
      vcf_in1 = vcf_in2 = vcf_out = NULL;
      num_vars_vcf1 = num_vars_vcf2 = 0;
@@ -245,17 +249,22 @@ main_vcfset(int argc, char *argv[])
          
     }
 
-    /* set up all input files */
     if (vcf_file_open(& vcfset_conf.vcf_in1, vcf_in1, 
                       HAS_GZIP_EXT(vcf_in1), 'r')) {
          LOG_ERROR("Couldn't open %s\n", vcf_in1);
          free(vcf_in1); free(vcf_in2); free(vcf_out);
          return 1;
     }
-    if (vcf_file_open(& vcfset_conf.vcf_in2, vcf_in2, 
-                      HAS_GZIP_EXT(vcf_in2), 'r')) {
-         LOG_ERROR("Couldn't open %s\n", vcf_in2);
-         free(vcf_in1); free(vcf_in2); free(vcf_out);
+
+
+    vcf2_hts = hts_open(vcf_in2, "r");
+    if (!vcf2_hts) {
+         LOG_FATAL("Couldn't load %s\n", vcf_in2);
+         return 1;
+    }
+    vcf2_tbx = tbx_index_load(vcf_in2);
+    if (!vcf2_tbx) {
+         LOG_FATAL("Couldn't load tabix index for %s\n", vcf_in2);
          return 1;
     }
 
@@ -280,14 +289,6 @@ main_vcfset(int argc, char *argv[])
     free(vcf_out);
 
 
-    /* recipe: read B into memory and parse from A one by one
-     * ======================================================
-     *
-     * FIXME things can be done a lot more efficient if both input
-     * files are sorted. assuming here they are not
-     *
-     */
-
     /* use meta-data/header of vcf_in1 for output
      */
     if (0 !=  vcf_parse_header(&vcf_header, & vcfset_conf.vcf_in1)) {
@@ -305,157 +306,94 @@ main_vcfset(int argc, char *argv[])
          free(vcf_header);
     }
 
-
-    /* skip meta-data/header in vcf_in2
-     */
-    if (0 != vcf_skip_header(& vcfset_conf.vcf_in2)) {
-         LOG_FATAL("%s\n", "Failed to skip header in 2nd vcf file");
-         return -1;
-    }
-
-
-    /* read vcf2 and save as hash
+    
+    /* parse first vcf file
      */
     while (1) {
-         var_t *var;
-         char *key;
-         int rc;
-         int is_indel = 0;
-
-         vcf_new_var(&var);
-         rc = vcf_parse_var(& vcfset_conf.vcf_in2, var);
-         if (-1 == rc) {
-              LOG_FATAL("%s\n", "Parsing error while parsing 2nd vcf-file");
-              exit(1);
-         }
-         if (1 == rc) {/* EOF */
-              free(var);
-              break;
-         }
-
-         is_indel = vcf_var_is_indel(var);
-         if (vcfset_conf.only_snvs && is_indel) {
-              free(var);
-              continue;
-         } else if (vcfset_conf.only_indels && ! is_indel) {
-              free(var);
-              continue;
-         }
-
-         if (! vcfset_conf.only_passed || VCF_VAR_PASSES(var)) {
-              /* if allele-aware then also deal with multi-allelic sites */
-              if (! vcfset_conf.only_pos) {
-                   const char field_delimiter[] = ",";
-                   char *token;
-                   char *alt_cp;
-                   char *ptr;
-                   var_t *var_cp;
-
-                   alt_cp = strdup(var->alt);
-                   ptr = alt_cp;
-                   vcf_cp_var(&var_cp, var);
-                   /* strsep modifies first arg */
-                   while (NULL != (token = strsep(&ptr, field_delimiter))) {
-                        strcpy(var_cp->alt, token);
-                        vcf_var_key(&key, var_cp);
-                        /* since we only need the key and no other info we do
-                         * not need to save the var (and save NULL instead) */
-                        var_hash_add(& var_hash_vcf2, key, NULL);         
-                   }
-
-                   free(alt_cp);
-                   vcf_free_var(& var_cp);
-              } else {
-                   vcf_var_key_pos_only(&key, var);
-                   /* since we only need the key and no other info we do
-                    * not need to save the var (and save NULL instead) */
-                   var_hash_add(& var_hash_vcf2, key, NULL);         
-              }
-
-         } else {
-              num_vars_vcf2_ign += 1;
-         }
-         vcf_free_var(& var);
-
-#ifdef TRACE
-         LOG_DEBUG("Adding %s\n", key);
-#endif
-    }
-    vcf_file_close(& vcfset_conf.vcf_in2);
-
-    num_vars_vcf2 = HASH_COUNT(var_hash_vcf2);
-    LOG_VERBOSE("Parsed %d variants from 2nd vcf file (ignoring %d non-passed of those)\n", 
-                num_vars_vcf2 + num_vars_vcf2_ign, num_vars_vcf2_ign);
-
-    /* now parse first vcf file and decide what to do
-     */
-    while (1) {
-         var_t *var_1;
-         char *key;
-         var_hash_t *var_2;
+         var_t *var1 = NULL;
          int rc;
          int is_indel;
+         kstring_t var2_kstr = {0, 0, 0};
+         hts_itr_t *var2_itr = NULL;
+         char regbuf[1024];
+         int var2_match = 0;
 
-         vcf_new_var(&var_1);
-         rc = vcf_parse_var(& vcfset_conf.vcf_in1, var_1);
+         vcf_new_var(&var1);
+         rc = vcf_parse_var(& vcfset_conf.vcf_in1, var1);
          if (-1 == rc) {
               LOG_FATAL("%s\n", "Parsing error while parsing 1st vcf-file");
               exit(1);
          }
          if (1 == rc) {/* EOF */
-              free(var_1);
+              free(var1);
               break;
          }
 
-         is_indel = vcf_var_is_indel(var_1);
+         is_indel = vcf_var_is_indel(var1);
          if (vcfset_conf.only_snvs && is_indel) {
-              free(var_1);
+              free(var1);
               continue;
          } else if (vcfset_conf.only_indels && ! is_indel) {
-              free(var_1);
+              free(var1);
               continue;
          }
 
-         if (! vcfset_conf.only_pos && NULL != strchr(var_1->alt, ',')) {
+         if (! vcfset_conf.only_pos && NULL != strchr(var1->alt, ',')) {
               LOG_FATAL("%s\n", "No support for multi-allelic SNVs in vcf1");
-              exit(1);
+              return -1;
          }
-         if (vcfset_conf.only_passed && ! VCF_VAR_PASSES(var_1)) {
+         if (vcfset_conf.only_passed && ! VCF_VAR_PASSES(var1)) {
               num_vars_vcf1_ign += 1;
-              vcf_free_var(& var_1);
+              vcf_free_var(& var1);
               continue;
          }
 #ifdef TRACE
-         fprintf(stderr, "var_1 pass: "); vcf_write_var(stderr, var_1);
+         fprintf(stderr, "var1 pass: "); vcf_write_var(stderr, var1);
 #endif
          num_vars_vcf1 += 1;
-         vcfset_conf.only_pos ? vcf_var_key_pos_only(&key, var_1) : vcf_var_key(&key, var_1);
-         HASH_FIND_STR(var_hash_vcf2, key, var_2);
-#ifdef TRACE
-         LOG_DEBUG("var with key %s in 2: %s\n", key, var_2? "found" : "not found");
-#endif
-         free(key);
 
-         if (vcfset_conf.vcf_setop == SETOP_COMPLEMENT) {
-              /* relative complement : elements in A but not B */
-              if (NULL == var_2) {
-                   num_vars_out += 1;
-                   if (! count_only) {
-                        vcf_write_var(& vcfset_conf.vcf_out, var_1);
+         snprintf(regbuf, 1024, "%s:%ld-%ld", var1->chrom, var1->pos+1, var1->pos+1);
+         var2_itr = tbx_itr_querys(vcf2_tbx, regbuf);
+         if (! var2_itr) {
+              var2_match = 0;
+         } else {
+              var2_match = 0;
+              while (tbx_itr_next(vcf2_hts, vcf2_tbx, var2_itr, &var2_kstr) >= 0) {
+                   var_t *var2 = NULL;
+                   vcf_new_var(&var2);
+                   rc = vcf_parse_var_from_line(var2_kstr.s, var2);
+                   if (-1 == rc) {
+                        LOG_FATAL("%s\n", "Error while parsing variant returned from tabix");
+                        return -1;
+                   }
+                   if (vcfset_conf.only_passed && ! VCF_VAR_PASSES(var2)) {
+                        var2_match = 0;
+                   } else if (vcfset_conf.only_pos) {
+                        var2_match = 1;/* FIXME: check type as well i.e. snv vs indel */
+                   } else {
+                        if (0==strcmp(var1->ref, var2->ref) && 0==strcmp(var1->alt, var2->alt)) {
+                             var2_match = 1;/* FIXME: check type as well i.e. snv vs indel */                             
+                        }
+                   }
+                   vcf_free_var(&var2);
+                   if (var2_match) {
+                        break;/* no need to continue */
                    }
               }
-#ifdef NOT_OKAY_IF_SIMPLE_KEY_AND_MULTIALLELIC_AND_ACTUALLY_NOT_NEEDED_AFTER_ALL
-              else {
-                   /* save some mem */
-                   HASH_DEL(var_hash_vcf2, var_2);
-                   var_hash_free_elem(var_2);
-              }
-#endif
-         } else if (vcfset_conf.vcf_setop == SETOP_INTERSECT) {
-              if (NULL != var_2) {
+         }
+         if (vcfset_conf.vcf_setop == SETOP_COMPLEMENT) {
+              /* relative complement : elements in A but not B */
+              if (!var2_match) {
                    num_vars_out += 1;
                    if (! count_only) {
-                        vcf_write_var(& vcfset_conf.vcf_out, var_1);
+                        vcf_write_var(& vcfset_conf.vcf_out, var1);
+                   }
+              }
+         } else if (vcfset_conf.vcf_setop == SETOP_INTERSECT) {
+              if (var2_match) {
+                   num_vars_out += 1;
+                   if (! count_only) {
+                        vcf_write_var(& vcfset_conf.vcf_out, var1);
                    }
               }
 
@@ -464,10 +402,12 @@ main_vcfset(int argc, char *argv[])
               return 1;
          }
 
-         vcf_free_var(& var_1);
+         vcf_free_var(& var1);
+         tbx_itr_destroy(var2_itr);
     }
     vcf_file_close(& vcfset_conf.vcf_in1);
-
+    hts_close(vcf2_hts);
+    tbx_destroy(vcf2_tbx);
 
     LOG_VERBOSE("Parsed %d variants from 1st vcf file (ignoring %d non-passed of those)\n", 
                 num_vars_vcf1 + num_vars_vcf1_ign, num_vars_vcf1_ign);

@@ -17,15 +17,18 @@
 #ifndef VCF_H
 #define VCF_H
 
+#include <stdarg.h>
 
-#include "zlib.h"
+#include "htslib/bgzf.h"
+/*#include "zlib.h"*/
 #include "uthash.h"
 
 
 typedef struct {
+     char *path;
+     int is_bgz;
      FILE *fh;
-     gzFile *fh_gz;
-     int gz;
+     BGZF *fh_bgz;
 } vcf_file_t;
 
 typedef struct {
@@ -71,17 +74,7 @@ void  var_hash_free_table(var_hash_t *var_hash);
 #define VCF_VAR_PASSES(v) ((v)->filter[0]==VCF_MISSING_VAL_CHAR || 0==strncmp((v)->filter, "PASS", 4))
 
 
-#define VCF_EOF(vf) ((vf)->gz ? gzeof((vf)->fh_gz) : feof((vf)->fh))
 
-/* there is no gzvprintf therefore we can't make this a function. this
- * way howver you won't know how many chars were written if any.
- * could add extra variable...
- */
-#define VCF_PRINTF(vf, fmt, args...) if (vf->gz) { \
-                                       gzprintf(vf->fh_gz, fmt, ## args); \
-                                     } else { \
-                                       fprintf(vf->fh, fmt, ## args); \
-                                     };
 int
 vcf_file_seek(vcf_file_t *f, long int offset, int whence);
 int
@@ -90,7 +83,8 @@ int
 vcf_file_close(vcf_file_t *f);
 char *
 vcf_file_gets(vcf_file_t *f, int len, char *line);
-
+int
+vcf_printf(vcf_file_t *f, char *fmt, ...);
 
 int vcf_get_dp4(dp4_counts_t *dp4, var_t *var);
 
@@ -103,6 +97,7 @@ void vcf_var_key_pos_only(char **key, var_t *var);
 
 int vcf_parse_header(char **header, vcf_file_t *vcf_file);
 int vcf_skip_header(vcf_file_t *vcf_file);
+int vcf_parse_var_from_line(char *line, var_t *var);
 int vcf_parse_var(vcf_file_t *vcf_file, var_t *var);
 int vcf_parse_vars(var_t ***vars, vcf_file_t *vcf_file, int only_passed);
 
