@@ -1266,6 +1266,8 @@ mpileup(const mplp_conf_t *mplp_conf,
     while (bam_mplp_auto(iter, &tid, &pos, n_plp, plp) > 0) {
         plp_col_t plp_col;
         int i=0; /* NOTE: mpileup originally iterated over n */
+
+        /*LOG_DEBUG("piling up %s:%d\n", h->target_name[tid], pos);*/
         if (mplp_conf->reg && (pos < beg0 || pos >= end0))
              continue; /* out of the region requested */
         if (mplp_conf->bed && tid >= 0 && !bed_overlap(mplp_conf->bed, h->target_name[tid], pos, pos+1))
@@ -1290,8 +1292,8 @@ mpileup(const mplp_conf_t *mplp_conf,
               * of one of the loops, so reset here */
 
         plp_counter += 1;
-        if (0 == plp_counter%100000) {
-             LOG_VERBOSE("Still alive and happily crunching away on pos"
+        if (1 == plp_counter%100000) {
+             LOG_VERBOSE("Alive and happily crunching away on pos"
                          " %d of %s...\n", pos+1, h->target_name[tid]);
         }
 
