@@ -1094,8 +1094,12 @@ for cov in coverage_range:
    /* get bam file argument
     */
     if (1 != argc - optind - 1) {
-        fprintf(stderr, "Need exactly one BAM file as last argument\n");
-        return 1;
+         int i;
+         LOG_FATAL("%s\n", "Need exactly one BAM file as last argument");
+         for (i=optind+1; i<argc; i++) {
+              LOG_FATAL("Unknown arg: %s\n", argv[i]);
+         }
+         return 1;
     }
     bam_file = (argv + optind + 1)[0];
         if (0 == strcmp(bam_file, "-")) {
