@@ -19,7 +19,6 @@ import os
 import argparse
 import subprocess
 import tempfile
-import gzip
 from socket import gethostname
 
 #--- third-party imports
@@ -72,10 +71,10 @@ class SomaticSNVCaller(object):
     #
     VCF_SOMATIC_RAW_EXT = "somatic_raw.snvs.vcf.gz"
     VCF_INDELS_SOMATIC_RAW_EXT = "somatic_raw.indels.vcf.gz"
-    VCF_SOMATIC_FINAL_EXT = "somatic_final.snvs.vcf"
-    VCF_INDELS_SOMATIC_FINAL_EXT = "somatic_final.indels.vcf"
-    VCF_SOMATIC_FINAL_WO_DBSNP_EXT = "somatic_final_minus-dbsnp.snvs.vcf"
-    VCF_INDELS_SOMATIC_FINAL_WO_DBSNP_EXT = "somatic_final_minus-dbsnp.indels.vcf"
+    VCF_SOMATIC_FINAL_EXT = "somatic_final.snvs.vcf.gz"
+    VCF_INDELS_SOMATIC_FINAL_EXT = "somatic_final.indels.vcf.gz"
+    VCF_SOMATIC_FINAL_WO_DBSNP_EXT = "somatic_final_minus-dbsnp.snvs.vcf.gz"
+    VCF_INDELS_SOMATIC_FINAL_WO_DBSNP_EXT = "somatic_final_minus-dbsnp.indels.vcf.gz"
     #
     VCF_GERMLINE_EXT = "germline.vcf.gz"
 
@@ -428,10 +427,12 @@ class SomaticSNVCaller(object):
         """
 
         vcfset_base_cmd =  [self.LOFREQ, 'vcfset', '-a', 'complement',
-                            '-2', self.vcf_n_rlx, '-o', '-']
-        vcfset_snv_cmd = vcfset_base_cmd + ['-1', self.vcf_t_str, '--only-snvs']
-        vcfset_indels_cmd = vcfset_base_cmd + ['-1', self.vcf_indels_t_str,
-                                               '--only-pos', '--only-indels']
+                            '-2', self.vcf_n_rlx, '--add-info', 'SOMATIC']
+        vcfset_snv_cmd = vcfset_base_cmd + [
+            '--only-snvs', '-1', self.vcf_t_str, '-o', self.vcf_som_raw]
+        vcfset_indels_cmd = vcfset_base_cmd + [
+            '--only-indels', '--only-pos', '-1', self.vcf_indels_t_str, 
+            '-o', self.vcf_indels_som_raw]
 
         for (vcf_out, cmd) in [(self.vcf_som_raw, vcfset_snv_cmd),
                                (self.vcf_indels_som_raw, vcfset_indels_cmd)]:
@@ -442,24 +443,7 @@ class SomaticSNVCaller(object):
                 assert not os.path.exists(vcf_out), (
                     "%s already exists. Please remove or"
                     " run me with --continue if you want to reuse this file" % vcf_out)
-
-            if vcf_out[-3:] == ".gz":
-                vcf_out_fh = gzip.open(vcf_out, 'w')
-            else:
-                vcf_out_fh = open(vcf_out, 'w')
-
-            (cmd_o, cmd_e) = self.subprocess_wrapper(cmd, close_tmp=False)
-            for l in cmd_e:
-                LOG.warn("cmd stderr: %s" % l.rstrip())
-            cmd_e.close()
-
-            # tag variants as SOMATIC
-            for l in cmd_o:
-                if not l.startswith('#'):
-                    l = l.rstrip() + ";SOMATIC"  + "\n"
-                vcf_out_fh.write("%s" % l)
-            cmd_o.close()
-            vcf_out_fh.close()
+            self.subprocess_wrapper(cmd)
 
 
     def uniq(self):
@@ -603,7 +587,7 @@ def cmdline_parser():
     basic.add_argument("-l", "--bed",
                         help="BED file listing regions to restrict analysis to")
     basic.add_argument("-d", "--dbsnp",
-                        help="vcf-file (gzip supported) containing known germline variants")
+                        help="vcf-file (bgzipped and index with tabix) containing known germline variants")
 
     default = SomaticSNVCaller.DEFAULT_NUM_THREADS
     basic.add_argument("--threads",
