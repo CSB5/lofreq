@@ -41,7 +41,7 @@
 /* -1: ref median, 0: keep original, >0: replace with this value */
 
 /* non match quality for source qual */
-#define DEFAULT_DEF_NM_QUAL 20
+#define DEFAULT_DEF_NM_QUAL -1
  
 /* coverage thresholds */
 #define DEFAULT_MIN_COV 1
