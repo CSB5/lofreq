@@ -165,7 +165,8 @@ vcf_file_open(vcf_file_t *f, const char *path, const int bgzip, char mode)
      }
 
      f->path = strdup(path);
-
+     f->mode =mode;
+     
      if (bgzip) {
           if (path[0] == '-') {
                LOG_FIXME("%s\n", "bgzip support for stdin/stdout not implemented yet");
@@ -212,7 +213,7 @@ vcf_file_close(vcf_file_t *f)
      int rc = 0;
      if (f->is_bgz) {          
           rc = bgzf_close(f->fh_bgz);
-          if (rc==0 && f->path && f->path[0] != '-') {
+          if (rc==0 && f->mode=='w' && f->path && f->path[0] != '-') {
                int min_shift = -1;
                tbx_conf_t conf = tbx_conf_vcf;
                rc = tbx_index_build(f->path, min_shift, &conf);
@@ -242,8 +243,8 @@ vcf_file_gets(vcf_file_t *f, int len, char *line)
                     fprintf(stderr, "WARN(%s|%s): line parsed from %s larger then buffer (%lu>%d)\n",
                             __FILE__, __FUNCTION__, f->path, str.l, len);
                }
-               strncpy(line, str.s, len-1);
-               /* behave like fgets: keep newline */
+               strncpy(line, str.s, len-2);
+               /* behave like fgets and keep newline */
                line[strlen(line)] = '\n';
                line[strlen(line)+1] = '\0';
                

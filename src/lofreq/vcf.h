@@ -29,6 +29,7 @@ typedef struct {
      int is_bgz;
      FILE *fh;
      BGZF *fh_bgz;
+     char mode;
 } vcf_file_t;
 
 typedef struct {
