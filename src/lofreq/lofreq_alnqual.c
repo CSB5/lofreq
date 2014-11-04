@@ -91,7 +91,7 @@ int main_alnqual(int argc, char *argv[])
           case 'A': idaq_flag = 0; break;
           case 'r': redo = 1; break;
           case '?': 
-               fprintf(stderr, "FATAL: %s unrecognized arguments found. Exiting...\n");
+               fprintf(stderr, "FATAL: unrecognized arguments found. Exiting...\n");
                return 1;
           default: 
                break;

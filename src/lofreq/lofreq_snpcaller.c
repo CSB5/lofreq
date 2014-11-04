@@ -706,6 +706,8 @@ call_vars(const plp_col_t *p, void *confp)
 static void
 usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
 {
+     fprintf(stderr, "%s: call variants from BAM file\n\n", MYNAME);
+
      fprintf(stderr, "Usage: %s [options] in.bam\n\n", MYNAME);
      fprintf(stderr, "Options:\n");
 
@@ -744,7 +746,7 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "            --only-indels           Only call indels; no SNVs\n");
 
      fprintf(stderr, "- Source quality:\n");
-     fprintf(stderr, "       -s | --src-qual              Enable computation of source quality for reads\n");
+     fprintf(stderr, "       -s | --src-qual              Enable computation of source quality\n");
      fprintf(stderr, "       -S | --ign-vcf FILE          Ignore variants in this vcf file for source quality computation\n"),
      fprintf(stderr, "       -T | --def-nm-q INT          If >= 0, then replace non-match base qualities with this default value [%d]\n", mplp_conf->def_nm_q);
 
