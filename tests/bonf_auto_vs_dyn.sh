@@ -13,9 +13,9 @@ reffa=$basedir/denv2-pseudoclonal_cons.fa
 
 outdir=$(mktemp -d -t $(basename $0).XXXXXX)
 # not supported anymore out_auto=$outdir/snv_auto.vcf
-out_dynamic=$outdir/snv_dynamic.vcf
+out_dynamic=$outdir/snv_dynamic.vcf.gz
 # bed_len.sh $be;# = 9909 * 3 = 29727
-out_29727=$outdir/snv_29727.vcf
+out_29727=$outdir/snv_29727.vcf.gz
 log=$outdir/log.txt
 
 KEEP_TMP=0

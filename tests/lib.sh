@@ -17,6 +17,9 @@ echodebug() {
 # md5sum is md5 on mac
 md5=$(which md5sum 2>/dev/null || which md5)
 
+# zcat looks for .Z file on mac
+zcat="gzip -dc"
+
 seq=$(which seq 2>/dev/null || which gseq)
 
 ncpus=$(sysctl -2 hw.ncpu 2>/dev/null || grep -c ^processor /proc/cpuinfo 2>/dev/null || echo 1)

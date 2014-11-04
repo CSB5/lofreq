@@ -9,7 +9,7 @@ basedir=data/denv2-pseudoclonal
 bam=$basedir/denv2-pseudoclonal.bam
 reffa=$basedir/denv2-pseudoclonal_cons.fa
 bed=$basedir/denv2-pseudoclonal_incl.bed
-truesnv=$basedir/denv2-pseudoclonal_true-snp.vcf
+truesnv=$basedir/denv2-pseudoclonal_true-snp.vcf.gz
 
 outdir=$(mktemp -d -t $(basename $0).XXXXXX)
 outraw_def=$outdir/raw_def.vcf

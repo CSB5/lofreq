@@ -13,7 +13,7 @@ bam=data/denv2-simulation/denv2-10haplo.bam
 vcf=data/denv2-simulation/denv2-10haplo_true-snp.vcf.gz
 
 # use only head. otherwise too slow
-zcat $vcf | head | valgrind  --log-file=$valgrind_log --tool=memcheck \
+$zcat $vcf | head | valgrind  --log-file=$valgrind_log --tool=memcheck \
     $LOFREQ uniq -v - $bam -o $vcf_out || exit 1
  
 

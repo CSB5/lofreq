@@ -11,7 +11,7 @@ reffa=$basedir/consensus.fa
 
 outdir=$(mktemp -d -t $(basename $0).XXXXXX)
 vcfout1=$outdir/$(basename $bam1 .bam).vcf
-vcfout2=$outdir/$(basename $bam2 .bam).vcf
+vcfout2=$outdir/$(basename $bam2 .bam).vcf.gz;# 2nd file has to be bgzipped for vcfset to work
 vcfinter=$outdir/intersection.vcf
 
 log=$outdir/log.txt

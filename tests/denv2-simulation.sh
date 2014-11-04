@@ -14,9 +14,9 @@ bonf=32169
 
 outdir=$(mktemp -d -t $(basename $0).XXXXXX)
 outraw_def=$outdir/raw_def.vcf
-outfinal_def=$outdir/final_def.vcf
+outfinal_def=$outdir/final_def.vcf.gz;# bgzip for complement
 outraw_nomq=$outdir/raw_nomq.vcf
-outfinal_nomq=$outdir/final_nomq.vcf
+outfinal_nomq=$outdir/final_nomq.vcf.gz;# bgzip for complement
 log=$outdir/log.txt
 
 KEEP_TMP=0
