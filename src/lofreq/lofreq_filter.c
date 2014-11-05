@@ -1064,12 +1064,8 @@ main_filter(int argc, char *argv[])
 
          vcf_new_var(&var);
          rc = vcf_parse_var(& cfg.vcf_in, var);
-         if (-1 == rc) {
-              LOG_FATAL("%s\n", "Error while parsing vcf-file");
-              exit(1);
-         }
-
-         if (1 == rc) {/* EOF */
+         if (rc) {
+              /* how to distinguish between error and EOF? */
               free(var);
               break;
          }

@@ -337,11 +337,7 @@ main_vcfset(int argc, char *argv[])
 
          vcf_new_var(&var1);
          rc = vcf_parse_var(& vcfset_conf.vcf_in1, var1);
-         if (-1 == rc) {
-              LOG_FATAL("%s\n", "Parsing error while parsing 1st vcf-file");
-              exit(1);
-         }
-         if (1 == rc) {/* EOF */
+         if (rc) {
               free(var1);
               
               if (vcfset_conf.vcf_setop != SETOP_CONCAT) {
@@ -418,7 +414,7 @@ main_vcfset(int argc, char *argv[])
                    var_t *var2 = NULL;
                    vcf_new_var(&var2);
                    rc = vcf_parse_var_from_line(var2_kstr.s, var2);
-                   if (-1 == rc) {
+                   if (rc) {
                         LOG_FATAL("%s\n", "Error while parsing variant returned from tabix");
                         return -1;
                    }

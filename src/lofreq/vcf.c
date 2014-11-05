@@ -233,15 +233,20 @@ vcf_file_close(vcf_file_t *f)
 }
 
 
+/* returns NULL on error or EOF */
 char *
 vcf_file_gets(vcf_file_t *f, int len, char *line) 
 {
      if (f->is_bgz) {
           kstring_t str = {0, 0, 0};
           if (bgzf_getline(f->fh_bgz, '\n', &str) > 0) {
-               if (str.l > len) {
-                    fprintf(stderr, "WARN(%s|%s): line parsed from %s larger then buffer (%lu>%d)\n",
-                            __FILE__, __FUNCTION__, f->path, str.l, len);
+               /* will get errors like
+                  [E::get_intv] failed to parse TBX_VCF, was wrong -p [type] used?
+                  The offending line was: "19,0,1"
+                  on just gzipped data. not sure how to catch this. the following is a paranoia check
+               */
+               if (str.l<1) {
+                    return NULL;
                }
                strncpy(line, str.s, len-2);
                /* behave like fgets and keep newline */
@@ -630,7 +635,7 @@ int vcf_parse_header(char **header, vcf_file_t *vcf_file)
           if (++line_no>MAX_HEADER_LEN) {
                break;
           }
-          if (NULL == rc || Z_NULL == rc) {
+          if (NULL == rc) {
                break;
           }
 #if 0
@@ -743,8 +748,8 @@ int vcf_parse_var_from_line(char *line, var_t *var)
 }
 
 
-/* parse one variant from stream. returns +1 on EOF and -1 on error.
- * note, multi-allelic entries are not treated specially
+/* parse one variant from stream. returns -1 on error or EOF.
+ * note, multi-allelic entries are not treated specially. returns non-null on error
  */
 int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
 {
@@ -753,7 +758,7 @@ int vcf_parse_var(vcf_file_t *vcf_file, var_t *var)
 
      rc = vcf_file_gets(vcf_file, sizeof(line), line);
      if (NULL == rc) {
-          return 1;
+          return -1;
      }
      return vcf_parse_var_from_line(line, var);
 }
@@ -773,17 +778,8 @@ int vcf_parse_vars(var_t ***vars, vcf_file_t *vcf_file, int only_passed)
           var_t *var;
           vcf_new_var(&var);
           rc = vcf_parse_var(vcf_file, var);
-          if (-1 == rc) {
-               int i;
-               LOG_FATAL("%s\n", "Parsing error");
-               for (i=0; i<num_vars; i++) {
-                    vcf_free_var(&(*vars)[i]);
-               }
-               vcf_free_var(&var);
-               free((*vars));
-               return -1;
-          }
-          if (1 == rc) {/* EOF */
+          if (rc) {
+               /* would be nice to distinguish between eof and error */
                free(var);
                break;
           }
@@ -900,11 +896,7 @@ int main(int argc, char *argv[]) {
      free(header);
 
 
-     if (-1 == (num_vars = vcf_parse_vars(& vcf_file_in, &vars))) {
-          LOG_FATAL("%s\n", "vcf_parse_vars() failed");
-          return 1;
-     }
-     fprintf(stdout, "Wrote %d vars to output\n", num_vars);
+     num_vars = vcf_parse_vars(& vcf_file_in, &vars);
      for (i=0; i<num_vars; i++) {
           vcf_write_var(& vcf_file_out, vars[i]);
      }
