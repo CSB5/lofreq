@@ -165,29 +165,22 @@ def total_num_tests_from_logs(log_files):
     return (total_num_snv_tests, total_num_indel_tests)
 
 
-def concat_vcf_files(vcf_files, vcf_concat, source=None):
-    """Keeps only head of first vcf file (with '##source=lofreq call'
-    replaced by source + \n if given) and write content of all to
-    vcf_concat
+def concat_vcf_files(vcf_files, vcf_out, source=None):
+    """FIXME source unused
     """
 
-    # FIXME add gzip support to concat_vcf_files() or make vcfset subcommand"
-    assert not os.path.exists(vcf_concat)
-    fh_out = open(vcf_concat, 'w')
+    assert not os.path.exists(vcf_out)
 
-    for (i, f) in enumerate(vcf_files):
-        fh = open(f, 'r')
-        for line in fh:
-            if i > 0 and line.startswith('#'):
-                continue
-            if source and line.startswith('##source=lofreq call'):
-                fh_out.write(source + "\n")
-                continue
-            fh_out.write(line)
-        fh.close()
-    fh_out.close()
+    cmd = ['lofreq', 'vcfset', '-a', 'concat', '-o', vcf_out, '-1']
+    cmd.extend(vcf_files)
+    try:
+        subprocess.check_call(cmd)
+    except subprocess.CalledProcessError as e:
+        LOG.fatal("The following command failed with return code %d: %s" % (
+            e.returncode, ' '.join(cmd)))
+        sys.exit(1)
 
-
+        
 def sq_list_from_bam_samtools(bam):
     """Extract SQs listed in BAM head using samtools
 
@@ -317,7 +310,7 @@ def lofreq_cmd_per_bin(lofreq_call_args, bins, tmp_dir):
         reg_str = "%s:%d-%d" % (b.chrom, b.start+1, b.end)
         cmd = ' '.join(lofreq_call_args)
         cmd += ' --no-default-filter'# needed here whether user-arg or not
-        cmd += ' -r "%s" -o %s/%d.vcf > %s/%d.log 2>&1' % (
+        cmd += ' -r "%s" -o %s/%d.vcf.gz > %s/%d.log 2>&1' % (
             reg_str, tmp_dir, i, tmp_dir, i)
         #LOG.warn("DEBUG: yielding %s" % cmd)
         yield cmd
@@ -350,7 +343,11 @@ def main():
     #
     # 1. parse pparallel specific args: get and remove from list
     #
-
+    
+    #cmd = ['which', 'lofreq']
+    #print "FIXME",  subprocess.check_output(cmd)
+    #sys.exit(1)
+    
     # poor man's usage
     #
     if '-h' in orig_argv:
@@ -520,7 +517,7 @@ def main():
         sys.exit(1)
 
     # now use one thread per region. output is numerated per thread
-    # (%d.log and %d.vcf) and goes into tmp_dir
+    # (%d.log and %d.vcf.gz) and goes into tmp_dir
     #
     tmp_dir = tempfile.mkdtemp(prefix='lofreq2_call_parallel')
     LOG.debug("tmp_dir = %s" % tmp_dir)
@@ -652,16 +649,15 @@ def main():
 
     # concat the output by number
     #
-    vcf_concat = os.path.join(tmp_dir, "concat.vcf")
+    vcf_concat = os.path.join(tmp_dir, "concat.vcf.gz")
     # maintain order
-    vcf_files = [os.path.join(tmp_dir, "%d.vcf" % no)
+    vcf_files = [os.path.join(tmp_dir, "%d.vcf.gz" % no)
                  for no in range(len(cmd_list))]
     if not all([os.path.exists(f) for f in vcf_files]):
         LOG.fatal("Missing some vcf output from threads")
         sys.exit(1)
     concat_vcf_files(vcf_files, vcf_concat,
                      "##source=%s" % ' '.join(sys.argv))
-
 
     # filtering
     #
@@ -682,10 +678,10 @@ def main():
         # if bonf was computed dynamically, use bonf sum
         sub_bonf = num_snv_tests
         indel_bonf = num_indel_tests
-        if sub_bonf==0:
-            sub_bonf=1
-        if indel_bonf==0:
-            indel_bonf=1
+        if sub_bonf == 0:
+            sub_bonf = 1
+        if indel_bonf == 0:
+            indel_bonf = 1
         sub_phredqual = prob_to_phredqual(sig_opt/float(sub_bonf))
         indel_phredqual = prob_to_phredqual(sig_opt/float(indel_bonf))
         cmd.extend(['--snvqual-thresh', "%s" % sub_phredqual])
@@ -698,26 +694,30 @@ def main():
         # if bonf_opt was a fixed int, then it was already used properly and
         # there's no need to filter against snv qual. if furthermore,
         # --no-defaults is given we then don't filter at all
+        #
         LOG.info("Copying concatenated vcf file to final destination")
         LOG.debug("vcf_concat=%s final_vcf_out=%s" % (vcf_concat, final_vcf_out))
-        fh_in = open(vcf_concat, 'r')
+
         if final_vcf_out == "-":
+            fh_in = gzip.open(vcf_concat, 'r')
             fh_out = sys.stdout
+            shutil.copyfileobj(fh_in, fh_out)
+            fh_in.close()
         else:
-            # check again to make race conditions less likely
+            # check again if final output doesn't exist, just to be sure
             if os.path.exists(final_vcf_out):
                 LOG.fatal("Cowardly refusing to overwrite %s with %s" % (
                     final_vcf_out, vcf_concat))
                 sys.exit(1)
 
-            if final_vcf_out[-3:] == '.gz':
-                fh_out = gzip.open(final_vcf_out, 'w')
-            else:
-                fh_out = open(final_vcf_out, 'w')
-        shutil.copyfileobj(fh_in, fh_out)
-        fh_in.close()
-        if fh_out != sys.stdout:
-            fh_out.close
+            shutil.copy(vcf_concat, final_vcf_out)
+        
+            # try to copy index as well if exists
+            tidx_src = vcf_concat + ".tbi"
+            if os.path.exists(tidx_src):
+                tidx_dst = final_vcf_out + ".tbi"
+                shutil.copy(tidx_src, tidx_dst)
+            
     else:
         cmd = ' '.join(cmd)# subprocess.call takes string
         LOG.info("Executing %s\n" % (cmd))
