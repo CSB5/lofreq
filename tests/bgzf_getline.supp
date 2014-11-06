@@ -1,0 +1,22 @@
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   fun:malloc
+   fun:realloc
+   fun:bgzf_getline
+   fun:tbx_readrec
+   fun:hts_itr_next
+   fun:main_vcfset
+   fun:main
+}
+
+{
+   htslib bgzf_getline leak
+   Memcheck:Leak
+   fun:realloc
+   fun:bgzf_getline
+   fun:tbx_readrec
+   fun:hts_itr_next
+   fun:main_vcfset
+   fun:main
+}

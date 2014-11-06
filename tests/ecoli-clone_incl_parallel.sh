@@ -13,8 +13,8 @@ reffa=$basedir/ref/Ecoli_K12_MG1655_NC_000913.fa
 #truesnv=$basedir/denv2-pseudoclonal_true-snp.vcf
 
 outdir=$(mktemp -d -t $(basename $0).XXXXXX)
-outvcf_p=$outdir/$(basename $bam .bam)_parallel.vcf
-outvcf_s=$outdir/$(basename $bam .bam)_single.vcf
+outvcf_p=$outdir/$(basename $bam .bam)_parallel.vcf.gz
+outvcf_s=$outdir/$(basename $bam .bam)_single.vcf.gz
 log=$outdir/log.txt
 
 KEEP_TMP=0

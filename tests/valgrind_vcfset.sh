@@ -7,8 +7,7 @@ source lib.sh || exit 1
 valgrind_log=$(mktemp -t $(basename $0).XXXXXX.valgrind)
 vcf_in=data/vcf/CTTGTA_2_remap_razers-i92_peakrem_corr_nodeff.vcf.gz
 
-valgrind --log-file=$valgrind_log --tool=memcheck $LOFREQ vcfset -a complement -1 $vcf_in -2 $vcf_in >/dev/null || exit 1
-#valgrind --log-file=$valgrind_log --tool=memcheck $lofreq vcfset -a intersect -1 $vcf_in -2 $vcf_in >/dev/null || exit 1
+valgrind --suppression=bgzf_getline.supp --log-file=$valgrind_log --tool=memcheck --leak-check=full $LOFREQ vcfset -a complement -1 $vcf_in -2 $vcf_in >/dev/null || exit 1
 
 test -s $valgrind_log || exit 1
 

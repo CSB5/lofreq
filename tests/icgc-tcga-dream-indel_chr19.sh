@@ -30,7 +30,7 @@ fi
 num_err=0
 
 title="snvs"
-f=${outpref}somatic_final.snvs.vcf
+f=${outpref}somatic_final.snvs.vcf.gz
 res_ll=$($EVALUATOR -v $f -t $TRUTH -m SNV | awk 'END {print $NF}') || exit 1
 res=$(echo $res_ll | \
   awk -F, '{prec=$1; rec=$2; if (prec<0.96 || rec<0.96) {status="ERROR"} else {status="OK"} printf "%s: precision=%f recall=%f\n", status, prec, rec}') || exit 1
@@ -40,7 +40,7 @@ fi
 echo "$title: " $res 1>&2
 
 title="snvs after dbsnp removal"
-f=${outpref}somatic_final_minus-dbsnp.snvs.vcf
+f=${outpref}somatic_final_minus-dbsnp.snvs.vcf.gz
 res_ll=$($EVALUATOR -v $f -t $TRUTH -m SNV | awk 'END {print $NF}') || exit 1
 res=$(echo $res_ll | \
   awk -F, '{prec=$1; rec=$2; if (prec<0.96 || rec<0.96) {status="ERROR"} else {status="OK"} printf "%s: precision=%f recall=%f\n", status, prec, rec}') || exit 1
@@ -50,7 +50,7 @@ fi
 echo "$title: " $res 1>&2
 
 title="indels"
-f=${outpref}somatic_final.indels.vcf
+f=${outpref}somatic_final.indels.vcf.gz
 res_ll=$($EVALUATOR -v $f -t $TRUTH -m INDEL | awk 'END {print $NF}') || exit 1
 res=$(echo $res_ll | \
   awk -F, '{prec=$1; rec=$2; if (prec<0.90 || rec<0.50) {status="ERROR"} else {status="OK"} printf "%s: precision=%f recall=%f\n", status, prec, rec}') || exit 1
@@ -60,7 +60,7 @@ fi
 echo "$title: "$res 1>&2
 
 title="indels after dbsnp removal"
-f=${outpref}somatic_final_minus-dbsnp.indels.vcf
+f=${outpref}somatic_final_minus-dbsnp.indels.vcf.gz
 res_ll=$($EVALUATOR -v $f -t $TRUTH -m INDEL | awk 'END {print $NF}') || exit 1
 res=$(echo $res_ll | \
   awk -F, '{prec=$1; rec=$2; if (prec<0.90 || rec<0.50) {status="ERROR"} else {status="OK"} printf "%s: precision=%f recall=%f\n", status, prec, rec}') || exit 1

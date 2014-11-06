@@ -15,7 +15,7 @@ outvcf=$outdir/out.vcf
 
 cmd="$LOFREQ call-parallel --pp-threads 8 -f $REF -o $outvcf --verbose $BAM"
 # only needed as long as indels are disabled by default
-# cmd="$cmd --call-indels"
+cmd="$cmd --call-indels"
 echodebug "cmd=$cmd"
 if ! eval $cmd > $log 2>&1; then
     echoerror "LoFreq failed. Check logfile $log. Command was $cmd"
@@ -23,7 +23,7 @@ if ! eval $cmd > $log 2>&1; then
 fi
 
 
-res_ll=$($EVALUATOR -v $f -t $TRUTH -m SNV | awk 'END {print $NF}') || exit 1
+res_ll=$($EVALUATOR -v $outvcf -t $TRUTH -m SNV | awk 'END {print $NF}') || exit 1
 res=$(echo $res_ll | \
   awk -F, '{prec=$1; rec=$2; if (prec<0.96 || rec<0.96) {status="ERROR"} else {status="OK"} printf "%s: precision=%f recall=%f\n", status, prec, rec}') || exit 1
 if echo $res | grep -q ERROR; then
@@ -31,7 +31,7 @@ if echo $res | grep -q ERROR; then
 fi
 echo "snvs: $res" 1>&2
 
-res_ll=$($EVALUATOR -v $f -t $TRUTH -m INDEL | awk 'END {print $NF}') || exit 1
+res_ll=$($EVALUATOR -v $outvcf -t $TRUTH -m INDEL | awk 'END {print $NF}') || exit 1
 res=$(echo $res_ll | \
   awk -F, '{prec=$1; rec=$2; if (prec<0.90 || rec<0.50) {status="ERROR"} else {status="OK"} printf "%s: precision=%f recall=%f\n", status, prec, rec}') || exit 1
 if echo $res | grep -q ERROR; then

@@ -13,7 +13,7 @@ bed=$basedir/denv2-pseudoclonal_incl.bed
 
 outdir=$(mktemp -d -t $(basename $0).XXXXXX)
 outraw_nobaq=$outdir/raw_nobaq.vcf
-outraw_baq=$outdir/raw_baq.vcf
+outraw_baq=$outdir/raw_baq.vcf.gz
 log=$outdir/log.txt
 
 KEEP_TMP=0

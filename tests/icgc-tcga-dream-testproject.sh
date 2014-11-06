@@ -21,7 +21,7 @@ for f in $REF $TUMOR $NORMAL $TRUTH $EVALUATOR; do
 done
 out_pref=$(mktemp -t $(basename $0).XXXXXX)
 log=${out_pref}.exec.log
-vcf_out=${out_pref}somatic_final.snvs.vcf
+vcf_out=${out_pref}somatic_final.snvs.vcf.gz
 if [ $DEBUG -eq 1 ]; then
     cp ${BASE}/snvs/lofreq/beta-4-8-g7b8b334-dirty_somatic_final.vcf $vcf_out
 else

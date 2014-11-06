@@ -16,8 +16,8 @@ DEBUG=0
 SIMULATE=0
 
 outdir=$(mktemp -d -t $(basename $0).XXXXXX)
-outraw_parallel=$outdir/raw_parallel.vcf
-outraw_single=$outdir/raw_single.vcf
+outraw_parallel=$outdir/raw_parallel.vcf.gz
+outraw_single=$outdir/raw_single.vcf.gz
 log=$outdir/log.txt
 
 LOFREQ_PARALLEL="$(dirname $LOFREQ)/../scripts/lofreq2_call_pparallel.py"
@@ -50,11 +50,11 @@ fi
 # there are occasional differences possible likely due to BAQ effects on region ends
 if [ $nup -gt 1 ] || [ $nus -gt 1 ] ; then
     echoerror "Observed some difference between parallel and single results. Check $outraw_parallel and $outraw_single"
-    n_parallel=$(grep -vc '^#' $outraw_parallel)
-    n_single=$(grep -vc '^#' $outraw_single)
+    n_parallel=$(zgrep -vc '^#' $outraw_parallel)
+    n_single=$(zgrep -vc '^#' $outraw_single)
 
     n_overlap=$($LOFREQ vcfset -a intersect -1 $outraw_parallel -2 $outraw_single --count-only)
-    echoerror "$outraw_parallel has $n_parallel and $outraw_single has $n_single SNVS (both overlap by $n_overlap). Make sure these are all right now the --snvqual-thresh value."
+    echoerror "$outraw_parallel has $n_parallel and $outraw_single has $n_single SNVS (both overlap by $n_overlap). Make sure these are all right on the --snvqual-thresh value."
     exit 1
 else
     echook "Parallel and single run give identical results."

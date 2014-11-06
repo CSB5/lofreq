@@ -16,7 +16,7 @@ if [ $KEEP_TMP -eq 1 ]; then
     echowarn "Keeping tmp files with prefix $outprefix"
 fi
 
-finalout=${outprefix}somatic_final.snvs.vcf
+finalout=${outprefix}somatic_final.snvs.vcf.gz
 cmd="$LOFREQ somatic --threads $threads -n $BAM_N -t $BAM_T -f $REF -l $BED -o $outprefix";#--verbose";# --debug"
 #echodebug "cmd = $cmd"
 if ! eval $cmd; then
