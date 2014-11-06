@@ -1,0 +1,12 @@
+{
+  faidx_fetch_seq leak
+  Memcheck:Leak
+  fun:malloc
+  fun:faidx_fetch_seq
+  fun:mplp_func
+  fun:bam_plp_auto
+  fun:bam_mplp_auto
+  fun:mpileup
+  fun:main_call
+  fun:main
+}

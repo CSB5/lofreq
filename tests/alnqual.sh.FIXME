@@ -1,0 +1,2 @@
+read with ID in cigar should get baq and a[id] tags
+read without shouldnt
