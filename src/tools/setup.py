@@ -36,11 +36,12 @@ setup(name = setup_conf.PACKAGE_NAME,
       author_email=setup_conf.PACKAGE_BUGREPORT,
       long_description = """LoFreq-Star is a fast and sensitive variant-caller for inferring single-nucleotide variants (SNVs) from high-throughput sequencing data""",
       # doesn't seem to work
-      requires = ['pysam (>=0.7.5)', 'scipy (>=0.12.0)', 'numpy (>=1.7.1)', 'huddel'],
+      # requires = ['pysam (>=0.7.5)', 'scipy (>=0.12.0)', 'numpy (>=1.7.1)', 'huddel'],
       #url='https://sourceforge.net/p/lofreq/',
       scripts = [
           'scripts/lofreq2_cluster.py',
-          'scripts/lofreq2_vcfplot.py'
+          'scripts/lofreq2_vcfplot.py',
+          'scripts/lofreq2_indel_ovlp.py'
       ],
       # http://pypi.python.org/pypi?%3Aaction=list_classifiers
       classifiers=['Environment :: Console',
