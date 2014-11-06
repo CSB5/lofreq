@@ -1066,6 +1066,8 @@ for cov in coverage_range:
          LOG_WARN("%s\n", "Indel calling is still considered an unstable feature in LoFreq.");
          LOG_WARN("%s\n", "Please make sure you added indel qualities to your BAM file, otherwise no indels will be called.");
          LOG_WARN("%s\n", "This can be achieved by running GATK's BQSR (version>=2) or lofreq indelqual (the former is preferred)");
+         LOG_WARN("%s\n", "Depending on which aligner you used, you might see overlapping indels, which should actually be one event.");
+         LOG_WARN("%s\n", "Please run lofreq2_indel_ovlp.py on your final vcf file to concatenate these.");
     }
 
     if (illumina_1_3) {
