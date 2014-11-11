@@ -73,16 +73,13 @@
  */
 #if 0
 #define SCALE_MQ 1
-#endif
 #define SCALE_MQ_FAC  1.3134658329243962
+#endif
 
 #if 0
-#define TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL 1
-#endif
-
 /* filled in missing values with the min of the two neighbouring values */
-static int MQ_TRANS_TABLE[61] = {
-0, /* actually 1 but 0 should stay 0 */
+static int MQ_TRANS_BWA_062_SAMPE_HG19_2X100_SIMUL[61] = {
+1,
 1,
 3,
 4,
@@ -145,6 +142,88 @@ static int MQ_TRANS_TABLE[61] = {
 67};
 
 
+static int MQ_TRANS_BWA_079_MEM_HG19_CHR22_2X75_SIMUL[72] = {
+     19,
+     48,
+     66,
+     47,
+     58,
+     59,
+     58,
+     55,
+     60,
+     54,
+     57,
+     58,
+     58,
+     58,
+     65,
+     56,
+     60,
+     62,
+     62,
+     57,
+     57,
+     54,
+     50,
+     51,
+     52,
+     49,
+     74,
+     49,
+     49,
+     77,
+     77,
+     77,
+     77,
+     68,
+     68,
+     74,
+     74,
+     74,
+     74,
+     74,
+     68,
+     68,
+     68,
+     68,
+     71,
+     71,
+     71,
+     71,
+     77,
+     77,
+     77,
+     77,
+     77,
+     77,
+     77,
+     77,
+     77,
+     74,
+     74,
+     74,
+     77,
+     77,
+     77,
+     77,
+     77,
+     77,
+     77,
+     77,
+     77,
+     77,
+     77};
+
+#if 0
+#define MQ_TRANS_TABLE MQ_TRANS_BWA_062_SAMPE_HG19_2X100_SIMUL
+#else
+#define MQ_TRANS_TABLE MQ_TRANS_BWA_079_MEM_HG19_CHR22_2X75_SIMUL
+#endif
+static int mq_trans_range_violation_printed = 0;
+
+#endif
+
 
 double log_sum(double log_a, double log_b);
 double log_diff(double log_a, double log_b);
@@ -155,10 +234,14 @@ double *pruned_calc_prob_dist(const double *err_probs, int N, int K,
                       long long int bonf_factor, double sig_level);
 
 
-static int mq_trans_range_violation_printed = 0;
 
+#ifdef MQ_TRANS_TABLE
 int mq_trans(int mq) {
-     if (mq<=60 && mq>=0) {
+#if 1
+     if (mq<=72  && mq>=0) {
+#else
+     if (mq<=60  && mq>=0) {
+#endif
           return MQ_TRANS_TABLE[mq];
 
      } else if (mq!=255) {
@@ -168,66 +251,6 @@ int mq_trans(int mq) {
           }
      }
      return mq;
-}
-
-
-#ifdef USE_ALNERRPROF
-/* J = PM  +  (1-PM) * PS  +  (1-PM) * (1-PS) * PA + (1-PM) * (1-PS) * (1-PA) * PB, where
-   PJ = joined error probability
-   PM = mapping prob.
-   PS = source/genome err.prob.
-   PS = mapping error profile prop.
-   PB = base err.prob.
-
-   Or in simple English:
-   either this is a mapping error
-   or
-   not a mapping error, but a genome/source error
-   or
-   not mapping error and not genome/source error but a aligner error
-   or
-   not mapping error and not genome/source error and not aligner error but a base error
-
- * NOTE: for mq the standard says that 255 means NA. In this function we
- * use -1 instead, and treat 255 as valid phred-score so you might want
- * to change mq before calling this functio
- *
- */
-double
-merge_srcq_baseq_mapq_and_alnq(const int sq, const int bq, const int mq, const int aq)
-{
-     double sp, bp, mp, ap, jp; /* corresponding probs */
-
-
-     bp = PHREDQUAL_TO_PROB(bq);
-
-     if (-1 == mq) {
-          mp = 0.0;
-     } else if (0 == mq) {
-          mp = MQ0_ERRPROB;
-     } else {
-          mp = PHREDQUAL_TO_PROB(mq);
-     }
-
-     if (-1 == sq) {
-          sp = 0.0;
-     } else {
-          sp = PHREDQUAL_TO_PROB(sq);
-     }
-
-     if (-1 == aq) {
-          ap = 0.0;
-     } else {
-          ap = PHREDQUAL_TO_PROB(aq);
-     }
-
-     jp = mp + (1.0 - mp) * sp + (1.0-mp) * (1.0-sp) * ap +  (1.0-mp) * (1.0-sp) * (1.0-ap) * bp;
-#ifdef DEBUG
-     LOG_DEBUG("jp=%g  =  mp=%g  +  (1.0-mp=%g)*sp=%g  +  (1-mp=%g)*(1-sp=%g)*ap=%g  + (1-mp=%g)*(1-sp=%g)*(1-ap=%g)*bp=%g\n",
-               jp, mp, mp, sp, mp, sp, ap, mp, sp, ap, bp);
-#endif
-
-     return jp;
 }
 #endif
 
@@ -401,7 +424,7 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                     }
 #ifdef SCALE_MQ
                     mq = 254/60.0*mq * pow(mq, SCALE_MQ_FAC)/pow(60, SCALE_MQ_FAC);
-#elif defined(TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL)
+#elif defined(MQ_TRANS_TABLE)
                     mq = mq_trans(mq);
 #endif
                }
@@ -616,7 +639,7 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
      fprintf(stream, "  flag & SNVCALL_USE_IDAQ    = %d\n", c->flag&SNVCALL_USE_IDAQ?1:0);
 #ifdef SCALE_MQ
      LOG_WARN("%s\n", "MQ scaling switched on!");
-#elif defined TRUE_MQ_BWA_HG19_EXOME_2X100_SIMUL
+#elif defined MQ_TRANS_TABLE
      LOG_WARN("%s\n", "MQ translation switched on!");
 #endif
      fprintf(stream, "  only_indels    = %d\n", c->only_indels);
