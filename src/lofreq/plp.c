@@ -52,8 +52,6 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 */
 #define SRC_QUAL_TAG "sq"
 
-#undef REF_OVER_CONS
-
 /* results on icga dream syn1.2 suggest that somatic calls made extra
  * with this settings are likely fp whereas the ones missing a likely
  * tp, therefore disabled */
