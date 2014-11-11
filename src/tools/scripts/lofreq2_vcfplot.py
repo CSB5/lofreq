@@ -293,7 +293,12 @@ def violin_plot(ax, data):
         return
     m = min(k.dataset) #lower bound of violin
     M = max(k.dataset) #upper bound of violin
-    x = np.arange(m, M, (M-m)/100.) # support for violin
+    try:
+        x = np.arange(m, M, (M-m)/100.) # support for violin
+    except TypeError:
+        # FIXME TypeError: only length-1 arrays can be converted to Python scalars
+        LOG.warn("arange failed in violint plot. skipping...")
+        return
     v = k.evaluate(x) # violin profile (density curve)
     if v.max():
         v = v/v.max()*w # scaling the violin to the available space
@@ -477,7 +482,7 @@ def main():
             LOG.critical("Couldn't find %s info tag in all variants"
             " (is %s a LoFreq file?). Won't plot..." % (t, args.vcf))
     props['Distance (log10)'] = np.array([np.log10(d) if d>0 else -1 for d in calc_dist_left(vars)])
-    props['QUAL (non-CONSVARs only)'] = np.array([v.QUAL for v in vars if not v.INFO.has_key('CONSVAR')])
+    #props['QUAL (non-CONSVARs only)'] = np.array([v.QUAL for v in vars if not v.INFO.has_key('CONSVAR')])
 
     if args.summary_only:
         for p in props.keys():
