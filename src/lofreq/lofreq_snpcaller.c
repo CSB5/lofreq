@@ -39,10 +39,13 @@
 #include "htslib/faidx.h"
 #include "sam.h"
 #include "htslib/kstring.h"
+
 /* from bedidx.c */
 void *bed_read(const char *fn);
 void bed_destroy(void *_h);
 int bed_overlap(const void *_h, const char *chr, int beg, int end);
+
+
 
 /* lofreq includes */
 #include "snpcaller.h"
@@ -914,6 +917,30 @@ for cov in coverage_range:
               if (mplp_conf.fai == 0)  {
                    free(mplp_conf.fa);
                    return 1;
+              } else {
+                   /* if this was create with GATK (version?) then fai structure is different. 
+                      htslib happily parses it anyway but it's member values are all wrong (most
+                      telling offset etc). accessing them here for a check is tricky. easiest is
+                      to use API and check whether all length are identical which is another indicator */
+                   faidx_t *fai = mplp_conf.fai;
+                   int i;
+                   int all_same_len = 1;
+                   int prev_len = -1;
+                   for (i=0; i< faidx_nseq(fai); i++) {
+                        int cur_len = faidx_seq_len(fai, faidx_iseq(fai, i));
+                        if (i) {
+                             if (prev_len != cur_len) {
+                                  all_same_len = 0;
+                                  break;
+                             }
+                        }
+                        prev_len = cur_len;
+                   }
+                   /* only seen in human cases */
+                   if (i>20 && i<200 && all_same_len) {
+                        LOG_FATAL("Fasta index looks weird. Please try reindexing. Exiting...\n");
+                        return 1;
+                   }
               }
               warn_old_fai(mplp_conf.fa);
               break;
