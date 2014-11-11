@@ -902,7 +902,7 @@ void compile_plp_col(plp_col_t *plp_col,
 check_indel:
 
           /* for post read- and base-level coverage. FIXME review */
-          if (! (p->is_del || p->is_refskip || 1 == base_skip)) {
+          if (! (p->is_del || p->is_refskip || 1 == base_skip)) {/* FIXME also use p->indel? */
                plp_col->num_bases += 1;
           }
 
@@ -936,7 +936,7 @@ check_indel:
 
 
           if (iq < conf->min_plp_idq || dq < conf->min_plp_idq) {
-               if (p->indel != 0) {
+               if (p->indel != 0 || p->is_del != 0) {
                   plp_col->num_ign_indels += 1;
                }
           } else {
