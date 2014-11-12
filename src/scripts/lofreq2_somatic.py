@@ -105,7 +105,7 @@ class SomaticSNVCaller(object):
 
     DEFAULT_NUM_THREADS = 1
     DEFAULT_DO_GERMLINE = False
-
+    DEFAULT_MAX_COV = 100000
 
     def __init__(self, bam_n, bam_t, ref, outprefix,
                  bed=None, dbsnp=None, continue_interrupted=False):
@@ -198,6 +198,7 @@ class SomaticSNVCaller(object):
         self.call_indels = self.DEFAULT_CALL_INDELS
         self.do_germline = self.DEFAULT_DO_GERMLINE
 
+        self.max_cov = self.DEFAULT_MAX_COV
 
 
     @staticmethod
@@ -276,6 +277,7 @@ class SomaticSNVCaller(object):
         else:
             cmd = [self.LOFREQ, 'call-parallel',
                    '--pp-threads', "%d" % self.num_threads]
+        cmd.extend(['-d', "%d" % int(self.max_cov*1.01)])
         cmd.extend(['-f', self.ref])
         cmd.append('--verbose')
         cmd.append('--no-default-filter')# we filter later explicitely
@@ -381,6 +383,7 @@ class SomaticSNVCaller(object):
         filter_base_cmd = [
             self.LOFREQ, 'filter', '-i', vcf_rlx,
             '--sb-mtc', 'fdr', '--sb-alpha', '%f' % 0.001,
+            '--cov-max', "%d" % self.max_cov,
             '--cov-min', '%d' % self.min_cov,
             '--only-passed']
         # snvs
