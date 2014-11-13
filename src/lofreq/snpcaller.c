@@ -38,11 +38,14 @@
 #endif
 
 
-/* median number of best hits in bwa for one WGS sample: 3. for one
- * exome sample it's 2. conservative choice is 3. FIXME make user
- * choice or derive from X0 tag (BWA specific though)
+/* mq0 would completely 'kill' a read. previously used 0.66 here since
+   the median number of best hits in bwa for one examined wgs samples
+   was 3. that would be lower than mq1 though, so just use mq1.
+   
+ *  derive from X0 tag (BWA sam[sp]e specific)
 */
-#define MQ0_ERRPROB 0.66
+#define MQ0_ERRPROB 0.7943282347242815
+/* == PHREDQUAL_TO_PROB(1) */
 
 #define LOGZERO -1e100
 /* FIXME shouldn't we use something from float.h ? */
