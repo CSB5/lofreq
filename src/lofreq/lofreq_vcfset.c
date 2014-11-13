@@ -308,6 +308,7 @@ main_vcfset(int argc, char *argv[])
 
     /* use meta-data/header of vcf_in1 for output
      */
+    LOG_DEBUG("Getting header from %s\n", vcf_in1);
     if (0 !=  vcf_parse_header(&vcf_header, & vcfset_conf.vcf_in1)) {
          LOG_WARN("%s\n", "vcf_parse_header() failed");
          if (vcf_file_seek(& vcfset_conf.vcf_in1, 0, SEEK_SET)) {
@@ -326,6 +327,7 @@ main_vcfset(int argc, char *argv[])
     
     /* parse first vcf file
      */
+    LOG_DEBUG("Starting to parse variants from %s\n", vcf_in1);
     while (1) {
          var_t *var1 = NULL;
          int rc;

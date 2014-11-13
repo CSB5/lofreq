@@ -120,16 +120,18 @@ vcf_var_key_pos_only(char **key, var_t *var)
 
 int vcf_printf(vcf_file_t *f, char *fmt, ...)
 {
-/* there is no gzvprintf therefore we can't make this a function. this
- * way howver you won't know how many chars were written if any.
- * could add extra variable...
- */
-     char buf[LINE_BUF_SIZE];
+     /* sadly there is no gzvprintf */
+     char buf[64000];/* needs to be able to hold header */
      va_list args;
+     int len;
+
      va_start(args, fmt);
-     vsprintf(buf, fmt, args);    
+     len = vsnprintf(buf, 64000, fmt, args);    
      va_end(args);
 
+     if (len>=64000) {
+          LOG_WARN("%s\n", "Truncated vcf_printf");
+     }
      if (f->is_bgz) {
           return bgzf_write(f->fh_bgz, buf, strlen(buf));
      } else {
@@ -579,6 +581,14 @@ void vcf_var_sprintf_info(var_t *var,
 
 void vcf_write_header(vcf_file_t *vcf_file, const char *header)
 {
+#if 0
+     fprintf(stderr, "TMP DEBUG: writing header %s", header);
+     fprintf(stderr, "TMP DEBUG: vcf_file path = %s\n", vcf_file->path);
+     fprintf(stderr, "TMP DEBUG: vcf_file is_bgz = %d\n", vcf_file->is_bgz);
+     fprintf(stderr, "TMP DEBUG: vcf_file fh = %p\n", vcf_file->fh);
+     fprintf(stderr, "TMP DEBUG: vcf_file fh_bgz = %p\n", vcf_file->fh_bgz);
+     fprintf(stderr, "TMP DEBUG: vcf_file mode = %c\n", vcf_file->mode);
+#endif
      vcf_printf(vcf_file, "%s", header);
 }
 
