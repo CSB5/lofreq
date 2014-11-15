@@ -137,48 +137,48 @@ usage(const filter_conf_t* filter_conf)
 
      fprintf(stderr,"Options:\n");
      fprintf(stderr, "  Files:\n");
-     fprintf(stderr, "  -i | --in FILE              VCF input file (gzip supported)\n");
-     fprintf(stderr, "  -o | --out FILE             VCF output file (default: - for stdout; gzip supported).\n");
+     fprintf(stderr, "  -i | --in FILE                 VCF input file (gzip supported)\n");
+     fprintf(stderr, "  -o | --out FILE                VCF output file (default: - for stdout; gzip supported).\n");
 
      fprintf(stderr, "  Coverage (DP):\n");
-     fprintf(stderr, "  -v | --cov-min INT          Minimum coverage allowed (<1=off)\n");
-     fprintf(stderr, "  -V | --cov-max INT          Maximum coverage allowed (<1=off)\n");
+     fprintf(stderr, "  -v | --cov-min INT             Minimum coverage allowed (<1=off)\n");
+     fprintf(stderr, "  -V | --cov-max INT             Maximum coverage allowed (<1=off)\n");
 
      fprintf(stderr, "  Allele Frequency (AF; neg. values = off):\n");
-     fprintf(stderr, "  -a | --af-min FLOAT         Minimum allele freq allowed (<1=off)\n");
-     fprintf(stderr, "  -A | --af-max FLOAT         Maximum allele freq allowed (<1=off)\n");
+     fprintf(stderr, "  -a | --af-min FLOAT            Minimum allele freq allowed (<1=off)\n");
+     fprintf(stderr, "  -A | --af-max FLOAT            Maximum allele freq allowed (<1=off)\n");
 
      fprintf(stderr, "\n");
      fprintf(stderr, "  Strand Bias (SB):\n");
      fprintf(stderr, "  Note, variants are only filtered if their SB pvalue is below the threshold\n");
      fprintf(stderr, "  AND %d%% of variant bases are on one strand (toggled with --sb-no-compound).\n", (int)ALT_STRAND_RATIO*100);
-     fprintf(stderr, "  -B | --sb-thresh INT        Maximum phred-value allowed. Conflicts with -b.\n");
-     fprintf(stderr, "  -b | --sb-mtc STRING        Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -B\n");
-     fprintf(stderr, "  -c | --sb-alpha FLOAT       Multiple testing correcion pvalue threshold\n");
+     fprintf(stderr, "  -B | --sb-thresh INT           Maximum phred-value allowed. Conflicts with -b.\n");
+     fprintf(stderr, "  -b | --sb-mtc STRING           Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -B\n");
+     fprintf(stderr, "  -c | --sb-alpha FLOAT          Multiple testing correcion pvalue threshold\n");
      fprintf(stderr, "       --sb-no-compound          Don't use compound filter\n");
 
      fprintf(stderr, "\n");
      fprintf(stderr, "  SNV Quality:\n");
-     fprintf(stderr, "  -Q | --snvqual-thresh INT   Maximum phred-value allowed. Conflicts with -q\n");
-     fprintf(stderr, "  -q | --snvqual-mtc STRING   Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -Q\n");
-     fprintf(stderr, "  -r | --snvqual-alpha FLOAT  Multiple testing correcion pvalue threshold\n");
-     fprintf(stderr, "  -s | --snvqual-ntests INT   Multiple testing correcion pvalue threshold\n");
+     fprintf(stderr, "  -Q | --snvqual-thresh INT      Minimum phred-value allowed. Conflicts with -q\n");
+     fprintf(stderr, "  -q | --snvqual-mtc STRING      Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -Q\n");
+     fprintf(stderr, "  -r | --snvqual-alpha FLOAT     Multiple testing correcion pvalue threshold\n");
+     fprintf(stderr, "  -s | --snvqual-ntests INT      Multiple testing correcion pvalue threshold\n");
 
      fprintf(stderr, "\n");
      fprintf(stderr, "  Indels:\n");
-     fprintf(stderr, "  -K | --indelqual-thresh INT     Maximum phred-value allowed. Conflicts with -q\n");
-     fprintf(stderr, "  -k | --indelqual-mtc STRING     Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -Q\n");
-     fprintf(stderr, "  -l | --indelqual-alpha FLOAT    Multiple testing correcion pvalue threshold\n");
-     fprintf(stderr, "  -m | --indelqual-ntests INT     Multiple testing correcion pvalue threshold\n");
+     fprintf(stderr, "  -K | --indelqual-thresh INT    Minimum phred-value allowed. Conflicts with -q\n");
+     fprintf(stderr, "  -k | --indelqual-mtc STRING    Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -Q\n");
+     fprintf(stderr, "  -l | --indelqual-alpha FLOAT   Multiple testing correcion pvalue threshold\n");
+     fprintf(stderr, "  -m | --indelqual-ntests INT    Multiple testing correcion pvalue threshold\n");
 
      fprintf(stderr, "\n");
      fprintf(stderr, "  Misc.:\n");
-     fprintf(stderr, "       --only-indels          Keep InDels only\n");
-     fprintf(stderr, "       --only-snvs            Keep SNVs only\n");
-     fprintf(stderr, "       --only-passed          Only output passed variants (off by default)\n");
-     fprintf(stderr, "       --no-defaults          Remove all default filter settings\n");
-     fprintf(stderr, "       --verbose              Be verbose\n");
-     fprintf(stderr, "       --debug                Enable debugging\n");
+     fprintf(stderr, "       --only-indels             Keep InDels only\n");
+     fprintf(stderr, "       --only-snvs               Keep SNVs only\n");
+     fprintf(stderr, "       --only-passed             Only output passed variants (off by default)\n");
+     fprintf(stderr, "       --no-defaults             Remove all default filter settings\n");
+     fprintf(stderr, "       --verbose                 Be verbose\n");
+     fprintf(stderr, "       --debug                   Enable debugging\n");
 }
 /* usage() */
 
