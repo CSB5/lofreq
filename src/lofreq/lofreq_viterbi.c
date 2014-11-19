@@ -61,9 +61,10 @@ static void replace_cigar(bam1_t *b, int n, uint32_t *cigar)
 }
 
 
-// function checks if alignment is made of all Q2s
-// if not, returns remaining values so that median 
-// can be calculated
+/* function checks if alignment is made of all Q2s
+ * if not, returns remaining values so that median 
+ *  can be calculated
+ */
 int check_Q2(char *bqual, int *num){
     int is_all_Q2 = 1;
     int i, pom = 0;
@@ -141,6 +142,7 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip
      /* fetch reference sequence if incorrect tid */
      if (tmp->tid != c->tid) {
           if (tmp->ref) free(tmp->ref);
+          LOG_WARN("%s\n", "refetching");
           if ((tmp->ref = 
                fai_fetch(tmp->fai, tmp->in->header->target_name[c->tid], &reflen)) == 0) {
                fprintf(stderr, "failed to find reference sequence %s\n", 
@@ -326,6 +328,24 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip
      return 0;
 }
 
+static void usage()
+{
+     fprintf(stderr, "Usage: lofreq viterbi [options] in.bam\n");
+     fprintf(stderr, "Options:\n");
+     fprintf(stderr, "     -f | --ref FILE     Indexed reference fasta file [null]\n");
+     fprintf(stderr, "     -k | --keepflags    Don't delete flags MC, MD, NM and A, which are all prone to change during realignment.\n");
+     fprintf(stderr, "     -q | --defqual INT  Assume INT as quality for all bases with BQ2. Default (=-1) is to use median quality of bases in read.\n");
+/* experimental. keep enabled but don't tell user about it */
+#if 0
+     fprintf(stderr, "     -r | --reclip       Reclip insertions and/or deletions on the beginning and end of read to soft clip\n");
+     fprintf(stderr, "                         FILE HAS TO BE PREVIOUSLY UNCLIPPED!!!\n");
+#endif
+     fprintf(stderr, "     -o | --out FILE     Output BAM file [- = stdout = default]\n");
+     fprintf(stderr, "          --verbose      Be verbose\n");
+     fprintf(stderr, "\n");
+     fprintf(stderr, "NOTE: Output BAM file will (likely) be unsorted (use samtools sort, e.g. lofreq viterbi ... | samtools sort -')\n");
+}
+
 int main_viterbi(int argc, char *argv[])
 {
      tmpstruct_t tmp = {0};
@@ -336,17 +356,7 @@ int main_viterbi(int argc, char *argv[])
      bam1_t *b = NULL;
  
      if (argc == 2) {
-          fprintf(stderr, "Usage: lofreq viterbi [options] in.bam\n");
-          fprintf(stderr, "Options:\n");
-          fprintf(stderr, "     -f | --ref FILE     Indexed reference fasta file [null]\n");
-          fprintf(stderr, "     -k | --keepflags    Don't delete flags MC, MD, NM and AS which are all prone to change during realignment\n");
-          fprintf(stderr, "     -q | --defqual INT  Assume INT as quality for all bases with base-quality 2\n");
-		  fprintf(stderr, "     -r | --reclip       Reclip insertions and/or deletions on the beginning and end of read to soft clip\n");
-		  fprintf(stderr, "                         FILE HAS TO BE PREVIOUSLY UNCLIPPED!!!\n");
-          fprintf(stderr, "     -o | --out FILE     Output BAM file [- = stdout = default]\n");
-          fprintf(stderr, "          --verbose      Be verbose\n");
-          fprintf(stderr, "\n");
-          fprintf(stderr, "NOTE: Output BAM file will be unsorted (use samtools sort, e.g. samtools sort -')\n");
+          usage();
           return 1;
      }
 
@@ -399,6 +409,7 @@ int main_viterbi(int argc, char *argv[])
                break;
           case '?':
                LOG_FATAL("%s\n", "Unrecognized arguments found. Exiting\n");
+               usage();
                break;
           default:
                break;
