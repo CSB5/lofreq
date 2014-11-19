@@ -670,7 +670,7 @@ def main():
     sys.stderr.write("Number of substitution tests performed: %d\n" % num_snv_tests)
     sys.stderr.write("Number of indel tests performed: %d\n" % num_indel_tests)
 
-    cmd = ['lofreq', 'filter', '--only-passed', '-i', vcf_concat, '-o', final_vcf_out]
+    cmd = ['lofreq', 'filter', '-i', vcf_concat, '-o', final_vcf_out]
     if no_default_filter:
         cmd.append('--no-defaults')
 

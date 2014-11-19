@@ -384,8 +384,7 @@ class SomaticSNVCaller(object):
             self.LOFREQ, 'filter', '-i', vcf_rlx,
             '--sb-mtc', 'fdr', '--sb-alpha', '%f' % 0.001,
             '--cov-max', "%d" % self.max_cov,
-            '--cov-min', '%d' % self.min_cov,
-            '--only-passed']
+            '--cov-min', '%d' % self.min_cov]
         # snvs
         filter_snv_cmd = filter_base_cmd + [
             '--only-snvs',

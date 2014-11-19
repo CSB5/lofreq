@@ -175,7 +175,7 @@ usage(const filter_conf_t* filter_conf)
      fprintf(stderr, "  Misc.:\n");
      fprintf(stderr, "       --only-indels             Keep InDels only\n");
      fprintf(stderr, "       --only-snvs               Keep SNVs only\n");
-     fprintf(stderr, "       --only-passed             Only output passed variants (off by default)\n");
+     fprintf(stderr, "       --print-all               Print all, not just passed variants\n");
      fprintf(stderr, "       --no-defaults             Remove all default filter settings\n");
      fprintf(stderr, "       --verbose                 Be verbose\n");
      fprintf(stderr, "       --debug                   Enable debugging\n");
@@ -722,7 +722,7 @@ main_filter(int argc, char *argv[])
 {
      filter_conf_t cfg;
      char *vcf_in = NULL, *vcf_out = NULL;
-     static int print_only_passed = 0;
+     static int print_only_passed = 1;
      static int no_compound_sb_filter = 0;
      static int only_indels = 0;
      static int only_snvs = 0;
@@ -753,7 +753,7 @@ main_filter(int argc, char *argv[])
               /* see usage sync */
               {"verbose", no_argument, &verbose, 1},
               {"debug", no_argument, &debug, 1},
-              {"only-passed", no_argument, &print_only_passed, 1},
+              {"print-all", no_argument, &print_only_passed, 0},
               {"no-defaults", no_argument, &no_defaults, 1},
               {"only-indels", no_argument, &only_indels, 1},
               {"only-snvs", no_argument, &only_snvs, 1},

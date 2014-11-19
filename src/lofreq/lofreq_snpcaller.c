@@ -1288,7 +1288,7 @@ for cov in coverage_range:
          int len;
 
          snprintf(cmd, BUF_SIZE,
-                  "lofreq filter --only-passed -i %s -o %s",
+                  "lofreq filter -i %s -o %s",
                   vcf_tmp_out, NULL==vcf_out ? "-" : vcf_out);
          len = strlen(cmd);
 
