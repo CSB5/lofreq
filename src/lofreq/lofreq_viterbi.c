@@ -142,7 +142,6 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip
      /* fetch reference sequence if incorrect tid */
      if (tmp->tid != c->tid) {
           if (tmp->ref) free(tmp->ref);
-          LOG_WARN("%s\n", "refetching");
           if ((tmp->ref = 
                fai_fetch(tmp->fai, tmp->in->header->target_name[c->tid], &reflen)) == 0) {
                fprintf(stderr, "failed to find reference sequence %s\n", 
@@ -175,6 +174,9 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip
                     z++;
                }
           } else if (op == BAM_CHARD_CLIP) {
+               /* in theory we should do nothing here but hard clipping info gets lost here FIXME
+                */               
+               bam_write1(tmp->out, b);
                return 1;
           } else if (op == BAM_CDEL) {
                x += oplen;
@@ -192,6 +194,8 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip
                     y++;
                }
           } else {
+               LOG_WARN("Unknown cigar op %d. Not touching read %s\n", op, bam1_qname(b));
+               bam_write1(tmp->out, b);
                return 1;
           }
      }
