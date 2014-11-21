@@ -25,3 +25,4 @@ Low Prio:
 - split lofreq_snpcaller cmd parsing: plp, snv, others (do they change argv?)
 - profile code e.g.
   $LOFREQ call -f mers_coronavirus_NC_019843.2.fa --verbose --debug NC_019843.2:2399-2399 dwgsim-ion-samba-mers-100kX-pool.bwamem.bam
+- parallelize viterbi avoiding overlapping reads. endpos of last read in last bin could be start pos for next bin
