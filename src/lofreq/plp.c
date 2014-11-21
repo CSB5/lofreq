@@ -556,7 +556,7 @@ free_and_exit:
 
 
 
-/* modelled after samtools FIXME.c */
+/* not part of offical samtools/htslib API but part of samtools */
 static int
 mplp_func(void *data, bam1_t *b)
 {
@@ -575,6 +575,12 @@ mplp_func(void *data, bam1_t *b)
                skip = 1;
                continue;
           }
+         
+          if (ma->conf->flag & BAM_DEF_MASK) {/* == BAM_FUNMAP | BAM_FSECONDARY | BAM_FQCFAIL | BAM_FDUP */
+               skip = 1; 
+               continue;
+          }
+
           if (ma->conf->bed) { /* test overlap */
                skip = !bed_overlap(ma->conf->bed, ma->h->target_name[b->core.tid], b->core.pos, bam_calend(&b->core, bam1_cigar(b)));
                if (skip)
@@ -583,7 +589,7 @@ mplp_func(void *data, bam1_t *b)
 
           if (ma->conf->flag & MPLP_ILLUMINA13) {
                int i;
-               uint8_t *qual = bam1_qual(b);
+               uint8_t *qual = bam_get_qual(b);
                for (i = 0; i < b->core.l_qseq; ++i)
                     qual[i] = qual[i] > 31? qual[i] - 31 : 0;
           }
@@ -605,7 +611,6 @@ mplp_func(void *data, bam1_t *b)
           }
 
           skip = 0;
-
 #if 0
           {
                fprintf(stderr, "before realn\n");
@@ -614,7 +619,6 @@ mplp_func(void *data, bam1_t *b)
                fflush(stdout);
           }
 #endif
-
           if (ma->conf->flag & MPLP_BAQ || ma->conf->flag & MPLP_IDAQ) {
                int baq_flag = ma->conf->flag & MPLP_BAQ ? 1 : 0;
                int baq_ext =  ma->conf->flag & MPLP_EXT_BAQ ? 1 : 0;
@@ -648,9 +652,10 @@ mplp_func(void *data, bam1_t *b)
         } else if (b->core.qual < ma->conf->min_mq) {
              skip = 1;
         }
+#if 0
         else if ((ma->conf->flag&MPLP_NO_ORPHAN) && (b->core.flag&1) && !(b->core.flag&2)) {
-#ifdef TRACE
-             LOG_DEBUG("%s orphan\n", bam1_qname(b));
+#else
+        else if ((ma->conf->flag&MPLP_NO_ORPHAN) && (b->core.flag&BAM_FPAIRED) && !(b->core.flag&BAM_FPROPER_PAIR)) {
 #endif
              skip = 1;
         }
@@ -1141,7 +1146,7 @@ check_indel:
 
 
 
-
+/* not part of offical samtools/htslib API but part of samtools */
 int
 mpileup(const mplp_conf_t *mplp_conf,
         void (*plp_proc_func)(const plp_col_t*, void*),
