@@ -568,6 +568,8 @@ mplp_func(void *data, bam1_t *b)
           ret = ma->iter? bam_iter_read(ma->fp, ma->iter, b) : bam_read1(ma->fp, b);
           if (ret < 0)
                break;
+
+          LOG_DEBUG("Got read %s with flag \n", bam1_qname(b));
           if (b->core.tid < 0 || (b->core.flag&BAM_FUNMAP)) { /* exclude unmapped reads */
 #ifdef TRACE
                LOG_DEBUG("%s unmapped\n", bam1_qname(b));
@@ -576,11 +578,13 @@ mplp_func(void *data, bam1_t *b)
                continue;
           }
          
-          if (ma->conf->flag & BAM_DEF_MASK) {/* == BAM_FUNMAP | BAM_FSECONDARY | BAM_FQCFAIL | BAM_FDUP */
+          if (b->core.flag & BAM_DEF_MASK) {/* == BAM_FUNMAP | BAM_FSECONDARY | BAM_FQCFAIL | BAM_FDUP */
+#ifdef TRACE
+               LOG_DEBUG("%s BAM_DEF_MASK match\n", bam1_qname(b));
+#endif
                skip = 1; 
                continue;
           }
-
           if (ma->conf->bed) { /* test overlap */
                skip = !bed_overlap(ma->conf->bed, ma->h->target_name[b->core.tid], b->core.pos, bam_calend(&b->core, bam1_cigar(b)));
                if (skip)
