@@ -24,12 +24,12 @@ num_fails=0
 
 # #input == #output with and without filtering
 #
-num_out=$($FILTER -i $VCF -v 1 -V 2 -a 0.5 -A 0.6 -B 10 -q bonf | grep -vc '^#')
+num_out=$($FILTER --print-all -i $VCF -v 1 -V 2 -a 0.5 -A 0.6 -B 10 -q bonf | grep -vc '^#')
 if [ $num_in -ne $num_out ]; then
     echoerror "total #input != #output (with filter)"
     let num_fails=num_fails+1
 fi
-num_out=$($FILTER -i $VCF | grep -vc '^#')
+num_out=$($FILTER --print-all -i $VCF | grep -vc '^#')
 if [ $num_in -ne $num_out ]; then
     echoerror "total #input != #output (without filter)"
     let num_fails=num_fails+1
@@ -38,7 +38,7 @@ fi
 
 # check defaults
 #
-num_filter_tags=$($FILTER -i $VCF | grep -v '^#' | grep -v PASS | cut -f 7 | tr ';' '\n' | sort -u | wc -l)
+num_filter_tags=$($FILTER --print-all -i $VCF | grep -v '^#' | grep -v PASS | cut -f 7 | tr ';' '\n' | sort -u | wc -l)
 if [ $num_filter_tags -ne 2 ]; then
     echoerror "was expecting exactly two filter tags coming from default filtering"
     let num_fails=num_fails+1
@@ -48,7 +48,7 @@ fi
 # AF filtering
 #
 num_exp=$(zgrep -c 'AF=0.2' $VCF)
-num_out=$($FILTER -i $VCF --no-defaults --af-min 0.2 --af-max 0.3 --only-passed | grep -vc '^#')
+num_out=$($FILTER -i $VCF --no-defaults --af-min 0.2 --af-max 0.3 | grep -vc '^#')
 if [ $num_exp -ne $num_out ]; then
     echoerror "AF filtering failed"
     let num_fails=num_fails+1
@@ -58,7 +58,7 @@ fi
 # DP filtering
 #
 num_exp=$(zgrep -c 'DP=2[0-9][0-9]' $VCF)
-num_out=$($FILTER -i $VCF --no-defaults  --cov-min 200 --cov-max 300 --only-passed | grep -vc '^#')
+num_out=$($FILTER -i $VCF --no-defaults  --cov-min 200 --cov-max 300 | grep -vc '^#')
 if [ $num_exp -ne $num_out ]; then
     echoerror "DP filtering failed"
     let num_fails=num_fails+1
@@ -68,7 +68,7 @@ fi
 # SB threshold filtering
 #
 num_exp=$(zgrep -c 'SB=[0-9]\($\|;\)' $VCF)
-num_out=$($FILTER -i $VCF --no-defaults  --sb-thresh 9 --only-passed | grep -vc '^#')
+num_out=$($FILTER -i $VCF --no-defaults  --sb-thresh 9 | grep -vc '^#')
 if [ $num_exp -ne $num_out ]; then
     echoerror "SB thresholdfiltering failed"
     let num_fails=num_fails+1
@@ -79,7 +79,7 @@ fi
 #
 num_prev_mtc=100000
 for mtc in $MTC_TYPES; do
-    num_prev_alpha=$($FILTER -i $VCF --sb-mtc $mtc --only-passed | grep -vc '^#')
+    num_prev_alpha=$($FILTER -i $VCF --sb-mtc $mtc | grep -vc '^#')
 
     # bonf rejects fewer than holm-bonf than fdr, i.e. in that order
     # more are significant, i.e. are filtered and therefore fewer pass
@@ -95,7 +95,7 @@ for mtc in $MTC_TYPES; do
     # significant and more pass
     #
     for alpha in $ALPHA_LIST; do
-        num_higher_alpha=$($FILTER -i $VCF --sb-mtc $mtc --sb-alpha $alpha --only-passed | grep -vc '^#')
+        num_higher_alpha=$($FILTER -i $VCF --sb-mtc $mtc --sb-alpha $alpha | grep -vc '^#')
         #echodebug "$mtc  $alpha  $num_prev_alpha -> $num_higher_alpha"
         if [ $num_higher_alpha -lt $num_prev_alpha ]; then
             echoerror "SB $mtc with next highest alpha ($alpha) produced fewer PASSED variants"
@@ -113,7 +113,7 @@ done
 #
 Q=40
 num_exp=$($zcat $VCF | awk -v q=$Q '/^[^#]/ {if ($6=="." || $6>=q) {s+=1}} END {print s}')
-num_out=$($FILTER -i $VCF --no-defaults  --snvqual-thresh $Q --only-passed | grep -vc '^#')
+num_out=$($FILTER -i $VCF --no-defaults  --snvqual-thresh $Q | grep -vc '^#')
 if [ $num_exp -ne $num_out ]; then
     echoerror "SNV quality threshold filtering failed: expected $num_exp but got $num_out"
     let num_fails=num_fails+1
@@ -130,7 +130,7 @@ fi
 #
 num_prev_mtc=0
 for mtc in $MTC_TYPES; do
-    num_prev_alpha=$($FILTER -i $VCF --no-defaults --snvqual-mtc $mtc --only-passed | grep -vc '^#')
+    num_prev_alpha=$($FILTER -i $VCF --no-defaults --snvqual-mtc $mtc | grep -vc '^#')
 
     # bonf rejects fewer than holm-bonf than fdr, i.e. in that order
     # more are significant, i.e. are kept and therefore more pass
@@ -146,7 +146,7 @@ for mtc in $MTC_TYPES; do
     # significant and fewer pass
     #
     for alpha in $ALPHA_LIST; do
-        num_higher_alpha=$($FILTER -i $VCF --no-defaults --snvqual-mtc $mtc --snvqual-alpha $alpha --only-passed | grep -vc '^#')
+        num_higher_alpha=$($FILTER -i $VCF --no-defaults --snvqual-mtc $mtc --snvqual-alpha $alpha | grep -vc '^#')
         #echodebug "$mtc  $alpha  $num_prev_alpha -> $num_higher_alpha"
         if [ $num_higher_alpha -gt $num_prev_alpha ]; then
             echoerror "SNV qual $mtc with next highest alpha ($alpha) produced more PASSED variants"

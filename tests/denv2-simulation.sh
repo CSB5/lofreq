@@ -29,7 +29,7 @@ if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
 fi
-cmd="$LOFREQ filter --only-passed -i $outraw_def -o $outfinal_def"
+cmd="$LOFREQ filter -i $outraw_def -o $outfinal_def"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
@@ -41,7 +41,7 @@ if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
 fi
-cmd="$LOFREQ filter --only-passed -i $outraw_nomq -o $outfinal_nomq"
+cmd="$LOFREQ filter -i $outraw_nomq -o $outfinal_nomq"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
@@ -54,12 +54,12 @@ fi
 #echodebug "nexp=$nexp nfinal_def=$nfinal_def $nfinal_nomq=$nfinal_nomq"
 
 
-ndiff=$($LOFREQ vcfset -a complement --only-passed -1 $outfinal_def -2 $truesnv  | grep -c '^[^#]')
+ndiff=$($LOFREQ vcfset -a complement -1 $outfinal_def -2 $truesnv  | grep -c '^[^#]')
 if [ $ndiff -ne 0 ]; then
     echoerror "Found extra SNVs in default predictions, which are not part of the list of true SNVs"
     exit 1
 fi
-ndiff=$($LOFREQ vcfset -a complement --only-passed -2 $outfinal_def -1 $truesnv  | grep -c '^[^#]')
+ndiff=$($LOFREQ vcfset -a complement -2 $outfinal_def -1 $truesnv  | grep -c '^[^#]')
 nexp=15
 # BAQ on: 19
 # BAQ off: 15
@@ -70,12 +70,12 @@ fi
 
 
 
-ndiff=$($LOFREQ vcfset -a complement --only-passed -1 $outfinal_nomq -2 $truesnv  | grep -c '^[^#]')
+ndiff=$($LOFREQ vcfset -a complement -1 $outfinal_nomq -2 $truesnv  | grep -c '^[^#]')
 if [ $ndiff -ne 0 ]; then
     echoerror "Found extra SNVs in no-mq predictions, which are not part of the list of true SNVs"
     exit 1
 fi
-ndiff=$($LOFREQ vcfset -a complement --only-passed -2 $outfinal_nomq -1 $truesnv  | grep -c '^[^#]')
+ndiff=$($LOFREQ vcfset -a complement -2 $outfinal_nomq -1 $truesnv  | grep -c '^[^#]')
 nexp=11
 # BAQ on: 14
 # BAQ off: 11

@@ -23,20 +23,20 @@ if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
 fi
-cmd="$LOFREQ filter --only-passed -i $outraw_def -o $outfinal_def"
+cmd="$LOFREQ filter -i $outraw_def -o $outfinal_def"
 if ! eval $cmd >> $log 2>&1; then
     echoerror "The following command failed (see $log for more): $cmd"
     exit 1
 fi
 
 
-ndiff=$($LOFREQ vcfset -a complement --only-passed -1 $outfinal_def -2 $truesnv  | grep -c '^[^#]')
+ndiff=$($LOFREQ vcfset -a complement -1 $outfinal_def -2 $truesnv  | grep -c '^[^#]')
 if [ $ndiff -ne 0 ]; then
     echoerror "Found FP SNVs (not part of the list of true SNVs)"
     exit 1
 fi
 
-ndiff=$($LOFREQ vcfset -a intersect --only-passed -1 $outfinal_def -2 $truesnv  | grep -c '^[^#]')
+ndiff=$($LOFREQ vcfset -a intersect -1 $outfinal_def -2 $truesnv  | grep -c '^[^#]')
 #nexp=229
 nexp=219;# FIXME not sure if this is the exact number but this is what I saw first running src qual on this data-set
 if [ $ndiff -lt $nexp ]; then

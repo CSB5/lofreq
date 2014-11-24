@@ -70,7 +70,7 @@ fi
 
 
 # intersect with all filtered should give 0
-cmd="$LOFREQ vcfset -1 $vcf_1 -2 $vcf_1_allfiltered -a intersect --only-passed -o -"
+cmd="$LOFREQ vcfset -1 $vcf_1 -2 $vcf_1_allfiltered -a intersect -o -"
 num_inter=$(eval $cmd | grep -vc '^#')
 if [ $num_inter -ne 0 ]; then
     echoerror "Intersect with all filtered should give 0 (but gave $num_inter; cmd = $cmd)"
@@ -79,7 +79,7 @@ else
 fi
 
 # complement with all filtered should give all
-cmd="$LOFREQ vcfset -1 $vcf_1 -2 $vcf_1_allfiltered --only-passed -a complement -o -"
+cmd="$LOFREQ vcfset -1 $vcf_1 -2 $vcf_1_allfiltered -a complement -o -"
 md5_test=$(eval $cmd | grep -v '^#' | $md5)
 md5_org=$(zgrep -v '^#' $vcf_1 | grep 'PASS' | $md5)
 #echodebug "$cmd test=$md5_test org=$md5_org"
