@@ -350,6 +350,7 @@ static void usage()
      fprintf(stderr, "NOTE: Output BAM file will (likely) be unsorted (use samtools sort, e.g. lofreq viterbi ... | samtools sort -')\n");
 }
 
+
 int main_viterbi(int argc, char *argv[])
 {
      tmpstruct_t tmp = {0};
@@ -418,6 +419,13 @@ int main_viterbi(int argc, char *argv[])
           default:
                break;
           }
+     }
+
+
+     if (! tmp.fai) {
+          LOG_FATAL("%s\n", "Couldn't load reference fasta file\n");
+          usage();
+          return 1;
      }
 
      /* get bam file */
