@@ -508,7 +508,7 @@ call_snvs(const plp_col_t *p, snvcall_conf_t *conf)
       *  Alt bases are all non-cons bases: A(!), T, G
       *
       *  if cons_as_ref:
-  *   C>A tested as A vs C
+      *   C>A tested as A vs C
        *   C>T tested as T vs C
        *   C>G tested as G vs C
        *   (no CONSVARs possible by definition)
@@ -694,10 +694,21 @@ call_vars(const plp_col_t *p, void *confp)
       * not calling anyhthing if the indel coverage is higher than the
       * 'substitution' coverage
       */
+#if 0
+     LOG_FIXME("%s:%d: p->del_quals.n=%d p->ins_quals.n=%d p->num_dels=%d p->num_ins=%d p->num_ign_indels=%d p->num_bases=%d p->cov=%d\n", 
+               p->target, p->pos+1,
+               p->del_quals.n, p->ins_quals.n,
+               p->num_dels, p->num_ins, p->num_ign_indels, p->num_bases, p->coverage_plp);
+#endif
+     /* don't call snvs on consensus indels. problem is we might not know there
+      * is one because indel qualities could be missing and we therefore didn't record
+      * anything etc. safest and easiest hack is to look at the
+      * difference between coverage and the number of bases (which might not work 
+      * if many bases were filtered)
+      */
      if (! conf->only_indels && \
-         ! ((p->cons_base[0] == '+' || p->cons_base[0] == '-')) && \
-         ! (p->num_ins + p->num_dels + p->num_ign_indels > p->num_bases)) {/* consensus indel actually there but not officially predicted because e.g. indel qualities were missing */
-
+         ! (p->cons_base[0] == '+' || p->cons_base[0] == '-') && \
+         ! (p->num_bases*2 < p->coverage_plp)) {
           call_snvs(p, conf);
      }
 
