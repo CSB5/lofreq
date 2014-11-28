@@ -5,16 +5,12 @@ High Prio:
 
 - fix indel af computation which seems off
 - add normal and tumor plp info to somatic calls. normal could be added in uniq
-- use bgzip instead of gzip for vcf compression and SQ fetch or relevant (region,bed) vars per chrom (tabix/bgzip)
-  (rework vcfset afterwards)
-- unify snv and indel call logic (call simultaneously)
 - multiprocessing version of alnqual (best per chrom as we get overlapping reads if run per bin)
 
 Med Prio:
 =========
 
 - what to do at high coverages where X>cap (e.g. Lewis' HepB)? replace already read values randomly?
-- speed up vcfset (tabix; sorting only won't work against dbsnp)
 - support of indels during ignore vcf loading and source qual computation
 
 Low Prio:
