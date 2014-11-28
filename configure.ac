@@ -193,11 +193,12 @@ fi
 # so we use an envvar to point us to the directory
 #AC_LIB_LINKFLAGS([hts])
 #AC_LIB_LINKFLAGS([bam])
-AC_ARG_VAR(SAMTOOLS, [Path to samtools directory])
+# FIXME how to use realpath on SAMTOOLS and HTSLIB?
+AC_ARG_VAR(SAMTOOLS, [*Absolute* path to samtools directory])
 if test x"$SAMTOOLS" = x""; then
    AC_MSG_ERROR([Samtools directory not define. Please use SAMTOOLS=/path/to/samtoolsdir/])
 fi
-AC_ARG_VAR(HTSLIB, [Path to htslib directory])
+AC_ARG_VAR(HTSLIB, [*Absolute* path to htslib directory])
 if test x"$HTSLIB" = x""; then
    AC_MSG_ERROR([Htslib directory not define. Please use HTSLIB=/path/to/htslibdir/])
 fi
