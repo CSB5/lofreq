@@ -29,12 +29,22 @@ else
    AC_DEFINE_UNQUOTED(GIT_VERSION, "$git_version")
 fi
 
-AC_MSG_NOTICE([configuring $PACKAGE_NAME (version $PACKAGE_VERSION) for your system...])
+AC_MSG_NOTICE([Configuring $PACKAGE_NAME (version $PACKAGE_VERSION) for your system...
+
+            |             ____|                 
+            |       _ \   |     __|  _ \   _` | 
+            |      (   |  __|  |     __/  (   | 
+           _____| \___/  _|   _|   \___| \__, | 
+                                             _| 
+])
+#
+# Created with http://patorjk.com/software/taag/#p=display&f=Shadow&t=LoFreq
+
 
 # The AM_INIT_AUTOMAKE line adds several standard checks. This macro
 # is always needed for automake. Obsolete: It takes the program name
 # and version number as arguments.
-AM_INIT_AUTOMAKE
+AM_INIT_AUTOMAKE([foreign])
 
 
 # This macro was introduced in Autoconf 2.60. If possible, enable
@@ -213,3 +223,5 @@ AC_CONFIG_FILES(Makefile
         src/tools/Makefile
         )
 AC_OUTPUT
+
+AC_MSG_NOTICE([Done. Next, run 'make' to compile the source, followed by 'make install' to install it.])
