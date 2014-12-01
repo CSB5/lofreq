@@ -36,6 +36,7 @@ found" then run
 $ automake --add-missing
 and run autoreconf again.
 
+NOTE: all the above has been replaced with the bootstrap script
 
 Adding source files
 ===================

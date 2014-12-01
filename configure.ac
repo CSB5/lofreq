@@ -29,25 +29,23 @@ else
    AC_DEFINE_UNQUOTED(GIT_VERSION, "$git_version")
 fi
 
-AC_MSG_NOTICE([configuring $PACKAGE_NAME (version $PACKAGE_VERSION) for your system...])
+AC_MSG_NOTICE([Configuring $PACKAGE_NAME (version $PACKAGE_VERSION) for your system...
+
+            |             ____|                 
+            |       _ \   |     __|  _ \   _` | 
+            |      (   |  __|  |     __/  (   | 
+           _____| \___/  _|   _|   \___| \__, | 
+                                             _| 
+])
+#
+# Created with http://patorjk.com/software/taag/#p=display&f=Shadow&t=LoFreq
+
 
 # The AM_INIT_AUTOMAKE line adds several standard checks. This macro
 # is always needed for automake. Obsolete: It takes the program name
 # and version number as arguments.
-AM_INIT_AUTOMAKE
+AM_INIT_AUTOMAKE([foreign])
 
-# config header: provides a way for people to customise the
-# configuration for their platform, via #defines. config.h.in can be
-# generated automatically with the autoheader tool. However, you need
-# a stamp-h file in your project to ensure that automake regenerates
-# config.h from config.h.in. Type 'touch stamp-h' to add this file to
-# your project.
-#
-#AM_CONFIG_HEADER(src/config.h) 
-
-# the following allows to install a copy config.h for libclustalo in a
-## namespace like way, i.e. no name clash with your own config.h
-# AX_PREFIX_CONFIG_H(src/clustal-omega-config.h)
 
 # This macro was introduced in Autoconf 2.60. If possible, enable
 # extensions to C or Posix on hosts that normally disable the
@@ -193,15 +191,16 @@ fi
 # so we use an envvar to point us to the directory
 #AC_LIB_LINKFLAGS([hts])
 #AC_LIB_LINKFLAGS([bam])
-AC_ARG_VAR(SAMTOOLS, [Path to samtools directory])
+AC_ARG_VAR(SAMTOOLS, [*Absolute* path to precompiled samtools source directory])
 if test x"$SAMTOOLS" = x""; then
-   AC_MSG_ERROR([Samtools directory not define. Please use SAMTOOLS=/path/to/samtoolsdir/])
+   AC_MSG_ERROR([Samtools directory not defined. Please use SAMTOOLS=/fullpath/to/samtoolsdir/])
 fi
-AC_ARG_VAR(HTSLIB, [Path to htslib directory])
+AC_ARG_VAR(HTSLIB, [*Absolute* path to precompiled htslib source directory])
 if test x"$HTSLIB" = x""; then
-   AC_MSG_ERROR([Htslib directory not define. Please use HTSLIB=/path/to/htslibdir/])
+   AC_MSG_ERROR([Htslib directory not defined. Please use HTSLIB=/fullpath/to/htslibdir/])
 fi
-
+AC_CHECK_FILE(${SAMTOOLS}/bam.h, [], [AC_MSG_ERROR([bam.h not found])])
+AC_CHECK_FILE(${HTSLIB}/htslib/hts.h, [], [AC_MSG_ERROR([hts.h not found])])
 
 AC_SUBST([AM_CFLAGS])
 AC_SUBST([AM_LDFLAGS])
@@ -224,3 +223,5 @@ AC_CONFIG_FILES(Makefile
         src/tools/Makefile
         )
 AC_OUTPUT
+
+AC_MSG_NOTICE([Done. Next, run 'make' to compile the source, followed by 'make install' to install it.])

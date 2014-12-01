@@ -6,7 +6,7 @@
 __author__ = "Andreas Wilm, Niranjan Nagarajan"
 __email__ = "wilma@gis.a-star.edu.sg"
 __copyright__ = "2013,2014 Genome Institute of Singapore"
-__license__ = "GPL2"
+__license__ = "The MIT License"
 
 
 
@@ -50,13 +50,6 @@ if HAVE_SNP_MODULE:
 if HAVE_VCF_MODULE:
     SUPPORTED_FORMATS.append('vcf')
     
-
-    
-__author__ = "Andreas Wilm"
-__email__ = "wilma@gis.a-star.edu.sg"
-__copyright__ = "2013 Genome Institute of Singapore"
-__license__ = "GPL2"
-
 
 
 #global logger

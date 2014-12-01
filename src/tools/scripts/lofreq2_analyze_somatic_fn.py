@@ -2,17 +2,18 @@
 """If you know about false negative somatic calls, find where they were lost along the way
 """
 
-import sys
-import argparse
-
-import vcf
-
-
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
 __copyright__ = "2014 Genome Institute of Singapore"
-__license__ = "GPL2"
+__license__ = "The MIT License"
+
+
+
+import sys
+import argparse
+
+import vcf
 
 
 

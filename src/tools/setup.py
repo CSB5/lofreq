@@ -46,7 +46,6 @@ setup(name = setup_conf.PACKAGE_NAME,
       # http://pypi.python.org/pypi?%3Aaction=list_classifiers
       classifiers=['Environment :: Console',
                    'Intended Audience :: Science/Research',
-#'License :: OSI Approved :: GNU General Public License (GPL)',
                    'Natural Language :: English',
                    'Operating System :: Unix',
                    'Programming Language :: C',
