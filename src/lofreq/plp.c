@@ -569,11 +569,10 @@ mplp_func(void *data, bam1_t *b)
           if (ret < 0)
                break;
 
-          LOG_DEBUG("Got read %s with flag \n", bam1_qname(b));
-          if (b->core.tid < 0 || (b->core.flag&BAM_FUNMAP)) { /* exclude unmapped reads */
 #ifdef TRACE
-               LOG_DEBUG("%s unmapped\n", bam1_qname(b));
+          LOG_DEBUG("Got read %s with flag %d\n", bam1_qname(b), core.flag);
 #endif
+          if (b->core.tid < 0 || (b->core.flag&BAM_FUNMAP)) { /* exclude unmapped reads */
                skip = 1;
                continue;
           }
