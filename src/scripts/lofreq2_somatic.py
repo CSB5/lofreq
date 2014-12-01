@@ -8,7 +8,7 @@ The script will produce several output files using the prefix specified.
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
 __copyright__ = "2013,2014 Genome Institute of Singapore"
-__license__ = "GPL2"
+__license__ = "The MIT License"
 
 
 #--- standard library imports

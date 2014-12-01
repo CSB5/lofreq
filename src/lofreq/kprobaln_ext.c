@@ -1,7 +1,8 @@
 /* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*- */
 /*
-  This is part of LoFreq Star and largely based on samtools' kprobaln_ext.c (0.1.19) which was originally published 
-  under the MIT License:
+  This is part of LoFreq Star and largely based on samtools'
+  kprobaln_ext.c (0.1.19) which was originally published under the MIT
+  License:
   
   Copyright (c) 2003-2006, 2008-2010, by Heng Li <lh3lh3@live.co.uk>
   

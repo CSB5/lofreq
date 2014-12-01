@@ -5,7 +5,7 @@
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
 __copyright__ = "2014 Genome Institute of Singapore"
-__license__ = "GPL2"
+__license__ = "The MIT License"
 
 
 #--- standard library imports
