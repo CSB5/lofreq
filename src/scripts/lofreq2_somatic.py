@@ -218,17 +218,20 @@ class SomaticSNVCaller(object):
             LOG.info("Executing %s", ' '.join(cmd))
             subprocess.check_call(cmd, stdout=fh_stdout, stderr=fh_stderr)
         except subprocess.CalledProcessError as e:
-            LOG.fatal("The following command failed: %s (%s)" % (
-                ' '.join(cmd), str(e)))
-            LOG.fatal("An error message indicating the source of"
-                      " this error should have bee printed above")
+            LOG.fatal("The following command failed with code %d: %s" % (
+                e.returncode, ' '.join(cmd)))
+            try:
+                fh_stderr.seek(0)
+                LOG.fatal("Received the following on stderr:")
+                for line in fh_stderr:
+                    sys.stderr.write(line + "\n")
+            except:
+                pass
             raise
         except OSError as e:
             LOG.fatal("The following command failed: %s (%s)" % (
                 ' '.join(cmd), str(e)))
-            LOG.fatal("An error message indicating the source of"
-                      " this error should have bee printed above")
-            LOG.fatal("Looks like the lofreq binary is not in your PATH")
+            LOG.fatal("Maybe the lofreq binary is not in your PATH")
             raise
 
         if close_tmp:
@@ -338,7 +341,7 @@ class SomaticSNVCaller(object):
                 fh = open(out_log, 'r')
                 elines = [l.replace("stderr: ", "") for l in fh.readlines()]
                 fh.close()
-                return (self.num_tests_from_log(elines))
+                return self.num_tests_from_log(elines)
             else:
                 assert not os.path.exists(out_log)
 
@@ -356,7 +359,7 @@ class SomaticSNVCaller(object):
         o.close()
         e.close()
 
-        return (self.num_tests_from_log(elines))
+        return self.num_tests_from_log(elines)
 
 
     def rlx_to_str(self, sample_type, (num_snv_tests, num_indel_tests)):
@@ -391,7 +394,7 @@ class SomaticSNVCaller(object):
             '--snvqual-mtc', "%s" % self.mtc_t,
             '--snvqual-alpha', '%f' % self.mtc_alpha_t,
             '--snvqual-ntests', '%d' % num_snv_tests]
-        filter_indel_cmd =  filter_base_cmd + [
+        filter_indel_cmd = filter_base_cmd + [
             '--only-indels',
             '--indelqual-mtc', "%s" % self.indel_mtc_t,
             '--indelqual-alpha', '%f' % self.indel_mtc_alpha_t,
@@ -428,7 +431,7 @@ class SomaticSNVCaller(object):
         """Produce complement of tumor and normal variants and add SOMATIC tag
         """
 
-        vcfset_base_cmd =  [self.LOFREQ, 'vcfset', '-a', 'complement',
+        vcfset_base_cmd = [self.LOFREQ, 'vcfset', '-a', 'complement',
                             '-2', self.vcf_n_rlx, '--add-info', 'SOMATIC']
         vcfset_snv_cmd = vcfset_base_cmd + [
             '--only-snvs', '-1', self.vcf_t_str, '-o', self.vcf_som_raw]
@@ -497,7 +500,7 @@ class SomaticSNVCaller(object):
         complement_indels_cmd = complement_base_cmd + [
             '-1', self.vcf_indels_som_fin, '--only-pos', '--only-indels']
 
-        for (vcf_out, cmd) in [(self.vcf_som_fin_wo_dbsnp,  complement_snv_cmd),
+        for (vcf_out, cmd) in [(self.vcf_som_fin_wo_dbsnp, complement_snv_cmd),
                                (self.vcf_indels_som_fin_wo_dbsnp, complement_indels_cmd)]:
 
             if self.continue_interrupted and os.path.exists(vcf_out):
@@ -582,6 +585,7 @@ def cmdline_parser():
                         required=True,
                         help="Tumor BAM file")
     basic.add_argument("-o", "--outprefix",
+                        required=True,
                         help="Prefix for output files")
     basic.add_argument("-f", "--ref",
                         required=True,
@@ -728,12 +732,14 @@ def main():
         LOG.error("The directory part of the given output prefix points"
                   " to a non-existing directory: '%s').\n" % (outdir))
         sys.exit(1)
-
-
-
-    somatic_snv_caller = SomaticSNVCaller(
-        bam_n=args.normal, bam_t=args.tumor, ref=args.ref, outprefix=args.outprefix,
-        bed=args.bed, dbsnp=args.dbsnp, continue_interrupted=args.continue_interrupted)
+    
+    try:
+        somatic_snv_caller = SomaticSNVCaller(
+            bam_n=args.normal, bam_t=args.tumor, ref=args.ref, outprefix=args.outprefix,
+            bed=args.bed, dbsnp=args.dbsnp, continue_interrupted=args.continue_interrupted)
+    except AssertionError as e:
+        LOG.fatal("%s" % str(e))
+        sys.exit(1)
 
     somatic_snv_caller.alpha_n = args.normal_alpha
     somatic_snv_caller.alpha_t = args.tumor_alpha
@@ -773,8 +779,8 @@ def main():
         somatic_snv_caller.run()
     except:
         LOG.fatal("Somatic SNV caller failed. Exiting")
-        raise
-        #sys.exit(1)
+        #raise
+        sys.exit(1)
 
 
 if __name__ == "__main__":
