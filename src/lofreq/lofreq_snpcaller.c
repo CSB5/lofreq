@@ -280,7 +280,7 @@ call_alt_ins(const plp_col_t *p, double *bi_err_probs, int bi_num_err_probs,
           dp4.alt_fw = it->fw_rv[0];
           dp4.alt_rv = it->fw_rv[1];
 
-          LOG_DEBUG("Low freq insertion: %s %d %s>%s pv-prob:%g;pv-qual:%d\n",
+          LOG_DEBUG("Low freq insertion: %s %d %s>%s pv-prob:%Lg;pv-qual:%d\n",
                     p->target, p->pos+1, report_ins_ref, report_ins_alt,
                     bi_pvalue, qual);
           report_var(&conf->vcf_out, p, report_ins_ref, report_ins_alt,
@@ -295,25 +295,29 @@ int call_alt_del(const plp_col_t *p, double *bd_err_probs, int bd_num_err_probs,
      int del_counts[3];
      long double bd_pvalues[3];
 
-     // prep for snpcaller
+     /* prep for snpcaller */
      del_counts[0] = it->count;
      del_counts[1] = del_counts[2] = 0;
-     //int k;
-     //for (k = 0; k < bd_num_err_probs; k++) {
-     //     LOG_DEBUG("bd_err_prob: %lg\n", bd_err_probs[k]);
-     //}
+    
+#if 0 
+     int k;
+     for (k = 0; k < bd_num_err_probs; k++) {
+          LOG_DEBUG("bd_err_prob: %lg\n", bd_err_probs[k]);
+     }
+#endif
+     
      LOG_DEBUG("%s %d: passing down %d quals with noncons_del_counts"
                "(%d, %d, %d) to snpcaller()\n", p->target, p->pos+1,
                bd_num_err_probs, del_counts[0], del_counts[1], del_counts[2]);
 
-     // snpcaller for deletion
+     /* snpcaller for deletion */
      if (snpcaller(bd_pvalues, bd_err_probs, bd_num_err_probs, del_counts,
                    conf->bonf_indel, conf->sig)) {
           fprintf(stderr, "FATAL: snpcaller() failed at %s:%s():%d\n",
                   __FILE__, __FUNCTION__, __LINE__);
           return 1;
      }
-     // compute p-value deletion
+     /* compute p-value deletion */
      long double bd_pvalue = bd_pvalues[0];
      if (bd_pvalue*conf->bonf_indel < conf->sig) {
           const int is_indel = 1;
@@ -338,7 +342,7 @@ int call_alt_del(const plp_col_t *p, double *bd_err_probs, int bd_num_err_probs,
           dp4.alt_fw = it->fw_rv[0];
           dp4.alt_rv = it->fw_rv[1];
 
-          LOG_DEBUG("Low freq deletion: %s %d %s>%s pv-prob:%g;pv-qual:%d\n",
+          LOG_DEBUG("Low freq deletion: %s %d %s>%s pv-prob:%Lg;pv-qual:%d\n",
                     p->target, p->pos+1, report_del_ref, report_del_alt,
                     bd_pvalue, qual);
           report_var(&conf->vcf_out, p, report_del_ref, report_del_alt,
