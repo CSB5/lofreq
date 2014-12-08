@@ -483,6 +483,7 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
      }
 }
 
+/* FIXME merge with plp_to_del_errprobs */
 void
 plp_to_ins_errprobs(double **err_probs, int *num_err_probs,
                     const plp_col_t *p, snvcall_conf_t *conf,
@@ -503,50 +504,49 @@ plp_to_ins_errprobs(double **err_probs, int *num_err_probs,
      iq = aq = mq = sq = -1;
 
      for (i = 0; i < p->ins_quals.n; i++) {
+          iq = mq = -1;
           iq = p->ins_quals.data[i];
-          mq = p->ins_map_quals.data[i];
+          if (conf->flag & SNVCALL_USE_MQ) {
+               mq = p->ins_map_quals.data[i];
+          }
           final_err_prob = merge_srcq_mapq_baq_and_bq(-1, mq, -1, iq);
           (*err_probs)[(*num_err_probs)++] = final_err_prob;
      }
 
      ins_event *it, *it_tmp;
      HASH_ITER(hh_ins, p->ins_event_counts, it, it_tmp) {
-          if (0 == strcmp(it->key, key)) {
-               for (j = 0; j < it->ins_quals.n; j++) {
-                    iq = it->ins_quals.data[j];
-                    if ((conf->flag & SNVCALL_USE_IDAQ)) {
-                         aq = it->ins_aln_quals.data[j];
-                    } else {
-                         aq = -1;
-                    }
-                    mq = it->ins_map_quals.data[j];
-                    sq = it->ins_source_quals.data[j];
+          for (j = 0; j < it->ins_quals.n; j++) {
+               iq = aq = mq = sq = -1;
+               iq = it->ins_quals.data[j];
 
-                    final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, iq);
-#ifdef TRACE
-                    LOG_DEBUG("+%s IQ:%d IAQ:%d MQ:%d SQ:%d EP:%lg\n",
-                         it->key, iq, aq, mq, sq, final_err_prob);
-#endif
-                    (*err_probs)[(*num_err_probs)++] = final_err_prob;
+               /* don't use idaq if not wanted or if not indel in question (FIXME does the latter amek sense)? */
+               if ((conf->flag & SNVCALL_USE_IDAQ) && (0 == strcmp(it->key, key))) {
+                    aq = it->ins_aln_quals.data[j];
                }
-          } else {
-               for (j = 0; j < it->ins_quals.n; j++) {
-                    iq = it->ins_quals.data[j];
+
+               if ((conf->flag & SNVCALL_USE_MQ) && it->ins_map_quals.n) {
                     mq = it->ins_map_quals.data[j];
-                    aq = -1;
+                    /*according to spec 255 is unknown */
+                    if (mq == 255) {
+                         mq = -1;
+                    }
+               }
+
+               if ((conf->flag & SNVCALL_USE_SQ) && it->ins_source_quals.n)  {
                     sq = it->ins_source_quals.data[j];
-                    final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, iq);
+               }
+               
+               final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, iq);
 #ifdef TRACE
-                    LOG_DEBUG("+%s IQ:%d IAQ:%d MQ:%d SQ:%d EP:%lg\n",
+               LOG_DEBUG("+%s IQ:%d IAQ:%d MQ:%d SQ:%d EP:%lg\n",
                          it->key, iq, aq, mq, sq, final_err_prob);
 #endif
-                    (*err_probs)[(*num_err_probs)++] = final_err_prob;
-               }
+               (*err_probs)[(*num_err_probs)++] = final_err_prob;
           }
      }
-
 }
 
+/* FIXME merge with plp_to_ins_errprobs */
 void
 plp_to_del_errprobs(double **err_probs, int *num_err_probs,
                     const plp_col_t *p, snvcall_conf_t *conf,
@@ -566,47 +566,46 @@ plp_to_del_errprobs(double **err_probs, int *num_err_probs,
      dq = aq = mq = sq = -1;
 
      for (i = 0; i < p->del_quals.n; i++) {
+          dq = mq = -1;
           dq = p->del_quals.data[i];
-          mq = p->del_map_quals.data[i];
+          if (conf->flag & SNVCALL_USE_MQ) {
+               mq = p->del_map_quals.data[i];
+          }
           final_err_prob = merge_srcq_mapq_baq_and_bq(-1, mq, -1, dq);
-          //LOG_DEBUG("#DQ:%d MQ:%d\n", dq, mq);
           (*err_probs)[(*num_err_probs)++] = final_err_prob;
      }
 
      del_event *it, *it_tmp;
      HASH_ITER(hh_del, p->del_event_counts, it, it_tmp) {
-          if (0 == strcmp(it->key, key)) {
-               for (j = 0; j < it->del_quals.n; j++) {
-                    dq = it->del_quals.data[j];
-                    if ((conf->flag & SNVCALL_USE_IDAQ)) {
-                         aq = it->del_aln_quals.data[j];
-                    } else {
-                         aq = -1;
+          for (j = 0; j < it->del_quals.n; j++) {
+               dq = aq = mq = sq = -1;
+               dq = it->del_quals.data[j];
+
+               /* don't use idaq if not wanted or if not indel in question (FIXME does the latter amek sense)? */
+               if ((conf->flag & SNVCALL_USE_IDAQ) && (0 == strcmp(it->key, key))) {
+                    aq = it->del_aln_quals.data[j];
+               }
+
+               if ((conf->flag & SNVCALL_USE_MQ) && it->del_map_quals.n) {
+                    mq = it->del_map_quals.data[j];
+                    /*according to spec 255 is unknown */
+                    if (mq == 255) {
+                         mq = -1;
                     }
-                    mq = it->del_map_quals.data[j];
-                    sq = it->del_source_quals.data[j];
-                    final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, dq);
+               }
+
+               if ((conf->flag & SNVCALL_USE_SQ) && it->del_source_quals.n) {
+                         sq = it->del_source_quals.data[j];
+               }
+
+               final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, dq);
 #ifdef TRACE
-                    LOG_DEBUG("+%s DQ:%d DAQ:%d MQ:%d SQ:%d EP:%lg\n",
+               LOG_DEBUG("+%s DQ:%d DAQ:%d MQ:%d SQ:%d EP:%lg\n",
                          it->key, dq, aq, mq, sq, final_err_prob);
 #endif
-                    (*err_probs)[(*num_err_probs)++] = final_err_prob;
-               }
-          } else {
-               for (j = 0; j < it->del_quals.n; j++) {
-                    dq = it->del_quals.data[j];
-                    mq = it->del_map_quals.data[j];
-                    sq = it->del_source_quals.data[j];
-                    final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, dq);
-#ifdef TRACE
-                    LOG_DEBUG("+%s DQ:%d DAQ:%d MQ:%d SQ:%d EP:%lg\n",
-                         it->key, dq, aq, mq, sq, final_err_prob);
-#endif
-                    (*err_probs)[(*num_err_probs)++] = final_err_prob;
-               }
+               (*err_probs)[(*num_err_probs)++] = final_err_prob;
           }
      }
-
 }
 
 /* initialize members of preallocated snvcall_conf */
