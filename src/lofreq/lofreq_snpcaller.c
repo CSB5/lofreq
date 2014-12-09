@@ -383,10 +383,15 @@ plp_summary(const plp_col_t *plp_col, void* confp)
           if (conf->flag & SNVCALL_USE_SQ) {
                X = 4;/* bq, baq, mq, sq */
           }
+          /* assuming we have base quals for all */
+          if (! plp_col->base_quals[i].n) {
+               continue;
+          }
           for (x=0; x<X; x++) {
                int j;
                int nt = bam_nt4_rev_table[i];
-               fprintf(stream, "  %s %c =", title[x], nt);
+               fprintf(stream, "  %c\t%s =\t", nt, title[x]);
+               /* assuming we have base quals for all */
                for (j=0; j<plp_col->base_quals[i].n; j++) {
                     int q = -1;
                     if (x==0) {
@@ -403,8 +408,117 @@ plp_summary(const plp_col_t *plp_col, void* confp)
                fprintf(stream, "\n");
           }
      }
-}
 
+     /* indels
+      */
+     {
+          char *types = "+-"; char *t;
+          for (t=types; *t!='\0'; t++) {
+               int iq, aq, mq, sq, i;
+               const int_varray_t *id_quals = NULL;
+               const int_varray_t *id_mquals = NULL;
+               ins_event *ins_it, *ins_it_tmp;
+               del_event *del_it, *del_it_tmp;
+
+               /* non-indel qualities first 
+                */
+               if (*t=='+') {
+                    /*fprintf(stream, "  INS events & (non-ins) qualities: %d & %lu\n", 
+                      plp_col->num_ins, plp_col->ins_quals.n);*/
+                    id_quals = & plp_col->ins_quals;
+                    id_mquals = & plp_col->ins_map_quals;
+               } else if (*t=='-') {
+                    /*fprintf(stream, "  DEL events & (non-del) qualities: %d & %lu\n", 
+                      plp_col->num_dels, plp_col->del_quals.n);*/
+                    id_quals = & plp_col->del_quals;
+                    id_mquals = & plp_col->del_map_quals;
+               } else {
+                    LOG_FATAL("%s\n", "Should never get here");
+                    exit(1);
+               }
+               fprintf(stream, "  %c0\tIQ =\t", *t);
+               for (i = 0; i < id_quals->n; i++) {
+                    iq = id_quals->data[i];
+                    fprintf(stream, " %d", iq);
+               }
+               fprintf(stream, "\n");
+               fprintf(stream, "  %c0\tMQ =\t", *t);
+               for (i = 0; i < id_mquals->n; i++) {
+                    mq = id_mquals->data[i];
+                    fprintf(stream, " %d", mq);
+               }
+               fprintf(stream, "\n");
+
+               /* now the actual indels
+                */
+               if (*t=='+') {
+                    /* WARN copy below for dels */
+                    HASH_ITER(hh_ins, plp_col->ins_event_counts, ins_it, ins_it_tmp) {
+                         fprintf(stream, "  %c%s\tIQ =\t", *t, ins_it->key);
+                         for (i = 0; i < ins_it->ins_quals.n; i++) {
+                              iq = ins_it->ins_quals.data[i];
+                              fprintf(stream, " %d", iq);
+                         }
+                         fprintf(stream, "\n");
+                         
+                         fprintf(stream, "  %c%s\tMQ =\t", *t,  ins_it->key);
+                         for (i = 0; i < ins_it->ins_quals.n; i++) {
+                              mq = ins_it->ins_map_quals.data[i];
+                              fprintf(stream, " %d", mq);
+                         }
+                         fprintf(stream, "\n");
+                         
+                         fprintf(stream, "  %c%s\tAQ =\t",  *t, ins_it->key);
+                         for (i = 0; i < ins_it->ins_quals.n; i++) {
+                              aq = ins_it->ins_aln_quals.data[i];
+                              fprintf(stream, " %d", aq);
+                         }
+                         fprintf(stream, "\n");
+                         
+                         fprintf(stream, "  %c%s\tSQ =\t", *t, ins_it->key);
+                         for (i = 0; i < ins_it->ins_quals.n; i++) {
+                              sq = ins_it->ins_source_quals.data[i];
+                              fprintf(stream, " %d", sq);
+                         }
+                         fprintf(stream, "\n");
+                    }
+               } else if (*t=='-') {
+                    /* WARN copy above for dels */
+                    HASH_ITER(hh_del, plp_col->del_event_counts, del_it, del_it_tmp) {
+                         fprintf(stream, "  %c%s\tIQ =\t", *t, del_it->key);
+                         for (i = 0; i < del_it->del_quals.n; i++) {
+                              iq = del_it->del_quals.data[i];
+                              fprintf(stream, " %d", iq);
+                         }
+                         fprintf(stream, "\n");
+                         
+                         fprintf(stream, "  %c%s\tMQ =\t", *t,  del_it->key);
+                         for (i = 0; i < del_it->del_quals.n; i++) {
+                              mq = del_it->del_map_quals.data[i];
+                              fprintf(stream, " %d", mq);
+                         }
+                         fprintf(stream, "\n");
+                         
+                         fprintf(stream, "  %c%s\tAQ =\t",  *t, del_it->key);
+                         for (i = 0; i < del_it->del_quals.n; i++) {
+                              aq = del_it->del_aln_quals.data[i];
+                              fprintf(stream, " %d", aq);
+                         }
+                         fprintf(stream, "\n");
+                         
+                         fprintf(stream, "  %c%s\tSQ =\t", *t, del_it->key);
+                         for (i = 0; i < del_it->del_quals.n; i++) {
+                              sq = del_it->del_source_quals.data[i];
+                              fprintf(stream, " %d", sq);
+                         }
+                         fprintf(stream, "\n");
+                    }
+                  
+               }
+          }
+     }
+     fprintf(stream, "\n");
+}
 
 void
 warn_old_fai(const char *fa)
