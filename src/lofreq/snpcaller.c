@@ -523,8 +523,10 @@ plp_to_ins_errprobs(double **err_probs, int *num_err_probs,
                     sq = it->ins_source_quals.data[j];
 
                     final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, iq);
+#ifdef TRACE
                     LOG_DEBUG("+%s IQ:%d IAQ:%d MQ:%d SQ:%d EP:%lg\n",
                          it->key, iq, aq, mq, sq, final_err_prob);
+#endif
                     (*err_probs)[(*num_err_probs)++] = final_err_prob;
                }
           } else {
@@ -534,8 +536,10 @@ plp_to_ins_errprobs(double **err_probs, int *num_err_probs,
                     aq = -1;
                     sq = it->ins_source_quals.data[j];
                     final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, iq);
+#ifdef TRACE
                     LOG_DEBUG("+%s IQ:%d IAQ:%d MQ:%d SQ:%d EP:%lg\n",
                          it->key, iq, aq, mq, sq, final_err_prob);
+#endif
                     (*err_probs)[(*num_err_probs)++] = final_err_prob;
                }
           }
@@ -582,8 +586,10 @@ plp_to_del_errprobs(double **err_probs, int *num_err_probs,
                     mq = it->del_map_quals.data[j];
                     sq = it->del_source_quals.data[j];
                     final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, dq);
+#ifdef TRACE
                     LOG_DEBUG("+%s DQ:%d DAQ:%d MQ:%d SQ:%d EP:%lg\n",
                          it->key, dq, aq, mq, sq, final_err_prob);
+#endif
                     (*err_probs)[(*num_err_probs)++] = final_err_prob;
                }
           } else {
@@ -592,8 +598,10 @@ plp_to_del_errprobs(double **err_probs, int *num_err_probs,
                     mq = it->del_map_quals.data[j];
                     sq = it->del_source_quals.data[j];
                     final_err_prob = merge_srcq_mapq_baq_and_bq(sq, mq, aq, dq);
+#ifdef TRACE
                     LOG_DEBUG("+%s DQ:%d DAQ:%d MQ:%d SQ:%d EP:%lg\n",
                          it->key, dq, aq, mq, sq, final_err_prob);
+#endif
                     (*err_probs)[(*num_err_probs)++] = final_err_prob;
                }
           }

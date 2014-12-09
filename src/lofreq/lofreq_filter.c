@@ -163,7 +163,7 @@ usage(const filter_conf_t* filter_conf)
      fprintf(stderr, "\n");
      fprintf(stderr, "  Strand Bias (SB):\n");
      fprintf(stderr, "  Note, variants are only filtered if their SB pvalue is below the threshold\n");
-     fprintf(stderr, "  AND %d%% of variant bases are on one strand (toggled with --sb-no-compound).\n", (int)ALT_STRAND_RATIO*100);
+     fprintf(stderr, "  AND %d%% of variant bases are on one strand (toggled with --sb-no-compound).\n", (int)(ALT_STRAND_RATIO*100));
      fprintf(stderr, "  -B | --sb-thresh INT           Maximum phred-value allowed. Conflicts with -b.\n");
      fprintf(stderr, "  -b | --sb-mtc STRING           Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -B\n");
      fprintf(stderr, "  -c | --sb-alpha FLOAT          Multiple testing correcion pvalue threshold\n");
@@ -191,6 +191,8 @@ usage(const filter_conf_t* filter_conf)
      fprintf(stderr, "       --no-defaults             Remove all default filter settings\n");
      fprintf(stderr, "       --verbose                 Be verbose\n");
      fprintf(stderr, "       --debug                   Enable debugging\n");
+     fprintf(stderr, "\nNOTE: without --no-defaults LoFreq's predefined filters are on (run with --verbose to see details)\n");
+     fprintf(stderr, "\n");
 }
 /* usage() */
 
@@ -469,7 +471,7 @@ int apply_indelqual_filter_mtc(indelqual_filter_t *indelqual_filter, var_t **var
      long int num_noncons_vars = 0;
      long int i;
 
-     LOG_FIXME("%s\n", "almost identical to apply_indelqual_filter_mtc just different filter can be easily merged by accepted both types of variants");
+     /* FIXME function almost identical to apply_indelqual_filter_mtc just different filter can be easily merged by accepting both types of variants */
 
      if (indelqual_filter->ntests && num_vars > indelqual_filter->ntests) {
          LOG_WARN("%s\n", "Number of predefined tests for indelqual filter larger than number of variants! Are you sure that makes sense?");

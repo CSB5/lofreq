@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Experimental implementation of various quality bias checks
+"""Removes overlapping indels
 """
 
 __author__ = "Andreas Wilm"
@@ -33,8 +33,8 @@ def vcf_line_to_var(line):
     return e._replace(pos=int(e.pos))
 
 
-def var_len(var):
-    return len(var.alt)-len(var.ref)    
+#def var_len(var):
+#    return abs(len(var.alt)-len(var.ref))
 
 
 def af_from_var(var):
@@ -44,56 +44,72 @@ def af_from_var(var):
     return None
 
 
-def overlap(e1, e2):
-    assert e1.pos <= e2.pos, ("unsorted input: %s > %s" % (e1, e2))
-    if e1.pos + var_len(e1) >= e2.pos or e2.pos + var_len(e2) <= e1.pos:
-        #print "overlap between %d %s %s and %d %s %s" % (e1.pos, e1.ref, e1.alt, e2.pos, e2.ref, e2.alt)
-        return True
+def qual_from_var(var):
+    """takes care of missing values, int conversion and ties in comparisons
+    """
+    if var.qual==".":
+        return sys.maxint
     else:
-        return False
+        # add AF to deal with ties
+        return int(var.qual)+af_from_var(var)
 
 
-if len(sys.argv) != 2:
-    sys.stderr.write("FATAL: Need (one) vcf file as only argument\n")
-    sys.exit(1)
-    
-vcf = sys.argv[1]
-if vcf == "-":
-    fh = sys.stdin
-elif vcf.endswith(".gz"):
-    fh = gzip.open(vcf)
-else:
-    fh = open(vcf)
+def overlap(v1, v2):
+    """determine whether affected positions of two variants overlap
+    """
 
-prev_vars = []
-for line in fh:
-    line = line.rstrip()
-    if line.startswith('#'):
-        print line
-        continue
-    
-    cur_var = vcf_line_to_var(line)
-    #if cur_var.pos==2114100:
+    #if v1.pos==4589049:
     #    import pdb; pdb.set_trace()
+    pos1 = set([v1.pos+i for i in range(max([len(v1.ref), len(v1.alt)]))])
+    pos2 = set([v2.pos+i for i in range(max([len(v2.ref), len(v2.alt)]))])
+    return len(pos1.intersection(pos2))>0
+
+def main():
+    if len(sys.argv) != 2:
+        sys.stderr.write("FATAL: Need (one) vcf file as only argument\n")
+        sys.exit(1)
         
-    #print "len(prev_vars)=%d" % (len(prev_vars))
-    if len(prev_vars):
-        if cur_var.chrom != prev_vars[-1].chrom or not overlap(prev_vars[-1], cur_var):
-            #if len(prev_vars)>1:
-                #import pdb; pdb.set_trace()
-            # pick highest qual/af from stack and empty stack
-            picked_var = sorted(prev_vars, key=lambda e: af_from_var(e), reverse=True)[0]
-            write_var(picked_var)
-            prev_vars = []
-    prev_vars.append(cur_var)
-
-# don't forget remaining ones
-picked_var = sorted(prev_vars, key=lambda e: af_from_var(e), reverse=True)[0]
-write_var(picked_var)
-
+    vcf = sys.argv[1]
+    if vcf == "-":
+        fh = sys.stdin
+    elif vcf.endswith(".gz"):
+        fh = gzip.open(vcf)
+    else:
+        fh = open(vcf)
     
-if fh != sys.stdout:
-    fh.close()
-    
-#print "%d prev_vars left" % (len(prev_vars))
+    #pic_best_func = af_from_var
+    pick_best_func = qual_from_var
 
+    prev_vars = []
+    for line in fh:
+        line = line.rstrip()
+        if line.startswith('#'):
+            print line
+            continue
+        
+        cur_var = vcf_line_to_var(line)
+        if False:
+            sys.stderr.write("INFO: looking at %d:%s>%s\n" % (cur_var.pos, cur_var.ref, cur_var.alt))
+            sys.stderr.write("INFO: on stack: %s\n" % (', '.join(["%d:%s>%s" % (v.pos, v.ref, v.alt) for v in prev_vars])))
+        if len(prev_vars):
+            if cur_var.chrom != prev_vars[-1].chrom or not overlap(prev_vars[-1], cur_var):
+                # pick highest qual/af from stack and empty stack
+                picked_var = sorted(prev_vars, key=lambda e: pick_best_func(e), reverse=True)[0]
+                #if len(prev_vars)>1:
+                #    print "picked %s from %s" % (picked_var, prev_vars)
+                write_var(picked_var)
+                prev_vars = []
+        prev_vars.append(cur_var)
+    
+    # don't forget remaining ones
+    picked_var = sorted(prev_vars, key=lambda e: pick_best_func(e), reverse=True)[0]
+    write_var(picked_var)
+    
+        
+    if fh != sys.stdout:
+        fh.close()
+        
+    #print "%d prev_vars left" % (len(prev_vars))
+
+if __name__ == "__main__":
+    main()
