@@ -667,9 +667,12 @@ mplp_func(void *data, bam1_t *b)
         } else if (b->core.qual < ma->conf->min_mq) {
              skip = 1;
         }
-#if 0
-        else if ((ma->conf->flag&MPLP_NO_ORPHAN) && (b->core.flag&1) && !(b->core.flag&2)) {
+        /* never tried RELAXED_ORPHAN. most examples I saw where orphans matter evaluate to true under both conditions anyway */
+#ifdef RELAXED_ORPHAN
+        /* only orphan if mate is wrongly mapped (but not unmapped) */
+        else if ((ma->conf->flag&MPLP_NO_ORPHAN) && (b->core.flag&BAM_FPAIRED) && !(b->core.flag&BAM_FMUNMAP)) {
 #else
+        /* orphan as in samtools: read is aligned but not as proper pair as defined by aligner */
         else if ((ma->conf->flag&MPLP_NO_ORPHAN) && (b->core.flag&BAM_FPAIRED) && !(b->core.flag&BAM_FPROPER_PAIR)) {
 #endif
              skip = 1;
@@ -833,12 +836,17 @@ void compile_plp_col(plp_col_t *plp_col,
 
                bq = bam1_qual(p->b)[p->qpos];
 
+               /* no need for check if mq is within user defined
+                * limits. check was done in mplp_func */
+               mq = p->b->core.qual;
+
                /* minimal base-call quality filtering. doing this here
                 * will make all downstream analysis blind to filtering
                 * and might skew AFs etc
                 */
                if (bq < conf->min_plp_bq) {
                     base_skip = 1;
+                    /* NOTE: all values used after check_indel need to be initialized before this goto */
                     goto check_indel; /* goto was easiest */
                }
 
@@ -861,9 +869,6 @@ void compile_plp_col(plp_col_t *plp_col,
                }
                /* otherwise baq disabled */
 
-               /* no need for check if mq is within user defined
-                * limits. check was done in mplp_func */
-               mq = p->b->core.qual;
                /* samtools check to detect Sanger max value: problem
                 * is that an MQ Phred of 255 means NA according to the
                 * samtools spec (needed below). This however is not
