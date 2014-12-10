@@ -404,6 +404,20 @@ def main():
         #num_threads = multiprocessing.cpu_count()
         sys.exit(1)
 
+
+    # reference. if not indexed, multiple threads might want to index it
+    # before actually running call, which creates a race condition
+    idx = -1
+    for arg in ['-f', '--ref']:
+        if arg in orig_argv:
+            idx = orig_argv.index(arg)
+            break
+    ref = orig_argv[idx+1]    
+    if not os.path.exists(ref + ".fai"):
+        LOG.fatal("Index for reference %s missing. Use samtools or lofreq faidx %s" % (ref, ref))
+        sys.exit(1)
+
+    
     # Doh!
     if 'call' in orig_argv:
         LOG.fatal("argument 'call' not needed")
