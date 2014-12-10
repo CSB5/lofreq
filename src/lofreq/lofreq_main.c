@@ -175,6 +175,7 @@ static void usage(const char *myname)
      fprintf(stderr, "    version       : Print version info\n");
      fprintf(stderr, "\n");
      fprintf(stderr, "  Samtools Clones:\n");
+     fprintf(stderr, "    faidx         : Create index for fasta file\n");
      fprintf(stderr, "    index         : Create index for BAM file\n");
      fprintf(stderr, "    idxstats      : Print stats for indexed BAM file\n");
      fprintf(stderr, "\n");
@@ -208,6 +209,9 @@ int main(int argc, char *argv[])
 
      } else if (strcmp(argv[1], "viterbi") == 0){
           return main_viterbi(argc,argv);
+
+     } else if (strcmp(argv[1], "faidx") == 0)  {
+          return main_faidx(argc, argv) ;
 
      } else if (strcmp(argv[1], "index") == 0)  {
           return main_index(argc, argv);
