@@ -73,12 +73,16 @@ static int default_fetch_func(bam1_t *b, void *data)
 
      uint8_t *to_delete;
      to_delete = bam_aux_get(b, "BI");
-     if (to_delete) bam_aux_del(b, to_delete);
+     if (to_delete) {
+          bam_aux_del(b, to_delete);
+     }
      bam_aux_append(b, "BI", 'Z', c->l_qseq+1, indelq);
 
 
      to_delete = bam_aux_get(b, "BD");
-     if (to_delete) bam_aux_del(b, to_delete);
+     if (to_delete) {
+          bam_aux_del(b, to_delete);
+     }
      bam_aux_append(b, "BD", 'Z', c->l_qseq+1, indelq);
 
      bam_write1(tmp->out, b);
@@ -121,9 +125,10 @@ static int dindel_fetch_func(bam1_t *b, void *data)
      bam1_core_t *c = &b->core;
      int rlen;
 
-     /* skip all reads that are not properly paired */
-     if (! (c->flag & BAM_FPROPER_PAIR)) {
-             /* fprintf(stderr, "skipping read: %s at pos %d\n", bam1_qname(b), c->pos); */
+     /* don't change reads failing default mask: BAM_FUNMAP | BAM_FSECONDARY | BAM_FQCFAIL | BAM_FDUP */
+     if (c->flag & BAM_DEF_MASK) {
+          /* fprintf(stderr, "skipping read: %s at pos %d\n", bam1_qname(b), c->pos); */
+          bam_write1(tmp->out, b);
           return 0;
      }
 
@@ -171,6 +176,7 @@ static int dindel_fetch_func(bam1_t *b, void *data)
                     y++;
                }
           } else {
+               LOG_FATAL("unknown op %d for read %s\n", op, bam1_qname(b));/* FIXME skip? seen this somewhere else properly handled */
                exit(1);
           }
      }
