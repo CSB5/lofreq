@@ -77,6 +77,7 @@ typedef struct {
      long int ntests;
      char id[FILTER_ID_STRSIZE];
      int no_compound; /* otherwise ALT_STRAND_RATIO of var bases have to be on one strand as well */
+     int incl_indels; /* if 1, also apply to indels */
 } sb_filter_t;
 
 typedef struct {
@@ -129,9 +130,9 @@ dump_filter_conf(const filter_conf_t *cfg)
              cfg->dp_filter.min, cfg->dp_filter.max);
      fprintf(stderr, "  af_filter min=%f max=%f\n",
              cfg->af_filter.min, cfg->af_filter.max);
-     fprintf(stderr, "  sb_filter thresh=%d mtc_type=%d|%s alpha=%f ntests=%ld no_compound=%d\n",
+     fprintf(stderr, "  sb_filter thresh=%d mtc_type=%d|%s alpha=%f ntests=%ld no_compound=%d incl_indel=%d\n",
              cfg->sb_filter.thresh, cfg->sb_filter.mtc_type, mtc_type_str[cfg->sb_filter.mtc_type],
-             cfg->sb_filter.alpha, cfg->sb_filter.ntests, cfg->sb_filter.no_compound);
+             cfg->sb_filter.alpha, cfg->sb_filter.ntests, cfg->sb_filter.no_compound, cfg->sb_filter.incl_indels);
      fprintf(stderr, "  snvqual_filter thresh=%d mtc_type=%d|%s alpha=%f ntests=%ld\n",
              cfg->snvqual_filter.thresh, cfg->snvqual_filter.mtc_type, mtc_type_str[cfg->snvqual_filter.mtc_type],
              cfg->snvqual_filter.alpha, cfg->snvqual_filter.ntests);
@@ -168,6 +169,7 @@ usage(const filter_conf_t* filter_conf)
      fprintf(stderr, "  -b | --sb-mtc STRING           Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -B\n");
      fprintf(stderr, "  -c | --sb-alpha FLOAT          Multiple testing correcion pvalue threshold\n");
      fprintf(stderr, "       --sb-no-compound          Don't use compound filter\n");
+     fprintf(stderr, "       --sb-incl-indels          Apply SB filter to indels as well\n");
 
      fprintf(stderr, "\n");
      fprintf(stderr, "  SNV Quality:\n");
@@ -334,16 +336,12 @@ void apply_sb_threshold(var_t *var, sb_filter_t *sb_filter)
           return;
      }
 
-     if (sb_missing_warning_printed) {
-          return;
-     }
-
      if ( ! vcf_var_has_info_key(&sb_char, var, "SB")) {
           if ( ! sb_missing_warning_printed) {
                LOG_WARN("%s\n", "Requested SB filtering failed since SB tag is missing in variant");
                sb_missing_warning_printed = 1;
-               return;
           }
+          return;
      }
      sb = atoi(sb_char);
      free(sb_char);
@@ -564,54 +562,71 @@ int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const long int num
 {
      double *sb_probs = NULL;
      long int i;
+     int num_ign = 0;
+     long int *real_idx;/* we might ignore some variants (missing values etc). keep track of real indices of kept vars */
 
-     if (sb_filter->ntests && num_vars > sb_filter->ntests) {
-         LOG_WARN("%s\n", "Number of predefined tests for SB filter larger than number of variants! Are you sure that makes sense?");
-     }
-
-     if (! sb_filter->ntests) {
-          sb_filter->ntests = num_vars;
-     }
      
      /* collect values from vars kept in mem
       */
      sb_probs = malloc(num_vars * sizeof(double));
-     if ( ! sb_probs) {
-          LOG_FATAL("%s\n", "out of memory");
-          return -1;
-     }
+     if ( ! sb_probs) {LOG_FATAL("%s\n", "out of memory"); return -1;}
+     real_idx = malloc(num_vars * sizeof(long int));
+     if ( ! real_idx) {LOG_FATAL("%s\n", "out of memory"); return -1;}
+
      for (i=0; i<num_vars; i++) {
           char *sb_char = NULL;
-          if ( ! vcf_var_has_info_key(&sb_char, vars[i], "SB")) {
-               LOG_WARN("%s\n", "Requested SB filtering failed since SB tag is missing in variant");
-               sb_missing_warning_printed = 1;
-               free(sb_probs);
-               return -1;
+          
+          /* count indels if sb filter is not too be applied */
+          if (! sb_filter->incl_indels && vcf_var_is_indel(vars[i])) {
+               num_ign += 1;
+               continue;
           }
-          sb_probs[i] = PHREDQUAL_TO_PROB(atoi(sb_char));
+
+          if ( ! vcf_var_has_info_key(&sb_char, vars[i], "SB")) {
+               if ( ! sb_missing_warning_printed) {
+                    LOG_WARN("%s\n", "At least one variant has no SB tag! SB filtering will be incomplete");
+                    sb_missing_warning_printed = 1;
+               }
+               num_ign += 1;
+               continue;
+          }
+
+          sb_probs[i-num_ign] = PHREDQUAL_TO_PROB(atoi(sb_char));
+          real_idx[i-num_ign] = i;
           free(sb_char);
      }
-     
+     sb_probs = realloc(sb_probs, (num_vars-num_ign) * sizeof(double));
+     real_idx = realloc(real_idx, (num_vars-num_ign) * sizeof(long int));
+
+     if (! sb_filter->ntests) {
+          sb_filter->ntests = num_vars - num_ign;
+     } else {
+          if (num_vars-num_ign > sb_filter->ntests) {
+               LOG_WARN("%s\n", "Number of predefined tests for SB filter larger than number of variants! Are you sure that makes sense?");
+          }
+     }
+
+
      /* multiple testing correction
       */
      if (sb_filter->mtc_type == MTC_BONF) {
-          bonf_corr(sb_probs, num_vars, 
+          bonf_corr(sb_probs, num_vars-num_ign, 
                     sb_filter->ntests);
           
      } else if (sb_filter->mtc_type == MTC_HOLMBONF) {
-          holm_bonf_corr(sb_probs, num_vars, 
+          holm_bonf_corr(sb_probs, num_vars-num_ign, 
                          sb_filter->alpha, sb_filter->ntests);
           
      } else if (sb_filter->mtc_type == MTC_FDR) {
           long int num_rej = 0;
           long int *idx_rej; /* indices of rejected i.e. significant values */
           
-          num_rej = fdr(sb_probs, num_vars, 
+          num_rej = fdr(sb_probs, num_vars-num_ign, 
                         sb_filter->alpha, sb_filter->ntests, 
                         &idx_rej);
           for (i=0; i<num_rej; i++) {
                long int idx = idx_rej[i];
-               sb_probs[idx] = -1;
+               sb_probs[real_idx[idx]] = -1;
           }
           free(idx_rej);
           
@@ -628,6 +643,7 @@ int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const long int num
           }
      }
 
+     free(real_idx);
      free(sb_probs);
 
      return 0;
@@ -737,7 +753,8 @@ main_filter(int argc, char *argv[])
      filter_conf_t cfg;
      char *vcf_in = NULL, *vcf_out = NULL;
      static int print_only_passed = 1;
-     static int no_compound_sb_filter = 0;
+     static int sb_filter_no_compound = 0;
+     static int sb_filter_incl_indels = 0;
      static int only_indels = 0;
      static int only_snvs = 0;
      char *vcf_header = NULL;
@@ -785,7 +802,8 @@ main_filter(int argc, char *argv[])
               {"sb-thresh", required_argument, NULL, 'B'},
               {"sb-mtc", required_argument, NULL, 'b'},
               {"sb-alpha", required_argument, NULL, 'c'},
-              {"sb-no-compound", no_argument, &no_compound_sb_filter, 1},
+              {"sb-no-compound", no_argument, &sb_filter_no_compound, 1},
+              {"sb-incl-indels", no_argument, &sb_filter_incl_indels, 1},
 
               {"snvqual-thresh", required_argument, NULL, 'Q'},
               {"snvqual-mtc", required_argument, NULL, 'q'},
@@ -951,7 +969,8 @@ main_filter(int argc, char *argv[])
     cfg.print_only_passed = print_only_passed;
     cfg.only_indels = only_indels;
     cfg.only_snvs = only_snvs;
-    cfg.sb_filter.no_compound = no_compound_sb_filter;
+    cfg.sb_filter.no_compound = sb_filter_no_compound;
+    cfg.sb_filter.incl_indels = sb_filter_incl_indels;
 
     if (cfg.only_indels && cfg.only_snvs) {
          LOG_FATAL("%s\n", "Can't keep only indels and only snvs");
@@ -1116,7 +1135,7 @@ main_filter(int argc, char *argv[])
          apply_af_filter(var, & cfg.af_filter);
          apply_dp_filter(var, & cfg.dp_filter);
 
-         /* filter depend on type of variant
+         /* quality threshold per variant type
           */
          if (! is_indel) {
               if (cfg.snvqual_filter.thresh) {
@@ -1124,15 +1143,17 @@ main_filter(int argc, char *argv[])
                    apply_snvqual_threshold(var, & cfg.snvqual_filter);
               }
 
-              /* FIXME SB on indel doesn't make sense, right? */
-              if (cfg.sb_filter.thresh) {
-                   assert(cfg.sb_filter.mtc_type == MTC_NONE);
-                   apply_sb_threshold(var, & cfg.sb_filter);
-              }
          } else {
               if (cfg.indelqual_filter.thresh) {
                    assert(cfg.indelqual_filter.mtc_type == MTC_NONE);
                    apply_indelqual_threshold(var, & cfg.indelqual_filter);
+              }
+         }
+         
+         if (cfg.sb_filter.thresh) {
+              if (! is_indel || cfg.sb_filter.incl_indels) {
+                   assert(cfg.sb_filter.mtc_type == MTC_NONE);
+                   apply_sb_threshold(var, & cfg.sb_filter);
               }
          }
     }
