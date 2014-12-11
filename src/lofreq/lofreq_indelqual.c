@@ -278,9 +278,9 @@ usage()
      fprintf(stderr, "%s: Insert indel qualities into BAM file (required for indel predictions)\n\n", myname);
      fprintf(stderr, "Usage: %s [options] in.bam\n", myname);
      fprintf(stderr,"Options:\n");
-     fprintf(stderr, "  -u | --uniform INT  Add this indel quality uniformly to all bases");
+     fprintf(stderr, "  -u | --uniform INT  Add this indel quality uniformly to all bases (if you have prior knowledge)");
      fprintf(stderr, " (clashes with --dindel)\n");
-     fprintf(stderr, "       --dindel       Add Dindel's indel qualities");
+     fprintf(stderr, "       --dindel       Add Dindel's indel qualities (Illumina specific)");
      fprintf(stderr, " (clashes with -u; needs --ref)\n");
      fprintf(stderr, "  -f | --ref          Reference sequence used for mapping\n");
      fprintf(stderr, "  -o | --out FILE     Output BAM file [- = stdout = default]\n");
