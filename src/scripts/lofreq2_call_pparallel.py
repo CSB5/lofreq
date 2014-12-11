@@ -680,7 +680,7 @@ def main():
     num_snv_tests, num_indel_tests = total_num_tests_from_logs(log_files)
     if num_snv_tests == -1 or num_indel_tests == -1:
         sys.exit(1)
-    # same as in lofreq_snpcaller.c and used by lofreq2_somatic.py
+    # same as in lofreq_call.c and used by lofreq2_somatic.py
     sys.stderr.write("Number of substitution tests performed: %d\n" % num_snv_tests)
     sys.stderr.write("Number of indel tests performed: %d\n" % num_indel_tests)
 

@@ -16,7 +16,7 @@ lofreq_main.c \
 lofreq_viterbi.c lofreq_viterbi.h \
 lofreq_vcfset.c lofreq_vcfset.h \
 lofreq_filter.c lofreq_filter.h  \
-lofreq_snpcaller.c lofreq_snpcaller.h \
+lofreq_call.c lofreq_call.h \
 multtest.c multtest.h \
 plp.c plp.h \
 samutils.h samutils.c \
