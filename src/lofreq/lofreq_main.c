@@ -44,7 +44,7 @@
 #include "lofreq_filter.h"
 #include "lofreq_index.h"
 #include "lofreq_indelqual.h"
-#include "lofreq_snpcaller.h"
+#include "lofreq_call.h"
 #include "lofreq_uniq.h"
 #include "lofreq_vcfset.h"
 #include "lofreq_viterbi.h"

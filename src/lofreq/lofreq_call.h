@@ -25,8 +25,8 @@
 *
 ************************************************************************/
 
-#ifndef LOFREQ_SNPCALLER_H
-#define LOFREQ_SNPCALLER_H
+#ifndef LOFREQ_CALL_H
+#define LOFREQ_CALL_H
 
 int main_call(int argc, char *argv[]);
 
