@@ -395,6 +395,9 @@ main_vcfset(int argc, char *argv[])
               return -1;
          }
          if (vcfset_conf.only_passed && ! VCF_VAR_PASSES(var1)) {
+#ifdef TRACE
+              LOG_DEBUG("Skipping non-passing var1 %s:%d\n", var1->chrom, var1->pos);
+#endif
               num_vars_vcf1_ign += 1;
               vcf_free_var(& var1);
               continue;
@@ -404,7 +407,7 @@ main_vcfset(int argc, char *argv[])
          }
          num_vars_vcf1 += 1;
 #ifdef TRACE
-         fprintf(stderr, "var1 pass: "); vcf_write_var(stderr, var1);
+         LOG_DEBUG("Got passing var1 %s:%d\n", var1->chrom, var1->pos);
 #endif
 
          if (vcfset_conf.vcf_setop == SETOP_CONCAT) {
@@ -433,11 +436,20 @@ main_vcfset(int argc, char *argv[])
                         return -1;
                    }
                    if (vcfset_conf.only_passed && ! VCF_VAR_PASSES(var2)) {
+#ifdef TRACE
+                        LOG_DEBUG("Skipping non-passing var2 %s:%d\n", var2->chrom, var2->pos);
+#endif
                         var2_match = 0;
                    } else if (vcfset_conf.only_pos) {
+#ifdef TRACE
+                        LOG_DEBUG("Pos match for var2 %s:%d\n", var2->chrom, var2->pos);
+#endif
                         var2_match = 1;/* FIXME: check type as well i.e. snv vs indel */
                    } else {
                         if (0==strcmp(var1->ref, var2->ref) && 0==strcmp(var1->alt, var2->alt)) {
+#ifdef TRACE
+                             LOG_DEBUG("Full match for var2 %s:%d\n", var2->chrom, var2->pos);
+#endif
                              var2_match = 1;/* FIXME: check type as well i.e. snv vs indel */                             
                         }
                    }
