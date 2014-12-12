@@ -517,6 +517,8 @@ class SomaticSNVCaller(object):
 
     def run(self):
         """Run the whole somatic SNV calling pipeline
+
+        Will raise an exception on error
         """
 
         LOG.info("Running on %s" % gethostname())
@@ -528,11 +530,11 @@ class SomaticSNVCaller(object):
                 LOG.fatal("BAM file %s is not indexed."
                           " Please create the index first"
                           " with e.g. samtools index (or use lofreq)" % (b))
-                return False
+                return ValueError
 
         if self.src_qual_ign_vcf and not self.src_qual_on:
             LOG.fatal("ign-vcf file was provided, but src-qual is off")
-            return False
+            return ValueError
 
 
         for (k, v) in [(x, self.__getattribute__(x)) for x in dir(self)
@@ -562,7 +564,7 @@ class SomaticSNVCaller(object):
             self.call_germline()
 
         # FIXME replace source line in final output with sys.argv?
-        return True
+
 
 
 def cmdline_parser():
