@@ -148,9 +148,18 @@ add_local_dir_to_path(char *argv0) {
 
 static void usage(const char *myname)
 {
-     fprintf(stderr, "\n%s: Fast and sensitive inference of single-nucleotide variants\n", PACKAGE_NAME);
+
      /*fprintf(stderr, "Version %s\n", PACKAGE_VERSION);*/
      fprintf(stderr, "\n");
+     fprintf(stderr, ""/* see configure for unescaped version and source */
+"       |             ____|                 \n"
+"       |       _ \\   |     __|  _ \\   _` | \n"
+"       |      (   |  __|  |     __/  (   | \n"
+"      _____| \\___/  _|   _|   \\___| \\__, | \n"
+"                                        _| \n");
+     fprintf(stderr, "\n");
+     fprintf(stderr, "Fast and sensitive inference of SNVs and indels\n");     
+     fprintf(stderr, "\n");     
      fprintf(stderr, "Usage: %s <command> [options]\n\n", myname);
      fprintf(stderr, "  Main Commands:\n");
      fprintf(stderr, "    call          : Call variants\n");
