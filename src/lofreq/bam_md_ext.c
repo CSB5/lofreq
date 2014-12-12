@@ -267,7 +267,10 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref,
              has_del = 1;
              x += l;
         }
-		else if (op == BAM_CREF_SKIP) return 0; /* do nothing if there is a reference skip */
+		else if (op == BAM_CREF_SKIP) {
+             /* FIXME can't handle refskips */
+             return 0; /* do nothing if there is a reference skip */
+        }
 	}
 
 #if 0

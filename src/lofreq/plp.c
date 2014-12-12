@@ -53,6 +53,8 @@ extern const char bam_nt16_nt4_table[];
 const char *bam_nt4_rev_table = "ACGTN";
 
 
+int missing_baq_warning_printed = 0;
+
 /* from bedidx.c */
 void *bed_read(const char *fn);
 void bed_destroy(void *_h);
@@ -650,6 +652,17 @@ mplp_func(void *data, bam1_t *b)
                if (bam_prob_realn_core_ext(b, ma->ref, baq_flag, baq_ext, idaq_flag)) {
                     LOG_ERROR("bam_prob_realn_core() failed for %s\n", bam1_qname(b));
                }
+
+#if 0
+               {
+                    uint8_t *baq_aux = NULL;
+                    baq_aux = bam_aux_get(b, BAQ_TAG);
+                    if (! baq_aux) {
+                         LOG_ERROR("bam_prob_realn_core() didn't report an error but %s is missing. Can happen on refskips etc\n", BAQ_TAG);
+                    }
+
+               }
+#endif
           }
 
 #if 0
@@ -800,11 +813,14 @@ void compile_plp_col(plp_col_t *plp_col,
                baq_aux = bam_aux_get(p->b, BAQ_TAG);
                /* should have been recomputed already */
                if (! baq_aux) {
-                    LOG_FATAL("BAQ tag %s missing but BAQ was supposed to be used (at %s:%d)\n", BAQ_TAG, plp_col->target, plp_col->pos+1);
-                    LOG_FATAL("%s\n", "Please pre-process your BAM file with lofreq alnqual first");
-                    exit(1);
+                    if (! missing_baq_warning_printed) {
+                         LOG_WARN("BAQ tag %s missing but BAQ was supposed to be used (at %s:%d; can happend if refskips are encountered)\n", BAQ_TAG, plp_col->target, plp_col->pos+1);
+                         /*LOG_FATAL("%s\n", "Please pre-process your BAM file with lofreq alnqual first");*/
+                         missing_baq_warning_printed = 1;
+                    }
+               } else {
+                    baq_aux++; /* first char is type (same for bd and bi done below) */
                }
-               baq_aux++; /* first char is type (same for bd and bi done below) */
           }
 
 #if 0
@@ -866,8 +882,10 @@ void compile_plp_col(plp_col_t *plp_col,
                if (baq_aux) {
                     baq = baq_aux[p->qpos]-33;
                     PLP_COL_ADD_QUAL(& plp_col->baq_quals[nt4], baq);
+               } else if (conf->flag & MPLP_BAQ)  {
+                    /* baq was enabled but failed. set to -1 */
+                    PLP_COL_ADD_QUAL(& plp_col->baq_quals[nt4], -1);
                }
-               /* otherwise baq disabled */
 
                /* samtools check to detect Sanger max value: problem
                 * is that an MQ Phred of 255 means NA according to the
