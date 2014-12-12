@@ -635,10 +635,10 @@ int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const long int num
           return -1;
      }
      
-     for (i=0; i<num_vars; i++) {
+     for (i=0; i<num_vars-num_ign; i++) {
           if (sb_probs[i] < sb_filter->alpha) {
-               if (sb_filter->no_compound || alt_mostly_on_one_strand(vars[i])) {
-                    vcf_var_add_to_filter(vars[i], sb_filter->id);
+               if (sb_filter->no_compound || alt_mostly_on_one_strand(vars[real_idx[i]])) {
+                    vcf_var_add_to_filter(vars[real_idx[i]], sb_filter->id);
                }
           }
      }
