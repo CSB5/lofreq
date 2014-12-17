@@ -28,6 +28,7 @@
 
 #include <ctype.h>
 #include <stdio.h>
+#include <string.h>
 #include <getopt.h>
 
 #include "htslib/faidx.h"
@@ -44,7 +45,7 @@ char DINDELQ2[] = "!CCCBA;963210/----,"; /* *10 */
 typedef struct {
      samfile_t *in;
      bamFile out;
-     uint8_t defq[1000];
+     int defq;
 } tmpstruct_t_default;
 
 
@@ -63,29 +64,31 @@ typedef struct {
 
 static int default_fetch_func(bam1_t *b, void *data)
 {
+     uint8_t *to_delete;
      tmpstruct_t_default *tmp = (tmpstruct_t_default*)data;
      bam1_core_t *c = &b->core;
+     char *indelq;
 
-     uint8_t indelq[c->l_qseq+1];
 
-     memcpy(&indelq, &tmp->defq, c->l_qseq);
+     indelq = malloc((c->l_qseq+1) * sizeof(char));
+     memset(indelq, tmp->defq, c->l_qseq);
      indelq[c->l_qseq] = '\0';
 
-     uint8_t *to_delete;
      to_delete = bam_aux_get(b, "BI");
      if (to_delete) {
           bam_aux_del(b, to_delete);
      }
-     bam_aux_append(b, "BI", 'Z', c->l_qseq+1, indelq);
-
+     bam_aux_append(b, "BI", 'Z', c->l_qseq+1, (uint8_t*) indelq);
 
      to_delete = bam_aux_get(b, "BD");
      if (to_delete) {
           bam_aux_del(b, to_delete);
      }
-     bam_aux_append(b, "BD", 'Z', c->l_qseq+1, indelq);
+     bam_aux_append(b, "BD", 'Z', c->l_qseq+1, (uint8_t*) indelq);
 
      bam_write1(tmp->out, b);
+
+     free(indelq);
      return 0;
 }
 
@@ -160,7 +163,7 @@ static int dindel_fetch_func(bam1_t *b, void *data)
                for (j = 0; j < oplen; j++) {
                        /*fprintf(stderr, "query:%d, ref:%d, count:%d\n", 
                          y, x, tmp->hpcount[x+1]); */
-                    /* FIXME valgrind complaints: The left operand of '>' is a garbage value */
+                    /* FIXME clang complains: The left operand of '>' is a garbage value */
                     indelq[y] = (x > tmp->rlen-2) ? DINDELQ[0] : (tmp->hpcount[x+1]>18 ?
                          DINDELQ[0] : DINDELQ[tmp->hpcount[x+1]]);
                     x++; 
@@ -194,7 +197,6 @@ int add_uniform(const char *bam_in, const char *bam_out, const int qual)
 {
 	tmpstruct_t_default tmp;
     uint8_t q = ENCODE_Q(qual+33);
-    int i;
     bam1_t *b = NULL;
     int count = 0;
 
@@ -203,10 +205,7 @@ int add_uniform(const char *bam_in, const char *bam_out, const int qual)
          return 1;
     }
 
-    for (i = 0; i < 999; i++) {
-         tmp.defq[i] = q;
-    }
-    tmp.defq[i] = '\0';
+    tmp.defq = q;
 
     if (!bam_out || bam_out[0] == '-') {
          tmp.out = bam_dopen(fileno(stdout), "w");
@@ -375,6 +374,11 @@ int main_indelqual(int argc, char *argv[])
           bam_out = malloc(2 * sizeof(char));
           strcpy(bam_out, "-");
      }
+
+     LOG_DEBUG("uniform=%d\n", uniform);
+     LOG_DEBUG("bam_in=%s\n", bam_in);
+     LOG_DEBUG("bam_out=%s\n", bam_out);
+     LOG_DEBUG("ref=%s\n", ref);
 
      if (uniform != -1) {
           if (dindel) {
