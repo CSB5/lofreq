@@ -1,0 +1,31 @@
+- Align your reads with a good aligner. We recommend BWA-MEM. It's best to
+  add a read-group (required if GATK is used later) during the alignment
+- Recommended: For PE reads fix mate-pair information and clean BAM file
+  (Picard's FixMateInformation and CleanSam)
+(last two steps can be run with bwamem_wrapper.sh)
+
+- Recommended for Illumina data: realignment with 'lofreq viterbi'.
+
+- Mark PCR Duplicates with Picard's MarkDuplicates (Skip for high coverage amplicon data)
+- Left alignment of indels with GATK's IndelRealigner. Untested alternative: Freebayes' bamleftalign)
+- Base-quality recalibration with GATK's BaseRecalibrator (also adds indel qualities
+  in versions >= 2). FIXME note about known.vcf
+(last three steps can be run with ngs_pipeline.py)
+
+- If LoFreq is used to predict indels and if BQSR was not run (i.e. indel qualities  are missing from the BAM
+- file). Use
+  'lofreq indelqual'
+
+- Somatic:
+  -l for targeted sequencign and exomes etc (see elsewhere)
+  -d dbsnp. dbsnp matching your reference genome version. we recommend to remove
+   variants marked as somatic (zgrep SAO=[23]) and variants found in cosmic from it.
+
+- FIXME: lofreq parameters:
+  source qual
+  baq
+  indel
+  somatic
+  parallel
+ 
+

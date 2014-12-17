@@ -16,7 +16,7 @@ Download and compile samtools and htslib version >= 1.1, e.g. [samtools version
 
 Then compile LoFreq as follows:
 ```
-./configure SAMTOOLS=/path/to/samtools HTSLIB=/path/to/htslib [--prefix instdir]
+./configure SAMTOOLS=/full-path/to/samtools HTSLIB=/full-path/to/htslib [--prefix instdir]
 make install
 ```
 

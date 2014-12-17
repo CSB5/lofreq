@@ -1,0 +1,5 @@
+NC_000913       3558478 .       G       C       .       .       SB=0,DP4=0,1,2,5,CONSVAR,DP=554,AF=0.012635
+samtools tview  EAS20_8.1k-snvs-1k-indels.postprocessed.viterbi-sorted.mdups.realn.recal.bam -p NC_000913:3558478-3558478 ref/Ecoli_K12_MG1655_NC_000913.fa
+
+
+
