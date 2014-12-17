@@ -9,11 +9,15 @@ outdir=$(mktemp -d -t $(basename $0).XXXXXX)
 # See ./data/af_tests/README for expected results
 failed=0
 
+
+echowarn "Only works with AQ off"
+
+
 # del test
 bam=./data/af_tests/test_deletions.bam
 log=$outdir/del_log.txt
 vcf=$outdir/del_out.vcf
-cmd="$LOFREQ call --no-default-filter -B -f $REF -o $vcf $bam"
+cmd="$LOFREQ call --call-indels --no-default-filter -A -B -f $REF -o $vcf $bam"
 #echodebug "cmd=$cmd"
 if ! eval $cmd > $log 2>&1; then
     echoerror "LoFreq failed. Check logfile $log. Command was $cmd"
@@ -32,7 +36,7 @@ fi
 bam=./data/af_tests/test_insertion.bam
 log=$outdir/ins_log.txt
 vcf=$outdir/ins_out.vcf
-cmd="$LOFREQ call --no-default-filter -B -a 0.5 -f $REF -o $vcf $bam"
+cmd="$LOFREQ call --call-indels --no-default-filter -a 0.5 -B -A -f $REF -o $vcf $bam"
 #echodebug "cmd=$cmd"
 if ! eval $cmd > $log 2>&1; then
     echoerror "LoFreq failed. Check logfile $log. Command was $cmd"
@@ -52,6 +56,4 @@ fi
 if [ $KEEP_TMP -ne 1 ] && [ $failed -eq 0 ]; then
    test -d $outdir && rm -rf $outdir
 fi
-                    
-                    
 
