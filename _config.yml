@@ -1,0 +1,33 @@
+# Dependencies
+markdown:         redcarpet
+highlighter:      pygments
+
+# Permalinks
+permalink:        pretty
+relative_permalinks: true
+
+# Setup
+title:            LoFreq
+tagline:          'Fast and sensitive variant calling from next-gen sequencing data'
+description:      'Fast and sensitive variant calling from next-gen sequencing data'
+url:              http://csb5.github.io
+baseurl:          /lofreq
+
+author:
+  name:           'Andreas Wilm'
+  url:            https://twitter.com/mdo
+
+paginate:         5
+paginate_path:    blog/page:num
+
+# Custom vars
+hyde_version:    2.1.0
+hyde_commit:     e2a6f89
+
+#sourceforge:
+#  download:     https://sourceforge.net/p/lofreq/
+github:
+  repo:         https://github.com/CSB5/lofreq-star
+
+# exclude this from build
+exclude:	[tmp/, jekyll.README, LICENSE.md]
