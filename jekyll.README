@@ -1,0 +1,4 @@
+This is a github project-page for LoFreq
+To start a local instance run:
+$ jekyll serve --baseurl "" &
+
