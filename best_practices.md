@@ -1,6 +1,7 @@
 ---
 layout: page
 title: 'Best Practices'
+published: false
 ---
 
 # Best Practices for LoFreq-Star
