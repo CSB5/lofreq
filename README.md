@@ -1,27 +1,30 @@
 # LoFreq*: A sequence-quality aware, ultra-sensitive variant caller for high-throughput sequencing data
 
-See https://sourceforge.net/p/lofreq/wiki/LoFreq-Star/ for more info
+See http://csb5.github.io/lofreq/ for more info.
 
-## Installing/Compiling a repository clone
+## Building the source
 
-After cloning the repository, run `bootstrap`, which will set up things such
-that you can use `./configure`
+To build the LoFreq source you will need
 
-After that you can proceed as in 'Installing/Compiling the source distribution'
+- a C compiler (e.g. gcc or clang)
+- a Python 2.7 interpreter
+- zlib developer files
+- a compiled version of samtools (>=1.1) and htslib version >= 1.1
+  (Note, [samtools 1.1](http://sourceforge.net/projects/samtools/files/samtools/1.1/samtools-1.1.tar.bz2/download)
+  already contains htslib 1.1)
 
-## Installing/Compiling the source distribution
+Then, 
 
-Download and compile samtools and htslib version >= 1.1, e.g. [samtools version
-1.1 (which also contains htslib)](http://sourceforge.net/projects/samtools/files/samtools/1.1/samtools-1.1.tar.bz2/download)
+- either clone the source or download the current master as zip and unpack
+- run `./bootstrap`
+- If you get an error like this `configure.ac:72: error: required file './ltmain.sh' not found`,  run libtoolize (or glibtoolize) first and then `bootstrap` again
+- `./configure SAMTOOLS=/path-to-samtools HTSLIB=/path-to-htslib [--prefix=custom-path]`
+- `make`
+- You can already start using lofreq at this stage: see `./bin/lofreq` for help
+- To install the package properly type: `make install`.  After that simply type `lofreq` to get more help
+- Depending on the used prefix you might need to adjust your PATH (and PYTHONPATH).
 
-Then compile LoFreq as follows:
-```
-./configure SAMTOOLS=/full-path/to/samtools HTSLIB=/full-path/to/htslib [--prefix instdir]
-make install
-```
 
-Depending on the used prefix you might need to adjust your PATH (and PYTHONPATH).
 
-After that simply type `lofreq` to get more help
 
 
