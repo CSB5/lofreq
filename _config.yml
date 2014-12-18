@@ -10,7 +10,7 @@ relative_permalinks: true
 title:            LoFreq
 tagline:          'Fast and sensitive variant calling from next-gen sequencing data'
 description:      'Fast and sensitive variant calling from next-gen sequencing data'
-url:              http://csb5.github.io
+#url:              http://csb5.github.io
 baseurl:          /lofreq
 
 author:
@@ -30,4 +30,5 @@ github:
   repo:         https://github.com/CSB5/lofreq-star
 
 # exclude this from build
-exclude:	[tmp/, jekyll.README, LICENSE.md]
+exclude:	[tmp/, jekyll.README, LICENSE.md,
+            Makefile Makefile.in aclocal.m4 autom4te.cache/ compile config.guess config.status config.sub configure depcomp install-sh libtool ltmain.sh m4/ missing src/]
