@@ -1,6 +1,8 @@
-# LoFreq*: A sequence-quality aware, ultra-sensitive variant caller for high-throughput sequencing data
+# LoFreq*: A sequence-quality aware, ultra-sensitive variant caller for NGS data
 
-See http://csb5.github.io/lofreq/ for more info.
+Note, most users will want to use the binary or source-code packages which distributed via [LoFreq's
+Sourceforge site](https://sourceforge.net/projects/lofreq/files/).
+
 
 ## Building the source
 
@@ -21,10 +23,15 @@ Then,
 - `./configure SAMTOOLS=/path-to-samtools HTSLIB=/path-to-htslib [--prefix=custom-path]`
 - `make`
 - You can already start using lofreq at this stage: see `./bin/lofreq` for help
-- To install the package properly type: `make install`.  After that simply type `lofreq` to get more help
+- To install the package properly type: `make install`.
 - Depending on the used prefix you might need to adjust your PATH (and PYTHONPATH).
 
 
+## Using LoFreq
+
+Simply type `lofreq` to get help.
+
+See http://csb5.github.io/lofreq/ for full documentation.
 
 
 
