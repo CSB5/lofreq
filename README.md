@@ -1,37 +1,41 @@
 # LoFreq*: A sequence-quality aware, ultra-sensitive variant caller for NGS data
 
-Note, most users will want to use the binary or source-code packages which distributed via [LoFreq's
-Sourceforge site](https://sourceforge.net/projects/lofreq/files/).
+## Note
 
+Most users will want to use either the binary or the
+source-code package which is distributed via [LoFreq's
+Sourceforge site](https://sourceforge.net/projects/lofreq/files/).
+The source hosted here on github is mainly for developers.
 
 ## Building the source
 
 To build the LoFreq source you will need
 
-- a C compiler (e.g. gcc or clang)
+- a C compiler (we used gcc and clang routinely)
 - a Python 2.7 interpreter
 - zlib developer files
-- a compiled version of samtools (>=1.1) and htslib version >= 1.1
-  (Note, [samtools 1.1](http://sourceforge.net/projects/samtools/files/samtools/1.1/samtools-1.1.tar.bz2/download)
-  already contains htslib 1.1)
+- a compiled version of samtools (>=1.1)
+- a compiled version of htslib (>= 1.1; usually part of the above; see
+- e.g. [here](http://sourceforge.net/projects/samtools/files/samtools/1.1/samtools-1.1.tar.bz2/download)
 
 Then, 
 
-- either clone the source or download the current master as zip and unpack
-- run `./bootstrap`
-- If you get an error like this `configure.ac:72: error: required file './ltmain.sh' not found`,  run libtoolize (or glibtoolize) first and then `bootstrap` again
-- `./configure SAMTOOLS=/path-to-samtools HTSLIB=/path-to-htslib [--prefix=custom-path]`
-- `make`
-- You can already start using lofreq at this stage: see `./bin/lofreq` for help
-- To install the package properly type: `make install`.
+- either clone the repot or download the current master as zip packageand unpack
+- run `./bootstrap` which will set up the required automake files
+  - If you get an error like this `configure.ac:72: error: required file './ltmain.sh' not found`,  run libtoolize (or glibtoolize) first and then `bootstrap` again
+- Run `./configure` with the **absolute** path to samtools and htslib: `./configure SAMTOOLS=/path-to-samtools HTSLIB=/path-to-htslib [--prefix=custom-path]`
+- Run `make`
+- At this point you can already start using lofreq: see `./bin/lofreq` for help
+- To properly install the package type: `make install`.
 - Depending on the used prefix you might need to adjust your PATH (and PYTHONPATH).
 
 
 ## Using LoFreq
 
-Simply type `lofreq` to get help.
-
 See http://csb5.github.io/lofreq/ for full documentation.
+
+On the command line simply type `lofreq` to get help.
+
 
 
 
