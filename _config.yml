@@ -34,5 +34,5 @@ paginate_path:    blog/page:num
 #  repo:         https://github.com/CSB5/lofreq
 
 # exclude this from build
-exclude:	[tmp/, jekyll.README, FIXME, LICENSE.md, 
-            Makefile, Makefile.in, aclocal.m4, autom4te.cache/, compile, config.guess, config.status, config.sub, configure, depcomp, install-sh, libtool, ltmain.sh, m4/, missing, src/]
+exclude:	[tmp/, jekyll.README, FIXME, LICENSE.md, .gitignore,
+	         Makefile, Makefile.in, aclocal.m4, autom4te.cache/, compile, config.guess, config.log, config.status, config.sub, configure, depcomp, install-sh, libtool, ltmain.sh, m4/, missing, src/]

@@ -43,7 +43,7 @@ If you don't have admin rights or want to install LoFreq to a non-standard direc
     bash binary_installer.sh --prefix $HOME/local/
 
 and follow the instruction given below under
-[Installation to a non-standard directory]({{page.url}}index.html#prefix).
+[Installation to a non-standard directory](#prefix).
 
 # Installation from Source
 
@@ -68,7 +68,7 @@ admin rights, use the following to compile and install LoFreq:
 If you don't have admin rights or want to install LoFreq to a
 non-standard directory use the `--prefix` argument, e.g. In that case
 you will also have to follow the instruction given below under
-[Installation to a non-standard directory]({{page.url}}index.html#prefix).
+[Installation to a non-standard directory](#prefix).
 
 Note, you will need to give the absolute path to samtools and htslib,
 not a relative one.
@@ -91,7 +91,7 @@ Now you can proceed as described above with `configure`, `make` and `make instal
 
 
  
-# <a name="#prefix">Installation to a non-standard directory</a>
+# <a name="prefix">Installation to a non-standard directory</a>
 
 If you installed LoFreq to a non-system directory (e.g. your
 home-directory), you will have to make sure that the corresponding

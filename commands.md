@@ -6,14 +6,14 @@ title: Commands
 # [Basics](#basics)
 
 LoFreq comes with a variety of subcommands. By just typing `lofreq`
-you will get a [list of available commands]({{page.url}}index.html#cmdlist). The two most
+you will get a [list of available commands](#cmdlist). The two most
 important ones are
 
-- `lofreq call`: simply call variants ([see documentation]({{page.url}}index.html#call))
+- `lofreq call`: simply call variants ([see documentation](#call))
 
 and
 
-- `lofreq somatic`: call somatic variants  ([see documentation]({{page.url}}index.html#somatic))
+- `lofreq somatic`: call somatic variants  ([see documentation](#somatic))
 
 Calling lofreq with one of these subcommands and without further
 arguments will display  corresponding usage information.
