@@ -32,9 +32,9 @@ most systems).
 
 ### Binary packages of versions before 2.1
 
-Binary packages before 2.1 used another way installation. There,
-you would `cd` to the newly created directory and (assuming you have
-admin rights) use the following to install LoFreq:
+Binary packages before 2.1 were installed differently: `cd` to the
+unpacked directory and (assuming you have admin rights) use the
+following to install LoFreq:
 
     bash binary_installer.sh 
 
@@ -42,7 +42,8 @@ If you don't have admin rights or want to install LoFreq to a non-standard direc
 
     bash binary_installer.sh --prefix $HOME/local/
 
-and follow the instruction given below under "Installation to a non-standard directory"
+and follow the instruction given below under
+[Installation to a non-standard directory]({{page.url}}index.html#prefix).
 
 # Installation from Source
 
@@ -64,8 +65,10 @@ admin rights, use the following to compile and install LoFreq:
     ./configure SAMTOOLS=/path-to-samtools HTSLIB=/path-to-htslib
     make install
 
-If you don't have admin rights or want to install LoFreq to a non-standard directory use the `--prefix` argument, e.g.
-In that case you will also have to follow the instruction given below under "Installation to a non-standard directory"
+If you don't have admin rights or want to install LoFreq to a
+non-standard directory use the `--prefix` argument, e.g. In that case
+you will also have to follow the instruction given below under
+[Installation to a non-standard directory]({{page.url}}index.html#prefix).
 
 Note, you will need to give the absolute path to samtools and htslib,
 not a relative one.
@@ -87,9 +90,8 @@ run libtoolize (or glibtoolize) first and then `bootstrap` again
 Now you can proceed as described above with `configure`, `make` and `make install`.
 
 
- Source
  
-# Installation to a non-standard directory
+# <a name="#prefix">Installation to a non-standard directory</a>
 
 If you installed LoFreq to a non-system directory (e.g. your
 home-directory), you will have to make sure that the corresponding
@@ -97,7 +99,7 @@ installation sub-directory is part of your `PATH` environment
 variable. If you also want to use the non-essential Python tools that
 come with LoFreq, please make sure to add the corresponding
 installation sub-directory to your `PYTHONPATH`. For example, for the
-prefix setting mentioned above ($HOME/local/), you would need the
+prefix setting mentioned above (i.e. `$HOME/local/`), you would need the
 following:
 
     export PATH=$HOME/local/bin/
