@@ -1,4 +1,4 @@
-# LoFreq*: A sequence-quality aware, ultra-sensitive variant caller for NGS data
+        # LoFreq*: A sequence-quality aware, ultra-sensitive variant caller for NGS data
 
 ## Note
 
