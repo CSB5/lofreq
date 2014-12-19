@@ -5,7 +5,6 @@ Licenses for third party software that is part of the source:
 - uthash (see src/uthash/LICENSE)
 
 Licenses external libraries (part of the statically compiled binary):
-- zlib (see src/zlib.LICENSE)
 - samtools (see src/samtools-1.1.LICENSE)
 - htslib (see src/htslib-1.1.LICENSE)
 
