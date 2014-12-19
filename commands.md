@@ -24,7 +24,7 @@ A few things to note:
   [GATK's best practice protocol](http://www.broadinstitute.org/gatk/guide/best-practices),
   i.e. that you mark duplicates, realign indels and recalibrate base
   qualities with GATK.
-- If you are working with exome data or targeted resequencing, don't
+- If you are working with exome or targeted resequencing data, don't
   forget to use the corresponding bed-file with `-l region.bed`
   (otherwise the automatically applied Bonferroni correction will
   reduce your sensitivity)
@@ -55,7 +55,7 @@ list (note, this requires special preprocessing of your data).
 
 <!-- FIXME preprocessing needs separate article-->
 
-If you want to make use of multiple processing use `lofreq
+If you want to make use of multiple processors use `lofreq
 call-parallel` instead of `lofreq call` and add `--pp-threads
 THREADS`, where `THREADS` is the number of threads you want to use.
 All other parameters stay the same, e.g.:
@@ -64,7 +64,7 @@ All other parameters stay the same, e.g.:
 
 
 If you are dealing with human samples (or large genomes  in general) we
-recommend the use if `-s` (source quality) in combination with `-S
+recommend the use of `-s` (source quality) in combination with `-S
 dbsnp.vcf.gz` (make sure the dbsnp version matches your reference version) to get rid of
 some mapping problems. Source quality is automatically enabled by default in the
 somatic SNV calling subcommand.
@@ -109,7 +109,7 @@ The main command for calling variants.
 
 ##### `call-parallel`: Call variants in parallel
 
-A wrapper around the `call` command that executes several instances of
+A wrapper for the `call` command that executes several instances of
 `lofreq` (use `--pp-threads` to specify number of threads to use).
 
 ##### `somatic` : Call somatic variants

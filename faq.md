@@ -79,7 +79,7 @@ cases as well (see above).
 ### Cryptic error messages: `call-parallel` fails
 
 `call-parallel` is really just a wrapper to `lofreq call`.
-This is easiest to debug it is to run `lodreq call`
+This is easiest to debug it is to run `lofreq call`
 first with the same parameters, check the error message and fix the
 parameter choice. Then execute `call-parallel` again with fixed
 parameters.
