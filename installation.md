@@ -12,7 +12,7 @@ specific instructions for each of the above listed options.
 # Installation from Binary Packages
 
 Download the binary LoFreq distribution matching your system
-[from the Files/Download section](https://sourceforge.net/projects/lofreq/files/)
+[from the Files/Download section]({{ site.sourceforge.download }})
 on sourceforge and unpack it. LoFreq can then simply be called with
 `./lofreq_star-2.1.0/bin/lofreq` (assuming you downloaded
 version 2.1.0).
@@ -58,7 +58,7 @@ To build the LoFreq source you will need
   already contains htslib 1.1)
 
 If those requirements are met, download LoFreq's source package
-[from the Files/Download section](https://sourceforge.net/projects/lofreq/files/),
+[from the Files/Download section]({{ site.sourceforge.download }}),
 unpack it and `cd` to the newly created directory. Assuming you have
 admin rights, use the following to compile and install LoFreq:
 
@@ -75,12 +75,12 @@ not a relative one.
 
 ### Installation from Github
 
-
-If you downloaded the source from Github instead of using a source
+If you downloaded [Lofreq's source from Github]({{ site.github.repo }}) instead of using a source
 package, you will need to do the following (once) before proceeding with the
 instructions above:
 
-- Either clone the source of download the current master as zip and
+- Either clone [the repository]({{ site.github.repo }}) or download the 
+  [current master as zip]({{ site.github.repo }}/archive/master.zip) and
   unpack
 - run `./bootstrap`
 - If you get an error like this `configure.ac:72: error: required file

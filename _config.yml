@@ -28,10 +28,10 @@ paginate_path:    blog/page:num
 #hyde_version:    2.1.0
 #hyde_commit:     e2a6f89
 
-#sourceforge:
-#  download:     https://sourceforge.net/p/lofreq/
-#github:
-#  repo:         https://github.com/CSB5/lofreq
+sourceforge:
+  download:     https://sourceforge.net/projects/lofreq/files/
+github:
+  repo:         https://github.com/CSB5/lofreq
 
 # exclude this from build
 exclude:	[tmp/, jekyll.README, FIXME, LICENSE.md, .gitignore,
