@@ -1,4 +1,4 @@
-        # LoFreq*: A sequence-quality aware, ultra-sensitive variant caller for NGS data
+# LoFreq*: A sequence-quality aware, ultra-sensitive variant caller for NGS data
 
 ## Note
 
@@ -16,7 +16,7 @@ To build the LoFreq source you will need
 - zlib developer files
 - a compiled version of samtools (>=1.1)
 - a compiled version of htslib (>= 1.1; usually part of the above; see
-- e.g. [here](http://sourceforge.net/projects/samtools/files/samtools/1.1/samtools-1.1.tar.bz2/download)
+ e.g. [here](http://sourceforge.net/projects/samtools/files/samtools/1.1/samtools-1.1.tar.bz2/download)
 
 Then, 
 
