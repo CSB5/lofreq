@@ -562,8 +562,8 @@ int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const long int num
 {
      double *sb_probs = NULL;
      long int i;
-     int num_ign = 0;
-     long int *real_idx;/* we might ignore some variants (missing values etc). keep track of real indices of kept vars */
+     long int num_ign = 0;
+     long int *real_idx = NULL;/* we might ignore some variants (missing values etc). keep track of real indices of kept vars */
 
      
      /* collect values from vars kept in mem
@@ -576,7 +576,7 @@ int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const long int num
      for (i=0; i<num_vars; i++) {
           char *sb_char = NULL;
           
-          /* count indels if sb filter is not too be applied */
+          /* ignore indels too if sb filter is not to be applied */
           if (! sb_filter->incl_indels && vcf_var_is_indel(vars[i])) {
                num_ign += 1;
                continue;
@@ -593,10 +593,21 @@ int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const long int num
 
           sb_probs[i-num_ign] = PHREDQUAL_TO_PROB(atoi(sb_char));
           real_idx[i-num_ign] = i;
+          /*LOG_FIXME("real_idx[i=%ld - num_ign=%ld = %ld] = i=%ld\n", i, num_ign, i-num_ign, i);*/
           free(sb_char);
      }
+     if (num_vars-num_ign <= 0) {
+          free(sb_probs);
+          free(real_idx);
+          return 0;
+     }
+
+
+     /* realloc to smaller size apparently not guaranteed to free up space so no point really but let's make sure we don't use that memory */
      sb_probs = realloc(sb_probs, (num_vars-num_ign) * sizeof(double));
+     if (! sb_probs) { LOG_FATAL("realloc failed. Exiting..."); return -1; }
      real_idx = realloc(real_idx, (num_vars-num_ign) * sizeof(long int));
+     if (! real_idx) { LOG_FATAL("realloc failed. Exiting..."); return -1; }
 
      if (! sb_filter->ntests) {
           sb_filter->ntests = num_vars - num_ign;
@@ -626,7 +637,7 @@ int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const long int num
                         &idx_rej);
           for (i=0; i<num_rej; i++) {
                long int idx = idx_rej[i];
-               sb_probs[real_idx[idx]] = -1;
+               sb_probs[idx] = -1;
           }
           free(idx_rej);
           
