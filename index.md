@@ -40,3 +40,29 @@ Hibberd and Niranjan Nagarajan.
 [LoFreq: A sequence-quality aware, ultra-sensitive variant caller for uncovering cell-population heterogeneity from high-throughput sequencing datasets.](http://www.ncbi.nlm.nih.gov/pubmed/23066108)
 _Nucleic Acids Res._ 2012; 40(22):11189-201.
 
+---
+
+<!-- show latest post only: -->
+<!-- http://stackoverflow.com/questions/17890493/how-can-i-show-just-the-most-recent-post-on-my-home-page-with-jekyll -->
+
+# Latest Blog Post:
+
+<div class="posts">
+{% for post in site.posts limit:1 %}
+
+  <div class="post">
+    <h2 class="post-title">
+      <a href="{{ post.url }}">
+        {{ post.title }}
+      </a>
+    </h1>
+
+    <span class="post-date">{{ post.date | date_to_string }}</span>
+
+    {{ post.content }}
+  </div>
+
+{% endfor %}
+</div>
+
+### <a href="{{ site.baseurl }}/blog/">Click here to read all blog entries</a>
