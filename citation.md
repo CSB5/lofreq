@@ -14,10 +14,11 @@ If you use LoFreq, please cite the following paper:
 - LoFreq has been used in a number of studies. See this
   [full list of publications citing LoFreq](http://scholar.google.com.sg/scholar?oi=bibs&hl=en&cites=12020456701536684432)
   (via Google Scholar).
-- [Pacific Biosciences' minor variants calling protocol](http://files.pacb.com/Training/SMRTAnalysisv22Overview/story.html) is based on LoFreq
+- [Pacific Biosciences' minor variants calling protocol](https://github.com/PacificBiosciences/Bioinformatics-Training/wiki/Minor-Variants-and-Phasing-Analysis) is based on LoFreq
 - LoFreq was covered in a [Featured Research of Science Daily](http://www.sciencedaily.com/releases/2013/03/130307145744.htm)
 and also in an
 [A-Star press release](http://www.research.a-star.edu.sg/research/6661).
 
+<!-- LoFreq on PacBio also here: http://files.pacb.com/Training/SMRTAnalysisv22Overview/story.html -->
 
 

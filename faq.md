@@ -106,3 +106,8 @@ In theory LoFreq doesn't have a minimum (or maximum coverage). The
 maximum is restricted by runtime (it gets slow for a coverage of a
 million and above). However, at very low coverages sampling biases can
 happen which is why we set a minimum coverage of 10 by default.
+
+
+### What about Rock 'n' Roll?
+
+[LoFreq rocks](http://www.last.fm/music/Lofreq) and there are [variants](http://www.last.fm/music/Lo+Freq).
