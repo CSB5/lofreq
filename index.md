@@ -33,12 +33,8 @@ Dengue genome sequencing data with nearly 4000X coverage, roughly one
 hour to call SNVs on a 600X coverage *E.coli* genome and also roughly
 an hour to run on a 100X coverage human exome dataset.
 
-For more details on the original version of LoFreq see: Andreas Wilm,
-Pauline Poh Kim Aw, Denis Bertrand, Grace Hui Ting Yeo, Swee Hoe Ong,
-Chang Hua Wong, Chiea Chuen Khor, Rosemary Petric, Martin Lloyd
-Hibberd and Niranjan Nagarajan.
-[LoFreq: A sequence-quality aware, ultra-sensitive variant caller for uncovering cell-population heterogeneity from high-throughput sequencing datasets.](http://www.ncbi.nlm.nih.gov/pubmed/23066108)
-_Nucleic Acids Res._ 2012; 40(22):11189-201.
+For more details on the original version of LoFreq see
+[Wilm *et al.* (2012)](http://www.ncbi.nlm.nih.gov/pubmed/23066108).
 
 ---
 

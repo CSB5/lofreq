@@ -7,7 +7,7 @@ title: Citation and Citations
 
 If you use LoFreq, please cite the following paper:
 
-[Wilm et a. LoFreq: A sequence-quality aware, ultra-sensitive variant caller for uncovering cell-population heterogeneity from high-throughput sequencing datasets. _Nucleic Acids Res._ 2012; 40(22):11189-201.](http://www.ncbi.nlm.nih.gov/pubmed/23066108)
+[Wilm *et al.* LoFreq: A sequence-quality aware, ultra-sensitive variant caller for uncovering cell-population heterogeneity from high-throughput sequencing datasets. _Nucleic Acids Res._ 2012; 40(22):11189-201.](http://www.ncbi.nlm.nih.gov/pubmed/23066108)
 
 ## LoFreq in action, media mentions etc.
 

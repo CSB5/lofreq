@@ -1,5 +1,5 @@
-- discuss paper citing LoFreq
+- discuss papers citing LoFreq include quotes
 - Have a section on preprocessing/best-practices (see disabled best_practices.md)
 - Have a section on Pacbio, Illumina, IonTorrent
 - Have a section on Somatic
-- Documentation of subcommands
+

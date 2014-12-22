@@ -21,7 +21,6 @@ title: Blog
 
 <div class="pagination">
   {% if paginator.next_page %}
-      <!-- FIXME get rid of hardcoded path to "blog" -->
     <a class="pagination-item older" href="{{ site.baseurl }}/blog/page{{paginator.next_page}}">Older</a>
   {% else %}
     <span class="pagination-item older">Older</span>
@@ -30,7 +29,6 @@ title: Blog
     {% if paginator.page == 2 %}
       <a class="pagination-item newer" href="{{ site.baseurl }}">Newer</a>
     {% else %}
-      <!-- FIXME get rid of hardcoded path to "blog" -->
       <a class="pagination-item newer" href="{{ site.baseurl }}/blog/page{{paginator.previous_page}}">Newer</a>
     {% endif %}
   {% else %}
