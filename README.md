@@ -1,11 +1,18 @@
 # LoFreq*: A sequence-quality aware, ultra-sensitive variant caller for NGS data
 
+
+
 ## Note
 
 Most users will want to use either the binary or the
 source-code package which is distributed via [LoFreq's
 Sourceforge site](https://sourceforge.net/projects/lofreq/files/).
 The source hosted here on github is mainly for developers.
+
+## Status
+
+[![Build Status](https://travis-ci.org/CSB5/lofreq.svg?branch=master)](https://travis-ci.org/CSB5/lofreq)
+
 
 ## Building the source
 
