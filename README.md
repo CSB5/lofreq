@@ -11,7 +11,11 @@ The source hosted here on github is mainly for developers!
 
 
 
-## Building the Source [![Build Status](https://travis-ci.org/CSB5/lofreq.svg?branch=master)](https://travis-ci.org/CSB5/lofreq)
+## Building the Source
+
+### Current Build Status
+
+[![Build Status](https://travis-ci.org/CSB5/lofreq.svg?branch=master)](https://travis-ci.org/CSB5/lofreq)
 
 ### Prerequisites
 
@@ -24,7 +28,7 @@ You will need:
 - a compiled version of htslib (>= 1.1; usually part of the above; see
  e.g. [here](http://sourceforge.net/projects/samtools/files/samtools/1.1/samtools-1.1.tar.bz2/download))
 
-### Building
+### Compilation
 
 - Clone the repo (or download the current master as zip package and unpack)
 - Run `./bootstrap` to set up the required automake files
@@ -44,10 +48,10 @@ You will need:
 
 ## Documentation
 
-Simply calling `lofreq` on the command line will display a list of
-subcommands. `lofreq cmd` will then display help for `cmd`.
-
-See http://csb5.github.io/lofreq/ for full documentation.
+- Simply calling `lofreq` on the command line will display a list of
+subcommands.
+- `lofreq cmd` will then display help for `cmd`.
+- See [LoFreq's website](http://csb5.github.io/lofreq/) for full documentation.
 
 
 
