@@ -5,9 +5,9 @@ compiler:
 # Change this to your needs
 # Change this to your needs
 before_script:
-  - wget 'http://downloads.sourceforge.net/project/samtools/samtools/1.1/samtools-1.1.tar.bz2?r=http%3A%2F%2Fcsb5.github.io%2Flofreq%2Finstallation%2F&ts=1419230064&use_mirror=softlayer-sng'
-  - tar xvfj samtools-1.1.tar.bz2
+  - wget 'http://downloads.sourceforge.net/project/samtools/samtools/1.1/samtools-1.1.tar.bz2' -O /tmp/samtools-1.1.tar.bz2
+  - tar -xjf /tmp/samtools-1.1.tar.bz2
   - cd samtools-1.1/
   - make
   - cd ..
-script: ./configure SAMTOOLS=${TRAVIS_BUILD_DIR}/samtools-1.1/ HTSLIB=${TRAVIS_BUILD_DIR}/samtools-1.1/htslib-1.1/ && make
+script: ./configure SAMTOOLS=$(PWD)/samtools-1.1/ HTSLIB=${TRAVIS_BUILD_DIR}/samtools-1.1/htslib-1.1/ && make
