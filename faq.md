@@ -3,6 +3,9 @@ layout: page
 title: FAQ
 ---
 
+### What is LoFreq's software license?
+
+LoFreq's source code is released under [the MIT license](http://opensource.org/licenses/MIT).
 
 
 ### Do I need to filter LoFreq predictions?
