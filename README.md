@@ -54,6 +54,8 @@ subcommands.
 - See [LoFreq's website](http://csb5.github.io/lofreq/) for full documentation.
 
 
+## License
 
+LoFreq is published under The MIT License (MIT).
 
 
