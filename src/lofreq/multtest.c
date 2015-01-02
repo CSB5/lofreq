@@ -37,7 +37,9 @@
 /* lofreq includes */
 #include "utils.h"
 #include "multtest.h"
-
+#ifdef MULTTEST_TEST
+#include "time.h"
+#endif
 
 
 typedef struct {
@@ -212,8 +214,9 @@ mtc_str(char *buf, int mtc_type) {
 }
 
 
-/*
-R:
+/* stand alone test
+
+# R results as reference:
 > p = c(2.354054e-07,2.101590e-05,2.576842e-05,9.814783e-05,1.052610e-04,1.241481e-04,1.325988e-04,1.568503e-04,2.254557e-04,3.795380e-04,6.114943e-04,1.613954e-03,3.302430e-03,3.538342e-03,5.236997e-03,6.831909e-03,7.059226e-03,8.805129e-03,9.401040e-03,1.129798e-02,2.115017e-02,4.922736e-02,6.053298e-02,6.262239e-02,7.395153e-02,8.281103e-02,8.633331e-02,1.190654e-01,1.890796e-01,2.058494e-01,2.209214e-01,2.856000e-01,3.048895e-01,4.660682e-01,4.830809e-01,4.921755e-01,5.319453e-01,5.751550e-01,5.783195e-01,6.185894e-01,6.363620e-01,6.448587e-01,6.558414e-01,6.885884e-01,7.189864e-01,8.179539e-01,8.274487e-01,8.971300e-01,9.118680e-01,9.437890e-01)
 > sum(p < 0.05)
 [1] 22
@@ -226,8 +229,9 @@ R:
 sum(p.adjust(p, "BH", 10000) < 1)
 [1] 11
 
+# Results from standalone binary:
 ps="2.354054e-07 2.101590e-05 2.576842e-05 9.814783e-05 1.052610e-04  1.241481e-04 1.325988e-04 1.568503e-04 2.254557e-04 3.795380e-04 6.114943e-04 1.613954e-03 3.302430e-03 3.538342e-03 5.236997e-03 6.831909e-03 7.059226e-03 8.805129e-03 9.401040e-03 1.129798e-02 2.115017e-02 4.922736e-02 6.053298e-02 6.262239e-02 7.395153e-02 8.281103e-02 8.633331e-02 1.190654e-01 1.890796e-01 2.058494e-01 2.209214e-01 2.856000e-01 3.048895e-01 4.660682e-01 4.830809e-01 4.921755e-01 5.319453e-01 5.751550e-01 5.783195e-01 6.185894e-01 6.363620e-01 6.448587e-01 6.558414e-01 6.885884e-01 7.189864e-01 8.179539e-01 8.274487e-01 8.971300e-01 9.118680e-01 9.437890e-01"
-$./multtest 50 0.05 $psntests=50
+$./multtest 50 0.05 $ps
  20 rejected with alpha 0.050000 and 50 tests
 $ ./multtest 1000 0.05 $ps
  10 rejected with alpha 0.050000 and 1000 tests
@@ -237,9 +241,9 @@ $ ./multtest 10000 1 $ps
  11 rejected with alpha 1.000000 and 10000 tests
 
 
- gcc -o multtest multtest.c utils.c log.c -ansi -Wall -DMULTTEST_MAIN 
+ gcc -o multtest multtest.c utils.c log.c -ansi -Wall -DMULTTEST_STANDALONE -I../uthash/
 */
-#ifdef MULTTEST_MAIN2
+#ifdef MULTTEST_STANDALONE
 int main(int argc, char *argv[])
 {
      int i;
@@ -288,12 +292,193 @@ int main(int argc, char *argv[])
 }
 #endif
 
-/* gcc -o multtest multtest.c utils.c log.c -ansi -Wall -DMULTTEST_MAIN */
-#ifdef MULTTEST_MAIN
-int main()
+
+/* gcc -o multtest multtest.c utils.c log.c -ansi -Wall -DMULTTEST_TEST */
+#ifdef MULTTEST_TEST
+
+
+/* http://stackoverflow.com/questions/6127503/shuffle-array-in-c
+ * answer by John Leehey
+ *
+ * arrange the N elements of ARRAY in random order.
+ * Only effective if N is much smaller than RAND_MAX;
+ * if this may not be the case, use a better random
+ * number generator. */
+#define NELEMS(x)  (sizeof(x) / sizeof(x[0]))
+static void shuffle(void *array, size_t n, size_t size) {
+    char tmp[size];
+    char *arr = array;
+    size_t stride = size * sizeof(char);
+
+    if (n > 1) {
+        size_t i;
+        for (i = 0; i < n - 1; ++i) {
+            size_t rnd = (size_t) rand();
+            size_t j = i + rnd / (RAND_MAX / (n - i) + 1);
+
+            memcpy(tmp, arr + j * stride, size);
+            memcpy(arr + j * stride, arr + i * stride, size);
+            memcpy(arr + i * stride, tmp, size);
+        }
+    }
+}
+
+int main(int argc, char *argv[])
 {
      int i;
      int ntests;
+     srand(time(NULL));
+
+
+     {
+          double data[] = {0.000001, 0.008, 0.039, 0.041, 0.042, 0.06, 0.074, 0.205, 0.212, 0.216, 0.222, 0.251, 0.269, 0.275, 0.34, 0.341, 0.384, 0.569, 0.594, 0.696, 0.762, 0.94, 0.942, 0.975, 0.986};
+          int data_len = 25;
+          float alpha = 0.25;
+          int num_tests = data_len;
+          long int* irejected;/* indices of rejected i.e. significant values */
+          int nrejected;
+          int exp_sig = 5;
+
+          /* FIXME use also for bonferroni */
+          printf("*** FDR test with data from http://www.biostathandbook.com/multiplecomparisons.html\n\n");
+
+          nrejected = fdr(data, data_len, alpha, num_tests, &irejected);
+          printf ("original:\t");
+          if (nrejected) {
+               for (i = 0; i < nrejected; i++) {
+                    printf("%f, ", data[irejected[i]]);
+               }
+          } else {
+               printf("None");
+          }
+          printf ("\n");
+                     
+          if (nrejected==exp_sig) {/* FIXME should also test values */
+               printf("PASS\n\n");
+          } else {
+               printf("FAIL\n\n");
+               exit(1);
+          }
+          free(irejected);
+
+
+
+          int cap = 10;
+          printf ("capped to %d:\t", cap);
+          nrejected = fdr(data, cap, alpha, num_tests, &irejected);
+          if (nrejected) {
+               for (i = 0; i < nrejected; i++) {
+                    printf("%f, ", data[irejected[i]]);
+               }
+          } else {
+               printf("None");
+          }
+          printf ("\n");
+                     
+          if (nrejected==exp_sig) {/* FIXME should also test values */
+               printf("PASS\n\n");
+          } else {
+               printf("FAIL\n\n");
+               exit(1);
+          }
+          free(irejected);
+
+
+          printf ("shuffled:\t");
+          shuffle(data, NELEMS(data), sizeof(data[0]));
+          nrejected = fdr(data, data_len, alpha, num_tests, &irejected);
+          if (nrejected) {
+               for (i = 0; i < nrejected; i++) {
+                    printf("%f, ", data[irejected[i]]);
+               }
+          } else {
+               printf("None");
+          }
+          printf ("\n");
+                     
+          if (nrejected==exp_sig) {/* FIXME should also test values */
+               printf("PASS\n\n");
+          } else {
+               printf("FAIL\n\n");
+               exit(1);
+          }
+          free(irejected);
+     }
+
+     {
+          double data[] = {0.010,  0.013, 0.014, 0.190, 0.350, 0.500, 0.630, 0.670, 0.750, 0.810};
+          int data_len = 10;
+          float alpha = 0.05;
+          int num_tests = data_len;
+          long int* irejected;/* indices of rejected i.e. significant values */
+          int nrejected;
+          int exp_sig = 3;
+
+          printf("*** FDR test with data from http://www.unc.edu/courses/2007spring/biol/145/001/docs/lectures/Nov12.html\n\n");
+
+          nrejected = fdr(data, data_len, alpha, num_tests, &irejected);
+          printf ("original:\t");
+          if (nrejected) {
+               for (i = 0; i < nrejected; i++) {
+                    printf("%f, ", data[irejected[i]]);
+               }
+          } else {
+               printf("None");
+          }
+          printf ("\n");
+                     
+          if (nrejected==exp_sig) {/* FIXME should also test values */
+               printf("PASS\n\n");
+          } else {
+               printf("FAIL\n\n");
+               exit(1);
+          }
+          free(irejected);   
+
+
+          int cap = 10;
+          printf ("capped to %d:\t", cap);
+          nrejected = fdr(data, cap, alpha, num_tests, &irejected);
+          if (nrejected) {
+               for (i = 0; i < nrejected; i++) {
+                    printf("%f, ", data[irejected[i]]);
+               }
+          } else {
+               printf("None");
+          }
+          printf ("\n");
+                     
+          if (nrejected==exp_sig) {/* FIXME should also test values */
+               printf("PASS\n\n");
+          } else {
+               printf("FAIL\n\n");
+          }
+          free(irejected);   
+
+          printf ("shuffled:\t");
+          shuffle(data, NELEMS(data), sizeof(data[0]));
+          nrejected = fdr(data, data_len, alpha, num_tests, &irejected);
+          if (nrejected) {
+               for (i = 0; i < nrejected; i++) {
+                    printf("%f, ", data[irejected[i]]);
+               }
+          } else {
+               printf("None");
+          }
+          printf ("\n");
+                     
+          if (nrejected==exp_sig) {/* FIXME should also test values */
+               printf("PASS\n");
+          } else {
+               printf("FAIL\n");
+          }
+          free(irejected);   
+
+          printf ("\n");
+     }
+
+
+     exit(1);
 
      /* output values according to python implementation 
       *
