@@ -1,41 +1,62 @@
 # LoFreq*: A sequence-quality aware, ultra-sensitive variant caller for NGS data
 
+
+
 ## Note
 
-Most users will want to use either the binary or the
-source-code package which is distributed via [LoFreq's
-Sourceforge site](https://sourceforge.net/projects/lofreq/files/).
-The source hosted here on github is mainly for developers.
+Most users will want to use either the binary or the source-code
+package. Both are distributed via
+[LoFreq's Sourceforge site](https://sourceforge.net/projects/lofreq/files/).
+The source hosted here on github is mainly for developers!
 
-## Building the source
 
-To build the LoFreq source you will need
 
-- a C compiler (we used gcc and clang routinely)
+## Building the Source
+
+### Current Build Status
+
+[![Build Status](https://travis-ci.org/CSB5/lofreq.svg?branch=master)](https://travis-ci.org/CSB5/lofreq)
+
+### Prerequisites
+
+You will need:
+
+- a C compiler (e.g. gcc or clang)
 - a Python 2.7 interpreter
 - zlib developer files
-- a compiled version of samtools (>=1.1)
-- a compiled version of htslib (>= 1.1; usually part of the above; see
- e.g. [here](http://sourceforge.net/projects/samtools/files/samtools/1.1/samtools-1.1.tar.bz2/download)
+- a compiled version of [samtools (>=1.1)]((http://sourceforge.net/projects/samtools/files/samtools/1.1/samtools-1.1.tar.bz2/download))
+- a compiled version of htslib (>= 1.1; usually part of the above)
 
-Then, 
+### Compilation
 
-- either clone the repot or download the current master as zip packageand unpack
-- run `./bootstrap` which will set up the required automake files
-  - If you get an error like this `configure.ac:72: error: required file './ltmain.sh' not found`,  run libtoolize (or glibtoolize) first and then `bootstrap` again
-- Run `./configure` with the **absolute** path to samtools and htslib: `./configure SAMTOOLS=/path-to-samtools HTSLIB=/path-to-htslib [--prefix=custom-path]`
+- Clone the repo (or download the current master as zip package and unpack)
+- Run `./bootstrap` to set up the required automake files
+  - If you get an error like `required file './ltmain.sh'
+    not found`, run `libtoolize` (or `glibtoolize`) first and then
+    `bootstrap` again
+  - Subsequent pulls won't require rerunning `./bootstrap`. This is
+    only necesary when changing `configure.ac` or any of the `Makefile.am`
+- Run `./configure` with the **absolute** path to samtools and htslib
+  (e.g. `./configure SAMTOOLS=/path-to-samtools HTSLIB=/path-to-htslib
+  [--prefix=inst-path]`)
 - Run `make`
-- At this point you can already start using lofreq: see `./bin/lofreq` for help
-- To properly install the package type: `make install`.
-- Depending on the used prefix you might need to adjust your PATH (and PYTHONPATH).
+  - At this point you can already start using lofreq: `./bin/lofreq`
+- Run `make install` to properly install the package
+  - Default is `/usr/local/`. If `--prefix` was given to `configure`,
+    the corresponding argument is used
+  - Depending on the used prefix you might need to adjust your PATH (and PYTHONPATH).
 
 
-## Using LoFreq
+## Documentation
 
-See http://csb5.github.io/lofreq/ for full documentation.
+- Simply calling `lofreq` on the command line will display a list of
+subcommands
+- `lofreq cmd` will then display help for `cmd`
+- See [LoFreq's website](http://csb5.github.io/lofreq/) for full documentation
 
-On the command line simply type `lofreq` to get help.
 
+## License
 
+LoFreq is published under The MIT License (MIT).
 
 

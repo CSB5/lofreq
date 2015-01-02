@@ -1,0 +1,13 @@
+language: c
+compiler:
+  - gcc
+  - clang
+# Change this to your needs
+# Change this to your needs
+before_script:
+  - wget 'http://downloads.sourceforge.net/project/samtools/samtools/1.1/samtools-1.1.tar.bz2' -O /tmp/samtools-1.1.tar.bz2
+  - tar -xjf /tmp/samtools-1.1.tar.bz2
+  - cd samtools-1.1/
+  - make
+  - cd ..
+script: libtoolize; ./bootstrap && ./configure SAMTOOLS=${PWD}/samtools-1.1/ HTSLIB=${PWD}/samtools-1.1/htslib-1.1/ && make
