@@ -50,10 +50,10 @@ static void usage()
      fprintf(stderr, "%s: add base- and indel-alignment qualities (BAQ, IDAQ) to BAM file\n\n", MYNAME);
      fprintf(stderr, "Usage:   %s [options] <aln.bam> <ref.fasta>\n", MYNAME);
      fprintf(stderr, "Options:\n");
-     fprintf(stderr, "         -b       Compressed BAM output\n");
+     fprintf(stderr, "         -b       BAM output (instead of SAM)\n");
      fprintf(stderr, "         -u       Uncompressed BAM output (for piping)\n");
      fprintf(stderr, "         -S       The input is SAM with header\n");
-     fprintf(stderr, "         -e       Use default instead of extended BAQ (the latter gives better sensitivity but lower specificity)\n\n");		
+     fprintf(stderr, "         -e       Use default instead of extended BAQ (the latter gives better sensitivity but lower specificity)\n");
      fprintf(stderr, "         -B       Don't compute base alignment qualities\n");
      fprintf(stderr, "         -A       Don't compute indel alignment qualities\n");
      fprintf(stderr, "         -r       Recompute i.e. overwrite existing values\n");
