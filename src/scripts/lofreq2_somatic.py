@@ -617,6 +617,12 @@ def cmdline_parser():
                         help="Significance threshold (alpha)"
                         " for SNV pvalues in (relaxed) tumor vcf"
                         " (default: %f)" % default)
+    
+    default = SomaticSNVCaller.DEFAULT_MIN_COV
+    advanced.add_argument("--min-cov",
+                        type=int,
+                        default=default,
+                        help="Minimum coverage for somatic calls")
 
     default = SomaticSNVCaller.DEFAULT_ALPHA_N
     advanced.add_argument("--normal-alpha",
@@ -750,6 +756,7 @@ def main():
     somatic_snv_caller.indel_mtc_t = args.indel_tumor_mtc
     somatic_snv_caller.indel_mtc_alpha_t = args.indel_tumor_mtc_alpha
     somatic_snv_caller.num_threads = args.num_threads
+    somatic_snv_caller.min_cov = args.min_cov
     if args.baq_off:
         somatic_snv_caller.baq_off = True
     else:
