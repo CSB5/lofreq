@@ -3,15 +3,17 @@ Todos:
 High Prio:
 ==========
 
-- fix indel af computation which seems off
-- add normal and tumor plp info to somatic calls. normal could be added in uniq
-- multiprocessing version of alnqual (best per chrom as we get overlapping reads if run per bin)
+- fix/check af computation for indels, esp. in presence of head/tails
+- support of indels during ignore vcf loading and source qual computation
+- use indexing for source quality
 
 Med Prio:
 =========
 
 - what to do at high coverages where X>cap (e.g. Lewis' HepB)? replace already read values randomly?
-- support of indels during ignore vcf loading and source qual computation
+
+- add normal and tumor plp info to somatic calls. normal could be added in uniq
+- multiprocessing version of alnqual (best per chrom as we get overlapping reads if run per bin)
 
 Low Prio:
 =========
