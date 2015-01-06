@@ -622,7 +622,8 @@ def cmdline_parser():
     advanced.add_argument("--min-cov",
                         type=int,
                         default=default,
-                        help="Minimum coverage for somatic calls")
+                        help="Minimum coverage for somatic calls"
+                        " (default: %d)" % default)
 
     default = SomaticSNVCaller.DEFAULT_ALPHA_N
     advanced.add_argument("--normal-alpha",
