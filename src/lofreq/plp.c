@@ -520,6 +520,27 @@ source_qual(const bam1_t *b, const char *ref,
           goto free_and_exit;
      }
 
+#ifdef SOURCEQUAL_USES_PAIRS
+     if ((b->core.flag&BAM_FPAIRED) && (b->core.flag&BAM_FPROPER_PAIR)) {
+          double median_err = dbl_median(err_probs, num_err_probs);
+          LOG_FIXME("%s\n", "SOURCEQUAL_USES_PAIRS: assuming perfect match for paire read");
+          /* can't easily access info about read in pair. assume 
+             perfect perfect match, using length and median prob of 
+             current one */
+          
+          num_err_probs *= 2;
+          if (NULL == (err_probs = realloc(err_probs, num_err_probs * sizeof(double)))) {
+               fprintf(stderr, "FATAL: couldn't reallocate memory at %s:%s():%d\n",
+                       __FILE__, __FUNCTION__, __LINE__);
+               exit(1);
+          }
+          for (i=err_prob_idx-1; i<num_err_probs; i++) {
+               err_probs[i] = median_err;
+          }
+          LOG_FIXME("median_err = %f\n", median_err);
+     }
+#endif
+
      /* src_prob: what's the prob of seeing n_mismatches-1 by chance,
       * given quals? or: how likely is this read from the genome.
       * 1-src_value = prob read is not from genome
@@ -564,6 +585,7 @@ free_and_exit:
                src_qual, src_prob, cigar_str_from_bam(b), num_err_probs, num_non_matches, orig_num_non_matches, b->core.pos);
 #endif
 #undef TRACE
+
      return src_qual;
 }
 /* source_qual() */
