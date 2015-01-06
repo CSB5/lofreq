@@ -379,15 +379,10 @@ int apply_snvqual_filter_mtc(snvqual_filter_t *snvqual_filter, var_t **vars, con
      /* collect values from noncons vars only and keep track of their indeces
       */
      orig_idx = malloc(num_vars * sizeof(long int));
-     if ( ! orig_idx) {
-          LOG_FATAL("%s\n", "out of memory");
-          return -1;
-     }
+     if ( ! orig_idx) { LOG_FATAL("%s\n", "out of memory"); return -1; }
      noncons_errprobs = malloc(num_vars * sizeof(double));
-     if ( ! noncons_errprobs) {
-          LOG_FATAL("%s\n", "out of memory");
-          return -1;
-     }
+     if ( ! noncons_errprobs) { LOG_FATAL("%s\n", "out of memory"); return -1; }
+
      num_noncons_vars = 0;
      for (i=0; i<num_vars; i++) {
           if (vars[i]->qual>-1 && ! vcf_var_has_info_key(NULL, vars[i], "INDEL")) {
@@ -402,13 +397,17 @@ int apply_snvqual_filter_mtc(snvqual_filter_t *snvqual_filter, var_t **vars, con
           return 0;
      }
      orig_idx = realloc(orig_idx, (num_noncons_vars * sizeof(long int)));
+     if (! orig_idx) { LOG_FATAL("realloc failed. Exiting..."); return -1; }
      noncons_errprobs = realloc(noncons_errprobs, (num_noncons_vars * sizeof(double)));
+     if (! noncons_errprobs) { LOG_FATAL("realloc failed. Exiting..."); return -1; }
 
      /* only now we can set the number of tests (if it wasn't set by
       * caller) */
      if (! snvqual_filter->ntests) {
           snvqual_filter->ntests = num_noncons_vars;
      }
+
+     LOG_DEBUG("updated ntests=%ld; num_noncons_vars=%ld\n", snvqual_filter->ntests, num_noncons_vars);
 
      /* multiple testing correction
       */
@@ -427,6 +426,11 @@ int apply_snvqual_filter_mtc(snvqual_filter_t *snvqual_filter, var_t **vars, con
           num_rej = fdr(noncons_errprobs, num_noncons_vars, 
                         snvqual_filter->alpha, snvqual_filter->ntests, 
                         &idx_rej);
+          /* first pretend none are significant */
+          for (i=0; i<num_noncons_vars; i++) {
+               noncons_errprobs[i] = DBL_MAX;
+          }
+          LOG_DEBUG("%ld results significant after fdr\n", num_rej);
           for (i=0; i<num_rej; i++) {
                long int idx = idx_rej[i];
                noncons_errprobs[idx] = -1;
@@ -478,14 +482,9 @@ int apply_indelqual_filter_mtc(indelqual_filter_t *indelqual_filter, var_t **var
      /* collect values from noncons vars only and keep track of their indeces
       */
      orig_idx = malloc(num_vars * sizeof(long int));
-     if ( ! orig_idx) {
-          LOG_FATAL("%s\n", "out of memory");
-          return -1;
-     }
+     if ( ! orig_idx) { LOG_FATAL("%s\n", "out of memory"); return -1; }
      noncons_errprobs = malloc(num_vars * sizeof(double));
-     if ( ! noncons_errprobs) {
-          LOG_FATAL("%s\n", "out of memory");
-          return -1;
+     if ( ! noncons_errprobs) { LOG_FATAL("%s\n", "out of memory"); return -1;
      }
      num_noncons_vars = 0;
      for (i=0; i<num_vars; i++) {
@@ -501,7 +500,9 @@ int apply_indelqual_filter_mtc(indelqual_filter_t *indelqual_filter, var_t **var
           return 0;
      }
      orig_idx = realloc(orig_idx, (num_noncons_vars * sizeof(long int)));
+     if ( ! orig_idx) { LOG_FATAL("%s\n", "out of memory"); return -1; }
      noncons_errprobs = realloc(noncons_errprobs, (num_noncons_vars * sizeof(double)));
+     if ( ! noncons_errprobs) { LOG_FATAL("%s\n", "out of memory"); return -1; }
 
      /* only now we can set the number of tests (if it wasn't set by
       * caller) */
@@ -523,9 +524,16 @@ int apply_indelqual_filter_mtc(indelqual_filter_t *indelqual_filter, var_t **var
           long int num_rej = 0;
           long int *idx_rej; /* indices of rejected i.e. significant values */
           
+
           num_rej = fdr(noncons_errprobs, num_noncons_vars, 
                         indelqual_filter->alpha, indelqual_filter->ntests, 
                         &idx_rej);
+
+          /* first pretend none are significant */
+          for (i=0; i<num_noncons_vars; i++) {
+               noncons_errprobs[i] = DBL_MAX;
+          }
+          LOG_DEBUG("%ld results significant after fdr\n", num_rej);
           for (i=0; i<num_rej; i++) {
                long int idx = idx_rej[i];
                noncons_errprobs[idx] = -1;
@@ -563,16 +571,17 @@ int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const long int num
      double *sb_probs = NULL;
      long int i;
      long int num_ign = 0;
-     long int *real_idx = NULL;/* we might ignore some variants (missing values etc). keep track of real indices of kept vars */
+     long int *orig_idx = NULL;/* we might ignore some variants (missing values etc). keep track of real indices of kept vars */
 
      
      /* collect values from vars kept in mem
       */
      sb_probs = malloc(num_vars * sizeof(double));
      if ( ! sb_probs) {LOG_FATAL("%s\n", "out of memory"); return -1;}
-     real_idx = malloc(num_vars * sizeof(long int));
-     if ( ! real_idx) {LOG_FATAL("%s\n", "out of memory"); return -1;}
+     orig_idx = malloc(num_vars * sizeof(long int));
+     if ( ! orig_idx) {LOG_FATAL("%s\n", "out of memory"); return -1;}
 
+     num_ign = 0;
      for (i=0; i<num_vars; i++) {
           char *sb_char = NULL;
           
@@ -592,13 +601,13 @@ int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const long int num
           }
 
           sb_probs[i-num_ign] = PHREDQUAL_TO_PROB(atoi(sb_char));
-          real_idx[i-num_ign] = i;
-          /*LOG_FIXME("real_idx[i=%ld - num_ign=%ld = %ld] = i=%ld\n", i, num_ign, i-num_ign, i);*/
+          orig_idx[i-num_ign] = i;
+          /*LOG_FIXME("orig_idx[i=%ld - num_ign=%ld = %ld] = i=%ld\n", i, num_ign, i-num_ign, i);*/
           free(sb_char);
      }
      if (num_vars-num_ign <= 0) {
           free(sb_probs);
-          free(real_idx);
+          free(orig_idx);
           return 0;
      }
 
@@ -606,8 +615,8 @@ int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const long int num
      /* realloc to smaller size apparently not guaranteed to free up space so no point really but let's make sure we don't use that memory */
      sb_probs = realloc(sb_probs, (num_vars-num_ign) * sizeof(double));
      if (! sb_probs) { LOG_FATAL("realloc failed. Exiting..."); return -1; }
-     real_idx = realloc(real_idx, (num_vars-num_ign) * sizeof(long int));
-     if (! real_idx) { LOG_FATAL("realloc failed. Exiting..."); return -1; }
+     orig_idx = realloc(orig_idx, (num_vars-num_ign) * sizeof(long int));
+     if (! orig_idx) { LOG_FATAL("realloc failed. Exiting..."); return -1; }
 
      if (! sb_filter->ntests) {
           sb_filter->ntests = num_vars - num_ign;
@@ -635,6 +644,12 @@ int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const long int num
           num_rej = fdr(sb_probs, num_vars-num_ign, 
                         sb_filter->alpha, sb_filter->ntests, 
                         &idx_rej);
+
+          /* first pretend none are significant */
+          for (i=0; i<num_vars-num_ign; i++) {
+               sb_probs[i] = DBL_MAX;
+          }
+          LOG_DEBUG("%ld results significant after fdr\n", num_rej);
           for (i=0; i<num_rej; i++) {
                long int idx = idx_rej[i];
                sb_probs[idx] = -1;
@@ -648,13 +663,13 @@ int apply_sb_filter_mtc(sb_filter_t *sb_filter, var_t **vars, const long int num
      
      for (i=0; i<num_vars-num_ign; i++) {
           if (sb_probs[i] < sb_filter->alpha) {
-               if (sb_filter->no_compound || alt_mostly_on_one_strand(vars[real_idx[i]])) {
-                    vcf_var_add_to_filter(vars[real_idx[i]], sb_filter->id);
+               if (sb_filter->no_compound || alt_mostly_on_one_strand(vars[orig_idx[i]])) {
+                    vcf_var_add_to_filter(vars[orig_idx[i]], sb_filter->id);
                }
           }
      }
 
-     free(real_idx);
+     free(orig_idx);
      free(sb_probs);
 
      return 0;
