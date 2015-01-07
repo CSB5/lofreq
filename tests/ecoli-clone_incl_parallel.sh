@@ -8,7 +8,7 @@ source lib.sh || exit 1
 
 
 basedir=data/ecoli-clone/
-bam=$basedir/EAS20_8.bwamem_pe.viterbi.mdups.realn.recal.bam
+bam=$basedir/clone/EAS20_8.bwamem_pe.viterbi.mdups.realn.recal.bam
 reffa=$basedir/ref/Ecoli_K12_MG1655_NC_000913.fa
 #truesnv=$basedir/denv2-pseudoclonal_true-snp.vcf
 
