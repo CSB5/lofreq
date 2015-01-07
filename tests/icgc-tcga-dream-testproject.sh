@@ -41,7 +41,7 @@ fi
 # 1389 15 1404 1445
 # precision, recall, F1 score: 0.989316239316,0.96124567474,0.975078975079
 res=$($EVALUATOR -t $TRUTH -v $vcf_out -m SNV | awk 'END {print $NF}') || exit
-echo $res | awk -F, '{prec=$1; rec=$2; if (prec<0.96 || rec<0.96) {status="ERROR"} else {status="OK"} printf "%s: precision=%f recall=%f\n", status, prec, rec > "/dev/stderr"}'
+echo $res | awk -F, '{prec=$1; rec=$2; if (prec<0.98 || rec<0.96) {status="ERROR"} else {status="OK"} printf "%s: precision=%f recall=%f\n", status, prec, rec > "/dev/stderr"}'
 
 #rm $vcf_out
 
