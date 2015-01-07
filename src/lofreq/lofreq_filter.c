@@ -372,8 +372,9 @@ int apply_snvqual_filter_mtc(snvqual_filter_t *snvqual_filter, var_t **vars, con
      long int num_noncons_vars = 0;
      long int i;
 
-     if (snvqual_filter->ntests && num_vars > snvqual_filter->ntests) {
-         LOG_WARN("%s\n", "Number of predefined tests for snvqual filter larger than number of variants! Are you sure that makes sense?");
+     if (snvqual_filter->ntests && (num_vars > snvqual_filter->ntests)) {
+          LOG_WARN("Number of variants (%ld) larger than the number of predefined tests (%ld) for snvqual filter. Are you sure that makes sense?\n",
+                   num_vars, snvqual_filter->ntests);
      }
 
      /* collect values from noncons vars only and keep track of their indeces
