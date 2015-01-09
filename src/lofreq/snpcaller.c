@@ -50,17 +50,16 @@
 #endif
 
 
-/* mq0 would completely 'kill' a read. previously used 0.66 here since
-   the median number of best hits in bwa for one examined wgs samples
-   was 3. that would be lower than mq1 though, so just use mq1.
-   
- *  derive from X0 tag (BWA sam[sp]e specific)
+/* Converting MQ=0 into prob would 'kill' a read. Previously used 0.66 here since
+   the median number of best hits in BWA for one examined human wgs sample
+   was 3 (sadly BWA-MEM doesn't produce X0 tags anymore). For simplicity's
+   sake, give MQ0 the benefit of doubt and assume that one only one other best
+   location existed, i.e. use 0.5
 */
-#define MQ0_ERRPROB 0.7943282347242815
-/* == PHREDQUAL_TO_PROB(1) */
+#define MQ0_ERRPROB 0.5
 
 #define LOGZERO -1e100
-/* FIXME shouldn't we use something from float.h ? */
+/* shouldn't we use something from float.h ? */
 
 
 #if 0

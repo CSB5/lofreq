@@ -33,7 +33,7 @@ title="snvs"
 f=${outpref}somatic_final.snvs.vcf.gz
 res_ll=$($EVALUATOR -v $f -t $TRUTH -m SNV | awk 'END {print $NF}') || exit 1
 res=$(echo $res_ll | \
-  awk -F, '{prec=$1; rec=$2; if (prec<0.96 || rec<0.96) {status="ERROR"} else {status="OK"} printf "%s: precision=%f recall=%f\n", status, prec, rec}') || exit 1
+  awk -F, '{prec=$1; rec=$2; if (prec<0.98 || rec<0.96) {status="ERROR"} else {status="OK"} printf "%s: precision=%f recall=%f\n", status, prec, rec}') || exit 1
 if echo $res | grep -q ERROR; then
    let num_err=num_err+1
 fi
