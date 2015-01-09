@@ -1,0 +1,40 @@
+boot2docker init
+boot2docker start
+$(boot2docker shellinit)
+
+# ---
+
+docker run -t -i ubuntu:14.04 /bin/bash
+
+apt-get update
+apt-get upgrade
+
+apt-get install make
+apt-get install libc6-dev libc-dev
+apt-get install zlib1g-dev
+apt-get install python2.7
+apt-get install libncurses-dev
+apt-get install wget
+
+ln -s /usr/bin/python2.7 /usr/bin/python
+
+cd /usr/local/src
+wget -nd 'http://downloads.sourceforge.net/project/lofreq/lofreq_star-2.1.1.tar.gz'
+#
+wget 'http://downloads.sourceforge.net/project/samtools/samtools/1.1/samtools-1.1.tar.bz2'
+tar -xjf samtools-1.1.tar.bz2
+cd samtools-1.1
+make
+make install
+
+cd ..
+tar xvzf lofreq_star-2.1.1.tar.gz
+cd lofreq_star-2.1.1
+./configure SAMTOOLS=/usr/local/src/samtools-1.1/ HTSLIB=/usr/local/src/samtools-1.1/htslib-1.1/
+make
+make install
+
+# ---
+
+docker commit -m="Added samtools/htslib 1.1 and lofreq 2.1.1" -a="Andreas Wilm" 78c85ef2e74a andreaswilm/lofreq:v2.1.1
+docker push andreaswilm/lofreq
