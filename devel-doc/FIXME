@@ -5,22 +5,20 @@ High Prio:
 
 - fix/check af computation for indels, esp. in presence of head/tails
 - support of indels during ignore vcf loading and source qual computation
-- use indexing for source quality
+
 
 Med Prio:
 =========
 
 - what to do at high coverages where X>cap (e.g. Lewis' HepB)? replace already read values randomly?
-
 - add normal and tumor plp info to somatic calls. normal could be added in uniq
-- multiprocessing version of alnqual (best per chrom as we get overlapping reads if run per bin)
+- use indexing for source quality ignore vcfs if region was given and support multiple ign vcf for source quality
 
 Low Prio:
 =========
 
 - keep var info field with hash
-- support multiple ign vcf input
-- split lofreq_snpcaller cmd parsing: plp, snv, others (do they change argv?)
 - profile code e.g.
   $LOFREQ call -f mers_coronavirus_NC_019843.2.fa --verbose --debug NC_019843.2:2399-2399 dwgsim-ion-samba-mers-100kX-pool.bwamem.bam
 - parallelize viterbi avoiding overlapping reads. endpos of last read in last bin could be start pos for next bin
+- multiprocessing version of alnqual (best per chrom as we get overlapping reads if run per bin)
