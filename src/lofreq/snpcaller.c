@@ -1113,7 +1113,7 @@ snpcaller(long double *snp_pvalues,
 
     if (pvalue * (double)bonf_factor > sig_level) {
 #ifdef DEBUG
-        fprintf(stderr, "DEBUG(%s:%s():%d): Most frequent SNV candidate already gets not signifcant pvalue of %g * %lld >= %g\n",
+        fprintf(stderr, "DEBUG(%s:%s():%d): Most frequent SNV candidate already gets not signifcant pvalue of %Lg * %lld > %f\n",
                 __FILE__, __FUNCTION__, __LINE__,
                 pvalue, bonf_factor, sig_level);
 #endif
