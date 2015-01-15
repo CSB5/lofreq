@@ -891,7 +891,7 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
 
      fprintf(stderr, "- Source quality:\n");
      fprintf(stderr, "       -s | --src-qual              Enable computation of source quality\n");
-     fprintf(stderr, "       -S | --ign-vcf FILE          Ignore variants in this vcf file for source quality computation\n"),
+     fprintf(stderr, "       -S | --ign-vcf FILE          Ignore variants in this vcf file for source quality computation. Multiple files can be given separated by commas\n"),
      fprintf(stderr, "       -T | --def-nm-q INT          If >= 0, then replace non-match base qualities with this default value [%d]\n", mplp_conf->def_nm_q);
 
      fprintf(stderr, "- P-values:\n");
@@ -1366,24 +1366,18 @@ for cov in coverage_range:
     }
 
     if (ign_vcf) {
-         /* FIXME also ignore variants outside given region on top of bed */
-         if (source_qual_load_ign_vcf(ign_vcf, mplp_conf.bed)) {
-              LOG_FATAL("Loading of ignore positions from %s failed.", optarg);
-              free(vcf_tmp_out);
-              return 1;
+         /* note strtok destroys input i.e. ign_vcf */
+         char *f = strtok(ign_vcf, ",");
+         while (NULL != f) {
+              if (source_qual_load_ign_vcf(f, mplp_conf.bed)) {
+                   LOG_FATAL("Loading of ignore positions from %s failed.", f);
+                   free(vcf_tmp_out);
+                   return 1;
+              }
+              f = strtok(NULL, " ");
          }
          free(ign_vcf);
     }
-#if 0
-    LOG_FIXME("%s\n", "Loading hardcoded vcf file to ignore for source_qual()");
-    if (source_qual_load_ign_vcf("./tests/schmock.vcf")) {
-         LOG_FATAL("Loading of ignore positions from %s failed.", "FIXME");
-         free(vcf_tmp_out);
-         return 1;
-    }
-#endif
-
-
 
     if (plp_summary_only) {
          plp_proc_func = &plp_summary;

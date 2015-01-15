@@ -86,7 +86,7 @@ var_hash_free_elem(var_hash_t *hash_elem_ptr)
 }
 
 
-/* key and var will not be copied ! */
+/* FIXME key and var will not be copied, i.e. don't free for now */
 void
 var_hash_add(var_hash_t **var_hash, char *key, var_t *var)
 {

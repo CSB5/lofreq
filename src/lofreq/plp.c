@@ -332,7 +332,8 @@ source_qual_free_ign_vars()
 }
 
 
-/* FIXME ignore variants outside given region (on top of bed as well)
+/* FIXME ignore variants outside given region  (mplp_conf.reg)
+ (on top of bed as well)
  * and use tabix API if indexed */
 int
 source_qual_load_ign_vcf(const char *vcf_path, void *bed)
@@ -385,12 +386,13 @@ source_qual_load_ign_vcf(const char *vcf_path, void *bed)
           * not need to save the var (and save NULL instead) */
          vcf_free_var(&var);
          var_hash_add(& source_qual_ign_vars_hash, key, NULL);
+         /* FIXME key used within vcf_free_var; dont free! */
     }
 
     num_kept_vars = HASH_COUNT(source_qual_ign_vars_hash);
     if (num_kept_vars) {
-         LOG_VERBOSE("Kept %d variants (of a total of %d) to ignore from %s\n",
-                     num_kept_vars, num_total_vars, vcf_path);
+         LOG_VERBOSE("Ignoring %d variants for SQ computation after reading %s\n",
+                     num_kept_vars, vcf_path);
     } else {
          LOG_WARN("None of the %d variants in %s were kept\n",
                   num_total_vars, vcf_path);
