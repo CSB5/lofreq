@@ -73,31 +73,42 @@ somatic SNV calling subcommand.
 
 # <a name="somatic">Calling somatic variants: `lofreq somatic`</a>
 
-Assuming you have the mapped reads of the normal sample in a file
-called `normal.bam` and the tumor reads in `tumor.bam`, both of which
-are mapped against `hg19.fa` then you would use the following to call
-somatic SNVs, using 8 threads and store the results to files with the
-prefix `out_`:
 
-    lofreq somatic --threads 8 -n normal.bam -t tumor.bam -f hg19.fa -o out_ [-d dbsnp.vcf.gz]
+<!-- FIXME preprocessing needs separate article-->
 
-The use of dbsnp is optional but highly recommended. It will remove
-possibly undetected germline variants from the final output. Ideally
-you have removed somatic variants from dbsnp (those matching SAO=2 or SAO=3).
-`lofreq somatic` produces several output files. Depending on whether
-you also enabled indels and whether you used dbsnp or not, they are
-called as follows:
+Assuming you have preprocessed your BAM files nicely, e.g. following
+GATK best practices, and your mapped reads of the normal sample are in
+a file called `normal.bam` and the tumor reads in `tumor.bam`, both of
+which are mapped against `hg19.fa` then you would use the following to
+call somatic SNVs, using 8 threads and store the results to files with
+the prefix `out_`:
 
-SNVs before and after dbsnp removal:
+    lofreq somatic -n normal.bam -t tumor.bam -f hg19.fa \
+        --threads 8 -o out_ [-d dbsnp.vcf.gz]
+
+The use of dbsnp is optional but **highly** recommended if you are
+dealing with human samples. It will help remove possibly undetected
+germline variants from the final output. Ideally you have removed
+somatic variants from dbsnp (those matching SAO=2 or SAO=3). LoFreq
+expects dbsnp to be tabix indexed for fast random access. Indexing can
+be achieved by running `bgzip` and `tabix` on the dbsnp vcf file.
+
+`lofreq somatic` produces several output files, most of which you can
+ignore. Depending on whether you also enabled indels and whether you
+used dbsnp or not, the final output files are called as follows:
+
+For SNVs before and after dbsnp removal (if you used `-o out_`):
 
 - `out_somatic_final.snvs.vcf.gz`
 - `out_somatic_final_minus-dbsnp.snvs.vcf.gz`
 
-And if you enabled indel calls:
+For indels (if enabled and properly preprocessed):
 
 - `out_somatic_final.indels.vcf.gz`
 - `out_somatic_final_minus-dbsnp.indels.vcf.gz`
 
+If you need more sensitive calls increase the value for
+`--tumor-mtc-alpha` (and `--indel-tumor-mtc-alpha` resp.)
 
 ---
 
