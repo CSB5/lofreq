@@ -45,6 +45,8 @@ LOG = logging.getLogger("")
 logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
+BIN_PER_THREAD = 2
+
 
 def prob_to_phredqual(prob):
     """WARNING: near-identical copy from utils.py. copied here to make
@@ -91,8 +93,8 @@ def split_region(reg):
 
 
 def read_bed_coords(fbed):
-    """Fault-resistant reading of coordinates from bed file and yields
-    them as chrom, start, end tuple with zero-based half-open
+    """Fault-resistant reading of coordinates from bed file. Yields
+    regions as chrom, start, end tuple with zero-based half-open
     coordinates. Based on the implementation in LoFreq 0.6.0
     """
 
@@ -100,32 +102,27 @@ def read_bed_coords(fbed):
         for line in fh:
             if line.startswith('#') or len(line.strip()) == 0:
                 continue
-
-            # bed should use tab as delimiter. use space if tab fails.
-            try:
+            # bed should use tab as delimiter. use whitespace if tab fails.
+            if len(line.split('\t')) >= 3:
                 (chrom, start, end) = line.split("\t")[0:3]
-            except IndexError:
-                try:
-                    (chrom, start, end) = line.split()[0:3]
-                except IndexError:
-                    raise IndexError, (
+            elif len(line.split()) >= 3:
+                (chrom, start, end) = line.split()[0:3]
+            else:
+                start = end = "NAN"# caught later
+            try:
+                # float conversion for support of scientific notation
+                (start, end) = [int(float(x)) for x in [start, end]]
+            except ValueError:
+                if line.startswith('browser') or line.startswith('track'):
+                    continue
+                else:
+                    #import pdb; pdb.set_trace()
+                    raise ValueError, (
                         "Couldn't parse the following line"
                         " from bed-file %s: %s" % (fbed, line))
 
-            # http://genome.ucsc.edu/FAQ/FAQformat.html#format1
-            # 4: name, score, strand...
-            #
-            # int(float()) conversion necessary for values in
-            # scientific notation
-            try:
-                (start, end) = [int(float(x)) for x in [start, end]]
-            except ValueError:
-                raise ValueError, (
-                    "Couldn't parse the following line"
-                    " from bed-file %s: %s" % (fbed, line))
-
-            if end <= start:
-                LOG.fatal("end>=start (%d>=%d) in %s" % (
+            if end <= start or end < 0 or start < 0:
+                LOG.fatal("Invalid coordinates start=%d end=%d read from %s" % (
                     start, end, fbed))
                 raise ValueError
 
@@ -180,7 +177,7 @@ def concat_vcf_files(vcf_files, vcf_out, source=None):
             e.returncode, ' '.join(cmd)))
         sys.exit(1)
 
-        
+
 def sq_list_from_bam_samtools(bam):
     """Extract SQs listed in BAM head using samtools
 
@@ -319,7 +316,7 @@ def lofreq_cmd_per_bin(lofreq_call_args, bins, tmp_dir):
 def work(cmd):
     """Command caller wrapper for multiprocessing"""
 
-    #print "DEBUG", os.environ["PATH"]     
+    #print "DEBUG", os.environ["PATH"]
     #from subprocess import Popen, PIPE
     #call(["which", "lofreq"])
     #which = Popen(['which', 'lofreq'], stdout=PIPE).stdout.read()
@@ -343,19 +340,15 @@ def main():
     #
     # 1. parse pparallel specific args: get and remove from list
     #
-    
-    #cmd = ['which', 'lofreq']
-    #print "FIXME",  subprocess.check_output(cmd)
-    #sys.exit(1)
-    
+
     # poor man's usage
     #
     if '-h' in orig_argv:
         sys.stderr.write(__doc__ + "\n")
         sys.stderr.write("All arguments except --pp-threads (mandatory),"
-                         " --pp-debug, --pp-verbose\nand --pp-dryrun"
-                         " will be passed down to 'lofreq call'."
-                         "Make sure that the\nremaining args are valid 'lofreq call'"
+                         " --pp-debug, --pp-verbose\nand --pp-dryrun will"
+                         " be passed down to 'lofreq call'. Make sure that"
+                         " the\nremaining args are valid 'lofreq call'"
                          " args as no syntax check will be\nperformed.\n")
         sys.exit(1)
 
@@ -412,12 +405,12 @@ def main():
         if arg in orig_argv:
             idx = orig_argv.index(arg)
             break
-    ref = orig_argv[idx+1]    
+    ref = orig_argv[idx+1]
     if not os.path.exists(ref + ".fai"):
         LOG.fatal("Index for reference %s missing. Use samtools or lofreq faidx %s" % (ref, ref))
         sys.exit(1)
 
-    
+
     # Doh!
     if 'call' in orig_argv:
         LOG.fatal("argument 'call' not needed")
@@ -495,7 +488,6 @@ def main():
     if bonf_opt == 'auto':
         raise NotImplementedError(
             'FIXME bonf "auto" handling not implemented')
-        # Just need derivation here and no more filtering at end
 
     sig_opt = 0.01# WARN: needs to be default is in lofreq call
     idx = -1
@@ -586,14 +578,13 @@ def main():
     # even after split
     #
     total_length = sum([region_length(b) for b in bins])
-    BIN_PER_THREAD = 2
     while True:
         #  inefficient but doesn't matter in practice: should split
         #  max and insert new elements
-        # intelligently to avoid sorting whole list. 
+        # intelligently to avoid sorting whole list.
         bins = sorted(bins, key=lambda b: region_length(b))
         biggest = bins[-1]
-        biggest_length = region_length(biggest) 
+        biggest_length = region_length(biggest)
 
         LOG.debug("biggest_length=%d total_length/(%d*num_threads)=%f" % (
             biggest_length, BIN_PER_THREAD, total_length/(BIN_PER_THREAD*num_threads)))
@@ -602,7 +593,7 @@ def main():
         elif biggest_length < 100:
             LOG.warn("Regions getting too small to be efficiently processed")
             break
-        
+
         biggest = bins.pop()
         (b1, b2) = split_region(biggest)
         bins.extend([b1, b2])
@@ -649,7 +640,7 @@ def main():
     #    if x:
     #        LOG.warn("multiprocessing.Pool call result: %s" % x)
     #        pool.terminate()
-    
+
     pool = multiprocessing.Pool(processes=num_threads)
     results = pool.map(work, cmd_list, chunksize=1)
     #results = pool.map_async(work, cmd_list, chunksize=1, callback=mycallback)
@@ -725,13 +716,13 @@ def main():
                 sys.exit(1)
 
             shutil.copy(vcf_concat, final_vcf_out)
-        
+
             # try to copy index as well if exists
             tidx_src = vcf_concat + ".tbi"
             if os.path.exists(tidx_src):
                 tidx_dst = final_vcf_out + ".tbi"
                 shutil.copy(tidx_src, tidx_dst)
-            
+
     else:
         cmd = ' '.join(cmd)# subprocess.call takes string
         LOG.info("Executing %s\n" % (cmd))
