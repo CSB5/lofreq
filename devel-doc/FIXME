@@ -12,7 +12,7 @@ Med Prio:
 
 - what to do at high coverages where X>cap (e.g. Lewis' HepB)? replace already read values randomly?
 - add normal and tumor plp info to somatic calls. normal could be added in uniq
-- use indexing for source quality ignore vcfs if region was given and support multiple ign vcf for source quality
+- use indexing for source quality ignore vcfs if region was given
 
 Low Prio:
 =========
