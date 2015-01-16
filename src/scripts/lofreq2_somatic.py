@@ -687,25 +687,30 @@ def cmdline_parser():
 
     ###
 
-    experts = parser.add_argument_group('Experts (PLEASE do not use/change these unless you know exactly what you are doing and if you change them light a candle first)')
+    experts = parser.add_argument_group('Experts (PLEASE do not use/change these, unless you know exactly what you are doing and'
+                                        ' if you change them nevertheless, light a candle first)')
 
     default = SomaticSNVCaller.DEFAULT_ALPHA_N
     experts.add_argument("--normal-alpha",
                         #required=True,
                         default=default,
                         type=float,
-                        help="Significance threshold (alpha) for SNV pvalues"
-                        "  in (relaxed) normal vcf"
-                        " (default: %f)" % default)
+                        help=argparse.SUPPRESS,
+                        #help="Significance threshold (alpha) for SNV pvalues"
+                        #"  in (relaxed) normal vcf"
+                        #" (default: %f)" % default
+                     )
     default = SomaticSNVCaller.DEFAULT_ALPHA_T
     experts.add_argument("--tumor-alpha",
-                        #required=True,
-                        default=default,
-                        type=float,
-                        help="Significance threshold (alpha) for SNV pvalues"
-                        "  in (relaxed) tumor vcf"
-                        " (default: %f)" % default)
-    default = "normal"
+                         #required=True,
+                         default=default,
+                         type=float,
+                         help=argparse.SUPPRESS,
+                         #help="Significance threshold (alpha) for SNV pvalues"
+                         #"  in (relaxed) tumor vcf"
+                         #" (default: %f)" % default
+                     )
+    default = "normal#"
     experts.add_argument("-S", "--ign-vcf",
                         default=default,
                         help="Ignore variants in this vcf-file for source"
