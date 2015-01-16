@@ -88,7 +88,7 @@ usage(const vcfset_conf_t* vcfset_conf)
      fprintf(stderr, "  -a | --action         Set operation to perform: intersect, complement or concat.\n"
              "                        - intersect = vcf1 AND vcf2.\n"
              "                        - complement = vcf1 \\ vcf2.\n"
-             "                        - concat = vcf1 + vcf2 ... vcfn (order as in input!)\n");
+             "                        - concat = vcf1 + vcf2 ... vcfn (output as in file order, i.e. output not necessarily sorted!)\n");
      fprintf(stderr, "  -I | --add-info STR   Add info field, e.g. 'SOMATIC'\n");
      fprintf(stderr, "       --count-only     Don't print bases, just numbers\n");
      fprintf(stderr, "       --only-pos       Disable allele-awareness by using position only (ignoring bases) as key for storing and comparison\n");

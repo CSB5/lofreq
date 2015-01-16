@@ -863,7 +863,7 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -o | --out FILE              Vcf output file [- = stdout]\n");
 
      fprintf(stderr, "- Regions:\n");
-     fprintf(stderr, "       -r | --region STR            Region in which pileup should be generated [null]\n");
+     fprintf(stderr, "       -r | --region STR            Limit calls to this region (chrom:start-end) [null]\n");
      fprintf(stderr, "       -l | --bed FILE              List of positions (chr pos) or regions (BED) [null]\n");
 
      fprintf(stderr, "- Base-call quality:\n");
