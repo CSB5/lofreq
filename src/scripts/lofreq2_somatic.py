@@ -76,35 +76,42 @@ class SomaticSNVCaller(object):
     VCF_SOMATIC_FINAL_WO_DBSNP_EXT = "somatic_final_minus-dbsnp.snvs.vcf.gz"
     VCF_INDELS_SOMATIC_FINAL_WO_DBSNP_EXT = "somatic_final_minus-dbsnp.indels.vcf.gz"
     #
-    VCF_GERMLINE_EXT = "germline.vcf.gz"
+    VCF_GERMLINE_EXT = "germline.snvs.vcf.gz"
+    VCF_GERMLINE_INDELS_EXT = "germline.indels.vcf.gz"
 
     LOFREQ = 'lofreq'
 
-    # call parameters for relaxed calls
+    # call parameters for relaxed calls in normal and tumor
     DEFAULT_ALPHA_N = 0.10
     DEFAULT_ALPHA_T = 0.01
     # tumor only
     DEFAULT_SRC_QUAL_ON = True
     DEFAULT_SRC_QUAL_IGN_VCF = None
-    DEFAULT_MIN_COV = 10
-    DEFAULT_USE_ORPHAN = False# on for normal anyway
-    DEFAULT_BAQ_OFF = False# off for normal anyway
+    DEFAULT_MIN_COV = 7
+    DEFAULT_USE_ORPHAN = False# always on for normal
+    DEFAULT_BAQ_OFF = False# always off for normal
 
-    # stringent parameters (also used for normal stringent)
+    # stringent parameters for tumor
     DEFAULT_MTC_T = 'bonf'
     DEFAULT_MTC_ALPHA_T = 1
     DEFAULT_INDEL_MTC_T = 'bonf'
     DEFAULT_INDEL_MTC_ALPHA_T = 0.01# conservative value reduces dep on dbsnp
 
+    # stringent parameters for normal (only used for sq)
+    DEFAULT_MTC_N = 'fdr'
+    DEFAULT_MTC_ALPHA_N = 0.01
+
+    # uniq parameters
     DEFAULT_SNV_UNIQ_MTC = 'fdr'
     DEFAULT_SNV_UNIQ_MTC_ALPHA = 0.001
     DEFAULT_INDEL_UNIQ_MTC = 'fdr'
     DEFAULT_INDEL_UNIQ_MTC_ALPHA = 0.0001
 
+    # misc
     DEFAULT_CALL_INDELS = False
-
     DEFAULT_NUM_THREADS = 1
     DEFAULT_DO_GERMLINE = False
+    DEFAULT_SB_MTC_ALPHA = 0.001
     DEFAULT_MAX_COV = 100000
 
     def __init__(self, bam_n, bam_t, ref, outprefix,
@@ -158,6 +165,7 @@ class SomaticSNVCaller(object):
         self.vcf_indels_som_fin_wo_dbsnp = self.outprefix + self.VCF_INDELS_SOMATIC_FINAL_WO_DBSNP_EXT
         #
         self.vcf_germl = self.outprefix + self.VCF_GERMLINE_EXT
+        self.vcf_germl_indels = self.outprefix + self.VCF_GERMLINE_INDELS_EXT
 
         self.call_rlx_extra_args = None
 
@@ -170,7 +178,7 @@ class SomaticSNVCaller(object):
                          self.vcf_som_raw, self.vcf_som_fin,
                          self.vcf_indels_som_raw, self.vcf_indels_som_fin,
                          self.vcf_som_fin_wo_dbsnp, self.vcf_indels_som_fin_wo_dbsnp,
-                         self.vcf_germl]
+                         self.vcf_germl, self.vcf_germl_indels]
         if not self.continue_interrupted:
             for f in self.outfiles:
                 assert not os.path.exists(f), (
@@ -179,10 +187,15 @@ class SomaticSNVCaller(object):
         # other params
         self.alpha_n = self.DEFAULT_ALPHA_N
         self.alpha_t = self.DEFAULT_ALPHA_T
+
         self.mtc_t = self.DEFAULT_MTC_T
         self.mtc_alpha_t = self.DEFAULT_MTC_ALPHA_T
         self.indel_mtc_t = self.DEFAULT_MTC_T
         self.indel_mtc_alpha_t = self.DEFAULT_MTC_ALPHA_T
+
+        # stringent normal (SQ ign. only)
+        self.mtc_n = self.DEFAULT_MTC_N
+        self.mtc_alpha_n = self.DEFAULT_MTC_ALPHA_N
 
         self.snv_uniq_mtc = self.DEFAULT_SNV_UNIQ_MTC
         self.snv_uniq_mtc_alpha = self.DEFAULT_SNV_UNIQ_MTC_ALPHA
@@ -197,7 +210,7 @@ class SomaticSNVCaller(object):
         self.num_threads = self.DEFAULT_NUM_THREADS
         self.call_indels = self.DEFAULT_CALL_INDELS
         self.do_germline = self.DEFAULT_DO_GERMLINE
-
+        self.sb_mtc_alpha = self.DEFAULT_SB_MTC_ALPHA
         self.max_cov = self.DEFAULT_MAX_COV
 
 
@@ -247,7 +260,7 @@ class SomaticSNVCaller(object):
 
     @staticmethod
     def num_tests_from_log(stream):
-        """FIXME:add-doc"""
+        """Extract number of performed SNV and indel tests from log file"""
 
         num_subst_tests = -1
         num_indel_tests = -1
@@ -374,10 +387,21 @@ class SomaticSNVCaller(object):
             vcf_rlx = self.vcf_n_rlx
             vcf_str = self.vcf_n_str
             vcf_indels_str = self.vcf_indels_n_str
+
+            mtc = self.mtc_n
+            mtc_alpha = self.mtc_alpha_n
+            indel_mtc = mtc
+            indel_mtc_alpha = mtc_alpha
+
         elif sample_type == "tumor":
             vcf_rlx = self.vcf_t_rlx
             vcf_str = self.vcf_t_str
             vcf_indels_str = self.vcf_indels_t_str
+
+            mtc = self.mtc_t
+            mtc_alpha = self.mtc_alpha_t
+            indel_mtc = self.indel_mtc_t
+            indel_mtc_alpha = self.indel_mtc_alpha_t
         else:
             raise ValueError(sample_type)
 
@@ -385,19 +409,18 @@ class SomaticSNVCaller(object):
         #
         filter_base_cmd = [
             self.LOFREQ, 'filter', '-i', vcf_rlx,
-            '--sb-mtc', 'fdr', '--sb-alpha', '%f' % 0.001,
+            '--sb-mtc', 'fdr', '--sb-alpha', '%f' % self.sb_mtc_alpha,
             '--cov-max', "%d" % self.max_cov,
             '--cov-min', '%d' % self.min_cov]
-        # snvs
         filter_snv_cmd = filter_base_cmd + [
             '--only-snvs',
-            '--snvqual-mtc', "%s" % self.mtc_t,
-            '--snvqual-alpha', '%f' % self.mtc_alpha_t,
+            '--snvqual-mtc', "%s" % mtc,
+            '--snvqual-alpha', '%f' % mtc_alpha,
             '--snvqual-ntests', '%d' % num_snv_tests]
         filter_indel_cmd = filter_base_cmd + [
             '--only-indels',
-            '--indelqual-mtc', "%s" % self.indel_mtc_t,
-            '--indelqual-alpha', '%f' % self.indel_mtc_alpha_t,
+            '--indelqual-mtc', "%s" % indel_mtc,
+            '--indelqual-alpha', '%f' % indel_mtc_alpha,
             '--indelqual-ntests', '%d' % num_indel_tests]
 
         for (vcf_out, cmd) in [(vcf_str, filter_snv_cmd),
@@ -413,17 +436,19 @@ class SomaticSNVCaller(object):
         """Call germline variants by taking the intersection between
         the stringent tumor and relaxed normal calls
 
-        FIXME this is very ad-hoc. For example there is no further
-        downstream filtering and we're using the meta-info from the
-        vcf_n_rlx entries
+        WARNING this is ad-hoc. There is no further downstream
+        filtering and we're using the meta-info from the vcf_n_rlx
+        entries.
         """
 
-        LOG.warn("germline calls will not contain indels!")
-        # needs to work on indel t str
         cmd = [self.LOFREQ, 'vcfset',
                '-a', 'intersect',
                '-1', self.vcf_n_rlx, '-2', self.vcf_t_str,
                '-o', self.vcf_germl]
+        cmd = [self.LOFREQ, 'vcfset',
+               '-a', 'intersect',
+               '-1', self.vcf_n_rlx, '-2', self.vcf_indels_t_str,
+               '-o', self.vcf_germl_indels]
         self.subprocess_wrapper(cmd)
 
 
@@ -436,7 +461,7 @@ class SomaticSNVCaller(object):
         vcfset_snv_cmd = vcfset_base_cmd + [
             '--only-snvs', '-1', self.vcf_t_str, '-o', self.vcf_som_raw]
         vcfset_indels_cmd = vcfset_base_cmd + [
-            '--only-indels', '--only-pos', '-1', self.vcf_indels_t_str, 
+            '--only-indels', '--only-pos', '-1', self.vcf_indels_t_str,
             '-o', self.vcf_indels_som_raw]
 
         for (vcf_out, cmd) in [(self.vcf_som_raw, vcfset_snv_cmd),
@@ -446,8 +471,8 @@ class SomaticSNVCaller(object):
                 continue
             else:
                 assert not os.path.exists(vcf_out), (
-                    "%s already exists. Please remove or"
-                    " run me with --continue if you want to reuse this file" % vcf_out)
+                    "%s already exists. Please remove or run me with"
+                    " --continue if you want to reuse this file" % vcf_out)
             self.subprocess_wrapper(cmd)
 
 
@@ -458,12 +483,14 @@ class SomaticSNVCaller(object):
         uniq_base_cmd = [self.LOFREQ, 'uniq', '--uni-freq', "0.5"]
 
 
-        uniq_snv_cmd = uniq_base_cmd + ["-v", self.vcf_som_raw,
-                                        '--uniq-mtc', self.snv_uniq_mtc,
-                                        '--uniq-alpha', "%s" % self.snv_uniq_mtc_alpha]
-        uniq_indels_cmd = uniq_base_cmd + ["-v", self.vcf_indels_som_raw,
-                                           '--uniq-mtc', self.indel_uniq_mtc,
-                                           '--uniq-alpha', "%s" % self.indel_uniq_mtc_alpha]
+        uniq_snv_cmd = uniq_base_cmd + [
+            "-v", self.vcf_som_raw,
+            '--uniq-mtc', self.snv_uniq_mtc,
+            '--uniq-alpha', "%s" % self.snv_uniq_mtc_alpha]
+        uniq_indels_cmd = uniq_base_cmd + [
+            "-v", self.vcf_indels_som_raw,
+            '--uniq-mtc', self.indel_uniq_mtc,
+            '--uniq-alpha', "%s" % self.indel_uniq_mtc_alpha]
 
         for (vcf_out, cmd) in [(self.vcf_som_fin, uniq_snv_cmd),
                                (self.vcf_indels_som_fin, uniq_indels_cmd)]:
@@ -473,8 +500,8 @@ class SomaticSNVCaller(object):
                 continue
             else:
                 assert not os.path.exists(vcf_out), (
-                    "%s already exists. Please remove or"
-                    " run me with --continue if you want to reuse this file" % vcf_out)
+                    "%s already exists. Please remove or run me with"
+                    " --continue if you want to reuse this file" % vcf_out)
 
             cmd.extend(['-o', vcf_out])
             cmd.append(self.bam_n)
@@ -490,8 +517,6 @@ class SomaticSNVCaller(object):
         """Remove dbSNP from 'final' somatic calls
         """
 
-        # FIXME only run if -1 contains indels/snvs otherwise
-        # we waste time loading dbsnp
         complement_base_cmd = [self.LOFREQ, 'vcfset',
                                '-a', 'complement',
                                '-2', self.dbsnp]
@@ -563,7 +588,7 @@ class SomaticSNVCaller(object):
         if self.do_germline:
             self.call_germline()
 
-        # FIXME replace source line in final output with sys.argv?
+        # FIXME add source line (sys.argv) in final outputs
 
 
 
@@ -595,7 +620,8 @@ def cmdline_parser():
     basic.add_argument("-l", "--bed",
                         help="BED file listing regions to restrict analysis to")
     basic.add_argument("-d", "--dbsnp",
-                        help="vcf-file (bgzipped and index with tabix) containing known germline variants")
+                        help="vcf-file (bgzipped and index with tabix)"
+                       " containing known germline variants (e.g. dbsnp for human")
 
     default = SomaticSNVCaller.DEFAULT_NUM_THREADS
     basic.add_argument("--threads",
@@ -604,34 +630,9 @@ def cmdline_parser():
                         dest="num_threads",
                         help="Use this many threads for each call")
 
-    advanced = parser.add_argument_group('Advanced Options')
-    advanced.add_argument("--call-indels",
-                        action="store_true",
-                        help="Also call indels")
+    ###
 
-    default = SomaticSNVCaller.DEFAULT_ALPHA_T
-    advanced.add_argument("--tumor-alpha",
-                        #required=True,
-                        default=default,
-                        type=float,
-                        help="Significance threshold (alpha)"
-                        " for SNV pvalues in (relaxed) tumor vcf"
-                        " (default: %f)" % default)
-    
-    default = SomaticSNVCaller.DEFAULT_MIN_COV
-    advanced.add_argument("--min-cov",
-                        type=int,
-                        default=default,
-                        help="Minimum coverage for somatic calls"
-                        " (default: %d)" % default)
-
-    default = SomaticSNVCaller.DEFAULT_ALPHA_N
-    advanced.add_argument("--normal-alpha",
-                        #required=True,
-                        default=default,
-                        type=float,
-                        help="Significance threshold (alpha) for SNV pvalues"
-                        "  in (relaxed) normal vcf (default: %f)" % default)
+    advanced = parser.add_argument_group('Advanced Options (PLEASE read the documentation before changing any of these)')
 
     default = SomaticSNVCaller.DEFAULT_MTC_T
     choices = ['bonf', 'holm-bonf', 'fdr']
@@ -667,39 +668,69 @@ def cmdline_parser():
                         help="Multiple testing correction alpha for tumor"
                         " (default: %f)" % default)
 
+    advanced.add_argument("--call-indels",
+                        action="store_true",
+                        help="Also call indels (see documentation  on how to preprocess your BAM files)")
+
+
+    default = SomaticSNVCaller.DEFAULT_MIN_COV
+    advanced.add_argument("--min-cov",
+                        type=int,
+                        default=default,
+                        help="Minimum coverage for somatic calls"
+                        " (default: %d)" % default)
+
     advanced.add_argument("--germline",
                         action="store_true",
                         help="Also list germline calls in separate file")
 
-    advanced.add_argument("--no-src-qual",
-                        action="store_true",
-                        help="Disable use of source quality in tumor (see also -V)")
+
+    ###
+
+    experts = parser.add_argument_group('Experts (PLEASE do not use/change these unless you know exactly what you are doing and if you change them light a candle first)')
+
+    default = SomaticSNVCaller.DEFAULT_ALPHA_N
+    experts.add_argument("--normal-alpha",
+                        #required=True,
+                        default=default,
+                        type=float,
+                        help="Significance threshold (alpha) for SNV pvalues"
+                        "  in (relaxed) normal vcf"
+                        " (default: %f)" % default)
+    default = SomaticSNVCaller.DEFAULT_ALPHA_T
+    experts.add_argument("--tumor-alpha",
+                        #required=True,
+                        default=default,
+                        type=float,
+                        help="Significance threshold (alpha) for SNV pvalues"
+                        "  in (relaxed) tumor vcf"
+                        " (default: %f)" % default)
     default = "normal"
-    advanced.add_argument("-S", "--ign-vcf",
+    experts.add_argument("-S", "--ign-vcf",
                         default=default,
                         help="Ignore variants in this vcf-file for source"
                         " quality computation in tumor (collides with "
-                        " --no-src-qual). Default is to use predictions in"
-                        " (stringently called) normal sample")
+                        " --no-src-qual). Default is to use (stringently"
+                         " filtered) predictions in normal sample")
 
-    advanced.add_argument("--debug",
-                          action="store_true",
-                          help="Enable debugging")
-
-
-    experts_only = parser.add_argument_group('Experts only')
-    experts_only.add_argument("--use-orphan",
+    experts.add_argument("--use-orphan",
                               action="store_true",
                               help="Use orphaned/anomalous reads from pairs"
                               " in all samples")
-    experts_only.add_argument("--baq-off",
+    experts.add_argument("--baq-off",
                               action="store_true",
                               help="Switch use of BAQ off in all samples")
-    experts_only.add_argument("--call-rlx-extra-args",
+    experts.add_argument("--call-rlx-extra-args",
                               dest="call_rlx_extra_args",
                               help="Extra arguments to call_rlx (replace dashes with @)")
 
-    experts_only.add_argument("--continue",
+    experts.add_argument("--no-src-qual",
+                        action="store_true",
+                        help="Disable use of source quality in tumor (see also -V)")
+    experts.add_argument("--debug",
+                          action="store_true",
+                          help="Enable debugging")
+    experts.add_argument("--continue",
                               dest="continue_interrupted",
                               action="store_true",
                               help="continue interrupted run. Will reuse"
@@ -741,11 +772,19 @@ def main():
         LOG.error("The directory part of the given output prefix points"
                   " to a non-existing directory: '%s').\n" % (outdir))
         sys.exit(1)
-    
+
+    if not args.dbsnp:
+        LOG.warn("No dbsnp file given. Using dbsnp is highly recommended"
+                 " when dealing with human data.")
+    elif not os.path.exists(args.dbsnp + ".tbi"):
+        LOG.warn("Looks like dbsnp was not indexed. Please run bgzip and tabix"
+                 " on your dbsnp vcf if 'lofreq somatic' fails and rerun with"
+                 " --continue")
     try:
         somatic_snv_caller = SomaticSNVCaller(
-            bam_n=args.normal, bam_t=args.tumor, ref=args.ref, outprefix=args.outprefix,
-            bed=args.bed, dbsnp=args.dbsnp, continue_interrupted=args.continue_interrupted)
+            bam_n=args.normal, bam_t=args.tumor, ref=args.ref,
+            outprefix=args.outprefix, bed=args.bed, dbsnp=args.dbsnp,
+            continue_interrupted=args.continue_interrupted)
     except AssertionError as e:
         LOG.fatal("%s" % str(e))
         sys.exit(1)
@@ -769,7 +808,8 @@ def main():
     if args.call_indels:
         somatic_snv_caller.call_indels = True
     if args.call_rlx_extra_args:
-        somatic_snv_caller.call_rlx_extra_args = args.call_rlx_extra_args.replace('@', '-').split(" ")
+        extra_args = args.call_rlx_extra_args.replace('@', '-').split(" ")
+        somatic_snv_caller.call_rlx_extra_args = extra_args
 
     if args.no_src_qual:
         somatic_snv_caller.src_qual_on = False
@@ -777,9 +817,10 @@ def main():
         somatic_snv_caller.src_qual_on = True
         if args.ign_vcf:
             if args.ign_vcf == "normal":
-                # using normal rlx is too relaxed (according to dream syn 1)
-                LOG.warn("Using stringent normal for SQ which does not however contain indels!")
-                somatic_snv_caller.src_qual_ign_vcf = somatic_snv_caller.vcf_n_str
+                somatic_snv_caller.src_qual_ign_vcf = ",".join([
+                    somatic_snv_caller.vcf_n_str,
+                    somatic_snv_caller.vcf_indels_n_str
+                    ])
             else:
                 somatic_snv_caller.src_qual_ign_vcf = args.ign_vcf
 
