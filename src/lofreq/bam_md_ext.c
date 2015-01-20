@@ -76,6 +76,12 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
     }
     iaq[k] = daq[k] = '\0';
     
+    /* equivalent indels may occur in repetitive regions. In such
+     * cases, we estimate the alignment probability of an indel event
+     * as the sum of the alignment probability of all equivalent indel
+     * events. see del_rep and ins_rep handling below 
+     */
+
     for (k = 0, x = c->pos, y = 0, z = 0; k < c->n_cigar; ++k) { 
          int j, op = cigar[k]&0xf, oplen = cigar[k]>>4;
          // this could be merged into the later block
@@ -93,12 +99,12 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
               int qpos = y;
               if (qpos == 0) continue;
               for (j = 0; j < oplen; j++) {
-                   del_seq[j] = toupper(ref[x]);
+                   del_seq[j] = ref[x];
                    x++;
               }
               del_seq[j] = '\0';
               int ref_i = x;
-              int del_rep = 0;
+              int del_rep = 0;/* if in repetetive region */
               int rep_i = 0;
               while (ref_i < xe) {
                    if (ref[ref_i] != del_seq[rep_i]) {
@@ -142,7 +148,7 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
                    z++;
               }
               ins_seq[j] = '\0';
-              int ins_rep = 0;
+              int ins_rep = 0; /* if in repetetive region */
               int ref_i = x;
               int rep_i = 0;
               while (ref_i < xe) {

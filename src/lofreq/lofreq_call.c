@@ -28,9 +28,9 @@
 
 
 /*
- * This file is partially based on samtools' bam_plcmd.c Whenever
- * parts of the code looks like they've been written by a other-wordly
- * wizard, then it was probably from Heng Li.
+ * This file is partially based on samtools' bam_plcmd.c. Parts of
+ * code that look like they were written by a other-worldly wizard are
+ * Heng Li's.
  *
  */
 

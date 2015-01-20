@@ -646,6 +646,7 @@ mplp_func(void *data, bam1_t *b)
                if (!ma->ref) {
                     has_ref = 0;
                } else {
+                    strtoupper(ma->ref);/* safeguard */
                     ma->ref_id = b->core.tid;
                     has_ref = 1;
                }
@@ -774,7 +775,7 @@ void compile_plp_col(plp_col_t *plp_col,
      plp_col_init(plp_col);
      plp_col->target = strdup(target_name);
      plp_col->pos = pos;
-     plp_col->ref_base = toupper(ref_base);
+     plp_col->ref_base = ref_base;
      plp_col->coverage_plp = n_plp;  /* this is coverage as in the original mpileup,
                                     i.e. after read-level filtering */
      plp_col->num_bases = 0;
@@ -1301,6 +1302,7 @@ mpileup(const mplp_conf_t *mplp_conf,
               LOG_FATAL("Reference fasta file doesn't seem to contain the right sequence(s) for this BAM file. (mismatch for seq %s listed in BAM header)\n", h->target_name[tid0]);
               return -1;
          }
+         strtoupper(ref);/* safeguard */
          ref_tid = tid0;
          for (i = 0; i < n; ++i) data[i]->ref = ref, data[i]->ref_id = tid0;
     } else {
@@ -1341,6 +1343,7 @@ mpileup(const mplp_conf_t *mplp_conf,
                       LOG_FATAL("Reference fasta file doesn't seem to contain the right sequence(s) for this BAM file. (mismatch for seq %s listed in BAM header).\n", h->target_name[tid]);
                       return -1;
                  }
+                 strtoupper(ref);/* safeguard */
                  LOG_DEBUG("%s\n", "sequence fetched");
             }
             for (i = 0; i < n; ++i)  {

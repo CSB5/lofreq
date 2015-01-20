@@ -308,7 +308,7 @@ calc_read_alnerrprof(double *alnerrprof, unsigned long int *used_pos,
                for (i=pos; i<pos+l; i++) {                             
                     assert(qpos < qlen);
                     /* case agnostic */
-                    char ref_nt = toupper(ref[i]);
+                    char ref_nt = ref[i];
                     char read_nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(b), qpos)];
                     int bq = bam1_qual(b)[qpos];
 #if 0
@@ -475,8 +475,7 @@ count_cigar_ops(int *counts, int **quals, const bam1_t *b,
                for (i=tpos; i<tpos+l; i++) {                             
                     int actual_op;
                     assert(qpos < qlen);
-                    /* case agnostic */
-                    char ref_nt = toupper(ref[i]);
+                    char ref_nt = ref[i];
                     char read_nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(b), qpos)];
                     int bq = bam1_qual(b)[qpos];
 

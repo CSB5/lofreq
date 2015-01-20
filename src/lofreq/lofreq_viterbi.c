@@ -157,6 +157,7 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip
                fprintf(stderr, "failed to find reference sequence %s\n", 
                                 tmp->in->header->target_name[c->tid]);
           }
+          strtoupper(tmp->ref);/* safeguard */
           tmp->tid = c->tid;
           tmp->reflen = reflen;
      }
@@ -252,7 +253,7 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip
      int upper = x + RWIN;
      upper = upper > tmp->reflen? tmp->reflen: upper;
      for (z = 0, i = lower; i < upper; z++, i++) {
-          ref[z] = toupper(tmp->ref[i]);
+          ref[z] = tmp->ref[i];
      }
      ref[z] = '\0';
 

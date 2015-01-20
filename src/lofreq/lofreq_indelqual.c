@@ -140,6 +140,7 @@ static int dindel_fetch_func(bam1_t *b, void *data)
              /*fprintf(stderr, "fetching reference sequence %s\n",
                tmp->in->header->target_name[c->tid]); */
           char *ref = fai_fetch(tmp->fai, tmp->in->header->target_name[c->tid], &rlen);
+          strtoupper(ref);/* safeguard */
           int rlen = strlen(ref);
           tmp->tid = c->tid;
           if (tmp->hpcount) free(tmp->hpcount);

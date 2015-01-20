@@ -252,6 +252,7 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
                target_name = sam->header->target_name[b->core.tid];
                ref = faidx_fetch_seq(bamstats_conf->fai, target_name,
                                      0, 0x7fffffff, &ref_len);
+               strtoupper(ref);/* safeguard */
           }
 
           if (bamstats_conf->type == TYPE_OPCAT) {

@@ -134,4 +134,8 @@ void add_del_sequence(del_event **head_del_counts, char seq[],
 del_event * find_del_sequence(del_event *const *head_del_counts, char seq[]);
 void destruct_del_event_counts(del_event **head_del_counts);
 
+void
+strtoupper(char *s);
+
+
 #endif

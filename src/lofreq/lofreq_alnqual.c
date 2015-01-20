@@ -30,6 +30,8 @@
 #include <stdlib.h>
 #include "htslib/faidx.h"
 #include "sam.h"
+
+#include "utils.h"
 #include "bam_md_ext.h"
 #include "defaults.h"
 
@@ -144,6 +146,7 @@ int main_alnqual(int argc, char *argv[])
                if (tid != b->core.tid) {
                     free(ref);
                     ref = fai_fetch(fai, fp->header->target_name[b->core.tid], &len);
+                    strtoupper(ref);/* safeguard */
                     tid = b->core.tid;
                     if (ref == 0) {
                          fprintf(stderr, "FATAL: %s failed to find sequence '%s' in the reference.\n",
