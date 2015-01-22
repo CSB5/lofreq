@@ -94,7 +94,7 @@ class MetaVar(object):
 
         # pyvcf keeps ALT as _Substitution, not string as LoFreq's vcf clone
         # therefore won't work','.join(vcf_var.ALT),
-        self.repr = "%s %d %c>%c %f" % (vcf_var.CHROM, vcf_var.POS,
+        self.repr = "%s %d %s>%s %f" % (vcf_var.CHROM, vcf_var.POS,
                                         vcf_var.REF, 
                                         ','.join(["%s" % x for x in vcf_var.ALT]),
                                         vcf_var.INFO['AF'])
