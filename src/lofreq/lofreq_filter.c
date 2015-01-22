@@ -372,11 +372,6 @@ int apply_snvqual_filter_mtc(snvqual_filter_t *snvqual_filter, var_t **vars, con
      long int num_noncons_vars = 0;
      long int i;
 
-     if (snvqual_filter->ntests && (num_vars > snvqual_filter->ntests)) {
-          LOG_WARN("Number of variants (%ld) larger than the number of predefined tests (%ld) for snvqual filter. Are you sure that makes sense?\n",
-                   num_vars, snvqual_filter->ntests);
-     }
-
      /* collect values from noncons vars only and keep track of their indeces
       */
      orig_idx = malloc(num_vars * sizeof(long int));
@@ -397,6 +392,12 @@ int apply_snvqual_filter_mtc(snvqual_filter_t *snvqual_filter, var_t **vars, con
           free(orig_idx);
           return 0;
      }
+
+     if (snvqual_filter->ntests && (num_noncons_vars > snvqual_filter->ntests)) {
+          LOG_WARN("Number of (non consensus) variants larger than the number of predefined tests for snvqual filter (%ld > %ld). Are you sure that makes sense?\n",
+                   num_noncons_vars, snvqual_filter->ntests);
+     }
+
      orig_idx = realloc(orig_idx, (num_noncons_vars * sizeof(long int)));
      if (! orig_idx) { LOG_FATAL("realloc failed. Exiting..."); return -1; }
      noncons_errprobs = realloc(noncons_errprobs, (num_noncons_vars * sizeof(double)));
@@ -476,10 +477,6 @@ int apply_indelqual_filter_mtc(indelqual_filter_t *indelqual_filter, var_t **var
 
      /* FIXME function almost identical to apply_indelqual_filter_mtc just different filter can be easily merged by accepting both types of variants */
 
-     if (indelqual_filter->ntests && num_vars > indelqual_filter->ntests) {
-         LOG_WARN("%s\n", "Number of predefined tests for indelqual filter larger than number of variants! Are you sure that makes sense?");
-     }
-
      /* collect values from noncons vars only and keep track of their indeces
       */
      orig_idx = malloc(num_vars * sizeof(long int));
@@ -500,6 +497,12 @@ int apply_indelqual_filter_mtc(indelqual_filter_t *indelqual_filter, var_t **var
           free(orig_idx);
           return 0;
      }
+
+     if (indelqual_filter->ntests && num_noncons_vars > indelqual_filter->ntests) {
+          LOG_WARN("Number of (non consensus) variants larger than number of predefined tests for indelqual filter (%ld > %ld)! Are you sure that makes sense?\n", 
+                   num_noncons_vars, indelqual_filter->ntests);
+     }
+
      orig_idx = realloc(orig_idx, (num_noncons_vars * sizeof(long int)));
      if ( ! orig_idx) { LOG_FATAL("%s\n", "out of memory"); return -1; }
      noncons_errprobs = realloc(noncons_errprobs, (num_noncons_vars * sizeof(double)));
@@ -1189,7 +1192,7 @@ main_filter(int argc, char *argv[])
          vars = realloc(vars, (num_vars * sizeof(var_t*)));
     }
     vcf_file_close(& cfg.vcf_in);
-    LOG_VERBOSE("Parsed %d variants\n", num_vars);
+    LOG_VERBOSE("Parsed %ld variants\n", num_vars);
 
 
     if (cfg.sb_filter.mtc_type != MTC_NONE) {
