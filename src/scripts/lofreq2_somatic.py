@@ -710,7 +710,7 @@ def cmdline_parser():
                          #"  in (relaxed) tumor vcf"
                          #" (default: %f)" % default
                      )
-    default = "normal#"
+    default = "normal"
     experts.add_argument("-S", "--ign-vcf",
                         default=default,
                         help="Ignore variants in this vcf-file for source"
