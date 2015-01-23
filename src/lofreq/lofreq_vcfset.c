@@ -83,8 +83,7 @@ usage(const vcfset_conf_t* vcfset_conf)
      fprintf(stderr,"Options:\n");
      fprintf(stderr, "  -1 | --vcf1 FILE      1st VCF input file (bgzip supported)\n");
      fprintf(stderr, "  -2 | --vcf2 FILE      2nd VCF input file (mandatory - except for concat - and needs to be tabix indexed)\n");
-     fprintf(stderr, "  -o | --vcfout         VCF output file (default: - for stdout; gzip supported).\n"
-             "                        Meta-data will be copied from vcf1\n");
+     fprintf(stderr, "  -o | --vcfout         VCF output file (default: - for stdout; gzip supported).\n");
      fprintf(stderr, "  -a | --action         Set operation to perform: intersect, complement or concat.\n"
              "                        - intersect = vcf1 AND vcf2.\n"
              "                        - complement = vcf1 \\ vcf2.\n"
@@ -93,10 +92,14 @@ usage(const vcfset_conf_t* vcfset_conf)
      fprintf(stderr, "       --count-only     Don't print bases, just numbers\n");
      fprintf(stderr, "       --only-pos       Disable allele-awareness by using position only (ignoring bases) as key for storing and comparison\n");
      fprintf(stderr, "       --only-passed    Ignore variants marked as filtered\n");
-     fprintf(stderr, "       --only-snvs      Ignore anything but SNVs in input files\n");
-     fprintf(stderr, "       --only-indels    Ignore anything but indels in input files\n");
+     fprintf(stderr, "       --only-snvs      Ignore anything but SNVs in both input files\n");
+     fprintf(stderr, "       --only-indels    Ignore anything but indels in both input files\n");
      fprintf(stderr, "       --verbose        Be verbose\n");
      fprintf(stderr, "       --debug          Enable debugging\n");
+
+     fprintf(stderr, "\nNote, vcf1 is always fully parsed, whereas indexing is used for vcf2.\n");
+     fprintf(stderr, "Therefore, use the bigger file as vcf2 to speed things up.\n");
+     fprintf(stderr, "Header/meta-data for the output file is taken from vcf1\n");
 }
 /* usage() */
 
@@ -429,22 +432,41 @@ main_vcfset(int argc, char *argv[])
               var2_match = 0;
               while (tbx_itr_next(vcf2_hts, vcf2_tbx, var2_itr, &var2_kstr) >= 0) {
                    var_t *var2 = NULL;
+                   int var2_is_indel = 0;
+
                    vcf_new_var(&var2);
                    rc = vcf_parse_var_from_line(var2_kstr.s, var2);
+                   /* LOG_FIXME("%d:%s>%s looking at var2 %d:%s>%s (reg %s)\n", 
+                             var1->pos+1, var1->ref, var1->alt,
+                             var2->pos+1, var2->ref, var2->alt, regbuf); */
                    if (rc) {
                         LOG_FATAL("%s\n", "Error while parsing variant returned from tabix");
                         return -1;
                    }
-                   if (vcfset_conf.only_passed && ! VCF_VAR_PASSES(var2)) {
-#ifdef TRACE
-                        LOG_DEBUG("Skipping non-passing var2 %s:%d\n", var2->chrom, var2->pos);
-#endif
+
+                   var2_is_indel = vcf_var_is_indel(var2);
+
+                   /* iterator returns anything overlapping with that 
+                    * position, i.e. this also includes up/downstream
+                    * indels, so make sure actual position matches */
+                   if (var1->pos != var2->pos) {
                         var2_match = 0;
+
+                   } else if (vcfset_conf.only_passed && ! VCF_VAR_PASSES(var2)) {
+                        var2_match = 0;
+
+                   } else if (vcfset_conf.only_snvs && var2_is_indel) {
+                        var2_match = 0;
+
+                   } else if (vcfset_conf.only_indels && ! var2_is_indel) {
+                        var2_match = 0;
+
                    } else if (vcfset_conf.only_pos) {
 #ifdef TRACE
                         LOG_DEBUG("Pos match for var2 %s:%d\n", var2->chrom, var2->pos);
 #endif
-                        var2_match = 1;/* FIXME: check type as well i.e. snv vs indel */
+                        var2_match = 1;
+
                    } else {
                         if (0==strcmp(var1->ref, var2->ref) && 0==strcmp(var1->alt, var2->alt)) {
 #ifdef TRACE
