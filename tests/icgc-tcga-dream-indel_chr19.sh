@@ -2,7 +2,7 @@
 
 source lib.sh || exit 1
 
-KEEP_TMP=1
+KEEP_TMP=0
 REF=data/icgc-tcga-dream-support/Homo_sapiens_assembly19.fasta
 NORMAL=data/icgc-tcga-dream-indel_chr19/chr19.normal_didq_aq.bam
 TUMOR=data/icgc-tcga-dream-indel_chr19/chr19.tumor_didq_aq.bam
@@ -13,6 +13,8 @@ EVALUATOR=data/icgc-tcga-dream-support/evaluator.py
 #EVALUATOR=/mnt/pnsg10_projects/wilma/lofreq/somatic/dream-challenge/tools/ICGC-TCGA-DREAM-Mutation-Calling-challenge-tools/evaluator.py
 # for patched version with --classvcf support but no proper arg handling
 TRUTH=data/icgc-tcga-dream-indel_chr19/chr19.truth.vcf.gz
+
+# threads=16; echoinfo "overwriting default threads to $threads"
 
 outdir=$(mktemp -d -t $(basename $0).XXXXXX)
 outpref=$outdir/lofreq_test
@@ -49,11 +51,14 @@ if echo $res | grep -q ERROR; then
 fi
 echo "$title: " $res 1>&2
 
+
+# sens/spec limit based on v2.1.2a-54-g52e8097 and with -1% allowance
+
 title="indels"
 f=${outpref}somatic_final.indels.vcf.gz
 res_ll=$($EVALUATOR -v $f -t $TRUTH -m INDEL | awk 'END {print $NF}') || exit 1
 res=$(echo $res_ll | \
-  awk -F, '{prec=$1; rec=$2; if (prec<0.90 || rec<0.50) {status="ERROR"} else {status="OK"} printf "%s: precision=%f recall=%f\n", status, prec, rec}') || exit 1
+  awk -F, '{prec=$1; rec=$2; if (prec<0.879 || rec<0.484) {status="ERROR"} else {status="OK"} printf "%s: precision=%f recall=%f\n", status, prec, rec}') || exit 1
 if echo $res | grep -q ERROR; then
    let num_err=num_err+1
 fi
@@ -63,7 +68,7 @@ title="indels after dbsnp removal"
 f=${outpref}somatic_final_minus-dbsnp.indels.vcf.gz
 res_ll=$($EVALUATOR -v $f -t $TRUTH -m INDEL | awk 'END {print $NF}') || exit 1
 res=$(echo $res_ll | \
-  awk -F, '{prec=$1; rec=$2; if (prec<0.90 || rec<0.50) {status="ERROR"} else {status="OK"} printf "%s: precision=%f recall=%f\n", status, prec, rec}') || exit 1
+  awk -F, '{prec=$1; rec=$2; if (prec<0.952 || rec<0.482) {status="ERROR"} else {status="OK"} printf "%s: precision=%f recall=%f\n", status, prec, rec}') || exit 1
 if echo $res | grep -q ERROR; then
    let num_err=num_err+1
 fi
