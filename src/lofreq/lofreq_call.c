@@ -140,21 +140,20 @@ report_cons_sub(const plp_col_t *p, snvcall_conf_t *conf){
      const int is_consvar = 1;
      const int qual = -1;
      float af = base_count(p, p->cons_base[0]) / (float)p->coverage_plp;
-
      char report_ref[2];
+     int ref_nt4 = bam_nt4_table[(int)report_ref[0]];
+     int alt_nt4 = bam_nt4_table[(int)p->cons_base[0]];
+     dp4_counts_t dp4;
+
+     
      report_ref[0] = p->ref_base;
      report_ref[1] = '\0';
 
-     int ref_nt4;
-     int alt_nt4;
-     ref_nt4 = bam_nt4_table[(int)report_ref[0]];
-     alt_nt4 = bam_nt4_table[(int)p->cons_base[0]];
-
-     dp4_counts_t dp4;
      dp4.ref_fw = p->fw_counts[ref_nt4];
      dp4.ref_rv = p->rv_counts[ref_nt4];
      dp4.alt_fw = p->fw_counts[alt_nt4];
      dp4.alt_rv = p->rv_counts[alt_nt4];
+
 
      LOG_DEBUG("cons var snp: %s %d %c>%s\n",
                p->target, p->pos+1, p->ref_base, p->cons_base);
@@ -236,6 +235,59 @@ report_cons_del(const plp_col_t *p, snvcall_conf_t *conf) {
 
 }
 
+
+
+/* converts del event to reference and alt string representation.
+   ref and alt are allocated here and must be freed by user */
+void
+del_to_str(const del_event *it, const char refbase, 
+           char **refstr, char **altstr)
+{
+     int j;
+     int del_length = strlen(it->key);
+
+     if (((*refstr) = malloc(2 * sizeof(char)))==NULL) {
+          LOG_FATAL("%s\n", "memory allocation failed");
+          exit(1);
+     }
+     if (((*altstr) = malloc((del_length+2) * sizeof(char)))==NULL) {
+          LOG_FATAL("%s\n", "memory allocation failed");
+          exit(1);
+     }
+
+     (*refstr)[0] = (*altstr)[0] = refbase;
+     for (j = 0; j <= del_length; ++j) {
+          (*refstr)[j+1] = it->key[j];
+     }
+     (*refstr)[j+1] = (*altstr)[1] = '\0';
+}
+
+
+/* converts ins event to reference and alt string representation.
+   ref and alt are allocated here and must be freed by user */
+void
+ins_to_str(const ins_event *it, const char refbase, 
+           char **refstr, char **altstr)
+{
+     int j;
+     int ins_length = strlen(it->key);
+
+     if (((*refstr) = malloc(2 * sizeof(char)))==NULL) {
+          LOG_FATAL("%s\n", "memory allocation failed");
+          exit(1);
+     }
+     if (((*altstr) = malloc((ins_length+2) * sizeof(char)))==NULL) {
+          LOG_FATAL("%s\n", "memory allocation failed");
+          exit(1);
+     }
+
+     (*refstr)[0] = (*altstr)[0] = refbase;
+     for (j = 0; j <= ins_length; ++j) {
+          (*altstr)[j+1] = it->key[j];
+     }
+     (*refstr)[1] = (*altstr)[j+1] = '\0';     
+}
+
 int
 call_alt_ins(const plp_col_t *p, double *bi_err_probs, int bi_num_err_probs,
              snvcall_conf_t *conf, ins_event *it) {
@@ -259,32 +311,28 @@ call_alt_ins(const plp_col_t *p, double *bi_err_probs, int bi_num_err_probs,
      // see if there was an insertion
      long double bi_pvalue = bi_pvalues[0];
      if (bi_pvalue*conf->bonf_indel < conf->sig) {
+          char *report_ins_ref;
+          char *report_ins_alt;
+          dp4_counts_t dp4;
           const int is_indel = 1;
           const int is_consvar = 0;
           const int qual = PROB_TO_PHREDQUAL(bi_pvalue);
-
-          char report_ins_ref[2];
-          char report_ins_alt[256];
-          int ins_length = strlen(it->key);
-          report_ins_ref[0] = report_ins_alt[0] = p->ref_base;
-          int j;
-          for (j = 0; j <= ins_length; ++j) {
-               report_ins_alt[j+1] = it->key[j];
-          }
-          report_ins_ref[1] = report_ins_alt[j+1] = '\0';
           float af = it->count / ((float)p->coverage_plp - p->num_tails);
 
-          dp4_counts_t dp4;
           dp4.ref_fw = p->non_ins_fw_rv[0];
           dp4.ref_rv = p->non_ins_fw_rv[1];
           dp4.alt_fw = it->fw_rv[0];
           dp4.alt_rv = it->fw_rv[1];
+
+          ins_to_str(it, p->ref_base, &report_ins_ref, &report_ins_alt);
 
           LOG_DEBUG("Low freq insertion: %s %d %s>%s pv-prob:%Lg;pv-qual:%d\n",
                     p->target, p->pos+1, report_ins_ref, report_ins_alt,
                     bi_pvalue, qual);
           report_var(&conf->vcf_out, p, report_ins_ref, report_ins_alt,
                      af, qual, is_indel, is_consvar, &dp4);
+
+          free(report_ins_ref); free(report_ins_alt);
      }
      return 0;
 }
@@ -323,20 +371,14 @@ int call_alt_del(const plp_col_t *p, double *bd_err_probs, int bd_num_err_probs,
           const int is_indel = 1;
           const int is_consvar = 0;
           const int qual = PROB_TO_PHREDQUAL(bd_pvalue);
-
-          char report_del_ref[256];
-          char report_del_alt[2];
-          int del_length = strlen(it->key);
-          report_del_ref[0] = report_del_alt[0] = p->ref_base;
-          int j;
-          for (j = 0; j <= del_length; ++j) {
-               report_del_ref[j+1] = it->key[j];
-          }
-          report_del_ref[j+1] = report_del_alt[1] = '\0';
-
+          char *report_del_ref;
+          char *report_del_alt;
           float af = it->count / ((float)p->coverage_plp - p->num_tails);
-
           dp4_counts_t dp4;
+
+          /* FIXME decision to use ref or cons made elsewhere or do we have to check again? */
+          del_to_str(it, p->ref_base, &report_del_ref, &report_del_alt);
+
           dp4.ref_fw = p->non_del_fw_rv[0];
           dp4.ref_rv = p->non_del_fw_rv[1];
           dp4.alt_fw = it->fw_rv[0];
@@ -347,6 +389,8 @@ int call_alt_del(const plp_col_t *p, double *bd_err_probs, int bd_num_err_probs,
                     bd_pvalue, qual);
           report_var(&conf->vcf_out, p, report_del_ref, report_del_alt,
                      af, qual, is_indel, is_consvar, &dp4);
+          free(report_del_ref);
+          free(report_del_alt);
      }
      return 0;
 }
@@ -564,48 +608,41 @@ call_indels(const plp_col_t *p, snvcall_conf_t *conf)
            report_cons_del(p, conf);
            return;
       }
-      /* Call indels */
-      if (p->num_dels || p->num_ins) {
-           /*
-           LOG_FIXME("%s:%d (p->num_dels=%d p->del_quals=%d"
-                     " p->num_ins=%d p->ins_quals.n=%d\n",
-                     p->target, p->pos+1, p->num_dels, p->del_quals.n,
-                     p->num_ins, p->ins_quals.n);
-           */
 
-           if (p->num_ins && p->ins_quals.n) {
-                ins_event *it, *it_tmp;
-                HASH_ITER(hh_ins, p->ins_event_counts, it, it_tmp) {
-                     plp_to_ins_errprobs(&bi_err_probs, &bi_num_err_probs,
-                          p, conf, it->key);
-                     qsort(bi_err_probs, bi_num_err_probs, sizeof(double), dbl_cmp);
-                     if (conf->bonf_dynamic) {
-                          conf->bonf_indel += 1;
-                     }
-                     num_indel_tests += 1;
-                     if (call_alt_ins(p, bi_err_probs, bi_num_err_probs, conf, it)) {
-                          free(bi_err_probs);
-                          return;
-                     }
+      /* low af XY>X and X>XY indel FPs could be filtered here */
+
+      if (p->num_ins && p->ins_quals.n) {
+           ins_event *it, *it_tmp;
+           HASH_ITER(hh_ins, p->ins_event_counts, it, it_tmp) {
+                plp_to_ins_errprobs(&bi_err_probs, &bi_num_err_probs,
+                                    p, conf, it->key);
+                qsort(bi_err_probs, bi_num_err_probs, sizeof(double), dbl_cmp);
+                if (conf->bonf_dynamic) {
+                     conf->bonf_indel += 1;
+                }
+                num_indel_tests += 1;
+                if (call_alt_ins(p, bi_err_probs, bi_num_err_probs, conf, it)) {
                      free(bi_err_probs);
+                     return;
                 }
+                free(bi_err_probs);
            }
-           if (p->num_dels && p->del_quals.n) {
-                del_event *it, *it_tmp;
-                HASH_ITER(hh_del, p->del_event_counts, it, it_tmp) {
-                     plp_to_del_errprobs(&bd_err_probs, &bd_num_err_probs,
-                          p, conf, it->key);
-                     qsort(bd_err_probs, bd_num_err_probs, sizeof(double), dbl_cmp);
-                     if (conf->bonf_dynamic) {
-                          conf->bonf_indel += 1;
-                     }
-                     num_indel_tests += 1;
-                     if (call_alt_del(p, bd_err_probs, bd_num_err_probs, conf, it)) {
-                          free(bd_err_probs);
-                          return;
-                     }
-                     free(bd_err_probs);
+      }
+      if (p->num_dels && p->del_quals.n) {
+           del_event *it, *it_tmp;
+           HASH_ITER(hh_del, p->del_event_counts, it, it_tmp) {
+                plp_to_del_errprobs(&bd_err_probs, &bd_num_err_probs,
+                                    p, conf, it->key);
+                qsort(bd_err_probs, bd_num_err_probs, sizeof(double), dbl_cmp);
+                if (conf->bonf_dynamic) {
+                     conf->bonf_indel += 1;
                 }
+                num_indel_tests += 1;
+                if (call_alt_del(p, bd_err_probs, bd_num_err_probs, conf, it)) {
+                     free(bd_err_probs);
+                     return;
+                }
+                free(bd_err_probs);
            }
       }
 }
@@ -1230,13 +1267,6 @@ for cov in coverage_range:
          snvcall_conf.flag &= ~SNVCALL_USE_IDAQ;
          mplp_conf.flag &= ~MPLP_IDAQ;
     }
-    if (! snvcall_conf.no_indels) {
-         LOG_WARN("%s\n", "LoFreq's ability to call indels is still considered an experimental feature.");
-         LOG_WARN("%s\n", "Make sure you added indel qualities to your BAM file, otherwise no indels will be called.");
-         LOG_WARN("%s\n", "You can add indel qualities by running GATK's BQSR (version>=2) or 'lofreq indelqual'");
-         LOG_WARN("%s\n", "Depending on used read mapper, you might see many overlapping indels, which should actually be one event.");
-         LOG_WARN("%s\n", "You should run lofreq2_indel_ovlp.py on your final indel vcf-file to merge these.");
-    }
 
     if (illumina_1_3) {
          mplp_conf.flag |= MPLP_ILLUMINA13;
@@ -1248,6 +1278,10 @@ for cov in coverage_range:
 
     if (cons_as_ref) {
          snvcall_conf.flag |= SNVCALL_CONS_AS_REF;
+         if (! snvcall_conf.no_indels) {
+              LOG_FATAL("%s\n", "Sorry, --cons-as-ref doesn't work with indel calls at the moment. Please use one or the other");/* FIXME */
+              exit(1);
+         }
     }
 
     if (no_indels && only_indels) {
