@@ -250,17 +250,17 @@ del_to_str(const del_event *it, const char refbase,
      int j;
      int del_length = strlen(it->key);
 
-     if (((*refstr) = malloc(2 * sizeof(char)))==NULL) {
+     if (((*refstr) = malloc((del_length+2) * sizeof(char)))==NULL) {
           LOG_FATAL("%s\n", "memory allocation failed");
           exit(1);
      }
-     if (((*altstr) = malloc((del_length+2) * sizeof(char)))==NULL) {
+     if (((*altstr) = malloc(2 * sizeof(char)))==NULL) {
           LOG_FATAL("%s\n", "memory allocation failed");
           exit(1);
      }
 
      (*refstr)[0] = (*altstr)[0] = refbase;
-     for (j = 0; j <= del_length; ++j) {
+     for (j = 0; j < del_length; ++j) {
           (*refstr)[j+1] = it->key[j];
      }
      (*refstr)[j+1] = (*altstr)[1] = '\0';
@@ -286,7 +286,7 @@ ins_to_str(const ins_event *it, const char refbase,
      }
 
      (*refstr)[0] = (*altstr)[0] = refbase;
-     for (j = 0; j <= ins_length; ++j) {
+     for (j = 0; j < ins_length; ++j) {
           (*altstr)[j+1] = it->key[j];
      }
      (*refstr)[1] = (*altstr)[j+1] = '\0';     
