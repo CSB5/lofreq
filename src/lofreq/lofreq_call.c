@@ -88,7 +88,7 @@ long long int num_indel_tests = 0;
 long int indel_calls_wo_idaq = 0;
 
 
-
+/* variant reporter to be used for all types */
 void
 report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char *ref,
            const char *alt, const float af, const int qual,
@@ -103,7 +103,6 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char *ref,
      var->chrom = strdup(p->target);
      var->pos = p->pos;
 
-
      if (is_indel && ! p->has_indel_aqs) {
           indel_calls_wo_idaq += 1;
      }
@@ -117,12 +116,17 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char *ref,
 
      /* strand bias
       */
-     /* double sb_prob = kt... Assignment removed to shut up clang static analyzer */
-     (void) kt_fisher_exact(dp4->ref_fw, dp4->ref_rv,
-                            dp4->alt_fw, dp4->alt_rv,
-                            &sb_left_pv, &sb_right_pv, &sb_two_pv);
-     sb_qual = PROB_TO_PHREDQUAL_SAFE(sb_two_pv);
-
+     /* special case: if ref is entirely missing and we have alts on 
+        only one strand fisher's exact test will return 0, which is
+        most certainly not what we want */
+     if ((dp4->ref_fw + dp4->ref_rv)==0  && (dp4->alt_fw==0 || dp4->alt_rv==0)) {
+          sb_qual = INT_MAX;
+     } else {
+          /* double sb_prob = kt... Assignment removed to shut up clang static analyzer */
+          (void) kt_fisher_exact(dp4->ref_fw, dp4->ref_rv, dp4->alt_fw, dp4->alt_rv,
+                                 &sb_left_pv, &sb_right_pv, &sb_two_pv);
+          sb_qual = PROB_TO_PHREDQUAL_SAFE(sb_two_pv);
+     }
      vcf_var_sprintf_info(var, is_indel? p->coverage_plp - p->num_tails : p->coverage_plp,
                           af, sb_qual, dp4, is_indel, is_consvar);
 
