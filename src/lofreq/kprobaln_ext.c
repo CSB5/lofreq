@@ -107,6 +107,9 @@ int kpa_ext_glocal(const uint8_t *_ref, int l_ref, const uint8_t *_query, int l_
 		f[i] = calloc(bw2 * 3 + 6, sizeof(double)); // FIXME: this is over-allocated for very short seqs
         if (is_backward) b[i] = calloc(bw2 * 3 + 6, sizeof(double));
         if (pd) pd[i] = calloc(bw2 * 3 + 6, sizeof(double));
+#if 0
+        if (pd && i==0) fprintf(stderr, "pd[i=%d] allocated to bw2*3+6=%d\n", i, bw2 * 3 + 6);
+#endif
 	}
 	s = calloc(l_query+2, sizeof(double)); // s[] is the scaling factor to avoid underflow
 	// initialize qual

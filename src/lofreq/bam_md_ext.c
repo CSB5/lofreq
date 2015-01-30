@@ -55,6 +55,19 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw);
 #define encode_q(q) (uint8_t)(q < 33 ? '!' : (q > 126 ? '~' : q))
 
 
+/* fw and bck matrices in kprob have alloc limit
+   bw2 = bw * 2 + 1
+   alloc(bw2 * 3 + 6)
+   and in addition the original BAQ checks whether if (u < 3 || u >= bw2*3+3) and continues if so
+*/
+int u_within_limits(int u, int bw) {
+     int bw2 = bw * 2 + 1;
+     if (u<3 || u >= bw2*3+3) {
+          return 0;
+     } else {
+          return 1;
+     }
+}     
 
 void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
 {
@@ -126,11 +139,25 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
                    if (qpos+j > c->l_qseq) break;
                    double *pdi = pd[qpos+j];
                    int u;
+
                    set_u(u, bw, qpos+j, rpos-xb+1+j);
+                   /* FIXME happens for long reads, i.e. pacbio. why? see corresponding bit for ins_rep 
+                    * pacbio shouldn't use idaq() for now anyway
+                    */
+                   if (! u_within_limits(u, bw)) {
+#if 0
+                        fprintf(stderr, "WARNING: u of %d not within limits for %s. break\n", u, bam1_qname(b));
+#endif
+                        break;
+                   }
                    ap += pdi[u+2];
 #if 0
+                   fprintf(stderr, "probability to add comes from pd[%d+%d + %d+%d = %d]. qseq+1 is %d\n", 
+                           qpos,j,u,2, qpos+j+u+2, c->l_qseq+1);
                    fprintf(stderr, "probability to add is (%d:%d:%d) %lg\n", 
                            qpos+j, rpos-xb+1+j, u, pdi[u+2]);
+                   fflush(stderr);
+
 #endif
               }
               ap = 1 - ap;
@@ -175,11 +202,24 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
                    if (qpos+j+1 > c->l_qseq) break;
                    double *pdi = pd[qpos+j+1]; 
                    int u;
+
                    set_u(u, bw, qpos+j+1, rpos-xb+j);
+                   /* FIXME happens for long reads, i.e. pacbio. why? see corresponding bit for del_rep 
+                    * pacbio shouldn't use idaq() for now anyway
+                    */
+                   if (! u_within_limits(u, bw)) {
+#if 0
+                        fprintf(stderr, "WARNING u of %d not within limits for %s. break\n", u, bam1_qname(b));
+#endif
+                        break;
+                   }
                    ap += pdi[u+1];
 #if 0
+                   fprintf(stderr, "probability to add comes from pd[%d+%d+%d + %d+%d = %d]. qseq+1 is %d\n", 
+                           qpos,j,1,u,1, qpos+j+1+u+1, c->l_qseq+1);
                    fprintf(stderr, "probability to add is (%d:%d:%d) %lg\n", 
                            qpos+j+1, rpos-xb+j, u, pdi[u+1]);
+                   fflush(stderr);
 #endif
               }
               ap = 1 - ap; // probability of alignment error
@@ -283,8 +323,14 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref,
              x += l;
         }
 		else if (op == BAM_CREF_SKIP) {
-             /* FIXME can't handle refskips */
+#if 0
              return 0; /* do nothing if there is a reference skip */
+#else
+             /* returning would mean give up and compute no BAQ. 
+                behaviour now modelled after calc_read_alnerrprof(),
+                where CDEL and CREF_SKIP behave the same */
+             x += l; 
+#endif
         }
 	}
 
