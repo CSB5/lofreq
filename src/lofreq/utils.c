@@ -575,7 +575,7 @@ void add_ins_sequence(ins_event **head_ins_counts, char seq[],
           int_varray_add_value(& it->ins_source_quals, ins_source_qual);
 
      } else {
-          it = malloc(sizeof(*it));
+          it = malloc(sizeof(ins_event));
           strcpy((char *)it->key, seq);
           it->count = 1;
           it->cons_quals = ins_qual;
@@ -634,7 +634,7 @@ void add_del_sequence(del_event **head_del_counts, char seq[],
           int_varray_add_value(& it->del_source_quals, del_source_qual);
      
      } else {
-          it = malloc(sizeof(*it));
+          it = malloc(sizeof(del_event));
           strcpy((char *)it->key, seq);
           it->count = 1;
           it->cons_quals = del_qual;

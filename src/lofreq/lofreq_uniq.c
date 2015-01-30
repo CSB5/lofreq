@@ -344,7 +344,7 @@ uniq_snv(const plp_col_t *p, void *confp)
                int ref_len = strlen(conf->var->ref);
                int alt_len = strlen(conf->var->alt);
                if (ref_len > alt_len) { /* deletion */
-                    char del_key[256];
+                    char *del_key = malloc((strlen(conf->var->ref)+1)*sizeof(char));
                     strcpy(del_key, conf->var->ref+1);
                     del_event *it_del = find_del_sequence(&p->del_event_counts, del_key);
                     if (it_del) {
@@ -353,8 +353,9 @@ uniq_snv(const plp_col_t *p, void *confp)
                          alt_count = 0;
                     }
                     /* LOG_DEBUG("%s>%s k:%s c:%d\n", conf->var->ref, conf->var->alt, del_key, alt_count); */
+                    free(del_key);
                } else { /* insertion */
-                    char ins_key[256];
+                    char *ins_key = malloc((strlen(conf->var->alt)+1)*sizeof(char));
                     strcpy(ins_key, conf->var->alt+1);
                     ins_event *it_ins = find_ins_sequence(&p->ins_event_counts, ins_key);
                     if (it_ins) {
@@ -363,6 +364,7 @@ uniq_snv(const plp_col_t *p, void *confp)
                          alt_count = 0;
                     }
                     /* LOG_DEBUG("%s>%s k:%s c:%d\n", conf->var->ref, conf->var->alt, ins_key, alt_count);*/
+                    free(ins_key);
                }
 
           } else {

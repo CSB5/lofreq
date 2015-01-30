@@ -50,7 +50,7 @@ extern void bam_destroy_header_hash(bam_header_t *header);
 
 #define BUF_SIZE 1024
 
-
+#define MAX_READ_LEN 8192
 
 #ifdef USE_ALNERRPROF
 

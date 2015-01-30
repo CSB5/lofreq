@@ -48,6 +48,7 @@
 /* bam_md.c */
 const char bam_nt16_nt4_table[] = { 4, 0, 1, 4, 2, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4 };
 
+void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw);
 
 #define set_u(u, b, i, k) { int x=(i)-(b); x=x>0?x:0; (u)=((k)-x+1)*3; }
 #define prob_to_sangerq(p) (p < 0.0 + DBL_EPSILON ? 126+1 : ((int)(-10 * log10(p))+33))
@@ -92,20 +93,24 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
                    z++; // coordinate on query w/o softclip
               }
          } else if (op == BAM_CDEL) {
-              if (oplen > 16) continue;
-              n_del += 1;
-              char del_seq[64];
+              char *del_seq;
               int rpos = x; 
               int qpos = y;
+              int ref_i;
+              int del_rep = 0;/* if in repetetive region */
+              int rep_i = 0;
+              double ap = 0;
+
               if (qpos == 0) continue;
+              if (oplen > 16) continue; /*FIXME why */
+              n_del += 1;
+              del_seq = malloc((oplen+1)*sizeof(char));
               for (j = 0; j < oplen; j++) {
                    del_seq[j] = ref[x];
                    x++;
               }
               del_seq[j] = '\0';
-              int ref_i = x;
-              int del_rep = 0;/* if in repetetive region */
-              int rep_i = 0;
+              ref_i = x;
               while (ref_i < xe) {
                    if (ref[ref_i] != del_seq[rep_i]) {
                         break;
@@ -117,40 +122,44 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
                         rep_i = 0;
                    }
               }
-              double ap = 0;
               for (j = 0; j < del_rep+1; j++) {
                    if (qpos+j > c->l_qseq) break;
                    double *pdi = pd[qpos+j];
                    int u;
                    set_u(u, bw, qpos+j, rpos-xb+1+j);
                    ap += pdi[u+2];
-#ifdef DEBUG
+#if 0
                    fprintf(stderr, "probability to add is (%d:%d:%d) %lg\n", 
                            qpos+j, rpos-xb+1+j, u, pdi[u+2]);
 #endif
               }
               ap = 1 - ap;
               daq[qpos-1] = encode_q(prob_to_sangerq(ap));
+              free(del_seq);
 #ifdef DEBUG
               fprintf(stderr, "DEL %s %d %lg %c %s\n",
                       del_seq, del_rep+1, ap, daq[qpos-1], bam1_qname(b));
 #endif
          } else if (op == BAM_CINS) {
-              if (oplen > 16) continue;
-              n_ins += 1;
-              char ins_seq[64];
+              char *ins_seq;
               int rpos = x;
               int qpos = y;
+              int ins_rep = 0; /* if in repetetive region */
+              int ref_i = x;
+              int rep_i = 0;
+              double ap = 0;
+
+              if (oplen > 16) continue; /*FIXME why */
+              n_ins += 1;
               if (qpos == 0) continue;
+              ins_seq = malloc((oplen+1)*sizeof(char));
               for (j = 0; j < oplen; j++) {
                    ins_seq[j] = bam_nt16_rev_table[bam1_seqi(bam1_seq(b), y)];
                    y++;
                    z++;
               }
               ins_seq[j] = '\0';
-              int ins_rep = 0; /* if in repetetive region */
-              int ref_i = x;
-              int rep_i = 0;
+              ref_i = x;
               while (ref_i < xe) {
                    if (ref[ref_i] != ins_seq[rep_i]) {
                         break;
@@ -162,20 +171,20 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
                         rep_i = 0;
                    }
               }
-              double ap = 0;
               for (j = 0; j < ins_rep+1; j++) {
                    if (qpos+j+1 > c->l_qseq) break;
                    double *pdi = pd[qpos+j+1]; 
                    int u;
                    set_u(u, bw, qpos+j+1, rpos-xb+j);
                    ap += pdi[u+1];
-#ifdef DEBUG
+#if 0
                    fprintf(stderr, "probability to add is (%d:%d:%d) %lg\n", 
                            qpos+j+1, rpos-xb+j, u, pdi[u+1]);
 #endif
               }
               ap = 1 - ap; // probability of alignment error
               iaq[qpos-1] = encode_q(prob_to_sangerq(ap));
+              free(ins_seq);
 #ifdef DEBUG
               fprintf(stderr, "INS %s %d %lg %c %s\n", 
                       ins_seq, ins_rep+1, ap, iaq[qpos-1], bam1_qname(b));

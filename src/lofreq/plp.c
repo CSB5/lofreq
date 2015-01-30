@@ -445,6 +445,8 @@ source_qual(const bam1_t *b, const char *ref,
      int err_prob_idx;
      int i, j;
 
+     int qlen = b->core.l_qseq;
+
      /* alloc op_quals
       */
      if (NULL == (op_quals = malloc(NUM_OP_CATS * sizeof(int *)))) {
@@ -453,7 +455,7 @@ source_qual(const bam1_t *b, const char *ref,
           exit(1);
      }
      for (i=0; i<NUM_OP_CATS; i++) {
-          if (NULL == (op_quals[i] = malloc(MAX_READ_LEN * sizeof(int)))) {
+          if (NULL == (op_quals[i] = malloc(qlen * sizeof(int)))) {/* over allocating */
                fprintf(stderr, "FATAL: couldn't allocate memory at %s:%s():%d\n",
                        __FILE__, __FUNCTION__, __LINE__);
                free(op_quals);
@@ -1013,12 +1015,18 @@ check_indel:
                     /* insertion (+)
                      */
                     if (p->indel > 0) {
+                         char *ins_seq;
+                         int j;
+
                          plp_col->num_ins += 1;
                          plp_col->sum_ins += p->indel;
 
+                         if ((ins_seq = malloc((p->indel+1) * sizeof(char)))==NULL) {
+                              LOG_FATAL("%s\n", "Memory allocation failed");
+                              exit(1);
+                         }
+
                          /* get inserted sequence */
-                         char ins_seq[256];
-                         int j;
                          for (j = 1; j <= p->indel; ++j) {
                               int c = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos+j)];
                               ins_seq[j-1] = toupper(c);
@@ -1046,16 +1054,23 @@ check_indel:
                          } else {
                               plp_col->non_del_fw_rv[0] += 1;
                          }
+                         free(ins_seq);
 
                     /* deletion (-)
                      */
                     } else if (p->indel < 0) {
+                         /* get deleted sequence */
+                         char *del_seq;
+                         int j;
+
                          plp_col->num_dels += 1;
                          plp_col->sum_dels -= p->indel;
 
-                         /* get deleted sequence */
-                         char del_seq[256];
-                         int j;
+                         if ((del_seq = malloc(((-p->indel)+1) * sizeof(char)))==NULL) {
+                              LOG_FATAL("%s\n", "Memory allocation failed");
+                              exit(1);
+                         }
+
                          for (j = 1; j <= -p->indel; ++j) {
                               int c =  (ref && (int)pos+j < ref_len)? ref[pos+j] : 'N';
                               del_seq[j-1] = toupper(c);
@@ -1082,6 +1097,7 @@ check_indel:
                               plp_col->non_ins_fw_rv[0] += 1;
                          }
 
+                         free(del_seq);
                     }
 
                } else { /* if (p->indel != 0) ... */
@@ -1213,7 +1229,7 @@ check_indel:
 
 /* not part of offical samtools/htslib API but part of samtools */
 int
-mpileup(const mplp_conf_t *mplp_conf,
+mpileup(const mplp_conf_t const *mplp_conf,
         void (*plp_proc_func)(const plp_col_t*, void*),
         void *plp_proc_conf,
         const int n, const char **fn)
@@ -1331,7 +1347,6 @@ mpileup(const mplp_conf_t *mplp_conf,
         plp_col_t plp_col;
         int i=0; /* NOTE: mpileup originally iterated over n */
 
-        /*LOG_DEBUG("piling up %s:%d\n", h->target_name[tid], pos);*/
         if (mplp_conf->reg && (pos < beg0 || pos >= end0))
              continue; /* out of the region requested */
         if (mplp_conf->bed && tid >= 0 && !bed_overlap(mplp_conf->bed, h->target_name[tid], pos, pos+1))
