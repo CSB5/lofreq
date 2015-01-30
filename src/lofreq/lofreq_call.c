@@ -143,15 +143,16 @@ report_cons_sub(const plp_col_t *p, snvcall_conf_t *conf){
      const int is_indel = 0;
      const int is_consvar = 1;
      const int qual = -1;
-     float af = base_count(p, p->cons_base[0]) / (float)p->coverage_plp;
      char report_ref[2];
-     int ref_nt4 = bam_nt4_table[(int)report_ref[0]];
-     int alt_nt4 = bam_nt4_table[(int)p->cons_base[0]];
+     int ref_nt4;
+     int alt_nt4;
      dp4_counts_t dp4;
-
+     float af = base_count(p, p->cons_base[0]) / (float)p->coverage_plp;
      
      report_ref[0] = p->ref_base;
      report_ref[1] = '\0';
+     ref_nt4 = bam_nt4_table[(int)report_ref[0]];
+     alt_nt4 = bam_nt4_table[(int)p->cons_base[0]];
 
      dp4.ref_fw = p->fw_counts[ref_nt4];
      dp4.ref_rv = p->rv_counts[ref_nt4];
