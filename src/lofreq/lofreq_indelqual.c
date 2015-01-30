@@ -45,8 +45,9 @@ char DINDELQ2[] = "!CCCBA;963210/----,"; /* *10 */
 typedef struct {
      samfile_t *in;
      bamFile out;
-     int defq;
-} tmpstruct_t_default;
+     int iq;
+     int dq;
+} data_t_uniform;
 
 
 typedef struct {
@@ -56,39 +57,46 @@ typedef struct {
      int *hpcount;
      int rlen;
      uint32_t tid;
-} tmpstruct_t_dindel;
+} data_t_dindel;
 
 
 #define ENCODE_Q(q) (uint8_t)(q < 33 ? '!' : (q > 126 ? '~' : q))
 
 
-static int default_fetch_func(bam1_t *b, void *data)
+static int uniform_fetch_func(bam1_t *b, void *data)
 {
      uint8_t *to_delete;
-     tmpstruct_t_default *tmp = (tmpstruct_t_default*)data;
+     data_t_uniform *tmp = (data_t_uniform*)data;
      bam1_core_t *c = &b->core;
-     char *indelq;
+     char *iq;
+     char *dq;
 
-
-     indelq = malloc((c->l_qseq+1) * sizeof(char));
-     memset(indelq, tmp->defq, c->l_qseq);
-     indelq[c->l_qseq] = '\0';
+     iq = malloc((c->l_qseq+1) * sizeof(char));
+     memset(iq, tmp->iq, c->l_qseq);
+     iq[c->l_qseq] = '\0';
 
      to_delete = bam_aux_get(b, "BI");
      if (to_delete) {
           bam_aux_del(b, to_delete);
      }
-     bam_aux_append(b, "BI", 'Z', c->l_qseq+1, (uint8_t*) indelq);
+     bam_aux_append(b, "BI", 'Z', c->l_qseq+1, (uint8_t*) iq);
+
+
+     dq = malloc((c->l_qseq+1) * sizeof(char));
+     memset(dq, tmp->dq, c->l_qseq);
+     dq[c->l_qseq] = '\0';
 
      to_delete = bam_aux_get(b, "BD");
      if (to_delete) {
           bam_aux_del(b, to_delete);
      }
-     bam_aux_append(b, "BD", 'Z', c->l_qseq+1, (uint8_t*) indelq);
+     bam_aux_append(b, "BD", 'Z', c->l_qseq+1, (uint8_t*) dq);
 
      bam_write1(tmp->out, b);
 
-     free(indelq);
+     free(iq);
+     free(dq);
+
      return 0;
 }
 
@@ -124,7 +132,7 @@ int find_homopolymers(char *query, int *count, int qlen)
 
 static int dindel_fetch_func(bam1_t *b, void *data)
 {
-     tmpstruct_t_dindel *tmp = (tmpstruct_t_dindel*)data;
+     data_t_dindel *tmp = (data_t_dindel*)data;
      bam1_core_t *c = &b->core;
      int rlen;
 
@@ -194,10 +202,12 @@ static int dindel_fetch_func(bam1_t *b, void *data)
 }
 
 
-int add_uniform(const char *bam_in, const char *bam_out, const int qual)
+int add_uniform(const char *bam_in, const char *bam_out,
+                const int ins_qual, const int del_qual)
 {
-	tmpstruct_t_default tmp;
-    uint8_t q = ENCODE_Q(qual+33);
+	data_t_uniform tmp;
+    uint8_t iq = ENCODE_Q(ins_qual+33);
+    uint8_t dq = ENCODE_Q(del_qual+33);
     bam1_t *b = NULL;
     int count = 0;
 
@@ -206,7 +216,8 @@ int add_uniform(const char *bam_in, const char *bam_out, const int qual)
          return 1;
     }
 
-    tmp.defq = q;
+    tmp.iq = iq;
+    tmp.dq = dq;
 
     if (!bam_out || bam_out[0] == '-') {
          tmp.out = bam_dopen(fileno(stdout), "w");
@@ -218,7 +229,7 @@ int add_uniform(const char *bam_in, const char *bam_out, const int qual)
     b = bam_init1();
     while (samread(tmp.in, b) >= 0) {
          count++;
-         default_fetch_func(b, &tmp); 
+         uniform_fetch_func(b, &tmp); 
     }
     bam_destroy1(b);
     
@@ -231,7 +242,7 @@ int add_uniform(const char *bam_in, const char *bam_out, const int qual)
 
 int add_dindel(const char *bam_in, const char *bam_out, const char *ref)
 {
-	tmpstruct_t_dindel tmp;
+	data_t_dindel tmp;
     int count = 0;
     bam1_t *b = NULL;
 
@@ -278,13 +289,16 @@ usage()
      fprintf(stderr, "%s: Insert indel qualities into BAM file (required for indel predictions)\n\n", myname);
      fprintf(stderr, "Usage: %s [options] in.bam\n", myname);
      fprintf(stderr,"Options:\n");
-     fprintf(stderr, "  -u | --uniform INT  Add this indel quality uniformly to all bases (if you have prior knowledge)");
-     fprintf(stderr, " (clashes with --dindel)\n");
-     fprintf(stderr, "       --dindel       Add Dindel's indel qualities (Illumina specific)");
-     fprintf(stderr, " (clashes with -u; needs --ref)\n");
-     fprintf(stderr, "  -f | --ref          Reference sequence used for mapping\n");
-     fprintf(stderr, "  -o | --out FILE     Output BAM file [- = stdout = default]\n");
-     fprintf(stderr, "       --verbose      Be verbose\n");
+     fprintf(stderr, "  -u | --uniform INT[,INT]  Add this indel quality uniformly to all bases.\n");
+     fprintf(stderr, "                            Use two comma separated values to specify\n");
+     fprintf(stderr, "                            insertion and deletion quality separately.\n");
+     fprintf(stderr, "                            (clashes with --dindel)\n");
+     fprintf(stderr, "       --dindel             Add Dindel's indel qualities (Illumina specific)\n");
+     fprintf(stderr, "                            (clashes with -u; needs --ref)\n");
+     fprintf(stderr, "  -f | --ref                Reference sequence used for mapping\n");
+     fprintf(stderr, "                            (Only required for --dindel)\n");
+     fprintf(stderr, "  -o | --out FILE           Output BAM file [- = stdout = default]\n");
+     fprintf(stderr, "       --verbose            Be verbose\n");
      fprintf(stderr, "\n");
      fprintf(stderr,
              "The preferred way of inserting indel qualities should be via GATK's BQSR (>=2)" \
@@ -297,6 +311,19 @@ usage()
 }
 
 
+void idq_from_arg(int *iq, int *dq, const char *arg) 
+{
+     char *arg2 = strdup(arg);
+     char *cpos = strchr(arg2, ',');
+     if (cpos) {
+          (*dq) = atoi(cpos+1);
+          (*cpos) = '\0';
+          (*iq) = atoi(arg2);
+     } else {
+          (*iq) = (*dq) = atoi(arg);
+     }
+     free(arg2);
+}
 
 int main_indelqual(int argc, char *argv[])
 {
@@ -305,7 +332,8 @@ int main_indelqual(int argc, char *argv[])
      char *ref = NULL;
      int c;
      static int dindel = 0;
-     int uniform = -1;
+     int uni_iq = -1;
+     int uni_dq = -1;
      while (1) {
           static struct option long_opts[] = {
                /* see usage sync */
@@ -335,7 +363,7 @@ int main_indelqual(int argc, char *argv[])
                usage();
                return 0;
           case 'u':
-               uniform = atoi(optarg);
+               idq_from_arg(& uni_iq, & uni_dq, optarg);
                break;
           case 'f':
                if (! file_exists(optarg)) {
@@ -376,17 +404,25 @@ int main_indelqual(int argc, char *argv[])
           strcpy(bam_out, "-");
      }
 
-     LOG_DEBUG("uniform=%d\n", uniform);
+     LOG_DEBUG("uni_iq=%d\n", uni_iq);
+     LOG_DEBUG("uni_dq=%d\n", uni_dq);
      LOG_DEBUG("bam_in=%s\n", bam_in);
      LOG_DEBUG("bam_out=%s\n", bam_out);
      LOG_DEBUG("ref=%s\n", ref);
 
-     if (uniform != -1) {
+     if ((uni_iq != -1 && uni_dq == -1)
+         ||
+         (uni_iq == -1 && uni_dq != -1)) {
+          LOG_FATAL("internal logic error: uni_iq=%d uni_dq=%d\n", uni_iq, uni_dq);
+          exit(1);
+     }
+
+     if (uni_iq != -1 && uni_dq != -1) {
           if (dindel) {
                LOG_FATAL("%s\n", "Can't insert both, uniform and dindel qualities");
                return -1;
           }
-          return add_uniform(bam_in, bam_out, uniform);          
+          return add_uniform(bam_in, bam_out, uni_iq, uni_dq);
 
      } else if (dindel) {
           if (! ref) {
