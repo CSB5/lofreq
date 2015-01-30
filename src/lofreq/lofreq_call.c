@@ -173,24 +173,27 @@ report_cons_ins(const plp_col_t *p, snvcall_conf_t *conf) {
      const int is_indel = 1;
      const int is_consvar = 1;
      const int qual = -1;
-
      char cons_ins_key[MAX_INDELSIZE];
-     strcpy(cons_ins_key, p->cons_base+1);
-     ins_event *it_ins = find_ins_sequence(&p->ins_event_counts, cons_ins_key);
-
+     ins_event *it_ins = NULL;
      char report_ins_ref[2];
      char report_ins_alt[MAX_INDELSIZE];
-     int ins_length = strlen(cons_ins_key);
-     report_ins_ref[0] = report_ins_alt[0] = p->ref_base;
+     int ins_length;
      int j;
+     float af;
+     dp4_counts_t dp4;
+
+     strncpy(cons_ins_key, p->cons_base+1, MAX_INDELSIZE-1);
+     it_ins = find_ins_sequence(&p->ins_event_counts, cons_ins_key);
+
+     ins_length = strlen(cons_ins_key);
+     report_ins_ref[0] = report_ins_alt[0] = p->ref_base;
      for (j = 0; j <= ins_length; ++j) {
           report_ins_alt[j+1] = cons_ins_key[j];
      }
      report_ins_ref[1] = report_ins_alt[j+1] = '\0';
 
-     float af = it_ins->count / ((float)p->coverage_plp-p->num_tails);
+     af = it_ins->count / ((float)p->coverage_plp-p->num_tails);
 
-     dp4_counts_t dp4;
      dp4.ref_fw = p->non_ins_fw_rv[0];
      dp4.ref_rv = p->non_ins_fw_rv[1];
      dp4.alt_fw = it_ins->fw_rv[0];
@@ -210,24 +213,27 @@ report_cons_del(const plp_col_t *p, snvcall_conf_t *conf) {
      const int is_indel = 1;
      const int is_consvar = 1;
      const int qual = -1;
-
-     char cons_del_key[MAX_INDELSIZE];
-     strcpy(cons_del_key, p->cons_base+1);
-     del_event *it_del = find_del_sequence(&p->del_event_counts, cons_del_key);
-
      char report_del_ref[MAX_INDELSIZE];
      char report_del_alt[2];
-     int del_length = strlen(cons_del_key);
-     report_del_ref[0] = report_del_alt[0] = p->ref_base;
      int j;
+     char cons_del_key[MAX_INDELSIZE];
+     del_event *it_del = NULL;
+     int del_length;
+     dp4_counts_t dp4;
+     float af;
+
+     strncpy(cons_del_key, p->cons_base+1, MAX_INDELSIZE-1);
+     it_del = find_del_sequence(&p->del_event_counts, cons_del_key);
+
+     del_length = strlen(cons_del_key);
+     report_del_ref[0] = report_del_alt[0] = p->ref_base;
      for (j = 0; j <= del_length; ++j) {
           report_del_ref[j+1] = cons_del_key[j];
      }
      report_del_ref[j+1] = report_del_alt[1] = '\0';
 
-     float af = it_del->count / ((float)p->coverage_plp - p->num_tails);
+     af = it_del->count / ((float)p->coverage_plp - p->num_tails);
 
-     dp4_counts_t dp4;
      dp4.ref_fw = p->non_del_fw_rv[0];
      dp4.ref_rv = p->non_del_fw_rv[1];
      dp4.alt_fw = it_del->fw_rv[0];
