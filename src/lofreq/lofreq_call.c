@@ -619,30 +619,31 @@ call_indels(const plp_col_t *p, snvcall_conf_t *conf)
            return;
       }
 
-      /* low af (<1%) 1bp indel fps with pattern XY>X and X>XY
-       * (see e.g. ecoli spike-in), that seem to happen because 
-       * of overestimated indel qual in homopolyer stretches can be
-       * filtered here 
+      /* Multiallelic, low AF, 1bp indels with pattern XY>X and X>XY
+       * (see e.g. ecoli spike-in) where Y is T or A are filtered here. Seem to happen because 
+       * of overestimated indel qual in Illumina homopolyer stretches 
+       *
+       * FIXME make switch
        */
-#ifdef IGN_XY2X_X2XY_LOWAF_INDEL_FP
       if (p->num_ins && p->ins_quals.n && p->num_dels && p->del_quals.n) {
+           const float max_af = 0.02;
            ins_event *ins_ev, *ins_ev_tmp;
            del_event *del_ev, *del_ev_tmp;
            /* counts of observed 1-base indels */
            int ins_dict[NUM_NT4] = {0};
            int del_dict[NUM_NT4] = {0};
            int i;
-           
+           const char at[] = "AT\0";
 
            HASH_ITER(hh_ins, p->ins_event_counts, ins_ev, ins_ev_tmp) {
-                LOG_FIXME("ins: %s count=%d fw/rv=%d/%d\n", ins_ev->key, ins_ev->count, ins_ev->fw_rv[0], ins_ev->fw_rv[1]);
-                if (strlen(ins_ev->key)==1) {
+                /*LOG_FIXME("ins: %s count=%d fw/rv=%d/%d\n", ins_ev->key, ins_ev->count, ins_ev->fw_rv[0], ins_ev->fw_rv[1]);*/
+                if (strlen(ins_ev->key)==1 && strchr(at, ins_ev->key[0])!=NULL) {
                      ins_dict[bam_nt4_table[(int)ins_ev->key[0]]] = ins_ev->count;
                 }
            }
            HASH_ITER(hh_del, p->del_event_counts, del_ev, del_ev_tmp) {
-                LOG_FIXME("del: %s count=%d fw/rv=%d/%d\n", del_ev->key, del_ev->count, del_ev->fw_rv[0], del_ev->fw_rv[1]);
-                if (strlen(del_ev->key)==1) {
+                /*LOG_FIXME("del: %s count=%d fw/rv=%d/%d\n", del_ev->key, del_ev->count, del_ev->fw_rv[0], del_ev->fw_rv[1]);*/
+                if (strlen(del_ev->key)==1 && strchr(at, del_ev->key[0])!=NULL) {
                      del_dict[bam_nt4_table[(int)del_ev->key[0]]] = del_ev->count;
                 }
            }
@@ -650,14 +651,13 @@ call_indels(const plp_col_t *p, snvcall_conf_t *conf)
                 if (ins_dict[i] && del_dict[i]) {
                      float ins_af = ins_dict[i]/((float)(p->coverage_plp - p->num_tails));
                      float del_af = del_dict[i]/((float)(p->coverage_plp - p->num_tails));
-                     if (ins_af<0.01 && del_af<0.01) {
-                          LOG_FIXME("ignore ins/del %c: %d/%d %.6f/%.6f\n", bam_nt4_rev_table[i], ins_dict[i], del_dict[i], ins_af, del_af);
+                     if (ins_af<max_af && del_af<max_af) {
+                          LOG_DEBUG("Ignoring multi-allelic XY>X:X>XY indel of low AF next to Poly-AT at %s:%d\n", p->target, p->pos+1);
                           ign_indels[i] = 1;
                      }
                 }
            }
       }      
-#endif
 
       if (p->num_ins && p->ins_quals.n) {
            ins_event *it, *it_tmp;
