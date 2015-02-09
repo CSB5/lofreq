@@ -646,7 +646,9 @@ mplp_func(void *data, bam1_t *b)
                int ref_len = -1;
                ma->ref = faidx_fetch_seq(ma->conf->fai, ma->h->target_name[b->core.tid], 0, 0x7fffffff, &ref_len);
                if (!ma->ref) {
-                    has_ref = 0;
+                    LOG_FATAL("Couldn't fetch sequence '%s'.\n", ma->h->target_name[b->core.tid]);
+                    exit(1);/* FIXME just returning would just skip calls for this seq */
+
                } else {
                     strtoupper(ma->ref);/* safeguard */
                     ma->ref_id = b->core.tid;
@@ -1229,7 +1231,7 @@ check_indel:
 
 /* not part of offical samtools/htslib API but part of samtools */
 int
-mpileup(const mplp_conf_t const *mplp_conf,
+mpileup(const mplp_conf_t *mplp_conf,
         void (*plp_proc_func)(const plp_col_t*, void*),
         void *plp_proc_conf,
         const int n, const char **fn)
