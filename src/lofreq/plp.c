@@ -809,16 +809,8 @@ void compile_plp_col(plp_col_t *plp_col,
 #ifdef USE_ALNERRPROF
           int aq = 0;
 #endif
-          /* GATKs BI & BD: "are per-base quantities which estimate
-           * the probability that the next base in the read was
-           * mis-incorporated or mis-deleted (due to slippage, for
-           * example)". See
-           * http://www.broadinstitute.org/gatk/guide/article?id=44
-           * and
-           * http2://gatkforums.broadinstitute.org/discussion/1619/baserecalibratorprintreads-bd-and-bi-flags
-           */
-          uint8_t *bi = bam_aux_get(p->b, "BI"); /* GATK indels */
-          uint8_t *bd = bam_aux_get(p->b, "BD"); /* GATK deletions */
+          uint8_t *bi = bam_aux_get(p->b, BI_TAG);
+          uint8_t *bd = bam_aux_get(p->b, BD_TAG);
           uint8_t *ai = bam_aux_get(p->b, AI_TAG);
           uint8_t *ad = bam_aux_get(p->b, AD_TAG);
           uint8_t *baq_aux = NULL; /* full baq value (not offset as "BQ"!) */
@@ -980,7 +972,7 @@ check_indel:
                char *t = (char*)(bi+1); /* 1 is type */
 #if 0
                int j;
-               printf("At %d qpos %d: BI=%s", plp_col->pos+1, p->qpos+1, t);
+               printf("At %d qpos %d: %s=%s", plp_col->pos+1, p->qpos+1, BI_TAG, t);
                for (j = 0; j < p->indel; ++j) {
                     printf(" %c:%d-%d-%d", t[p->qpos+j], t[p->qpos+j-1]-33, t[p->qpos+j]-33, t[p->qpos+j+1]-33);
                }
@@ -994,7 +986,7 @@ check_indel:
                char *t = (char*)(bd+1);  /* 1 is type */
 #if 0
                int j;
-               printf("At %d qpos %d: BD=%sx", plp_col->pos+1, p->qpos+1, t);
+               printf("At %d qpos %d: %s=%sx", plp_col->pos+1, p->qpos+1, BD_TAG, t);
                for (j = 0; j < p->indel; ++j) {
                     printf(" %c:%d-%d-%d", t[p->qpos+j], t[p->qpos+j-1]-33, t[p->qpos+j]-33, t[p->qpos+j+1]-33);
                }

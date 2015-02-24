@@ -96,4 +96,17 @@
 #define AI_TAG "ai"
 #define AD_TAG "ad"
 
+/* base insertion and deletion qualities. GATK uses BI and BD. 
+ * GATKs BI & BD: "are per-base quantities which estimate
+ * the probability that the next base in the read was
+ * mis-incorporated or mis-deleted (due to slippage, for
+ * example)". See
+ * http://www.broadinstitute.org/gatk/guide/article?id=44
+ * and
+ * http2://gatkforums.broadinstitute.org/discussion/1619/baserecalibratorprintreads-bd-and-bi-flags
+ *
+ */
+#define BI_TAG "BI"
+#define BD_TAG "BD"
+
 #endif

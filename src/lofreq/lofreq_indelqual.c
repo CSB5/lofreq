@@ -35,6 +35,7 @@
 #include "sam.h" 
 #include "log.h"
 #include "utils.h"
+#include "defaults.h"
 #include "lofreq_indelqual.h"
 
 
@@ -75,22 +76,22 @@ static int uniform_fetch_func(bam1_t *b, void *data)
      memset(iq, tmp->iq, c->l_qseq);
      iq[c->l_qseq] = '\0';
 
-     to_delete = bam_aux_get(b, "BI");
+     to_delete = bam_aux_get(b, BI_TAG);
      if (to_delete) {
           bam_aux_del(b, to_delete);
      }
-     bam_aux_append(b, "BI", 'Z', c->l_qseq+1, (uint8_t*) iq);
+     bam_aux_append(b, BI_TAG, 'Z', c->l_qseq+1, (uint8_t*) iq);
 
 
      dq = malloc((c->l_qseq+1) * sizeof(char));
      memset(dq, tmp->dq, c->l_qseq);
      dq[c->l_qseq] = '\0';
 
-     to_delete = bam_aux_get(b, "BD");
+     to_delete = bam_aux_get(b, BD_TAG);
      if (to_delete) {
           bam_aux_del(b, to_delete);
      }
-     bam_aux_append(b, "BD", 'Z', c->l_qseq+1, (uint8_t*) dq);
+     bam_aux_append(b, BD_TAG, 'Z', c->l_qseq+1, (uint8_t*) dq);
 
      bam_write1(tmp->out, b);
 
@@ -194,8 +195,8 @@ static int dindel_fetch_func(bam1_t *b, void *data)
      }
      indelq[y] = '\0';
 
-     bam_aux_append(b, "BI", 'Z', c->l_qseq+1, indelq);
-     bam_aux_append(b, "BD", 'Z', c->l_qseq+1, indelq);
+     bam_aux_append(b, BI_TAG, 'Z', c->l_qseq+1, indelq);
+     bam_aux_append(b, BD_TAG, 'Z', c->l_qseq+1, indelq);
 
      bam_write1(tmp->out, b);
      return 0;
