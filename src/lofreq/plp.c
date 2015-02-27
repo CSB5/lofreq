@@ -998,6 +998,7 @@ check_indel:
 
 
           if (iq < conf->min_plp_idq || dq < conf->min_plp_idq) {
+               /* LOG_FIXME("iq=%d < conf->min_plp_idq=%d || dq=%d < conf->min_plp_idq=%d\n", iq, conf->min_plp_idq, dq, conf->min_plp_idq); */
                if (p->indel != 0 || p->is_del != 0) {
                   plp_col->num_ign_indels += 1;
                }
@@ -1147,8 +1148,6 @@ check_indel:
       * the log sum of the qualities, because qualities are the negative log of the
       * error probabilities."""
       *
-      *
-      *
       * FIXME: check consensus indel against minimum consensus quality
       * FIXME: merge indel qualities when determining consensus indel event
       *
@@ -1174,10 +1173,10 @@ check_indel:
           }
      }
 
-     LOG_DEBUG("ins_maxevent_qual:%d ins_nonevent_qual:%d "
+     /* LOG_DEBUG("ins_maxevent_qual:%d ins_nonevent_qual:%d "
                "del_maxevent_qual:%d del_nonevent_qual:%d\n",
                ins_maxevent_qual, ins_nonevent_qual,
-               del_maxevent_qual, del_nonevent_qual);
+               del_maxevent_qual, del_nonevent_qual); */
 
      if (!(ins_maxevent_qual > ins_nonevent_qual) &&
          !(del_maxevent_qual > del_nonevent_qual)) {
@@ -1192,9 +1191,11 @@ check_indel:
           plp_col->cons_base[1] = '\0';
 #endif
      } else if (ins_maxevent_qual > ins_nonevent_qual) {  // consensus insertion
+          /* LOG_DEBUG("cons ins: ins_maxevent_qual=%d > ins_nonevent_qual=%d\n", ins_maxevent_qual, ins_nonevent_qual); */
           plp_col->cons_base[0] = '+';
           strcpy(plp_col->cons_base+1, ins_maxevent_key);
      } else if (del_maxevent_qual > del_nonevent_qual) { // consensus deletion
+          /* LOG_DEBUG("cons del: del_maxevent_qual=%d > del_nonevent_qual=%d\n", del_maxevent_qual, del_nonevent_qual); */
           plp_col->cons_base[0] = '-';
           strcpy(plp_col->cons_base+1, del_maxevent_key);
      } else {
