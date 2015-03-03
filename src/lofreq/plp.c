@@ -803,7 +803,7 @@ void compile_plp_col(plp_col_t *plp_col,
           int nt4;
           int mq=-1, bq, baq; /* phred scores */
           int iq = 0, dq = 0;
-          int iaq = INT_MAX, daq = INT_MAX;
+          int iaq = -1, daq = -1;
           int base_skip = 0; /* boolean */
           int sq = -1;
 #ifdef USE_ALNERRPROF

@@ -344,7 +344,15 @@ call_alt_ins(const plp_col_t *p, double *bi_err_probs, int bi_num_err_probs,
                      af, qual, is_indel, is_consvar, &dp4);
 
           free(report_ins_ref); free(report_ins_alt);
+     } 
+#if 0
+else if (debug) {
+          char *report_ins_ref;
+          char *report_ins_alt;
+          ins_to_str(it, p->ref_base, &report_ins_ref, &report_ins_alt);
+          LOG_DEBUG("insignificant ins: %s %d %s>%s pv-prob:%Lg;pv-qual:%d\n", p->target, p->pos+1, report_ins_ref, report_ins_alt, bi_pvalue, PROB_TO_PHREDQUAL(bi_pvalue));
      }
+#endif
      return 0;
 }
 
@@ -402,7 +410,15 @@ int call_alt_del(const plp_col_t *p, double *bd_err_probs, int bd_num_err_probs,
                      af, qual, is_indel, is_consvar, &dp4);
           free(report_del_ref);
           free(report_del_alt);
+     } 
+#if 0
+else if (debug) {
+          char *report_del_ref;
+          char *report_del_alt;
+          del_to_str(it, p->ref_base, &report_del_ref, &report_del_alt);
+          LOG_DEBUG("delignificant del: %s %d %s>%s pv-prob:%Lg;pv-qual:%d\n", p->target, p->pos+1, report_del_ref, report_del_alt, bd_pvalue, PROB_TO_PHREDQUAL(bd_pvalue));
      }
+#endif
      return 0;
 }
 
