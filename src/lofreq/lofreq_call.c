@@ -587,8 +587,7 @@ plp_summary(const plp_col_t *plp_col, void* confp)
                               fprintf(stream, " %d", sq);
                          }
                          fprintf(stream, "\n");
-                    }
-                  
+                    }                  
                }
           }
      }
@@ -747,19 +746,19 @@ call_snvs(const plp_col_t *p, snvcall_conf_t *conf)
       *
       *  if cons_as_ref:
       *   C>A tested as A vs C
-       *   C>T tested as T vs C
-       *   C>G tested as G vs C
-       *   (no CONSVARs possible by definition)
-       *
-       *  else (ref):
-       *   A>C tested as NIL (CONSVAR A vs C)
-       *   A>T tested as T vs C
-       *   A>G tested as G vs C
-       *   (A>A obviously not possible)
-       *
-       * First branch is "default" i.e. doesn't need exception checking
-       */
-
+      *   C>T tested as T vs C
+      *   C>G tested as G vs C
+      *   (no CONSVARs possible by definition)
+      *
+      *  else (ref):
+      *   A>C tested as NIL (CONSVAR A vs C)
+      *   A>T tested as T vs C
+      *   A>G tested as G vs C
+      *   (A>A obviously not possible)
+      *
+      * First branch is "default" i.e. doesn't need exception checking
+      */
+     
       /* CONSVAR, i.e. the consensus determined here is different from
        * the reference coming from a fasta file
        */
@@ -780,11 +779,11 @@ call_snvs(const plp_col_t *p, snvcall_conf_t *conf)
                       alt_bases, alt_counts, alt_raw_counts,
                       p, conf);
 
- #if 0
+#if 0
       for (i=0; i<NUM_NONCONS_BASES; i++) {
            LOG_FIXME("NUM_NONCONS_BASES=%d alt_counts=%d alt_raw_counts=%d\n", i, alt_counts[i], alt_raw_counts[i]);
       }
- #endif
+#endif
 
       for (i=0; i<NUM_NONCONS_BASES; i++) {
            if (alt_counts[i]) {
@@ -844,15 +843,15 @@ call_snvs(const plp_col_t *p, snvcall_conf_t *conf)
 
            if (alt_base==reported_snv_ref) { /* p->ref_base && !cons_as_ref) {*/
                 /* self comparison */
- #if DEBUG
+#if DEBUG
                 LOG_DEBUG("%s\n", "continue because self comparison")
- #endif
+#endif
                 continue;
            }
            if (p->ref_base==alt_base && !cons_as_ref) {
- #if DEBUG
+#if DEBUG
                 LOG_DEBUG("%s\n", "continue because: p->ref_base==alt_base && !cons_as_ref")
- #endif
+#endif
                 continue;
            }
 
@@ -888,11 +887,11 @@ call_snvs(const plp_col_t *p, snvcall_conf_t *conf)
                           /* counts-raw */ alt_raw_count, p->coverage_plp, alt_raw_count/(float)p->coverage_plp,
                           /* counts-filt */ alt_count, bc_num_err_probs, alt_count/(float)bc_num_err_probs);
            }
- #if 0
+#if 0
            else {
                 LOG_DEBUG("non sig: pvalue=%Lg * (double)conf->bonf=%lld < conf->sig=%f\n", pvalue, conf->bonf, conf->sig);
            }
- #endif
+#endif
       }
       free(bc_err_probs);
 }
