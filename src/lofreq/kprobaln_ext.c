@@ -47,7 +47,8 @@ static float g_qual2prob[256];
 
 kpa_ext_par_t kpa_ext_par_def = { 0.001, 0.1, 10 };
 kpa_ext_par_t kpa_ext_par_alt = { 0.0001, 0.01, 10 };
-kpa_ext_par_t kpa_ext_par_lofreq = { 0.00001, 0.4, 10};
+kpa_ext_par_t kpa_ext_par_lofreq_illumina = { 0.00001, 0.4, 10};
+kpa_ext_par_t kpa_ext_par_lofreq_pacbio = { 0.1, 0.4, 10};
 
 /*
   The topology of the profile HMM:

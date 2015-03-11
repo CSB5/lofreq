@@ -45,6 +45,6 @@ extern "C" {
 }
 #endif
 
-extern kpa_ext_par_t kpa_ext_par_def, kpa_ext_par_alt, kpa_ext_par_lofreq;
+extern kpa_ext_par_t kpa_ext_par_def, kpa_ext_par_alt, kpa_ext_par_lofreq_illumina, kpa_ext_par_lofreq_pacbio;
 
 #endif
