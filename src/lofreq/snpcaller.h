@@ -48,7 +48,6 @@ typedef struct {
                         * filtering of all has to be done by
                         * caller! */
      int min_cov;
-     int dont_skip_n;
      long long int bonf_sub; /* warning: changed dynamically ! */
      long long int bonf_indel;
      float sig;

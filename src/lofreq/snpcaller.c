@@ -359,7 +359,7 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
           avg_ref_bq = -1;
           for (i=0; i<NUM_NT4; i++) {
                int nt = bam_nt4_rev_table[i];
-               if (nt != p->cons_base[0]) {
+               if (nt != p->ref_base) {
                     continue;
                }
                if (p->base_quals[i].n) {
@@ -383,7 +383,7 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
           }
 
           is_alt_base = 0;
-          if (nt != p->cons_base[0]) {
+          if (nt != p->ref_base) {
                is_alt_base = 1;
                alt_idx += 1;
                alt_bases[alt_idx] = nt;
@@ -622,7 +622,6 @@ init_snvcall_conf(snvcall_conf_t *c)
      c->def_alt_jq = DEFAULT_DEF_ALT_JQ;
 
      c->min_cov = DEFAULT_MIN_COV;
-     c->dont_skip_n = 0;
      c->bonf_dynamic = 1;
      c->bonf_sub = 1;
      c->bonf_indel = 1;
@@ -647,7 +646,6 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
      fprintf(stream, "  min_alt_jq     = %d\n", c->min_alt_jq);
      fprintf(stream, "  def_alt_jq     = %d\n", c->def_alt_jq);
      fprintf(stream, "  min_cov        = %d\n", c->min_cov);
-     fprintf(stream, "  dont_skip_n    = %d\n", c->dont_skip_n);
      fprintf(stream, "  bonf_sub       = %lld  (might get recalculated)\n", c->bonf_sub);
      fprintf(stream, "  bonf_indel     = %lld  (might get recalculated)\n", c->bonf_indel);
      fprintf(stream, "  bonf_dynamic   = %d\n", c->bonf_dynamic);
@@ -656,7 +654,6 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
      fprintf(stream, "  flag & SNVCALL_USE_BAQ     = %d\n", c->flag&SNVCALL_USE_BAQ?1:0);
      fprintf(stream, "  flag & SNVCALL_USE_MQ      = %d\n", c->flag&SNVCALL_USE_MQ?1:0);
      fprintf(stream, "  flag & SNVCALL_USE_SQ      = %d\n", c->flag&SNVCALL_USE_SQ?1:0);
-     fprintf(stream, "  flag & SNVCALL_CONS_AS_REF = %d\n", c->flag&SNVCALL_CONS_AS_REF?1:0);
      fprintf(stream, "  flag & SNVCALL_USE_IDAQ    = %d\n", c->flag&SNVCALL_USE_IDAQ?1:0);
 #ifdef SCALE_MQ
      LOG_WARN("%s\n", "MQ scaling switched on!");

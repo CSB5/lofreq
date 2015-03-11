@@ -948,8 +948,8 @@ void compile_plp_col(plp_col_t *plp_col,
                count_incr = 1.0 - PHREDQUAL_TO_PROB(bq);
 #endif
 
-               /* FIXME is this the proper way to handle cases where count_incr = 0.0 because one of the values is 0? */
-               if (count_incr == 0.0/* nearly */) {
+               /* FIXME this can't be the proper way to handle cases where count_incr = 0.0 because one of the values is 0? */
+               if (count_incr == 0.0) {
                     count_incr = DBL_MIN;
                }
 
@@ -1183,15 +1183,10 @@ check_indel:
      if (!(ins_maxevent_qual > ins_nonevent_qual) &&
          !(del_maxevent_qual > del_nonevent_qual)) {
 
-#ifdef REF_OVER_CONS
-          plp_col->cons_base[0] = plp_col->ref_base;
-          plp_col->cons_base[1] = '\0';
-#else
           /* determine consensus from 'counts'. will never produce N on tie  */
           plp_col->cons_base[0] = bam_nt4_rev_table[
                argmax_d(base_counts, NUM_NT4)];
           plp_col->cons_base[1] = '\0';
-#endif
      } else if (ins_maxevent_qual > ins_nonevent_qual) {  // consensus insertion
           /* LOG_DEBUG("cons ins: ins_maxevent_qual=%d > ins_nonevent_qual=%d\n", ins_maxevent_qual, ins_nonevent_qual); */
           plp_col->cons_base[0] = '+';

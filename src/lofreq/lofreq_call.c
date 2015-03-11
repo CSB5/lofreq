@@ -136,6 +136,7 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char *ref,
 /* report_var() */
 
 
+#if 0
 /* report consensus substitution */
 void
 report_cons_sub(const plp_col_t *p, snvcall_conf_t *conf){
@@ -245,7 +246,7 @@ report_cons_del(const plp_col_t *p, snvcall_conf_t *conf) {
                 af, qual, is_indel, is_consvar, &dp4);
 
 }
-
+#endif
 
 
 /* converts del event to reference and alt string representation.
@@ -623,6 +624,7 @@ call_indels(const plp_col_t *p, snvcall_conf_t *conf)
           return;
      }
 
+#if 0
       /* Report consensus indel
        * FIXME: call other indels/substitutions with respect to consensus indel */
       if (p->cons_base[0] == '+') {
@@ -633,6 +635,7 @@ call_indels(const plp_col_t *p, snvcall_conf_t *conf)
            report_cons_del(p, conf);
            return;
       }
+#endif
 
       /* Multiallelic, low AF, 1bp indels with pattern XY>X and X>XY
        * (see e.g. ecoli spike-in) where Y is T or A are filtered here. Seem to happen because 
@@ -718,12 +721,16 @@ call_indels(const plp_col_t *p, snvcall_conf_t *conf)
 }
 
 
+/* we always use the reference for calculating a quality.
+ * previous versions used the consensus and reported the
+ * consensus as CONSVAR without quality
+ *
+ */
 void
 call_snvs(const plp_col_t *p, snvcall_conf_t *conf)
 {
      double *bc_err_probs; /* error probs (qualities) passed down to snpcaller */
      int bc_num_err_probs; /* #elements in bc_err_probs */
-     int cons_as_ref = conf->flag & SNVCALL_CONS_AS_REF;
      int i;
      /* 4 bases ignoring N, -1 reference/consensus base makes 3 */
      long double pvalues[NUM_NONCONS_BASES]; /* pvalues reported back from snpcaller */
@@ -736,44 +743,12 @@ call_snvs(const plp_col_t *p, snvcall_conf_t *conf)
           return;
      }
 
-     /*
-      * as snv-ref we always report what the user wanted (given
-      * ref or determined cons if corresponding flag was given).
-      * we always use the determined cons for calculating a quality though.
-      *
-      *  Example with given ref A and cons/alt C
-      *  Alt bases are all non-cons bases: A(!), T, G
-      *
-      *  if cons_as_ref:
-      *   C>A tested as A vs C
-      *   C>T tested as T vs C
-      *   C>G tested as G vs C
-      *   (no CONSVARs possible by definition)
-      *
-      *  else (ref):
-      *   A>C tested as NIL (CONSVAR A vs C)
-      *   A>T tested as T vs C
-      *   A>G tested as G vs C
-      *   (A>A obviously not possible)
-      *
-      * First branch is "default" i.e. doesn't need exception checking
+      /* Ns would in theory work as ref. However, downstream functions e.g. plp_to_errprobs
+      * don't support it
       */
-     
-      /* CONSVAR, i.e. the consensus determined here is different from
-       * the reference coming from a fasta file
-       */
-      if (p->ref_base != p->cons_base[0] && !cons_as_ref) {/* && p->ref_base != 'N') {*/
-           if (p->cons_base[0] != '+' && p->cons_base[0] != '-') {/* redundant */
-                report_cons_sub(p, conf);
-           }
-      }
-
-      /* no point continuing we're calling against a reference (not
-       * consensus) and ref nt is an n. only consvars should be
-       * predicted then (see above) */
-      if (p->ref_base == 'N' && !cons_as_ref) {
-           return;
-      }
+     if (p->ref_base == 'N') {
+          return;
+     }
 
       plp_to_errprobs(&bc_err_probs, &bc_num_err_probs,
                       alt_bases, alt_counts, alt_raw_counts,
@@ -839,18 +814,12 @@ call_snvs(const plp_col_t *p, snvcall_conf_t *conf)
            int alt_count = alt_counts[i];
            int alt_raw_count = alt_raw_counts[i];
            long double pvalue = pvalues[i];
-           int reported_snv_ref = cons_as_ref ? p->cons_base[0] : p->ref_base;
+           int reported_snv_ref = p->ref_base;
 
-           if (alt_base==reported_snv_ref) { /* p->ref_base && !cons_as_ref) {*/
+           if (alt_base==reported_snv_ref) { 
                 /* self comparison */
 #if DEBUG
                 LOG_DEBUG("%s\n", "continue because self comparison")
-#endif
-                continue;
-           }
-           if (p->ref_base==alt_base && !cons_as_ref) {
-#if DEBUG
-                LOG_DEBUG("%s\n", "continue because: p->ref_base==alt_base && !cons_as_ref")
 #endif
                 continue;
            }
@@ -897,11 +866,7 @@ call_snvs(const plp_col_t *p, snvcall_conf_t *conf)
 }
 
 
-/* low-freq vars always called against cons_base, which might be
- * different from ref_base. if cons_base != ref_base then it's a
- * cons-var.
- *
- * Assuming conf->min_bq and read-level filtering was already done
+/* Assuming conf->min_bq and read-level filtering was already done
  * upstream. altbase mangling happens here however.
  *
  */
@@ -911,10 +876,7 @@ call_vars(const plp_col_t *p, void *confp)
      snvcall_conf_t *conf = (snvcall_conf_t *)confp;
 
      /* don't call if we don't know what to call against */
-     if (p->cons_base[0] == 'N') {
-          return;
-     }
-     if (! conf->dont_skip_n && p->ref_base == 'N') {
+     if (p->ref_base == 'N') {
           return;
      }
 
@@ -936,11 +898,14 @@ call_vars(const plp_col_t *p, void *confp)
                p->del_quals.n, p->ins_quals.n,
                p->num_dels, p->num_ins, p->num_ign_indels, p->num_bases, p->coverage_plp);
 #endif
+
      /* don't call snvs on consensus indels. problem is we might not know there
       * is one because indel qualities could be missing and we therefore didn't record
       * anything etc. safest and easiest hack is to look at the
       * difference between coverage and the number of bases (which might not work 
       * if many bases were filtered)
+      *
+      * FIXME overhaul
       */
      if (! conf->only_indels && \
          ! (p->cons_base[0] == '+' || p->cons_base[0] == '-') && \
@@ -963,7 +928,6 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
 
      fprintf(stderr, "- Reference:\n");
      fprintf(stderr, "       -f | --ref FILE              Indexed reference fasta file (gzip supported) [null]\n");
-     fprintf(stderr, "            --cons-as-ref           Use consensus base as ref, i.e. ignore base given in reffa (reffa still used for BAQ, if enabled)\n");
 
      fprintf(stderr, "- Output:\n");
      fprintf(stderr, "       -o | --out FILE              Vcf output file [- = stdout]\n");
@@ -1009,7 +973,6 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "                                    (note: without --no-default-filter default filters (incl. coverage) kick in after predictions are done)\n");
      fprintf(stderr, "       -d | --max-depth INT         Cap coverage at this depth [%d]\n", mplp_conf->max_depth);
      fprintf(stderr, "            --illumina-1.3          Assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
-     fprintf(stderr, "            --dont-skip-n           Don't skip positions where refbase is N (will try to predict CONSVARs (only) at those positions)\n");
      fprintf(stderr, "            --use-orphan            Count anomalous read pairs (i.e. where mate is not aligned properly)\n");
      fprintf(stderr, "            --plp-summary-only      No variant calling. Just output pileup summary per column\n");
      fprintf(stderr, "            --no-default-filter     Don't run default 'lofreq filter' automatically after calling variants\n");
@@ -1025,13 +988,11 @@ main_call(int argc, char *argv[])
      /* based on bam_mpileup() */
      int c, i;
      static int use_orphan = 0;
-     static int cons_as_ref = 0;
      static int only_indels = 0;
      static int no_indels = 1;
 
      static int plp_summary_only = 0;
      static int no_default_filter = 0;
-     static int dont_skip_n = 0;
      static int illumina_1_3 = 0;
      char *bam_file = NULL;
      char *bed_file = NULL;
@@ -1045,10 +1006,6 @@ main_call(int argc, char *argv[])
      int rc = 0;
      char *ign_vcf = NULL;
 
-
-#ifdef IGN_XY2X_X2XY_LOWAF_INDEL_FP
-     LOG_WARN("%s\n", "Compiled with IGN_XY2X_X2XY_LOWAF_INDEL_FP");
-#endif
 
 /* FIXME add sens test:
 construct p such with
@@ -1093,7 +1050,6 @@ for cov in coverage_range:
               {"bed", required_argument, NULL, 'l'}, /* changes here must be reflected in pseudo_parallel code as well */
 
               {"ref", required_argument, NULL, 'f'},
-              {"cons-as-ref", no_argument, &cons_as_ref, 1},
               {"call-indels", no_argument, &no_indels, 0},
               {"only-indels", no_argument, &only_indels, 1},
 
@@ -1123,7 +1079,6 @@ for cov in coverage_range:
               {"min-cov", required_argument, NULL, 'C'},
               {"maxdepth", required_argument, NULL, 'd'},
 
-              {"dont-skip-n", no_argument, &dont_skip_n, 1},
               {"illumina-1.3", no_argument, &illumina_1_3, 1},
               {"use-orphan", no_argument, &use_orphan, 1},
               {"plp-summary-only", no_argument, &plp_summary_only, 1},
@@ -1327,7 +1282,6 @@ for cov in coverage_range:
     }
 
 
-    snvcall_conf.dont_skip_n = dont_skip_n;
     snvcall_conf.no_indels = no_indels;
     snvcall_conf.only_indels = only_indels;
 #ifdef DISABLE_INDELS
@@ -1346,14 +1300,6 @@ for cov in coverage_range:
 
     if (use_orphan) {
          mplp_conf.flag &= ~MPLP_NO_ORPHAN;
-    }
-
-    if (cons_as_ref) {
-         snvcall_conf.flag |= SNVCALL_CONS_AS_REF;
-         if (! snvcall_conf.no_indels) {
-              LOG_FATAL("%s\n", "Sorry, --cons-as-ref doesn't work with indel calls at the moment. Please use one or the other");/* FIXME */
-              exit(1);
-         }
     }
 
     if (no_indels && only_indels) {
@@ -1407,8 +1353,8 @@ for cov in coverage_range:
          LOG_FATAL("%s\n", "Can't compute BAQ with no reference...\n");
          return 1;
     }
-    if ( ! (snvcall_conf.flag & SNVCALL_CONS_AS_REF) && ! mplp_conf.fa && ! plp_summary_only) {
-         LOG_FATAL("%s\n", "Need a reference when not calling in consensus mode...\n");
+    if ( ! mplp_conf.fa && ! plp_summary_only) {
+         LOG_FATAL("%s\n", "Need a reference for calling variants...\n");
          return 1;
     }
 
