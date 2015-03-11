@@ -41,6 +41,9 @@
 
 const int BQ2_DEFAULT = 20;
 
+#ifdef PACBIO_REALN
+static int pacbio_msg_printed = 0;
+#endif
 
 int left_align_indels(char *sref, char *squery, int slen, char *new_state_seq) {
 
@@ -110,13 +113,23 @@ int viterbi(char *ref, char *query, char *bqual, char *aln, int quality)
 
      // Define transition probabilities
      // FIXME: define globally to speed up
+#ifdef PACBIO_REALN
+     double alpha = 0.1;
+     if (! pacbio_msg_printed) {
+          fprintf(stderr, "WARN(%s|%s): Using pacbio viterbi params\n", __FILE__, __FUNCTION__);
+          pacbio_msg_printed = 1;
+     }
+#else
      double alpha = 0.00001;
+#endif
      double beta = 0.4;
+
      double L = (double)rlen;
      double gamma = 1/(2.*L);
      int i, k;
      double ep_ins = log10(.25); // Insertion emission probability
      double tp[5][5] = {{0}};
+
      tp[0][0] = log10((1 - 2*alpha)*(1 - gamma)); // M->M
      tp[0][1] = log10(alpha*(1 - gamma)); // M->I
      tp[0][2] = log10(alpha*(1 - gamma)); // M->D

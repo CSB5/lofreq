@@ -45,6 +45,12 @@
 #include "defaults.h"
 #include "bam_md_ext.h"
 
+#ifdef PACBIO_REALN
+static int pacbio_msg_printed = 0;
+#endif
+
+
+
 /* bam_md.c */
 const char bam_nt16_nt4_table[] = { 4, 0, 1, 4, 2, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4 };
 
@@ -264,7 +270,15 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref,
      int k, i, bw, x, y, yb, ye, xb, xe;
      uint32_t *cigar = bam1_cigar(b);
      bam1_core_t *c = &b->core;
-     kpa_ext_par_t conf = kpa_ext_par_lofreq;
+#ifdef PACBIO_REALN
+     kpa_ext_par_t conf = kpa_ext_par_lofreq_pacbio;
+     if (! pacbio_msg_printed) {
+          fprintf(stderr, "WARN(%s|%s): Using pacbio viterbi params\n", __FILE__, __FUNCTION__);
+          pacbio_msg_printed = 1;
+     }
+#else
+     kpa_ext_par_t conf = kpa_ext_par_lofreq_illumina;
+#endif
      /*uint8_t *bq = 0, *zq = 0, *qual = bam1_qual(b);*/
      uint8_t *qual = bam1_qual(b);
      uint8_t *prec_ai, *prec_ad, *prec_baq;
