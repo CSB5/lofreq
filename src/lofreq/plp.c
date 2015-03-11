@@ -851,6 +851,10 @@ void compile_plp_col(plp_col_t *plp_col,
                     bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos)],
                     p->is_del, p->is_refskip, p->indel, p->is_head, p->is_tail);
 #endif
+          /* no need for check if mq is within user defined
+           * limits. check was done in mplp_func */
+          mq = p->b->core.qual;
+
           /* p->is_del mean there was a deletion (already printed before this column). */
           if (! p->is_del) {
                double count_incr;
@@ -872,10 +876,6 @@ void compile_plp_col(plp_col_t *plp_col,
                nt4 = bam_nt16_nt4_table[bam1_seqi(bam1_seq(p->b), p->qpos)];
 
                bq = bam1_qual(p->b)[p->qpos];
-
-               /* no need for check if mq is within user defined
-                * limits. check was done in mplp_func */
-               mq = p->b->core.qual;
 
                /* minimal base-call quality filtering. doing this here
                 * will make all downstream analysis blind to filtering
