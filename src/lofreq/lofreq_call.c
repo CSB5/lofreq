@@ -644,7 +644,7 @@ call_indels(const plp_col_t *p, snvcall_conf_t *conf)
        * FIXME make switch
        */
       if (p->num_ins && p->ins_quals.n && p->num_dels && p->del_quals.n) {
-           const float max_af = 0.02;
+           const float max_af = 0.05;
            ins_event *ins_ev, *ins_ev_tmp;
            del_event *del_ev, *del_ev_tmp;
            /* counts of observed 1-base indels */
@@ -677,7 +677,8 @@ call_indels(const plp_col_t *p, snvcall_conf_t *conf)
            }
       }      
 
-      if (p->num_ins && p->ins_quals.n) {
+      /*if (p->num_ins && p->ins_quals.n) { FIXME check for ins_quals.n breaks if 100% consvar. why was this needed? see also del */
+      if (p->num_ins) {
            ins_event *it, *it_tmp;
            HASH_ITER(hh_ins, p->ins_event_counts, it, it_tmp) {
                 if (strlen(it->key)==1 && ign_indels[bam_nt4_table[(int)it->key[0]]]) {
@@ -698,7 +699,8 @@ call_indels(const plp_col_t *p, snvcall_conf_t *conf)
            }
       }
 
-      if (p->num_dels && p->del_quals.n) {
+      /*if (p->num_dels && p->del_quals.n) { FIXME check for del_quals.n breaks if 100% consvar. why was this needed? see also ins */
+      if (p->num_dels) {
            del_event *it, *it_tmp;
            HASH_ITER(hh_del, p->del_event_counts, it, it_tmp) {
                 if (strlen(it->key)==1 && ign_indels[bam_nt4_table[(int)it->key[0]]]) {
