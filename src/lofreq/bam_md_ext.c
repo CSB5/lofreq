@@ -91,6 +91,7 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
     iaq = calloc(c->l_qseq + 1, 1);
     daq = calloc(c->l_qseq + 1, 1);
     
+    /* init to highest possible value */
     for (k = 0; k < c->l_qseq; k++) {
          iaq[k] = daq[k] = '~';
     }
@@ -101,7 +102,6 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
      * as the sum of the alignment probability of all equivalent indel
      * events. see del_rep and ins_rep handling below 
      */
-
     for (k = 0, x = c->pos, y = 0, z = 0; k < c->n_cigar; ++k) { 
          int j, op = cigar[k]&0xf, oplen = cigar[k]>>4;
          // this could be merged into the later block
@@ -148,13 +148,13 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
 
                    set_u(u, bw, qpos+j, rpos-xb+1+j);
                    /* FIXME happens for long reads, i.e. pacbio. why? see corresponding bit for ins_rep 
-                    * pacbio shouldn't use idaq() for now anyway
                     */
                    if (! u_within_limits(u, bw)) {
 #if 0
-                        fprintf(stderr, "WARNING: u of %d not within limits for %s. break\n", u, bam1_qname(b));
+                        fprintf(stderr, "WARNING u of %d not within limits for %s. break\n", u, bam1_qname(b));
+                        /*fprintf(stderr, "WARNING: u of %d not within limits for %s. u=%d, bw=%d qpos=%d j=%d rpos=%d xb=%d j=%d break\n", u, bam1_qname(b), u, bw, qpos, j, rpos, xb, j);*/
 #endif
-                        break;
+                        continue;
                    }
                    ap += pdi[u+2];
 #if 0
@@ -168,6 +168,7 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
               }
               ap = 1 - ap;
               daq[qpos-1] = encode_q(prob_to_sangerq(ap));
+              /*fprintf(stderr, "DAQ %d: %c %g\n", qpos-1, daq[qpos-1], ap);*/
               free(del_seq);
 #ifdef DEBUG
               fprintf(stderr, "DEL %s %d %lg %c %s\n",
@@ -211,13 +212,12 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
 
                    set_u(u, bw, qpos+j+1, rpos-xb+j);
                    /* FIXME happens for long reads, i.e. pacbio. why? see corresponding bit for del_rep 
-                    * pacbio shouldn't use idaq() for now anyway
                     */
                    if (! u_within_limits(u, bw)) {
 #if 0
                         fprintf(stderr, "WARNING u of %d not within limits for %s. break\n", u, bam1_qname(b));
 #endif
-                        break;
+                        continue;
                    }
                    ap += pdi[u+1];
 #if 0
@@ -230,6 +230,7 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
               }
               ap = 1 - ap; // probability of alignment error
               iaq[qpos-1] = encode_q(prob_to_sangerq(ap));
+              /*fprintf(stderr, "IAQ %d: %c %g\n", qpos-1, iaq[qpos-1], ap);*/
               free(ins_seq);
 #ifdef DEBUG
               fprintf(stderr, "INS %s %d %lg %c %s\n", 
@@ -244,7 +245,7 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
     
     /*fprintf(stderr, "%s:%s:%d n_ins=%d n_del=%d\n", __FILE__, __FUNCTION__, __LINE__, n_ins, n_del);*/
     if (n_ins) {
-             bam_aux_append(b, AI_TAG, 'Z', c->l_qseq+1, iaq);
+         bam_aux_append(b, AI_TAG, 'Z', c->l_qseq+1, iaq);
     }
     if (n_del)  {
          bam_aux_append(b, AD_TAG, 'Z', c->l_qseq+1, daq);
@@ -290,6 +291,8 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref,
           return 0;
      }
 
+     /*fprintf(stderr, "FIXME baq_flag=%d idaq_flag=%d\n", baq_flag, idaq_flag);*/
+
      /* no alignment? */
      if ((c->flag & BAM_FUNMAP) || b->core.l_qseq == 0) {
           return 0;
@@ -315,7 +318,6 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref,
                prec_ad = NULL;
           }
      }
-
 
 	/* find the start and end of the alignment */
 	x = c->pos, y = 0, yb = ye = xb = xe = -1;
