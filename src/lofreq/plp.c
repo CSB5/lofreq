@@ -991,8 +991,8 @@ void compile_plp_col(plp_col_t *plp_col,
                count_incr = 1.0 - PHREDQUAL_TO_PROB(bq);
 #endif
 
-               /* FIXME is this the proper way to handle cases where count_incr = 0.0 because one of the values is 0? */
-               if (count_incr == 0.0/* nearly */) {
+               /* FIXME this can't be the proper way to handle cases where count_incr = 0.0 because one of the values is 0? */
+               if (count_incr == 0.0) {
                     count_incr = DBL_MIN;
                }
 
@@ -1043,7 +1043,7 @@ check_indel:
 
 
           if (iq < conf->min_plp_idq || dq < conf->min_plp_idq) {
-               /* LOG_FIXME("iq=%d < conf->min_plp_idq=%d || dq=%d < conf->min_plp_idq=%d\n", iq, conf->min_plp_idq, dq, conf->min_plp_idq); */
+               /* LOG_DEBUG("iq=%d < conf->min_plp_idq=%d || dq=%d < conf->min_plp_idq=%d\n", iq, conf->min_plp_idq, dq, conf->min_plp_idq); */
                if (p->indel != 0 || p->is_del != 0) {
                   plp_col->num_ign_indels += 1;
                }
@@ -1055,6 +1055,12 @@ check_indel:
                     if (p->indel > 0) {
                          char *ins_seq;
                          int j;
+
+                         if (ai) {
+                              char *a = (char*)(ai+1);
+                              iaq = a[p->qpos] - 33;
+                              plp_col->has_indel_aqs = 1;
+                         }
 
                          plp_col->num_ins += 1;
                          plp_col->sum_ins += p->indel;
@@ -1071,14 +1077,8 @@ check_indel:
                          }
                          ins_seq[j-1] = '\0';
 
-                         if (ai) {
-                              char *a = (char*)(ai+1);
-                              iaq = a[p->qpos] - 33;
-                              plp_col->has_indel_aqs = 1;
-                         }
 
-                         //LOG_DEBUG("Insertion of %s at %d with iq %d iaq %d\n",
-                         //           ins_seq, pos, iq, iaq);
+                         /*LOG_DEBUG("Insertion of %s at %d with iq %d iaq %d\n", ins_seq, pos, iq, iaq);*/
                          add_ins_sequence(&plp_col->ins_event_counts,
                               ins_seq, iq, iaq, mq, sq,
                               bam1_strand(p->b)? 1: 0);
@@ -1101,6 +1101,12 @@ check_indel:
                          char *del_seq;
                          int j;
 
+                         if (ad) {
+                              char *a = (char*)(ad+1);
+                              daq = a[p->qpos] - 33;
+                              plp_col->has_indel_aqs = 1;
+                         }
+
                          plp_col->num_dels += 1;
                          plp_col->sum_dels -= p->indel;
 
@@ -1115,13 +1121,7 @@ check_indel:
                          }
                          del_seq[j-1] = '\0';
 
-                         if (ad) {
-                              char *a = (char*)(ad+1);
-                              daq = a[p->qpos] - 33;
-                         plp_col->has_indel_aqs = 1;
-                         }
-                         //LOG_DEBUG("Deletion of %s at %d with dq %d daq %d\n",
-                         //           del_seq, pos, dq, daq);
+                         /*LOG_DEBUG("Deletion of %s at %d with dq %d daq %d\n", del_seq, pos, dq, daq);*/
                          add_del_sequence(&plp_col->del_event_counts,
                               del_seq, dq, daq, mq, sq,
                               bam1_strand(p->b)? 1: 0);
@@ -1134,7 +1134,6 @@ check_indel:
                          } else {
                               plp_col->non_ins_fw_rv[0] += 1;
                          }
-
                          free(del_seq);
                     }
 
@@ -1150,6 +1149,7 @@ check_indel:
                          plp_col->non_ins_fw_rv[0] += 1;
                     }
 
+                    /*LOG_DEBUG("Neither deletion nor insertion. Adding iq=%d dq=%d\n", iq, dq);*/
                     PLP_COL_ADD_QUAL(& plp_col->del_quals, dq);
                     PLP_COL_ADD_QUAL(& plp_col->del_map_quals, mq);
                     del_nonevent_qual += dq;
@@ -1195,7 +1195,6 @@ check_indel:
       *
       * FIXME: check consensus indel against minimum consensus quality
       * FIXME: merge indel qualities when determining consensus indel event
-      *
       * FIXME(AW): why are we using max qualities here and not errprob corrected counts?
       */
 
@@ -1225,16 +1224,10 @@ check_indel:
 
      if (!(ins_maxevent_qual > ins_nonevent_qual) &&
          !(del_maxevent_qual > del_nonevent_qual)) {
-
-#ifdef REF_OVER_CONS
-          plp_col->cons_base[0] = plp_col->ref_base;
-          plp_col->cons_base[1] = '\0';
-#else
           /* determine consensus from 'counts'. will never produce N on tie  */
           plp_col->cons_base[0] = bam_nt4_rev_table[
                argmax_d(base_counts, NUM_NT4)];
           plp_col->cons_base[1] = '\0';
-#endif
      } else if (ins_maxevent_qual > ins_nonevent_qual) {  // consensus insertion
           /* LOG_DEBUG("cons ins: ins_maxevent_qual=%d > ins_nonevent_qual=%d\n", ins_maxevent_qual, ins_nonevent_qual); */
           plp_col->cons_base[0] = '+';
@@ -1244,6 +1237,7 @@ check_indel:
           plp_col->cons_base[0] = '-';
           strcpy(plp_col->cons_base+1, del_maxevent_key);
      } else {
+          LOG_FATAL("internal error...");
           exit(1);
      }
 

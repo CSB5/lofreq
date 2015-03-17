@@ -76,9 +76,8 @@
 #define SNVCALL_USE_BAQ     1
 #define SNVCALL_USE_MQ      2
 #define SNVCALL_USE_SQ      4
-#define SNVCALL_CONS_AS_REF 8
 /* indel alignment quality */
-#define SNVCALL_USE_IDAQ      16
+#define SNVCALL_USE_IDAQ      8
 
 
 /* private tag for actual baq values: "l"ofreseq "b"ase-alignment */
