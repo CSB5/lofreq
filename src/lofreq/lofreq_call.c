@@ -128,7 +128,7 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char *ref,
           sb_qual = PROB_TO_PHREDQUAL_SAFE(sb_two_pv);
      }
      vcf_var_sprintf_info(var, is_indel? p->coverage_plp - p->num_tails : p->coverage_plp,
-                          af, sb_qual, dp4, is_indel, is_consvar);
+                          af, sb_qual, dp4, is_indel, p->hrun, is_consvar);
 
      vcf_write_var(vcf_file, var);
      vcf_free_var(&var);
@@ -450,8 +450,9 @@ plp_summary(const plp_col_t *plp_col, void* confp)
 
      fprintf(stream, "\theads:%d\ttails:%d", plp_col->num_heads,
              plp_col->num_tails);
-     fprintf(stream, "\tins=%d\tdels=%d", plp_col->num_ins,
+     fprintf(stream, "\tins:%d\tdels:%d", plp_col->num_ins,
              plp_col->num_dels);
+     fprintf(stream, "\thrun:%d", plp_col->hrun);
      fprintf(stream, "\n");
      for (i=0; i<NUM_NT4; i++) {
           int X = 3;/* bq, baq, mq */

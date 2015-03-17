@@ -132,7 +132,14 @@ typedef struct {
                            BAM contained alignment quality for indel calls 
                            (all reads with indels should have those).
                            indels are still predicted if missing, but overcalled. */  
-     
+     int hrun; /* homopolymer run at (to the right of) current
+                * position. if indels are not left aligned and current
+                * position is already a homopolymer this will be taken
+                * into account. mainly for filtering low af FP indel
+                * at the beginning of poly-AT regions. A del GT>G
+                * which is in the sequence context of GTTT will
+                * receive an hrun value of 3. same for ins G>GT.
+                */
      /* changes here should be reflected in plp_col_init, plp_col_free etc. */
 } plp_col_t;
 

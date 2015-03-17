@@ -570,9 +570,10 @@ int vcf_get_dp4(dp4_counts_t *dp4, var_t *var)
 
 /* var->info allocated here. caller has to free */
 void vcf_var_sprintf_info(var_t *var,
-                         const int dp, const float af, const int sb,
-                         const dp4_counts_t *dp4,
-                         const int indel, const int consvar)
+                          const int dp, const float af, const int sb,
+                          const dp4_counts_t *dp4,
+                          const int indel, const int hrun, 
+                          const int consvar)
 {
      char buf[LINE_BUF_SIZE];
      snprintf(buf, sizeof(buf)-32, /* leave some for INDEL and other flags below */
@@ -580,6 +581,7 @@ void vcf_var_sprintf_info(var_t *var,
               dp, af, sb, dp4->ref_fw, dp4->ref_rv, dp4->alt_fw, dp4->alt_rv);
      if (indel) {
           sprintf(buf, "%s;INDEL", buf);
+          sprintf(buf, "%s;HRUN=%d", buf, hrun);
      }
      if (consvar) {
           sprintf(buf, "%s;CONSVAR", buf);
@@ -632,6 +634,7 @@ void vcf_write_new_header(vcf_file_t *vcf_file, const char *src, const char *ref
      vcf_printf(vcf_file, "##INFO=<ID=DP4,Number=4,Type=Integer,Description=\"Counts for ref-forward bases, ref-reverse, alt-forward and alt-reverse bases\">\n");
      vcf_printf(vcf_file, "##INFO=<ID=INDEL,Number=0,Type=Flag,Description=\"Indicates that the variant is an INDEL.\">\n");
      vcf_printf(vcf_file, "##INFO=<ID=CONSVAR,Number=0,Type=Flag,Description=\"Indicates that the variant is a consensus variant (as opposed to a low frequency variant).\">\n");
+     vcf_printf(vcf_file, "##INFO=<ID=HRUN,Number=1,Type=Integer,Description=\"Homopolymer length to the right of report indel position\">\n");
      vcf_printf(vcf_file, "%s\n", VCF_HEADER);
 }
 

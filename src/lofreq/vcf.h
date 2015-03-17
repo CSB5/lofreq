@@ -122,7 +122,7 @@ char *vcf_var_add_to_info(var_t *var, const char *info_str);
 void vcf_var_sprintf_info(var_t *var,
                           const int dp, const float af, const int sb,
                           const dp4_counts_t *dp4,
-                          const int is_indel, const int is_consvar);
+                          const int is_indel, const int hrun, const int is_consvar);
 void vcf_write_var(vcf_file_t *vcf_file, const var_t *var);
 void vcf_write_header(vcf_file_t *vcf_file, const char *header);
 void vcf_write_new_header(vcf_file_t *vcf_file, const char *srcprog, const char *reffa);

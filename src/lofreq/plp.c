@@ -181,6 +181,7 @@ plp_col_init(plp_col_t *p) {
     p->non_del_fw_rv[0] = p->non_del_fw_rv[1] = 0;
 
     p->has_indel_aqs = 0;
+    p->hrun = 0;
 }
 
 
@@ -225,7 +226,8 @@ void plp_col_debug_print(const plp_col_t *p, FILE *stream)
      }
 
      fprintf(stream, " heads:%d tails:%d", p->num_heads, p->num_tails);
-     fprintf(stream, " ins=%d del=%d", p->num_ins, p->num_dels);
+     fprintf(stream, " ins:%d del:%d", p->num_ins, p->num_dels);
+     fprintf(stream, " hrun=%d", p->hrun);
      fprintf(stream, "\n");
 
 #if 0
@@ -743,7 +745,46 @@ mplp_func(void *data, bam1_t *b)
     return ret;
 }
 
+/* homopolymer run at (to the right of) current
+                * position. if indels are not left aligned and current
+                * position is already a homopolymer this will be taken
+                * into account. mainly for filtering low af FP indel
+                * at the beginning of poly-AT regions. A del GT>G
+                * which is in the sequence context of GTTT will
+                * receive an hrun value of 3. same for ins G>GT */
+int
+get_hrun(const int pos, const char *ref, const int ref_len)
+{
+     char c;
+     int hrun=1;
+     int i;
 
+     /* to the right */
+     i=pos+1;
+     if (i<ref_len) {
+          c=toupper(ref[i]);
+          for (i=i+1; i<ref_len; i++) {
+               /*LOG_DEBUG("to right: %c vs %c at %d\n", c, toupper(ref[i]), i+1);*/
+               if (toupper(ref[i])==c) {
+                    hrun+=1;
+               } else {
+                    break;
+               }
+          }
+     }
+
+     /* extend to the left in case not left aligned */
+     for (i=pos; i>=0; i--) {
+          /*LOG_DEBUG("to left: %c vs %c at %d\n", c, toupper(ref[i]), i+1);*/
+          if (toupper(ref[i])==c) {
+               hrun+=1;
+          } else {
+               break;
+          }
+     }
+
+     return hrun;
+}
 
 /* Press pileup info into one data-structure. plp_col members
  * allocated here. Called must free with plp_col_free();
@@ -786,6 +827,8 @@ void compile_plp_col(plp_col_t *plp_col,
      plp_col->num_ign_indels = 0;
      plp_col->num_non_indels = 0;
      LOG_DEBUG("Processing %s:%d\n", plp_col->target, plp_col->pos+1);
+     
+     plp_col->hrun = get_hrun(pos, ref, ref_len);
 
      for (i = 0; i < n_plp; ++i) {
           /* inserted parts of pileup_seq() here.
