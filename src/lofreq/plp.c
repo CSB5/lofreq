@@ -761,15 +761,17 @@ get_hrun(const int pos, const char *ref, const int ref_len)
 
      /* to the right */
      i=pos+1;
-     if (i<ref_len) {
-          c=toupper(ref[i]);
-          for (i=i+1; i<ref_len; i++) {
-               /*LOG_DEBUG("to right: %c vs %c at %d\n", c, toupper(ref[i]), i+1);*/
-               if (toupper(ref[i])==c) {
-                    hrun+=1;
-               } else {
-                    break;
-               }
+     if (i>=ref_len) {
+        return hrun;
+     }   
+     
+     c=toupper(ref[i]);
+     for (i=i+1; i<ref_len; i++) {
+          /*LOG_DEBUG("to right: %c vs %c at %d\n", c, toupper(ref[i]), i+1);*/
+          if (toupper(ref[i])==c) {
+               hrun+=1;
+          } else {
+               break;
           }
      }
 
@@ -828,7 +830,9 @@ void compile_plp_col(plp_col_t *plp_col,
      plp_col->num_non_indels = 0;
      LOG_DEBUG("Processing %s:%d\n", plp_col->target, plp_col->pos+1);
      
-     plp_col->hrun = get_hrun(pos, ref, ref_len);
+     if (ref) {
+          plp_col->hrun = get_hrun(pos, ref, ref_len);
+     }
 
      for (i = 0; i < n_plp; ++i) {
           /* inserted parts of pileup_seq() here.
