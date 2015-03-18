@@ -20,7 +20,7 @@ done
 outdir=$(mktemp -d -t $(basename $0).XXXXXX)
 log=$outdir/log.txt
 outvcf=$outdir/out.vcf
-
+num_err=0
 
 cmd="$LOFREQ call-parallel --pp-threads 8 -f $REF -o $outvcf --verbose $BAM"
 # only needed as long as indels are disabled by default
