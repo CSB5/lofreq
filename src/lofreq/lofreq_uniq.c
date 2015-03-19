@@ -681,7 +681,7 @@ main_uniq(int argc, char *argv[])
     num_vars = vcf_parse_vars(&vars, & uniq_conf.vcf_in, 1);
     if (0 == num_vars) {
          LOG_WARN("%s\n", "Didn't find any variants in input");
-         return 0;
+         goto clean_and_exit;
     }
     if (! uniq_conf.uniq_filter.ntests) {
          uniq_conf.uniq_filter.ntests = num_vars;
