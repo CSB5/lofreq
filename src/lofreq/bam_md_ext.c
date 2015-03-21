@@ -38,7 +38,6 @@
 #include "bam.h"
 #include "htslib/faidx.h"
 #include "htslib/kstring.h"
-#include "kaln.h"
 
 #include "kprobaln_ext.h"
 #include "samutils.h"
