@@ -136,6 +136,7 @@ static int dindel_fetch_func(bam1_t *b, void *data)
      data_t_dindel *tmp = (data_t_dindel*)data;
      bam1_core_t *c = &b->core;
      int rlen;
+     uint8_t *to_delete;
 
      /* don't change reads failing default mask: BAM_FUNMAP | BAM_FSECONDARY | BAM_FQCFAIL | BAM_FDUP */
      if (c->flag & BAM_DEF_MASK) {
@@ -195,7 +196,16 @@ static int dindel_fetch_func(bam1_t *b, void *data)
      }
      indelq[y] = '\0';
 
+     to_delete = bam_aux_get(b, BI_TAG);
+     if (to_delete) {
+          bam_aux_del(b, to_delete);
+     }
      bam_aux_append(b, BI_TAG, 'Z', c->l_qseq+1, indelq);
+
+     to_delete = bam_aux_get(b, BD_TAG);
+     if (to_delete) {
+          bam_aux_del(b, to_delete);
+     }
      bam_aux_append(b, BD_TAG, 'Z', c->l_qseq+1, indelq);
 
      bam_write1(tmp->out, b);
@@ -306,7 +316,8 @@ usage()
              " If that's not possible, use this subcommand.\n"  \
              "The command has two modes: 'uniform' and 'dindel':\n" \
              "- 'uniform' will assign a given value uniformly, whereas\n"  \
-             "- 'dindel' will insert indel qualities based on Dindel (PMID 20980555).\n");
+             "- 'dindel' will insert indel qualities based on Dindel (PMID 20980555).\n" \
+             "Both will overwrite any existing values.\n");
      fprintf(stderr, "Do not realign your BAM file afterwards!\n");
      fprintf(stderr, "\n");
 }
