@@ -25,7 +25,7 @@ You will need:
 - a Python 2.7 interpreter
 - zlib developer files
 - a compiled version of [samtools (>=1.1)]((http://sourceforge.net/projects/samtools/files/samtools/1.1/samtools-1.1.tar.bz2/download))
-- a compiled version of htslib (>= 1.1; usually part of the above)
+- a compiled version of htslib (>= 1.1; use the one that comes bundled with samtools!)
 
 ### Compilation
 
