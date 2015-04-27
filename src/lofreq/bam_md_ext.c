@@ -150,8 +150,7 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
                     */
                    if (! u_within_limits(u, bw)) {
 #if 0
-                        fprintf(stderr, "WARNING u of %d not within limits for %s. break\n", u, bam1_qname(b));
-                        /*fprintf(stderr, "WARNING: u of %d not within limits for %s. u=%d, bw=%d qpos=%d j=%d rpos=%d xb=%d j=%d break\n", u, bam1_qname(b), u, bw, qpos, j, rpos, xb, j);*/
+                        fprintf(stderr, "WARNING u of %d not within limits for %s\n", u, bam1_qname(b));
 #endif
                         continue;
                    }
@@ -214,7 +213,7 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
                     */
                    if (! u_within_limits(u, bw)) {
 #if 0
-                        fprintf(stderr, "WARNING u of %d not within limits for %s. break\n", u, bam1_qname(b));
+                        fprintf(stderr, "WARNING u of %d not within limits for %s\n", u, bam1_qname(b));
 #endif
                         continue;
                    }
