@@ -48,7 +48,7 @@ typedef struct {
                         * filtering of all has to be done by
                         * caller! */
      int min_cov;
-     long long int bonf_sub; /* warning: changed dynamically ! */
+     long long int bonf_subst; /* warning: changed dynamically ! */
      long long int bonf_indel;
      float sig;
      vcf_file_t vcf_out;
@@ -59,7 +59,7 @@ typedef struct {
      int only_indels; 
      int no_indels; 
 
-} snvcall_conf_t;
+} varcall_conf_t;
 
 
 double
@@ -71,22 +71,22 @@ merge_srcq_baseq_mapq_and_alnq(const int sq, const int bq, const int mq, const i
 void
 plp_to_errprobs(double **err_probs, int *num_err_probs, 
                 int *alt_bases, int *alt_counts, int *alt_raw_counts,
-                const plp_col_t *p, snvcall_conf_t *conf);
+                const plp_col_t *p, varcall_conf_t *conf);
 void 
 plp_to_ins_errprobs(double **err_probs, int *num_err_probs, 
-                    const plp_col_t *p, snvcall_conf_t *conf,
+                    const plp_col_t *p, varcall_conf_t *conf,
                     char key[MAX_INDELSIZE]);
 
 void 
 plp_to_del_errprobs(double **err_probs, int *num_err_probs, 
-                    const plp_col_t *p, snvcall_conf_t *conf,
+                    const plp_col_t *p, varcall_conf_t *conf,
                     char key[MAX_INDELSIZE]);
 
 void
-init_snvcall_conf(snvcall_conf_t *c);
+init_varcall_conf(varcall_conf_t *c);
 
 void
-dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream) ;
+dump_varcall_conf(const varcall_conf_t *c, FILE *stream) ;
 
 
 extern double *

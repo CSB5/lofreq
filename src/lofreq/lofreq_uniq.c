@@ -286,19 +286,19 @@ uniq_snv(const plp_col_t *p, void *confp)
           int alt_bases[NUM_NONCONS_BASES];/* actual alt bases */
           int alt_counts[NUM_NONCONS_BASES]; /* counts for alt bases handed down to snpcaller */
           int alt_raw_counts[NUM_NONCONS_BASES]; /* raw, unfiltered alt-counts */
-          snvcall_conf_t snvcall_conf;
+          varcall_conf_t varcall_conf;
 
           int bonf = 1;
           float alpha = 0.01;
 
-          init_snvcall_conf(&snvcall_conf);
+          init_varcall_conf(&varcall_conf);
           if (debug) {
-               dump_snvcall_conf(&snvcall_conf, stderr);
+               dump_varcall_conf(&varcall_conf, stderr);
           }
 
           plp_to_errprobs(&err_probs, &num_err_probs,
                           alt_bases, alt_counts, alt_raw_counts,
-                          p, &snvcall_conf);
+                          p, &varcall_conf);
           LOG_DEBUG("at %s:%d with cov %d and num_err_probs %d\n", 
               p->target, p->pos, coverage, num_err_probs);
 

@@ -65,7 +65,7 @@ typedef struct {
      char *fa;
      faidx_t *fai;
      void *bed;
-     char *alnerrprof_file; /* logically belongs to snvcall_conf, but we need it here since only here the bam header is known */
+     char *alnerrprof_file; /* logically belongs to varcall_conf, but we need it here since only here the bam header is known */
      char cmdline[1024];
 } mplp_conf_t;
 
@@ -146,7 +146,7 @@ typedef struct {
 
 #define PLP_COL_ADD_QUAL(p, q)   int_varray_add_value((p), (q))
 
-/* initialize members of preallocated snvcall_conf */
+/* initialize members of preallocated varcall_conf */
 void init_mplp_conf(mplp_conf_t *c);
 
 int
