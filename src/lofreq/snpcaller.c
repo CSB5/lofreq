@@ -340,7 +340,7 @@ merge_srcq_mapq_baq_and_bq(const int sq, const int mq, const int baq, const int 
 void
 plp_to_errprobs(double **err_probs, int *num_err_probs,
                 int *alt_bases, int *alt_counts, int *alt_raw_counts,
-                const plp_col_t *p, snvcall_conf_t *conf)
+                const plp_col_t *p, varcall_conf_t *conf)
 {
      int i, j;
      int alt_idx;
@@ -426,11 +426,11 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                     }
                }
 
-               if ((conf->flag & SNVCALL_USE_BAQ) && p->baq_quals[i].n) {
+               if ((conf->flag & VARCALL_USE_BAQ) && p->baq_quals[i].n) {
                     baq = p->baq_quals[i].data[j];
                }
 
-               if ((conf->flag & SNVCALL_USE_MQ) && p->map_quals[i].n) {
+               if ((conf->flag & VARCALL_USE_MQ) && p->map_quals[i].n) {
                     mq = p->map_quals[i].data[j];
                     /*according to spec 255 is unknown */
                     if (mq == 255) {
@@ -443,7 +443,7 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
 #endif
                }
 
-               if ((conf->flag & SNVCALL_USE_SQ) && p->source_quals[i].n) {
+               if ((conf->flag & VARCALL_USE_SQ) && p->source_quals[i].n) {
                     sq = p->source_quals[i].data[j];
                }
 
@@ -485,7 +485,7 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
 /* FIXME merge with plp_to_del_errprobs */
 void
 plp_to_ins_errprobs(double **err_probs, int *num_err_probs,
-                    const plp_col_t *p, snvcall_conf_t *conf,
+                    const plp_col_t *p, varcall_conf_t *conf,
                     char key[MAX_INDELSIZE]){
 
      if (NULL == ((*err_probs) = malloc(p->coverage_plp * sizeof(double)))) {
@@ -505,7 +505,7 @@ plp_to_ins_errprobs(double **err_probs, int *num_err_probs,
      for (i = 0; i < p->ins_quals.n; i++) {
           iq = mq = -1;
           iq = p->ins_quals.data[i];
-          if (conf->flag & SNVCALL_USE_MQ) {
+          if (conf->flag & VARCALL_USE_MQ) {
                mq = p->ins_map_quals.data[i];
           }
           final_err_prob = merge_srcq_mapq_baq_and_bq(-1, mq, -1, iq);
@@ -519,11 +519,11 @@ plp_to_ins_errprobs(double **err_probs, int *num_err_probs,
                iq = it->ins_quals.data[j];
 
                /* don't use idaq if not wanted or if not indel in question (FIXME does the latter amek sense)? */
-               if ((conf->flag & SNVCALL_USE_IDAQ) && (0 == strcmp(it->key, key))) {
+               if ((conf->flag & VARCALL_USE_IDAQ) && (0 == strcmp(it->key, key))) {
                     aq = it->ins_aln_quals.data[j];
                }
 
-               if ((conf->flag & SNVCALL_USE_MQ) && it->ins_map_quals.n) {
+               if ((conf->flag & VARCALL_USE_MQ) && it->ins_map_quals.n) {
                     mq = it->ins_map_quals.data[j];
                     /*according to spec 255 is unknown */
                     if (mq == 255) {
@@ -531,7 +531,7 @@ plp_to_ins_errprobs(double **err_probs, int *num_err_probs,
                     }
                }
 
-               if ((conf->flag & SNVCALL_USE_SQ) && it->ins_source_quals.n)  {
+               if ((conf->flag & VARCALL_USE_SQ) && it->ins_source_quals.n)  {
                     sq = it->ins_source_quals.data[j];
                }
                
@@ -548,7 +548,7 @@ plp_to_ins_errprobs(double **err_probs, int *num_err_probs,
 /* FIXME merge with plp_to_ins_errprobs */
 void
 plp_to_del_errprobs(double **err_probs, int *num_err_probs,
-                    const plp_col_t *p, snvcall_conf_t *conf,
+                    const plp_col_t *p, varcall_conf_t *conf,
                     char key[MAX_INDELSIZE]){
      if (NULL == ((*err_probs) = malloc(p->coverage_plp * sizeof(double)))) {
           /* coverage = base-count after read level filtering */
@@ -567,7 +567,7 @@ plp_to_del_errprobs(double **err_probs, int *num_err_probs,
      for (i = 0; i < p->del_quals.n; i++) {
           dq = mq = -1;
           dq = p->del_quals.data[i];
-          if (conf->flag & SNVCALL_USE_MQ) {
+          if (conf->flag & VARCALL_USE_MQ) {
                mq = p->del_map_quals.data[i];
           }
           final_err_prob = merge_srcq_mapq_baq_and_bq(-1, mq, -1, dq);
@@ -581,11 +581,11 @@ plp_to_del_errprobs(double **err_probs, int *num_err_probs,
                dq = it->del_quals.data[j];
 
                /* don't use idaq if not wanted or if not indel in question (FIXME does the latter amek sense)? */
-               if ((conf->flag & SNVCALL_USE_IDAQ) && (0 == strcmp(it->key, key))) {
+               if ((conf->flag & VARCALL_USE_IDAQ) && (0 == strcmp(it->key, key))) {
                     aq = it->del_aln_quals.data[j];
                }
 
-               if ((conf->flag & SNVCALL_USE_MQ) && it->del_map_quals.n) {
+               if ((conf->flag & VARCALL_USE_MQ) && it->del_map_quals.n) {
                     mq = it->del_map_quals.data[j];
                     /*according to spec 255 is unknown */
                     if (mq == 255) {
@@ -593,7 +593,7 @@ plp_to_del_errprobs(double **err_probs, int *num_err_probs,
                     }
                }
 
-               if ((conf->flag & SNVCALL_USE_SQ) && it->del_source_quals.n) {
+               if ((conf->flag & VARCALL_USE_SQ) && it->del_source_quals.n) {
                          sq = it->del_source_quals.data[j];
                }
 
@@ -607,11 +607,11 @@ plp_to_del_errprobs(double **err_probs, int *num_err_probs,
      }
 }
 
-/* initialize members of preallocated snvcall_conf */
+/* initialize members of preallocated varcall_conf */
 void
-init_snvcall_conf(snvcall_conf_t *c)
+init_varcall_conf(varcall_conf_t *c)
 {
-     memset(c, 0, sizeof(snvcall_conf_t));
+     memset(c, 0, sizeof(varcall_conf_t));
 
      c->min_bq = DEFAULT_MIN_BQ;
      c->min_alt_bq = DEFAULT_MIN_ALT_BQ;
@@ -623,20 +623,20 @@ init_snvcall_conf(snvcall_conf_t *c)
 
      c->min_cov = DEFAULT_MIN_COV;
      c->bonf_dynamic = 1;
-     c->bonf_sub = 1;
+     c->bonf_subst = 1;
      c->bonf_indel = 1;
      c->sig = DEFAULT_SIG;
      /* c->out = ; */
-     c->flag |= SNVCALL_USE_MQ;
-     c->flag |= SNVCALL_USE_BAQ;
-     c->flag |= SNVCALL_USE_IDAQ;
+     c->flag |= VARCALL_USE_MQ;
+     c->flag |= VARCALL_USE_BAQ;
+     c->flag |= VARCALL_USE_IDAQ;
      c->only_indels = 0;
      c->no_indels = 0;
 }
 
 
 void
-dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
+dump_varcall_conf(const varcall_conf_t *c, FILE *stream)
 {
      fprintf(stream, "snvcall options\n");
      fprintf(stream, "  min_bq         = %d\n", c->min_bq);
@@ -646,15 +646,15 @@ dump_snvcall_conf(const snvcall_conf_t *c, FILE *stream)
      fprintf(stream, "  min_alt_jq     = %d\n", c->min_alt_jq);
      fprintf(stream, "  def_alt_jq     = %d\n", c->def_alt_jq);
      fprintf(stream, "  min_cov        = %d\n", c->min_cov);
-     fprintf(stream, "  bonf_sub       = %lld  (might get recalculated)\n", c->bonf_sub);
+     fprintf(stream, "  bonf_subst       = %lld  (might get recalculated)\n", c->bonf_subst);
      fprintf(stream, "  bonf_indel     = %lld  (might get recalculated)\n", c->bonf_indel);
      fprintf(stream, "  bonf_dynamic   = %d\n", c->bonf_dynamic);
      fprintf(stream, "  sig            = %f\n", c->sig);
 /*     fprintf(stream, "  out            = %p\n", (void*)c->out);*/
-     fprintf(stream, "  flag & SNVCALL_USE_BAQ     = %d\n", c->flag&SNVCALL_USE_BAQ?1:0);
-     fprintf(stream, "  flag & SNVCALL_USE_MQ      = %d\n", c->flag&SNVCALL_USE_MQ?1:0);
-     fprintf(stream, "  flag & SNVCALL_USE_SQ      = %d\n", c->flag&SNVCALL_USE_SQ?1:0);
-     fprintf(stream, "  flag & SNVCALL_USE_IDAQ    = %d\n", c->flag&SNVCALL_USE_IDAQ?1:0);
+     fprintf(stream, "  flag & VARCALL_USE_BAQ     = %d\n", c->flag&VARCALL_USE_BAQ?1:0);
+     fprintf(stream, "  flag & VARCALL_USE_MQ      = %d\n", c->flag&VARCALL_USE_MQ?1:0);
+     fprintf(stream, "  flag & VARCALL_USE_SQ      = %d\n", c->flag&VARCALL_USE_SQ?1:0);
+     fprintf(stream, "  flag & VARCALL_USE_IDAQ    = %d\n", c->flag&VARCALL_USE_IDAQ?1:0);
 #ifdef SCALE_MQ
      LOG_WARN("%s\n", "MQ scaling switched on!");
 #elif defined MQ_TRANS_TABLE

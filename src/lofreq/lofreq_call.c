@@ -139,7 +139,7 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char *ref,
 #if 0
 /* report consensus substitution */
 void
-report_cons_sub(const plp_col_t *p, snvcall_conf_t *conf){
+report_cons_sub(const plp_col_t *p, varcall_conf_t *conf){
 
      const int is_indel = 0;
      const int is_consvar = 1;
@@ -169,7 +169,7 @@ report_cons_sub(const plp_col_t *p, snvcall_conf_t *conf){
 
 /* report consensus insertion */
 void
-report_cons_ins(const plp_col_t *p, snvcall_conf_t *conf) {
+report_cons_ins(const plp_col_t *p, varcall_conf_t *conf) {
 
      const int is_indel = 1;
      const int is_consvar = 1;
@@ -209,7 +209,7 @@ report_cons_ins(const plp_col_t *p, snvcall_conf_t *conf) {
 
 /* report consensus deletion */
 void
-report_cons_del(const plp_col_t *p, snvcall_conf_t *conf) {
+report_cons_del(const plp_col_t *p, varcall_conf_t *conf) {
 
      const int is_indel = 1;
      const int is_consvar = 1;
@@ -302,7 +302,7 @@ ins_to_str(const ins_event *it, const char refbase,
 
 int
 call_alt_ins(const plp_col_t *p, double *bi_err_probs, int bi_num_err_probs,
-             snvcall_conf_t *conf, ins_event *it) {
+             varcall_conf_t *conf, ins_event *it) {
 
      int ins_counts[3];
      long double bi_pvalues[3];
@@ -358,7 +358,7 @@ else if (debug) {
 }
 
 int call_alt_del(const plp_col_t *p, double *bd_err_probs, int bd_num_err_probs,
-                 snvcall_conf_t *conf, del_event *it) {
+                 varcall_conf_t *conf, del_event *it) {
 
      int del_counts[3];
      long double bd_pvalues[3];
@@ -436,7 +436,7 @@ void
 plp_summary(const plp_col_t *plp_col, void* confp)
 {
      FILE* stream = stdout;
-     snvcall_conf_t *conf = (snvcall_conf_t *)confp;
+     varcall_conf_t *conf = (varcall_conf_t *)confp;
      static const char* title[] = {"BQ", "BAQ", "MQ", "SQ"};
      int i, x;
 
@@ -457,7 +457,7 @@ plp_summary(const plp_col_t *plp_col, void* confp)
      fprintf(stream, "\n");
      for (i=0; i<NUM_NT4; i++) {
           int X = 3;/* bq, baq, mq */
-          if (conf->flag & SNVCALL_USE_SQ) {
+          if (conf->flag & VARCALL_USE_SQ) {
                X = 4;/* bq, baq, mq, sq */
           }
           /* assuming we have base quals for all */
@@ -473,7 +473,7 @@ plp_summary(const plp_col_t *plp_col, void* confp)
                     int q = -1;
                     if (x==0) {
                          q = plp_col->base_quals[i].data[j];
-                    } else if (x==1 && conf->flag & SNVCALL_USE_BAQ) {
+                    } else if (x==1 && conf->flag & VARCALL_USE_BAQ) {
                          q = plp_col->baq_quals[i].data[j];
                     } else if (x==2) {
                          q = plp_col->map_quals[i].data[j];
@@ -614,7 +614,7 @@ warn_old_fai(const char *fa)
 
 
 void 
-call_indels(const plp_col_t *p, snvcall_conf_t *conf)
+call_indels(const plp_col_t *p, varcall_conf_t *conf)
 {
 
      double *bi_err_probs, *bd_err_probs; /* error probs for indel calling */
@@ -730,7 +730,7 @@ call_indels(const plp_col_t *p, snvcall_conf_t *conf)
  *
  */
 void
-call_snvs(const plp_col_t *p, snvcall_conf_t *conf)
+call_snvs(const plp_col_t *p, varcall_conf_t *conf)
 {
      double *bc_err_probs; /* error probs (qualities) passed down to snpcaller */
      int bc_num_err_probs; /* #elements in bc_err_probs */
@@ -790,20 +790,20 @@ call_snvs(const plp_col_t *p, snvcall_conf_t *conf)
       }
  #endif
       if (conf->bonf_dynamic) {
-           if (1 == conf->bonf_sub) {
-                conf->bonf_sub = NUM_NONCONS_BASES; /* otherwise we start with 1+NUM_NONCONS_BASES */
+           if (1 == conf->bonf_subst) {
+                conf->bonf_subst = NUM_NONCONS_BASES; /* otherwise we start with 1+NUM_NONCONS_BASES */
            } else {
-                conf->bonf_sub += NUM_NONCONS_BASES; /* will do one test per non-cons nuc */
+                conf->bonf_subst += NUM_NONCONS_BASES; /* will do one test per non-cons nuc */
            }
       }
       num_snv_tests += NUM_NONCONS_BASES;
 
       LOG_DEBUG("%s %d: passing down %d quals with noncons_counts"
                 " (%d, %d, %d) to snpcaller(num_snv_tests=%lld conf->bonf=%lld, conf->sig=%f)\n", p->target, p->pos+1,
-                bc_num_err_probs, alt_counts[0], alt_counts[1], alt_counts[2], num_snv_tests, conf->bonf_sub, conf->sig);
+                bc_num_err_probs, alt_counts[0], alt_counts[1], alt_counts[2], num_snv_tests, conf->bonf_subst, conf->sig);
 
       if (snpcaller(pvalues, bc_err_probs, bc_num_err_probs,
-                   alt_counts, conf->bonf_sub, conf->sig)) {
+                   alt_counts, conf->bonf_subst, conf->sig)) {
            fprintf(stderr, "FATAL: snpcaller() failed at %s:%s():%d\n",
                    __FILE__, __FUNCTION__, __LINE__);
            free(bc_err_probs);
@@ -827,7 +827,7 @@ call_snvs(const plp_col_t *p, snvcall_conf_t *conf)
                 continue;
            }
 
-           if (pvalue * (double)conf->bonf_sub < conf->sig) {
+           if (pvalue * (double)conf->bonf_subst < conf->sig) {
                 const int is_indel = 0;
                 const int is_consvar = 0;
                 float af = alt_raw_count/(float)p->coverage_plp;
@@ -876,7 +876,7 @@ call_snvs(const plp_col_t *p, snvcall_conf_t *conf)
 void
 call_vars(const plp_col_t *p, void *confp)
 {
-     snvcall_conf_t *conf = (snvcall_conf_t *)confp;
+     varcall_conf_t *conf = (varcall_conf_t *)confp;
 
      /* don't call if we don't know what to call against */
      if (p->ref_base == 'N') {
@@ -922,7 +922,7 @@ call_vars(const plp_col_t *p, void *confp)
 
 
 static void
-usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
+usage(const mplp_conf_t *mplp_conf, const varcall_conf_t *varcall_conf)
 {
      fprintf(stderr, "%s: call variants from BAM file\n\n", MYNAME);
 
@@ -940,13 +940,13 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -l | --bed FILE              List of positions (chr pos) or regions (BED) [null]\n");
 
      fprintf(stderr, "- Base-call quality:\n");
-     fprintf(stderr, "       -q | --min-bq INT            Skip any base with baseQ smaller than INT [%d]\n", snvcall_conf->min_bq);
-     fprintf(stderr, "       -Q | --min-alt-bq INT        Skip alternate bases with baseQ smaller than INT [%d]\n", snvcall_conf->min_alt_bq);
-     fprintf(stderr, "       -R | --def-alt-bq INT        Overwrite baseQs of alternate bases (that passed bq filter) with this value (-1: use median ref-bq; 0: keep) [%d]\n", snvcall_conf->def_alt_bq);
+     fprintf(stderr, "       -q | --min-bq INT            Skip any base with baseQ smaller than INT [%d]\n", varcall_conf->min_bq);
+     fprintf(stderr, "       -Q | --min-alt-bq INT        Skip alternate bases with baseQ smaller than INT [%d]\n", varcall_conf->min_alt_bq);
+     fprintf(stderr, "       -R | --def-alt-bq INT        Overwrite baseQs of alternate bases (that passed bq filter) with this value (-1: use median ref-bq; 0: keep) [%d]\n", varcall_conf->def_alt_bq);
 
-     fprintf(stderr, "       -j | --min-jq INT            Skip any base with joinedQ smaller than INT [%d]\n", snvcall_conf->min_jq);
-     fprintf(stderr, "       -J | --min-alt-jq INT        Skip alternate bases with joinedQ smaller than INT [%d]\n", snvcall_conf->min_alt_jq);
-     fprintf(stderr, "       -K | --def-alt-jq INT        Overwrite joinedQs of alternate bases (that passed jq filter) with this value (-1: use median ref-bq; 0: keep) [%d]\n", snvcall_conf->def_alt_jq);
+     fprintf(stderr, "       -j | --min-jq INT            Skip any base with joinedQ smaller than INT [%d]\n", varcall_conf->min_jq);
+     fprintf(stderr, "       -J | --min-alt-jq INT        Skip alternate bases with joinedQ smaller than INT [%d]\n", varcall_conf->min_alt_jq);
+     fprintf(stderr, "       -K | --def-alt-jq INT        Overwrite joinedQs of alternate bases (that passed jq filter) with this value (-1: use median ref-bq; 0: keep) [%d]\n", varcall_conf->def_alt_jq);
 
      fprintf(stderr, "- Base-alignment (BAQ) and indel-aligment (IDAQ) qualities:\n");
      fprintf(stderr, "       -B | --no-baq                Disable use of base-alignment quality (BAQ)\n");
@@ -968,11 +968,11 @@ usage(const mplp_conf_t *mplp_conf, const snvcall_conf_t *snvcall_conf)
      fprintf(stderr, "       -T | --def-nm-q INT          If >= 0, then replace non-match base qualities with this default value [%d]\n", mplp_conf->def_nm_q);
 
      fprintf(stderr, "- P-values:\n");
-     fprintf(stderr, "       -a | --sig                   P-Value cutoff / significance level [%f]\n", snvcall_conf->sig);
+     fprintf(stderr, "       -a | --sig                   P-Value cutoff / significance level [%f]\n", varcall_conf->sig);
      fprintf(stderr, "       -b | --bonf                  Bonferroni factor. 'dynamic' (increase per actually performed test) or INT ['dynamic']\n");
 
      fprintf(stderr, "- Misc.:\n");
-     fprintf(stderr, "       -C | --min-cov INT           Test only positions having at least this coverage [%d]\n", snvcall_conf->min_cov);
+     fprintf(stderr, "       -C | --min-cov INT           Test only positions having at least this coverage [%d]\n", varcall_conf->min_cov);
      fprintf(stderr, "                                    (note: without --no-default-filter default filters (incl. coverage) kick in after predictions are done)\n");
      fprintf(stderr, "       -d | --max-depth INT         Cap coverage at this depth [%d]\n", mplp_conf->max_depth);
      fprintf(stderr, "            --illumina-1.3          Assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
@@ -1003,8 +1003,8 @@ main_call(int argc, char *argv[])
      char vcf_tmp_template[] = "/tmp/lofreq2-call-dyn-bonf.XXXXXX";
      char *vcf_tmp_out = NULL; /* write to this file first, then filter */
      mplp_conf_t mplp_conf;
-     snvcall_conf_t snvcall_conf;
-     /*void (*plp_proc_func)(const plp_col_t*, const snvcall_conf_t*);*/
+     varcall_conf_t varcall_conf;
+     /*void (*plp_proc_func)(const plp_col_t*, const varcall_conf_t*);*/
      void (*plp_proc_func)(const plp_col_t*, void*);
      int rc = 0;
      char *ign_vcf = NULL;
@@ -1020,7 +1020,7 @@ for cov in coverage_range:
     for q in quality_range:
         num_noncons = 1
         while True:
-            void call_snvs(const plp_col_t *p, &snvcall_conf);
+            void call_snvs(const plp_col_t *p, &varcall_conf);
             count snvs in output
             if len(snps):
                 print num_noncons
@@ -1039,7 +1039,7 @@ for cov in coverage_range:
      init_mplp_conf(& mplp_conf);
 
      /* default snvcall options */
-     init_snvcall_conf(& snvcall_conf);
+     init_varcall_conf(& varcall_conf);
 
     /* keep in sync with long_opts_str and usage
      *
@@ -1164,28 +1164,28 @@ for cov in coverage_range:
               break;
 
          case 'q':
-              snvcall_conf.min_bq = atoi(optarg);
+              varcall_conf.min_bq = atoi(optarg);
               break;
 
          case 'Q':
-              snvcall_conf.min_alt_bq = atoi(optarg);
+              varcall_conf.min_alt_bq = atoi(optarg);
               break;
 
          case 'R':
-              snvcall_conf.def_alt_bq = atoi(optarg);
+              varcall_conf.def_alt_bq = atoi(optarg);
               break;
 
          case 'j':
-              snvcall_conf.min_jq = atoi(optarg);
+              varcall_conf.min_jq = atoi(optarg);
               break;
 
          case 'J':
-              snvcall_conf.min_alt_jq = atoi(optarg);
+              varcall_conf.min_alt_jq = atoi(optarg);
               break;
 
          case 'K':
-              snvcall_conf.def_alt_jq = atoi(optarg);
-              if (-1 == snvcall_conf.def_alt_jq) {
+              varcall_conf.def_alt_jq = atoi(optarg);
+              if (-1 == varcall_conf.def_alt_jq) {
                    LOG_FATAL("%s\n", "Sorry, use of median ref JQ implemented yet");/* FIXME */
                    exit(1);
               }
@@ -1201,11 +1201,11 @@ for cov in coverage_range:
 
          case 'B':
               mplp_conf.flag &= ~MPLP_BAQ;
-              snvcall_conf.flag &= ~SNVCALL_USE_BAQ;
+              varcall_conf.flag &= ~VARCALL_USE_BAQ;
               break;
 
          case 'A':
-              snvcall_conf.flag &= ~SNVCALL_USE_IDAQ;
+              varcall_conf.flag &= ~VARCALL_USE_IDAQ;
               mplp_conf.flag &= ~MPLP_IDAQ;
               break;
 
@@ -1218,12 +1218,12 @@ for cov in coverage_range:
               break;
 
          case 'N':
-              snvcall_conf.flag &= ~SNVCALL_USE_MQ;
+              varcall_conf.flag &= ~VARCALL_USE_MQ;
               break;
 
          case 's':
               mplp_conf.flag |= MPLP_USE_SQ;
-              snvcall_conf.flag |= SNVCALL_USE_SQ;
+              varcall_conf.flag |= VARCALL_USE_SQ;
               break;
 
          case 'S':
@@ -1235,21 +1235,21 @@ for cov in coverage_range:
               break;
 
          case 'a':
-              snvcall_conf.sig = strtof(optarg, (char **)NULL); /* atof */
-              if (0==snvcall_conf.sig) {
+              varcall_conf.sig = strtof(optarg, (char **)NULL); /* atof */
+              if (0==varcall_conf.sig) {
                    LOG_FATAL("%s\n", "Couldn't parse sign-threshold");
                    return 1;
               }
               break;
          case 'b':
               if (0 == strncmp(optarg, "dynamic", 7)) {
-                   snvcall_conf.bonf_dynamic = 1;
+                   varcall_conf.bonf_dynamic = 1;
 
               } else {
-                   snvcall_conf.bonf_dynamic = 0;
+                   varcall_conf.bonf_dynamic = 0;
 
-                   snvcall_conf.bonf_sub = strtoll(optarg, (char **)NULL, 10); /* atol */
-                   if (1>snvcall_conf.bonf_sub) {
+                   varcall_conf.bonf_subst = strtoll(optarg, (char **)NULL, 10); /* atol */
+                   if (1>varcall_conf.bonf_subst) {
                         LOG_FATAL("%s\n", "Couldn't parse Bonferroni factor");
                         return 1;
                    }
@@ -1257,7 +1257,7 @@ for cov in coverage_range:
               break;
 
          case 'C':
-              snvcall_conf.min_cov = atoi(optarg);
+              varcall_conf.min_cov = atoi(optarg);
               break;
 
          case 'd':
@@ -1265,7 +1265,7 @@ for cov in coverage_range:
               break;
 
          case 'h':
-              usage(& mplp_conf, & snvcall_conf);
+              usage(& mplp_conf, & varcall_conf);
               return 0; /* WARN: not printing defaults if some args where parsed */
 
          case '?':
@@ -1285,15 +1285,15 @@ for cov in coverage_range:
     }
 
 
-    snvcall_conf.no_indels = no_indels;
-    snvcall_conf.only_indels = only_indels;
+    varcall_conf.no_indels = no_indels;
+    varcall_conf.only_indels = only_indels;
 #ifdef DISABLE_INDELS
-    snvcall_conf.no_indels = 1;
+    varcall_conf.no_indels = 1;
 #endif
     /* if indels are not to be called, switch off idaq computation to
      * save some time */
-    if (snvcall_conf.no_indels) {
-         snvcall_conf.flag &= ~SNVCALL_USE_IDAQ;
+    if (varcall_conf.no_indels) {
+         varcall_conf.flag &= ~VARCALL_USE_IDAQ;
          mplp_conf.flag &= ~MPLP_IDAQ;
     }
 
@@ -1312,7 +1312,7 @@ for cov in coverage_range:
 
     if (argc == 2) {
         fprintf(stderr, "\n");
-        usage(& mplp_conf, & snvcall_conf);
+        usage(& mplp_conf, & varcall_conf);
         return 1;
     }
 
@@ -1347,9 +1347,9 @@ for cov in coverage_range:
                    mplp_conf.min_mq, mplp_conf.max_mq);
          return 1;
     }
-    if (snvcall_conf.min_bq > snvcall_conf.min_alt_bq) {
+    if (varcall_conf.min_bq > varcall_conf.min_alt_bq) {
          LOG_FATAL("Minimum base-call quality for all bases (%d) larger than minimum base-call quality for alternate bases (%d)\n",
-                   snvcall_conf.min_bq, snvcall_conf.min_alt_bq);
+                   varcall_conf.min_bq, varcall_conf.min_alt_bq);
          return 1;
     }
     if (mplp_conf.flag & MPLP_BAQ && ! mplp_conf.fa && ! plp_summary_only) {
@@ -1369,15 +1369,15 @@ for cov in coverage_range:
      * we can directly write to requested output file. otherwise we
      * use a tmp file that gets filtered.
      */
-    if (no_default_filter && ! snvcall_conf.bonf_dynamic) {
+    if (no_default_filter && ! varcall_conf.bonf_dynamic) {
          if (NULL == vcf_out || 0 == strcmp(vcf_out, "-")) {
-              if (vcf_file_open(& snvcall_conf.vcf_out, "-",
+              if (vcf_file_open(& varcall_conf.vcf_out, "-",
                                 0, 'w')) {
                    LOG_ERROR("%s\n", "Couldn't open stdout");
                    return 1;
               }
          } else {
-              if (vcf_file_open(& snvcall_conf.vcf_out, vcf_out,
+              if (vcf_file_open(& varcall_conf.vcf_out, vcf_out,
                                 HAS_GZIP_EXT(vcf_out), 'w')) {
                    LOG_ERROR("Couldn't open %s\n", vcf_out);
                    return 1;
@@ -1389,7 +1389,7 @@ for cov in coverage_range:
               LOG_FATAL("%s\n", "Couldn't create temporary vcf file");
               return 1;
          }
-         if (vcf_file_open(& snvcall_conf.vcf_out, vcf_tmp_out,
+         if (vcf_file_open(& varcall_conf.vcf_out, vcf_tmp_out,
                            HAS_GZIP_EXT(vcf_tmp_out), 'w')) {
               LOG_ERROR("Couldn't open %s\n", vcf_tmp_out);
               free(vcf_tmp_out);
@@ -1417,7 +1417,7 @@ for cov in coverage_range:
 
     if (debug) {
          dump_mplp_conf(& mplp_conf, stderr);
-         dump_snvcall_conf(& snvcall_conf, stderr);
+         dump_varcall_conf(& varcall_conf, stderr);
     }
 
     if (ign_vcf) {
@@ -1439,24 +1439,24 @@ for cov in coverage_range:
 
     } else {
          /* or use PACKAGE_STRING */
-         vcf_write_new_header(& snvcall_conf.vcf_out,
+         vcf_write_new_header(& varcall_conf.vcf_out,
                               mplp_conf.cmdline, mplp_conf.fa);
          plp_proc_func = &call_vars;
     }
 
-    rc = mpileup(&mplp_conf, plp_proc_func, (void*)&snvcall_conf,
+    rc = mpileup(&mplp_conf, plp_proc_func, (void*)&varcall_conf,
                  1, (const char **) argv + optind + 1);
     if (rc) {
          free(vcf_tmp_out);
          return rc;
     }
 
-    if (indel_calls_wo_idaq && snvcall_conf.flag & SNVCALL_USE_IDAQ) {
+    if (indel_calls_wo_idaq && varcall_conf.flag & VARCALL_USE_IDAQ) {
          LOG_WARN("%ld indel calls (before filtering) were made without indel alignment-quality!"
                   " Did you forget to indel alignment-quality to your bam-file?\n", indel_calls_wo_idaq);
     }
 
-    vcf_file_close(& snvcall_conf.vcf_out);
+    vcf_file_close(& varcall_conf.vcf_out);
 
     /* snv calling completed. now filter according to the following rules:
      *  1. no_default_filter and ! dyn
@@ -1468,7 +1468,7 @@ for cov in coverage_range:
     if (plp_summary_only) {
          LOG_VERBOSE("%s\n", "No filtering needed: didn't run in SNV calling mode");
 
-    } else if (no_default_filter && ! snvcall_conf.bonf_dynamic) {
+    } else if (no_default_filter && ! varcall_conf.bonf_dynamic) {
          /* vcf file needs no filtering and was already printed to
           * final destination. already taken care of above. */
          LOG_VERBOSE("%s\n", "No filtering needed or requested: variants already written to final destination");
@@ -1486,11 +1486,26 @@ for cov in coverage_range:
               len += sprintf(cmd+len, " %s", "--no-defaults");
          }
 
-         if (snvcall_conf.bonf_dynamic) {
+         if (varcall_conf.bonf_dynamic) {
+              int snvqual_thresh = INT_MAX;
+              int indelqual_thresh = INT_MAX;
+
+              if (varcall_conf.bonf_subst) {
+                   snvqual_thresh = PROB_TO_PHREDQUAL(varcall_conf.sig/varcall_conf.bonf_subst);
+                   if (snvqual_thresh < 0) {
+                        snvqual_thresh = 0;
+                   }
+              }
+              if (varcall_conf.bonf_indel) {
+                   indelqual_thresh =  PROB_TO_PHREDQUAL(varcall_conf.sig/varcall_conf.bonf_indel);
+                   if (indelqual_thresh < 0) {
+                        indelqual_thresh = 0;
+                   }
+              }         
+                             
               len += sprintf(cmd+len,/* appending to str with format. see http://stackoverflow.com/questions/14023024/strcat-for-formatted-strings */
                              " --snvqual-thresh %d --indelqual-thresh %d",
-                             snvcall_conf.bonf_sub ? PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf_sub) : INT_MAX,
-                             snvcall_conf.bonf_indel ? PROB_TO_PHREDQUAL(snvcall_conf.sig/snvcall_conf.bonf_indel) : INT_MAX);
+                             snvqual_thresh, indelqual_thresh);
          } else {
               LOG_VERBOSE("%s\n", "No SNV/indel-quality filtering needed (already applied during call since bonf was fixed)");
          }

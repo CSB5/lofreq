@@ -73,11 +73,11 @@
    non-consensus bases */
 #define NUM_NONCONS_BASES 3
 
-#define SNVCALL_USE_BAQ     1
-#define SNVCALL_USE_MQ      2
-#define SNVCALL_USE_SQ      4
+#define VARCALL_USE_BAQ     1
+#define VARCALL_USE_MQ      2
+#define VARCALL_USE_SQ      4
 /* indel alignment quality */
-#define SNVCALL_USE_IDAQ      8
+#define VARCALL_USE_IDAQ      8
 
 
 /* private tag for actual baq values: "l"ofreseq "b"ase-alignment */
