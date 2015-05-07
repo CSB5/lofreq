@@ -1125,14 +1125,18 @@ check_indel:
                          }
                          del_seq[j-1] = '\0';
                          /*LOG_DEBUG("Deletion of %s at %d with dq %d daq %d\n", del_seq, pos, dq, daq);*/
-#ifdef PACBIO_SUPPRESS_1BASE_DEL_OF_GC
-                         LOG_FIXME("Deletion of %s at %d with dq %d daq %d\n", del_seq, pos, dq, daq);
-                         if (strlen(del_seq)==1 && (del_seq[0]=='G' || del_seq[0]=='C')) {
-                              dq -= 10;
+#ifdef PACBIO_SUPPRESS_1BASE_DEL
+                         /*LOG_FIXME("Deletion of %s at %d with dq %d daq %d\n", del_seq, pos, dq, daq);*/
+                         if (strlen(del_seq)==1) {
+                              if (del_seq[0]=='G' || del_seq[0]=='C') {
+                                   dq -= 10;
+                              }
+                              if (del_seq[0]=='A' || del_seq[0]=='T') {
+                                   dq -= 5;
+                              }
                               if (dq<0) {
                                    dq=0;
                               }
-                              /*LOG_FIXME("Single bp del of G|C downgraded to %d\n", dq);*/
                          }
 #endif
                          add_del_sequence(&plp_col->del_event_counts,
