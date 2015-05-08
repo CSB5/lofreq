@@ -406,7 +406,7 @@ int main_indelqual(int argc, char *argv[])
           return 1;
      }
      bam_in = (argv + optind + 1)[0];
-     if (! file_exists(bam_in)) {
+     if ((0 != strcmp(bam_in, "-")) && ! file_exists(bam_in)) {
           LOG_FATAL("BAM file %s does not exist. Exiting...\n", bam_in);
           return -1;
      }
