@@ -2,7 +2,8 @@
 
 source lib.sh >/dev/null || exit 1
 
-if hostname | grep -q aquila; then
+#if hostname | grep -q aquila; then
+if set | grep -q SGE_CLUSTER_NAME; then
 	on_cluster=1
 	threads=8;# overriding default
 	ln -sf /mnt/projects/wilma/lofreq/testing/data .	
