@@ -1,0 +1,55 @@
+2015-05-19	Changes in 2.1.2	Andreas Wilm <wilma@gis.a-star.edu.sg>
+		* 'indelqual' now allows to read bam from stdin
+		* Fixed bug in 'call' which resulted in negative phred quality
+ 		filter, when pvalue alpha was above 1 and number of tests was low
+		* 'indelqual' dindel now deletes BI/BD before inserting
+		* remove unnecessary dependency on kaln.h (not present in samtools
+		1.2)
+		* 'uniq' now closing output vcf filehandle on error, thus always
+		writing at least a header (reported by DNANexus)
+		* Added HRUN info field to output vcf
+		* Fixed calling of indel consvars
+		* Removed options (and use of) cons-as-ref and skip-n. now reference
+		is always used by default to call against and n's are always
+		skipped. also means the consensus variants (CONSVAR) concept
+		disappeared
+		* Set DEFAULT_MIN_PLP_IDQ to zero
+		* Caught yet another variant of the reference sequence name
+		mismatch problem
+		* 'viterbi': memory allocation now mainly dynamic.
+		fixes observed segfault on pacbio reads (unclear why though)
+		*  Low AF false positive multi-allelic 1bp indel adjacent to
+		poly-AT now filtered by default.
+		* 'indelqual': added support for adding uniform insertion and
+		deletion qualities (instead of just indel qualities)
+		* indel calling: fixed index violation while accessing pdi[u] in
+		idaq happening while processing pacbio reads. added bound check as
+		hack (idaq() mostly illumina specific anyway)
+		* Removed MAX_READ_LEN globally
+		* 'call': added special case for SB test: if ref is entirely missing
+		and we have alts on only one strand fisher's exact test will
+		return 0, which is most certainly not what we want. setting to
+		INT_MAX instead
+		* vcfset: only-[type] now correctly dealt with in vcf2 on top of vcf1.
+		* vcfset: fixed bug which match vars even if they only overlapped
+		partially (now also checking position instead of relying on
+		tabix iterator)
+		* Reference sequences now converted to uppercase after fetching to be safe.
+		This also addresses the "AQ-bug" where low AQ values were reported
+		because of a lower-case reference
+		* 'pparallel': made bed reading function standard conform and more
+		fault tolerant. e.g. now allowing browser and track lines
+		* 'somatic': now also producing germline indels
+		* 'somatic': min cov lowered to 7
+	    * 'somatic': normal stringent now has separate parameters, i.e. independent of
+		tumor stringent (set to fdr 1%)
+		* 'somatic': sq ignore normal now ignoring indels and snvs
+		* 'somatic': Added support for multiple ignore vcf files
+		* 'filter': corrected wrong info about default sb mtc method
+		* Changed MQ0 prob to a generic 0.5
+		* Fixed bug in fdr application in filter: previous versions
+		called more tests significant than actually true. Fixed by setting
+		all values to not significant right after calling fdr()
+		* 'somatic': added --min-cov option
+
+Changes in versions before 2.1.2: See http://csb5.github.io/lofreq/blog/
