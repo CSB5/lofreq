@@ -491,7 +491,7 @@ plp_summary(const plp_col_t *plp_col, void* confp)
      {
           char *types = "+-"; char *t;
           for (t=types; *t!='\0'; t++) {
-               int iq, aq, mq, sq, i;
+               int idq, aq, mq, sq, i;
                const int_varray_t *id_quals = NULL;
                const int_varray_t *id_mquals = NULL;
                ins_event *ins_it, *ins_it_tmp;
@@ -513,10 +513,10 @@ plp_summary(const plp_col_t *plp_col, void* confp)
                     LOG_FATAL("%s\n", "Should never get here");
                     exit(1);
                }
-               fprintf(stream, "  %c0\tIQ =\t", *t);
+               fprintf(stream, "  %c0\tIDQ =\t", *t);
                for (i = 0; i < id_quals->n; i++) {
-                    iq = id_quals->data[i];
-                    fprintf(stream, " %d", iq);
+                    idq = id_quals->data[i];
+                    fprintf(stream, " %d", idq);
                }
                fprintf(stream, "\n");
                fprintf(stream, "  %c0\tMQ =\t", *t);
@@ -533,8 +533,8 @@ plp_summary(const plp_col_t *plp_col, void* confp)
                     HASH_ITER(hh_ins, plp_col->ins_event_counts, ins_it, ins_it_tmp) {
                          fprintf(stream, "  %c%s\tIQ =\t", *t, ins_it->key);
                          for (i = 0; i < ins_it->ins_quals.n; i++) {
-                              iq = ins_it->ins_quals.data[i];
-                              fprintf(stream, " %d", iq);
+                              idq = ins_it->ins_quals.data[i];
+                              fprintf(stream, " %d", idq);
                          }
                          fprintf(stream, "\n");
                          
@@ -562,10 +562,10 @@ plp_summary(const plp_col_t *plp_col, void* confp)
                } else if (*t=='-') {
                     /* WARN copy above for dels */
                     HASH_ITER(hh_del, plp_col->del_event_counts, del_it, del_it_tmp) {
-                         fprintf(stream, "  %c%s\tIQ =\t", *t, del_it->key);
+                         fprintf(stream, "  %c%s\tIDQ =\t", *t, del_it->key);
                          for (i = 0; i < del_it->del_quals.n; i++) {
-                              iq = del_it->del_quals.data[i];
-                              fprintf(stream, " %d", iq);
+                              idq = del_it->del_quals.data[i];
+                              fprintf(stream, " %d", idq);
                          }
                          fprintf(stream, "\n");
                          
