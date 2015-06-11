@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Release of 2.1.2
+title: Release of LoFreq version 2.1.2
 ---
 
 A long overdue release with many, many smaller bug fixes and
