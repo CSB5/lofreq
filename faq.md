@@ -39,7 +39,7 @@ If you want to run LoFreq only on certain regions use the appropriate
 bed-file as input with `-l regions.bed`. Not doing so will negatively
 affect LoFreq's sensitivity (because the automatically applied
 Bonferroni correction will be too harsh) and it also might call variants
-outside of the desired regions.
+outside of the desired regions (where some reads will map wrongly).
 
 ### PCR amplified data (amplicons)
 
@@ -110,6 +110,12 @@ maximum is restricted by runtime (it gets slow for a coverage of a
 million and above). However, at very low coverages sampling biases can
 happen which is why we set a minimum coverage of 10 by default.
 
+### I can't see any indels
+
+If you're using the `--call-indels` option and don't see any indels
+in the output then your BAM file likely didn't contain  indel
+qualities. This can be achieved by running GATK's BQSR or `lofreq
+indelqual` (use option `--dindel` for Illumina).
 
 ### What about Rock 'n' Roll?
 

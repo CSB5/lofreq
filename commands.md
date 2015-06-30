@@ -23,15 +23,18 @@ A few things to note:
 - For Illumina data, we suggest that you preprocess your BAM files by
   following
   [GATK's best practice protocol](http://www.broadinstitute.org/gatk/guide/best-practices),
-  i.e. that you mark duplicates (not for ultra high coverage data),
-  realign indels and recalibrate base qualities with GATK
+  i.e. that you mark duplicates (not for very high coverage data though),
+  realign indels and recalibrate base qualities with GATK (BQSR). The
+  latter will also add indel qualities, which is needed for indel
+  calling (alternatively use `lofreq indelqual`).
 - If you are working with exome or targeted resequencing data, don't
   forget to provide LoFreq with the corresponding bed-file (`-l
   region.bed`). Otherwise the automatically applied Bonferroni
   correction will reduce your sensitivity
 - If you also want to call indels add `--call-indels` to the parameter
-  list (note, this requires special preprocessing of your data,
-  explained elsewhere)
+  list. Note, this will only work if your BAM file contains indel
+  qualities. This will be the case if you ran GATK's BQSR.
+  Alternatively use `lofreq indelqual`
 - Predicted variants are already filtered using default parameters
   (which include coverage, strand-bias, SNV-quality etc). There will
   usually be no need for you to filter the output again
@@ -52,7 +55,8 @@ save them to `vars.vcf`, you would use the following
     lofreq call -f ref.fa -o vars.vcf aln.bam
 
 If you also want to call indels add `--call-indels` to the parameter
-list (note, this requires special preprocessing of your data).
+list. Note, this requires that your BAM file contains indel qualities
+(automatically added by GATK's BQSR or with `lofreq indelqual`)
 
 <!-- FIXME preprocessing needs separate article-->
 
@@ -102,7 +106,7 @@ For SNVs before and after dbsnp removal (if you used `-o out_`):
 - `out_somatic_final.snvs.vcf.gz`
 - `out_somatic_final_minus-dbsnp.snvs.vcf.gz`
 
-For indels (if enabled and properly preprocessed):
+For indels (if enabled and BAM file was properly preprocessed):
 
 - `out_somatic_final.indels.vcf.gz`
 - `out_somatic_final_minus-dbsnp.indels.vcf.gz`
@@ -143,8 +147,11 @@ non-Illumina data.
 #### `indelqual`: Insert indel qualities
 
 Inserts indel qualities into your BAM file. Can be used instead of
-GATK's BQSR or for non-Illumina data (if you have a good idea about
-the indel error rates).
+GATK's BQSR or on non-Illumina data. If you have Illumina data and
+don't want to use GATK's BQSR then the easist thing is to use 
+the `--dindel` option. If you have non-Illumina data and have a good
+guess of the indel error rate then use the `--uniform` option which
+adds uniform indel qualities.
 
 #### `alnqual`: Insert base and indel alignment qualities
 
