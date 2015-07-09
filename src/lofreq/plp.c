@@ -944,8 +944,8 @@ void compile_plp_col(plp_col_t *plp_col,
                 */
                if (bq > SANGER_PHRED_MAX) {
                     /* bq = SANGER_PHRED_MAX; /@ Sanger/Phred max */
-                    LOG_FATAL("Base qualitiy above allowed maximum detected (%d)\n", bq);
-                    exit(1);
+                    LOG_WARN("Base quality above allowed maximum detected (%d > %d). Using max instead\n", bq, SANGER_PHRED_MAX, bam1_qname(p->b));
+                    bq = SANGER_PHRED_MAX;
                }
                PLP_COL_ADD_QUAL(& plp_col->base_quals[nt4], bq);
 
