@@ -15,6 +15,6 @@ even though these columns are optional according to the
 As a workaround, you can just add fake columns in cases where you know
 that the information is actually not required and for somatic
 samples you can use
-([lofreq2_add_sample.py](https://github.com/CSB5/lofreq/blob/master/src/tools/scripts/lofreq2_add_sample.py)
+([lofreq2\_add\_sample.py](https://github.com/CSB5/lofreq/blob/master/src/tools/scripts/lofreq2_add_sample.py)
 , which comes with LoFreq (note the pysam dependency). The next versions of LoFreq (2.2) will be
 able to call genotypes.
