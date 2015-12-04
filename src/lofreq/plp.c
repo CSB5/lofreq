@@ -832,6 +832,8 @@ void compile_plp_col(plp_col_t *plp_col,
      
      if (ref) {
           plp_col->hrun = get_hrun(pos, ref, ref_len);
+     } else {
+          plp_col->hrun = -1;
      }
 
      for (i = 0; i < n_plp; ++i) {
@@ -1043,6 +1045,12 @@ check_indel:
 #endif
                /* adding 1 value representing whole del */
                dq = t[p->qpos] - 33;
+#ifdef PACBIO_REALN
+               /* FIXME temp artifically decreasing pacbio del quals in hruns */
+               if (plp_col->hrun>1) {
+                    if (dq>7) dq=7;
+               }
+#endif
           } /* else default to 0 */
 
 
