@@ -97,7 +97,7 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char *ref,
 {
      var_t *var;
      double sb_left_pv, sb_right_pv, sb_two_pv;
-     int sb_qual;
+     int sb_qual, dp;
 
      vcf_new_var(&var);
      var->chrom = strdup(p->target);
@@ -127,10 +127,12 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char *ref,
                                  &sb_left_pv, &sb_right_pv, &sb_two_pv);
           sb_qual = PROB_TO_PHREDQUAL_SAFE(sb_two_pv);
      }
-     vcf_var_sprintf_info(var, is_indel? p->coverage_plp - p->num_tails : p->coverage_plp,
-                          af, sb_qual, dp4, is_indel, p->hrun, is_consvar);
-
-     vcf_write_var(vcf_file, var);
+     dp = is_indel? p->coverage_plp - p->num_tails - p->min_bq_filtered_bases
+         : p->coverage_plp - p->min_bq_filtered_bases;
+     vcf_var_sprintf_info(var, dp, af, sb_qual, dp4, is_indel, p->hrun, is_consvar);
+     if (dp > 0) {
+         vcf_write_var(vcf_file, var);
+     }
      vcf_free_var(&var);
 }
 /* report_var() */
@@ -148,7 +150,7 @@ report_cons_sub(const plp_col_t *p, varcall_conf_t *conf){
      int ref_nt4;
      int alt_nt4;
      dp4_counts_t dp4;
-     float af = base_count(p, p->cons_base[0]) / (float)p->coverage_plp;
+     float af = base_count(p, p->cons_base[0]) / (float)(p->coverage_plp - p->min_bq_filtered_bases);
      
      report_ref[0] = p->ref_base;
      report_ref[1] = '\0';
@@ -329,7 +331,7 @@ call_alt_ins(const plp_col_t *p, double *bi_err_probs, int bi_num_err_probs,
           const int is_indel = 1;
           const int is_consvar = 0;
           const int qual = PROB_TO_PHREDQUAL(bi_pvalue);
-          float af = it->count / ((float)p->coverage_plp - p->num_tails);
+          float af = it->count / (float)(p->coverage_plp - p->num_tails - p->min_bq_filtered_bases);
 
           dp4.ref_fw = p->non_ins_fw_rv[0];
           dp4.ref_rv = p->non_ins_fw_rv[1];
@@ -393,7 +395,7 @@ int call_alt_del(const plp_col_t *p, double *bd_err_probs, int bd_num_err_probs,
           const int qual = PROB_TO_PHREDQUAL(bd_pvalue);
           char *report_del_ref;
           char *report_del_alt;
-          float af = it->count / ((float)p->coverage_plp - p->num_tails);
+          float af = it->count / (float)(p->coverage_plp - p->num_tails - p->min_bq_filtered_bases);
           dp4_counts_t dp4;
 
           /* FIXME decision to use ref or cons made elsewhere or do we have to check again? */
@@ -830,7 +832,7 @@ call_snvs(const plp_col_t *p, varcall_conf_t *conf)
            if (pvalue * (double)conf->bonf_subst < conf->sig) {
                 const int is_indel = 0;
                 const int is_consvar = 0;
-                float af = alt_raw_count/(float)p->coverage_plp;
+                float af = alt_raw_count/(float)(p->coverage_plp - p->min_bq_filtered_bases);
 
                 char report_ref[2];
                 char report_alt[2];
@@ -941,6 +943,7 @@ usage(const mplp_conf_t *mplp_conf, const varcall_conf_t *varcall_conf)
 
      fprintf(stderr, "- Base-call quality:\n");
      fprintf(stderr, "       -q | --min-bq INT            Skip any base with baseQ smaller than INT [%d]\n", varcall_conf->min_bq);
+     fprintf(stderr, "       -Z | --min-blind-bq INT      Skip any base with baseQ smaller than INT [%d] for depth and AF reporting.\n", varcall_conf->min_bq);
      fprintf(stderr, "       -Q | --min-alt-bq INT        Skip alternate bases with baseQ smaller than INT [%d]\n", varcall_conf->min_alt_bq);
      fprintf(stderr, "       -R | --def-alt-bq INT        Overwrite baseQs of alternate bases (that passed bq filter) with this value (-1: use median ref-bq; 0: keep) [%d]\n", varcall_conf->def_alt_bq);
 
@@ -1059,6 +1062,7 @@ for cov in coverage_range:
               {"out", required_argument, NULL, 'o'}, /* NOTE changes here must be reflected in pseudo_parallel code as well */
 
               {"min-bq", required_argument, NULL, 'q'},
+              {"min-blind-bq", required_argument, NULL, 'Z'},
               {"min-alt-bq", required_argument, NULL, 'Q'},
               {"def-alt-bq", required_argument, NULL, 'R'},
 
@@ -1165,6 +1169,10 @@ for cov in coverage_range:
 
          case 'q':
               varcall_conf.min_bq = atoi(optarg);
+              break;
+
+         case 'Z':
+              mplp_conf.min_plp_bq = atoi(optarg);
               break;
 
          case 'Q':

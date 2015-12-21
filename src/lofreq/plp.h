@@ -76,6 +76,7 @@ typedef struct {
      char ref_base; /* uppercase reference base (given by fasta) */
      char cons_base[MAX_INDELSIZE]; /* uppercase consensus base according to base-counts, after read-level filtering. */
      int coverage_plp; /* original samtools value. upper count limit for all kept values */
+     int min_bq_filtered_bases; /* number of bases filtered out from min base qual filter */
      int num_bases; /* number of bases after base filtering */
      /* num_ins and num_dels gives 'num_indels' */
      int num_ign_indels; /* a hack: indels often get filtered because of low quality of missing qualities in bam file. we need to know nevertheless they are present. this is the count of all "ignored" indels */

@@ -148,6 +148,7 @@ plp_col_init(plp_col_t *p) {
     p->ref_base = '\0';
     p->cons_base[0] = 'N'; p->cons_base[1] = '\0';
     p->coverage_plp = 0;
+    p->min_bq_filtered_bases = 0;
     p->num_bases = 0;
     p->num_ign_indels = 0;
     p->num_non_indels = 0;
@@ -931,6 +932,7 @@ void compile_plp_col(plp_col_t *plp_col,
                 * and might skew AFs etc
                 */
                if (bq < conf->min_plp_bq) {
+                    plp_col->min_bq_filtered_bases++;
                     base_skip = 1;
                     /* NOTE: all values used after check_indel need to be initialized before this goto */
                     goto check_indel; /* goto was easiest */
