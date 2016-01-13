@@ -167,7 +167,7 @@ usage(const filter_conf_t* filter_conf)
      fprintf(stderr, "  AND %d%% of variant bases are on one strand (toggled with --sb-no-compound).\n", (int)(ALT_STRAND_RATIO*100));
      fprintf(stderr, "  -B | --sb-thresh INT           Maximum phred-value allowed. Conflicts with -b.\n");
      fprintf(stderr, "  -b | --sb-mtc STRING           Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -B\n");
-     fprintf(stderr, "  -c | --sb-alpha FLOAT          Multiple testing correcion pvalue threshold\n");
+     fprintf(stderr, "  -c | --sb-alpha FLOAT          Multiple testing correction pvalue threshold\n");
      fprintf(stderr, "       --sb-no-compound          Don't use compound filter\n");
      fprintf(stderr, "       --sb-incl-indels          Apply SB filter to indels as well\n");
 
@@ -175,15 +175,15 @@ usage(const filter_conf_t* filter_conf)
      fprintf(stderr, "  SNV Quality:\n");
      fprintf(stderr, "  -Q | --snvqual-thresh INT      Minimum phred-value allowed. Conflicts with -q\n");
      fprintf(stderr, "  -q | --snvqual-mtc STRING      Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -Q\n");
-     fprintf(stderr, "  -r | --snvqual-alpha FLOAT     Multiple testing correcion pvalue threshold\n");
-     fprintf(stderr, "  -s | --snvqual-ntests INT      Multiple testing correcion pvalue threshold\n");
+     fprintf(stderr, "  -r | --snvqual-alpha FLOAT     Multiple testing correction pvalue threshold\n");
+     fprintf(stderr, "  -s | --snvqual-ntests INT      Number of performed SNV tests for multiple testing correction\n");
 
      fprintf(stderr, "\n");
      fprintf(stderr, "  Indels:\n");
      fprintf(stderr, "  -K | --indelqual-thresh INT    Minimum phred-value allowed. Conflicts with -q\n");
      fprintf(stderr, "  -k | --indelqual-mtc STRING    Multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. Conflicts with -Q\n");
-     fprintf(stderr, "  -l | --indelqual-alpha FLOAT   Multiple testing correcion pvalue threshold\n");
-     fprintf(stderr, "  -m | --indelqual-ntests INT    Multiple testing correcion pvalue threshold\n");
+     fprintf(stderr, "  -l | --indelqual-alpha FLOAT   Multiple testing correction pvalue threshold\n");
+     fprintf(stderr, "  -m | --indelqual-ntests INT    Number of performed indel tests for multiple testing correction\n");
 
      fprintf(stderr, "\n");
      fprintf(stderr, "  Misc.:\n");
