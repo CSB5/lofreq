@@ -137,9 +137,9 @@ def gen_plp_data(sam_fh, var):
             else:
                 is_orphan = False
 
-            base = aln_read.seq[plp_read.qpos]
+            base = aln_read.seq[plp_read.query_position]
             mq = aln_read.mapq
-            bq = ord(aln_read.qual[plp_read.qpos])-33
+            bq = ord(aln_read.qual[plp_read.query_position])-33
 
             if base == var.REF:
                 k = 'ref'
