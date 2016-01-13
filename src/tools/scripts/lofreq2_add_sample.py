@@ -21,6 +21,7 @@ import gzip
 #--- third-party imports
 #
 import pysam
+assert [int(x) for x in pysam.__version__.split('.')] >= [0, 8, 2]
 
 #--- project specific imports
 #
@@ -35,19 +36,19 @@ logging.basicConfig(level=logging.WARN,
 
 
 Variant = namedtuple('Variant',
-    ['CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO'])
+                     ['CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO'])
 # all fields except POS (int) are strings and values are preserved as-is
 
 Format = namedtuple('Format',
                     ['id', 'num', 'type', 'descr'])
 
-def median(x):
+def median(data):
     """compute median of provided list"""
 
-    if not len(x):
+    if not len(data):
         return None
     # http://stackoverflow.com/questions/10482339/how-to-find-median/10482422#10482422 answer by user3100512
-    return sorted(x)[len(x)//2]
+    return sorted(data)[len(data)//2]
 
 
 def cmdline_parser():
@@ -58,24 +59,24 @@ def cmdline_parser():
     parser = argparse.ArgumentParser(description=__doc__)
 
     parser.add_argument("--verbose",
-                      action="store_true",
-                      dest="verbose",
-                      help="be verbose")
+                        action="store_true",
+                        dest="verbose",
+                        help="be verbose")
     parser.add_argument("--debug",
-                      action="store_true",
-                      dest="debug",
-                      help="enable debugging")
+                        action="store_true",
+                        dest="debug",
+                        help="enable debugging")
     parser.add_argument("-i", "--vcf-in",
-                      dest="vcf_in",
-                      required=True,
-                      help="Input vcf file listing somatic variants"
-                      " (gzip supported; - for stdin).")
+                        dest="vcf_in",
+                        required=True,
+                        help="Input vcf file listing somatic variants"
+                        " (gzip supported; - for stdin).")
     default = "-"
     parser.add_argument("-o", "--vcf-out",
-                      dest="vcf_out",
-                      default=default,
-                      help="Output vcf file (gzip supported; - for stdout;"
-                      " default: %s)." % default)
+                        dest="vcf_out",
+                        default=default,
+                        help="Output vcf file (gzip supported; - for stdout;"
+                        " default: %s)." % default)
     parser.add_argument("-b", "--bam",
                         dest="bams", nargs="*",
                         required=True,
@@ -94,7 +95,7 @@ def gen_formats():
     """
 
     formats = OrderedDict()
-    for (id, num_str, type_str, descr) in [
+    for (fid, num_str, type_str, descr) in [
             ('DP', '1', 'Integer', 'Read depth at this position for this sample'),# standard
             ('NR', '1', 'Integer', 'Number of reference bases'),
             ('NA', '1', 'Integer', 'Number of alternate bases'),
@@ -104,7 +105,7 @@ def gen_formats():
             ('BA', '3', 'Integer', 'Minimum, median and maximum base-qualities for alternate bases'),
             ('MR', '3', 'Integer', 'Minimum, median and maximum mapping-qualities for reference bases'),
             ('MA', '3', 'Integer', 'Minimum, median and maximum mapping-qualities for alternate bases')]:
-        formats[id] = Format(id=id, num=num_str, type=type_str, descr=descr)
+        formats[fid] = Format(id=fid, num=num_str, type=type_str, descr=descr)
 
     return formats
 
@@ -137,9 +138,9 @@ def gen_plp_data(sam_fh, var):
             else:
                 is_orphan = False
 
-            base = aln_read.seq[plp_read.qpos]
+            base = aln_read.seq[plp_read.query_position]
             mq = aln_read.mapq
-            bq = ord(aln_read.qual[plp_read.qpos])-33
+            bq = ord(aln_read.qual[plp_read.query_position])-33
 
             if base == var.REF:
                 k = 'ref'
@@ -258,7 +259,7 @@ def add_plp_to_vcf(vcf_in, vcf_out, bam_files):
             row.append(':'.join(formats.keys()))
             for bam in bam_files:
                 assert os.path.exists(bam)
-                sam_fh = pysam.Samfile(bam)
+                sam_fh = pysam.AlignmentFile(bam)
 
                 sample_data = gen_plp_data(sam_fh, var)
                 assert sample_data.keys() == formats.keys(), (
@@ -286,7 +287,7 @@ def main():
         LOG.setLevel(logging.DEBUG)
 
     for (in_file, descr) in [#(args.bam, "BAM"),
-                             (args.vcf_in, "VCF input")]:
+            (args.vcf_in, "VCF input")]:
         if not in_file:
             parser.error("%s file argument missing." % descr)
             sys.exit(1)
