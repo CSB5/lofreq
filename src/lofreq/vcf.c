@@ -220,6 +220,17 @@ vcf_file_open(vcf_file_t *f, const char *path, const int bgzip, char mode)
 }
 
 
+int
+vcf_file_flush(vcf_file_t *f)
+{
+     if (f->is_bgz) {          
+          return bgzf_flush(f->fh_bgz);
+     } else {
+          return fflush(f->fh);
+     }
+}
+
+
 /* note: tries to tabix index and also frees path */
 int
 vcf_file_close(vcf_file_t *f) 

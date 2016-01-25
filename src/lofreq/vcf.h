@@ -93,6 +93,8 @@ vcf_file_seek(vcf_file_t *f, long int offset, int whence);
 int
 vcf_file_open(vcf_file_t *f, const char *path, const int gzip, const char mode);
 int
+vcf_file_flush(vcf_file_t *f);
+int
 vcf_file_close(vcf_file_t *f);
 char *
 vcf_file_gets(vcf_file_t *f, int len, char *line);
