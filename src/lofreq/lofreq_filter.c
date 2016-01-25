@@ -440,7 +440,7 @@ int apply_snvqual_filter_mtc(mtc_qual_t *mtc_quals, snvqual_filter_t *snvqual_fi
                         snvqual_filter->alpha, snvqual_filter->ntests, 
                         &idx_rej);
           /* first pretend none are significant */
-          for (i=0; i<num_ign; i++) {
+          for (i=0; i<num_vars-num_ign; i++) {
                errprobs[i] = DBL_MAX;
           }
           for (i=0; i<num_rej; i++) {
@@ -545,7 +545,7 @@ int apply_indelqual_filter_mtc(mtc_qual_t *mtc_quals, indelqual_filter_t *indelq
                         indelqual_filter->alpha, indelqual_filter->ntests, 
                         &idx_rej);
           /* first pretend none are significant */
-          for (i=0; i<num_ign; i++) {
+          for (i=0; i<num_vars-num_ign; i++) {
                errprobs[i] = DBL_MAX;
           }
           for (i=0; i<num_rej; i++) {
@@ -839,7 +839,7 @@ mtc_quals_from_vcf_file(mtc_qual_t **mtc_quals, const char *vcf_in)
          /* strand bias */
          if ( ! vcf_var_has_info_key(&sb_char, var, "SB")) {
                if ( ! sb_missing_warning_printed) {
-                    LOG_WARN("%s\n", "At least one variant has no SB tag! Assuming INT_MAX");
+                    LOG_WARN("%s\n", "At least one variant has no SB tag! Assuming 0");
                     sb_missing_warning_printed = 1;
                }
                (*mtc_quals)[num_vars-1].sb_qual = 0;
@@ -868,9 +868,10 @@ main_filter(int argc, char *argv[])
      static int only_indels = 0;
      static int only_snvs = 0;
      char *vcf_header = NULL;
-     mtc_qual_t *mtc_quals;
+     mtc_qual_t *mtc_quals = NULL;
      long int num_vars;
      static int no_defaults = 0;
+     long int var_idx = -1;
 
      /* default filter options */
      memset(&cfg, 0, sizeof(filter_conf_t));
@@ -1167,7 +1168,6 @@ main_filter(int argc, char *argv[])
               return 1;
          }
 
-
          if (cfg.sb_filter.mtc_type != MTC_NONE) {
               if (apply_sb_filter_mtc(mtc_quals, & cfg.sb_filter, num_vars)) {
                    LOG_FATAL("%s\n", "Multiple testing correction on strand-bias pvalues failed");
@@ -1192,12 +1192,13 @@ main_filter(int argc, char *argv[])
                        i, mtc_quals[i].sb_qual, mtc_quals[i].var_qual, mtc_quals[i].is_indel);
          }
 #endif
+         LOG_VERBOSE("%s\n", "MTC application completed");
     } else {
          LOG_VERBOSE("%s\n", "No multiple testing correction requested. First pass of vcf skipped");
 
     }
 
-
+    
     if (vcf_file_open(& cfg.vcf_in, vcf_in,
                       HAS_GZIP_EXT(vcf_in), 'r')) {
          LOG_ERROR("Couldn't open %s\n", vcf_in);
@@ -1233,7 +1234,6 @@ main_filter(int argc, char *argv[])
          var_t *var;
          int rc;
          int is_indel = 0;
-         long int var_idx = -1;
 
          vcf_new_var(&var);
          rc = vcf_parse_var(& cfg.vcf_in, var);
@@ -1301,6 +1301,7 @@ main_filter(int argc, char *argv[])
          /* output
           */
          if (cfg.print_only_passed && ! (VCF_VAR_PASSES(var))) {
+              vcf_free_var(&var);
               continue;
          }
 
@@ -1315,12 +1316,14 @@ main_filter(int argc, char *argv[])
 
          vcf_write_var(& cfg.vcf_out, var);
          vcf_free_var(&var);
+
+         if (var_idx%1000==0) {
+              (void) vcf_file_flush(& cfg.vcf_out);
+         }
     }
 
-   
     vcf_file_close(& cfg.vcf_in);
     vcf_file_close(& cfg.vcf_out);
-
 
     free(mtc_quals);
 
