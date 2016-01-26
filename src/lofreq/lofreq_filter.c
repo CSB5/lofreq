@@ -1327,8 +1327,6 @@ main_filter(int argc, char *argv[])
 
     free(mtc_quals);
 
-    LOG_WARN("%s\n", "new filter: untested in mixed indel/snv files");
-
     LOG_VERBOSE("%s\n", "Successful exit.");
 
     return 0;
