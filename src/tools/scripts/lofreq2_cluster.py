@@ -17,7 +17,8 @@ import logging
 import os
 import argparse
 from math import sqrt
-
+from collections import namedtuple
+from itertools import groupby
 
 #--- third-party imports
 #
@@ -25,30 +26,8 @@ from math import sqrt
 
 #--- project specific imports
 #
-# legacy snp format
-HAVE_SNP_MODULE = False
-try:
-    from lofreq import snp
-    HAVE_SNP_MODULE = True
-except ImportError:
-    pass
-# vcf format
-HAVE_VCF_MODULE = False
-try:
-    import lofreq2_local
-    #from lofreq_star import vcf
-    import vcf
-    HAVE_VCF_MODULE = True
-except ImportError:
-    pass    
-if HAVE_SNP_MODULE == False and HAVE_VCF_MODULE == False:
-    sys.stderr.write("Couldn't import any of LoFreq SNP format modules\n")
-    sys.exit(1)
-SUPPORTED_FORMATS = []
-if HAVE_SNP_MODULE:
-    SUPPORTED_FORMATS.append('snp')
-if HAVE_VCF_MODULE:
-    SUPPORTED_FORMATS.append('vcf')
+# James Casbon's pyvcf
+import vcf
     
 
 
@@ -59,6 +38,7 @@ logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
 
+CI = namedtuple('CI', ['min', 'max'])
 
 # invocation of ipython on exceptions
 #import sys, pdb
@@ -66,84 +46,44 @@ logging.basicConfig(level=logging.WARN,
 #sys.excepthook = ultratb.FormattedTB(mode='Verbose',
 #                                     color_scheme='Linux', call_pdb=1)
 
-class MetaVar(object):
-    """Wrapper for SNV and VCF format variants to look the same
+def compute_ci(coverage, var_count):
+    """Compute confidnce interval:
+    
+    Agresti-Coull Interval at the 0.05 level
+    http://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval#Agresti-Coull_Interval
+    
+    n~ = n + 4
+    p~ = 1/n~ * (X + 4/2)
+    ci: p~ +- 2*sqrt(1/n~ * p~ * (1-p~)
     """
+    n_t = float(coverage + 4)
+    p_t = (var_count + 2) / n_t
+    ci = 2 * sqrt(p_t * (1-p_t) / n_t)
+    min_ci = p_t - 3*ci
+    if min_ci < 0.0:
+        min_ci = 0.0
+    max_ci = p_t + 3*ci
+
+    return CI._make([min_ci, max_ci])
+
     
-    def __init__(self, vcf_var=None, snp_var=None):
-        """
-        """
+def fasta_iter(fasta_name):
+    """
+    given a fasta file. yield tuples of header, sequence
 
-        if vcf_var and snp_var:
-            raise ValueError, ("Can only take one: vcf- or snp-var")
-        self.repr = None
-        self.coverage = None
-        self.freq = None
-        self.var_count = None
-        self.max_ci = None
-        self.min_ci = None
-        if vcf_var:
-            self.add_vcf_var(vcf_var)
-        elif snp_var:
-            self.add_snp_var(snp_var)
-
-
-    def add_vcf_var(self, vcf_var):
-        """Add variant in vcf format
-        """
-
-        # pyvcf keeps ALT as _Substitution, not string as LoFreq's vcf clone
-        # therefore won't work','.join(vcf_var.ALT),
-        self.repr = "%s %d %s>%s %f" % (vcf_var.CHROM, vcf_var.POS,
-                                        vcf_var.REF, 
-                                        ','.join(["%s" % x for x in vcf_var.ALT]),
-                                        vcf_var.INFO['AF'])
-        self.coverage = vcf_var.INFO['DP']
-        self.freq = vcf_var.INFO['AF']
-        self.var_count = int(self.coverage * self.freq)
-        (self.min_ci, self.max_ci) = self.compute_ci(
-            self.coverage, self.var_count)
-        LOG.info('CI for %s: %f--%f' % (
-            self.repr, self.min_ci, self.max_ci))
-
-        
-    def add_snp_var(self, snp_var):
-        """Add variant in legacy SNP format
-        """
-        self.repr = "%s %d %c>%c %f" % (snp_var.chrom, snp_var.pos+1,
-                                        snp_var.wildtype, snp_var.variant,
-                                        snp_var.freq)
-        self.coverage = int(snp_var.info['coverage'])
-        self.freq = snp_var.freq
-        self.var_count = int(self.coverage * self.freq)
-        (self.min_ci, self.max_ci) = self.compute_ci(
-            self.coverage, self.var_count)
-        LOG.info('CI for %s: %f--%f' % (
-            self.repr, self.min_ci, self.max_ci))
-
-        
-    @staticmethod
-    def compute_ci(coverage, var_count):
-        """Compute confidnce interval:
-        
-        Agresti-Coull Interval at the 0.05 level
-        http://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval#Agresti-Coull_Interval
-        
-        n~ = n + 4
-        p~ = 1/n~ * (X + 4/2)
-        ci: p~ +- 2*sqrt(1/n~ * p~ * (1-p~)
-        """
-        n_t = float(coverage + 4)
-        p_t = (var_count + 2) / n_t
-        ci = 2 * sqrt(p_t * (1-p_t) / n_t)
-        min_ci = p_t - 3*ci
-        if min_ci < 0.0:
-            min_ci = 0.0
-        max_ci = p_t + 3*ci
-
-        return (min_ci, max_ci)
-    
-
+    Brent Pedersen: https://www.biostars.org/p/710/
+    """
+    fh = open(fasta_name)
+    # ditch the boolean (x[0]) and just keep the header or sequence since
+    # we know they alternate.
+    faiter = (x[1] for x in groupby(fh, lambda line: line[0] == ">"))
+    for header in faiter:
+        # drop the ">"
+        #header = header.next()[1:].strip()
+        header = header.next()[1:].strip().split(" ")[0]
+        # join all sequence lines to one.
+        seq = "".join(s.strip() for s in faiter.next())
+        yield header, seq
         
 
 def cmdline_parser():
@@ -164,8 +104,10 @@ def cmdline_parser():
                       help="enable debugging")
     parser.add_argument("-i", "--variants",
                       dest="var_file",
-                      help="variant input file (supported formats: %s)" % (
-                          ', '.join(SUPPORTED_FORMATS)))
+                      help="variant input file (vcf format)")
+    parser.add_argument("-r", "--ref",
+                      dest="reffa",
+                        help="Reference fasta file (for reconstructing cluster sequence)")
     parser.add_argument("-o", "--out",
                       dest="cluster_file",
                       default="-",
@@ -173,6 +115,10 @@ def cmdline_parser():
 
     return parser
 
+
+def vcf_var_to_str(v):
+    return "%s %d %s>%s %f" % (
+        v.CHROM, v.POS, v.REF, ','.join(["%s" % x for x in v.ALT]), v.INFO['AF'])
 
     
 def main():
@@ -210,88 +156,95 @@ def main():
             sys.exit(1)
 
 
-    # A lot of code for supporting legacy SNP format. 
-    #
-    # FIXME this and MetaVar() should use vcf by default and just
-    # convert snp to vcf
-    #
-    is_vcf = False
-    if HAVE_VCF_MODULE:
-        if args.var_file == '-':
-            vcf_fh = sys.stdin
-        else:
-            vcf_fh = open(args.var_file)
-            # FIXME gzip support
-        vcf_reader = vcf.VCFReader(vcf_fh)
-        try:
-            var_list = [MetaVar(vcf_var=r)
-                        for r in vcf_reader]
-            is_vcf = True
-        except:
-            raise
-        if vcf_fh != sys.stdin:
-            vcf_fh.close()
-    is_snp = False
-    if not is_vcf and HAVE_SNP_MODULE:
-        try:
-            var_list = [MetaVar(snp_var=s) 
-                        for s in snp.parse_snp_file(args.var_file)]
-            is_snp = True
-        except IndexError:
-            pass
-
-    if not is_snp and not is_vcf:
-        LOG.error("Can't parse %s. Tried the following formats: %s" % (
-            args.var_file, ', '.join(SUPPORTED_FORMATS)))
-        sys.exit(1)
-
-    
-    LOG.info("Parsed %d SNPs from %s" % (len(var_list), args.var_file))
-
-    
-    var_list =  sorted(var_list, key=lambda x: x.freq, reverse=True)
-
     if args.cluster_file == '-':
         fh_out = sys.stdout
     else:
         fh_out = open(args.cluster_file, 'w')
 
+
+    if args.reffa:
+        refno = 0
+        for refname, refseq in fasta_iter(args.reffa):
+            if refno > 0:
+                sys.stderr.write("Only supporting one sequence\n")
+                sys.exit(1)
+            refno += 1
+    else:
+        refseq = ""
+
+
+    if args.var_file == '-':
+        vcf_fh = sys.stdin
+    else:
+        vcf_fh = vcf.VCFReader(filename=args.var_file)
+    var_list = [v for v in vcf_fh]
+
+    if any([not v.is_snp for v in var_list]):
+        sys.stderr.write("WARNING: Only supporting SNPs! Automatically removing others\n")
+        var_list = [v for v in var_list if v.is_snp]
+         
+    LOG.info("Parsed %d SNPs from %s" % (len(var_list), args.var_file))
+    
+    
+
+    assert all([x.INFO.has_key('AF') and x.INFO.has_key('DP')
+                for x in var_list])
+    var_list = sorted(var_list, key=lambda x: x.INFO['AF'], reverse=True)
+    ci_list = [compute_ci(v.INFO['DP'], int(v.INFO['AF'] * v.INFO['DP'])) 
+               for v in var_list]
+    var_ci_list = zip(var_list, ci_list)
+    del var_list, ci_list# paranoia
+
+
         
-    if len(var_list)==0:
-        fh_out.write("No SNPs <-> no clusters!\n")
+    if len(var_ci_list)==0:
+        fh_out.write("No variants <-> no clusters!\n")
         if fh_out != sys.stdout:
-            print "No SNPs <-> no clusters!"
             fh_out.close()
         sys.exit(0)
 
         
     cluster = dict()
     clu_no = 0
-    seed = var_list[0]
+    seed_var, seed_ci = var_ci_list[0]
     #cluster[clu_no,'members'] = ["%s %f" % (seed.repr, seed.freq)]
-    cluster[clu_no,'members'] = ["%s" % (seed.repr)]
-    cluster[clu_no,'min'] = seed.min_ci
-    cluster[clu_no,'max'] = seed.max_ci
+    cluster[clu_no,'members'] = [seed_var]
+    cluster[clu_no,'min'] = seed_ci.min
+    cluster[clu_no,'max'] = seed_ci.max
 
-    for var in var_list[1:]:
+    for var, ci in var_ci_list[1:]:
         LOG.debug("checking %s %f: max_ci %f vvar. clu_min %f" % (
-            var.repr, var.freq, var.max_ci, cluster[clu_no,'min']))
-        if var.max_ci > cluster[clu_no,'min']:
+            var, var.INFO['AF'], ci.max, cluster[clu_no,'min']))
+        if ci.max > cluster[clu_no,'min']:
             #cluster[clu_no,'members'].append("%s %f" % (var.repr, var.freq))
-            cluster[clu_no,'members'].append("%s" % (var.repr))
+            cluster[clu_no,'members'].append(var)
         else:
             clu_no += 1
             seed = var
             #cluster[clu_no,'members'] = ["%s %f" % (seed.repr, seed.freq)]
-            cluster[clu_no,'members'] = ["%s" % (seed.repr)]
-            cluster[clu_no,'min'] = seed.min_ci
-            cluster[clu_no,'max'] = seed.max_ci
+            cluster[clu_no,'members'] = [seed]
+            cluster[clu_no,'min'] = ci.min
+            cluster[clu_no,'max'] = ci.max
 
         
     for i in range(clu_no+1):
-        fh_out.write("cluster %d (freq. range: %f - %f): %s\n" % (
+        fh_out.write("# cluster %d (freq. range: %f - %f): %s\n" % (
             i+1, cluster[i,'min'], cluster[i,'max'], 
-            ', '.join(cluster[i,'members'])))
+            ', '.join([vcf_var_to_str(x) for x in cluster[i,'members']])))
+
+        # write sequence as well if we have a reference
+        if refseq:
+            haplotype = refseq
+            for v in sorted(cluster[i,'members'], key = lambda v: v.POS):
+                # FIXME random order for multi-allelic psositions
+                assert v.CHROM == refname
+                assert refseq[v.POS-1] == v.REF# use refseq to not break for multi-allelic positions
+                assert len(v.ALT)==1, ("Support for 1 base alt only")
+                alt = str(v.ALT[0])
+                idx = v.POS-1
+                haplotype = haplotype[:idx] + alt + haplotype[idx + 1:]
+            fh_out.write(">haplotype-cluster-{}\n{}\n".format(i+1, haplotype))
+
         
     if fh_out != sys.stdout:
         fh_out.close()
