@@ -908,13 +908,19 @@ call_vars(const plp_col_t *p, void *confp)
       * difference between coverage and the number of bases (which might not work 
       * if many bases were filtered)
       *
-      * FIXME overhaul
+      * FIXME overhaul. see also https://github.com/CSB5/lofreq/issues/26
       */
-     if (! conf->only_indels && \
+#ifdef CALL_SNVS_ON_CONS_INDELS
+     if (! conf->only_indels) {
+          call_snvs(p, conf);
+     }
+#else
+     if (! conf->only_indels &&                                  \
          ! (p->cons_base[0] == '+' || p->cons_base[0] == '-') && \
          ! (p->num_bases*2 < p->coverage_plp)) {
           call_snvs(p, conf);
      }
+#endif
 
 }
 /* call_vars() */
@@ -1080,7 +1086,7 @@ for cov in coverage_range:
               {"bonf", required_argument, NULL, 'b'}, /* NOTE changes here must be reflected in pseudo_parallel code as well */
 
               {"min-cov", required_argument, NULL, 'C'},
-              {"maxdepth", required_argument, NULL, 'd'},
+              {"max-depth", required_argument, NULL, 'd'},
 
               {"illumina-1.3", no_argument, &illumina_1_3, 1},
               {"use-orphan", no_argument, &use_orphan, 1},
