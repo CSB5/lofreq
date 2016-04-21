@@ -18,3 +18,4 @@ samples you can use
 ([lofreq2\_add\_sample.py](https://github.com/CSB5/lofreq/blob/master/src/tools/scripts/lofreq2_add_sample.py)
 , which comes with LoFreq (note the pysam dependency). The next versions of LoFreq (2.2) will be
 able to call genotypes.
+
