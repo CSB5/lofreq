@@ -1045,11 +1045,14 @@ check_indel:
 #endif
                /* adding 1 value representing whole del */
                dq = t[p->qpos] - 33;
-#ifdef PACBIO_REALN
+#ifdef PACBIO_REALN_HRUNDQ7
                /* FIXME temp artifically decreasing pacbio del quals in hruns */
                if (plp_col->hrun>1) {
                     if (dq>7) dq=7;
                }
+#elif PACBIO_REALN
+               /* FIXME temp artifically decreasing pacbio del quals in hruns */
+               if (dq>=10) dq-=10;
 #endif
           } /* else default to 0 */
 
