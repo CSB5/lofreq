@@ -1,5 +1,5 @@
 # Dependencies
-highlighter:      pygments
+highlighter:      rouge
 
 # Permalinks
 # http://jekyllrb.com/docs/upgrading/: "Starting with v2.0, however, absolute permalinks will become opt-out, meaning Jekyll will default to using absolute permalinks instead of relative permalinks."
