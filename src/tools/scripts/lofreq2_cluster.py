@@ -28,7 +28,7 @@ from itertools import groupby
 #
 # James Casbon's pyvcf
 import vcf
-    
+
 
 
 #global logger
@@ -48,10 +48,10 @@ CI = namedtuple('CI', ['min', 'max'])
 
 def compute_ci(coverage, var_count):
     """Compute confidnce interval:
-    
+
     Agresti-Coull Interval at the 0.05 level
     http://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval#Agresti-Coull_Interval
-    
+
     n~ = n + 4
     p~ = 1/n~ * (X + 4/2)
     ci: p~ +- 2*sqrt(1/n~ * p~ * (1-p~)
@@ -66,7 +66,7 @@ def compute_ci(coverage, var_count):
 
     return CI._make([min_ci, max_ci])
 
-    
+
 def fasta_iter(fasta_name):
     """
     given a fasta file. yield tuples of header, sequence
@@ -84,7 +84,7 @@ def fasta_iter(fasta_name):
         # join all sequence lines to one.
         seq = "".join(s.strip() for s in faiter.next())
         yield header, seq
-        
+
 
 def cmdline_parser():
     """
@@ -95,11 +95,11 @@ def cmdline_parser():
     parser = argparse.ArgumentParser(description=__doc__)
 
     parser.add_argument("--verbose",
-                      action="store_true", 
+                      action="store_true",
                       dest="verbose",
                       help="be verbose")
     parser.add_argument("--debug",
-                      action="store_true", 
+                      action="store_true",
                       dest="debug",
                       help="enable debugging")
     parser.add_argument("-i", "--variants",
@@ -120,7 +120,7 @@ def vcf_var_to_str(v):
     return "%s %d %s>%s %f" % (
         v.CHROM, v.POS, v.REF, ','.join(["%s" % x for x in v.ALT]), v.INFO['AF'])
 
-    
+
 def main():
     """The main function
     """
@@ -144,7 +144,7 @@ def main():
             sys.stderr.write(
                 "file '%s' does not exist.\n" % in_file)
             sys.exit(1)
-            
+
     for (out_file, descr) in [(args.cluster_file, "cluster output file")]:
         if not out_file:
             parser.error("%s output file argument missing." % descr)
@@ -182,28 +182,28 @@ def main():
     if any([not v.is_snp for v in var_list]):
         sys.stderr.write("WARNING: Only supporting SNPs! Automatically removing others\n")
         var_list = [v for v in var_list if v.is_snp]
-         
+
     LOG.info("Parsed %d SNPs from %s" % (len(var_list), args.var_file))
-    
-    
+
+
 
     assert all([x.INFO.has_key('AF') and x.INFO.has_key('DP')
                 for x in var_list])
     var_list = sorted(var_list, key=lambda x: x.INFO['AF'], reverse=True)
-    ci_list = [compute_ci(v.INFO['DP'], int(v.INFO['AF'] * v.INFO['DP'])) 
+    ci_list = [compute_ci(v.INFO['DP'], int(v.INFO['AF'] * v.INFO['DP']))
                for v in var_list]
     var_ci_list = zip(var_list, ci_list)
     del var_list, ci_list# paranoia
 
 
-        
+
     if len(var_ci_list)==0:
         fh_out.write("No variants <-> no clusters!\n")
         if fh_out != sys.stdout:
             fh_out.close()
         sys.exit(0)
 
-        
+
     cluster = dict()
     clu_no = 0
     seed_var, seed_ci = var_ci_list[0]
@@ -226,10 +226,10 @@ def main():
             cluster[clu_no,'min'] = ci.min
             cluster[clu_no,'max'] = ci.max
 
-        
+
     for i in range(clu_no+1):
         fh_out.write("# cluster %d (freq. range: %f - %f): %s\n" % (
-            i+1, cluster[i,'min'], cluster[i,'max'], 
+            i+1, cluster[i,'min'], cluster[i,'max'],
             ', '.join([vcf_var_to_str(x) for x in cluster[i,'members']])))
 
         # write sequence as well if we have a reference
@@ -245,13 +245,12 @@ def main():
                 haplotype = haplotype[:idx] + alt + haplotype[idx + 1:]
             fh_out.write(">haplotype-cluster-{}\n{}\n".format(i+1, haplotype))
 
-        
+
     if fh_out != sys.stdout:
         fh_out.close()
-    print "%d clusters found (written to %s)" % (clu_no+1, fh_out.name)
- 
+    print("%d clusters found (written to %s)" % (clu_no+1, fh_out.name))
+
 
 if __name__ == "__main__":
     main()
     LOG.info("Successful program exit")
-        

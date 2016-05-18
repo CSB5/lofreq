@@ -26,6 +26,3 @@ if os.path.exists(os.path.join(d, 'lofreq')):
 #if os.path.exists(d):
 #    #sys.stderr.write("NOTE: Adding local dir %s to PATH\n" % d)
 #    os.environ["PATH"] = d + os.pathsep + os.environ["PATH"]
-    
-
-        

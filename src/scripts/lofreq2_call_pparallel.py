@@ -4,12 +4,6 @@ listed in header (used as region to make use of indexing feature) and
 bed file (if given) and combines results at the end.
 """
 
-__author__ = "Andreas Wilm"
-__email__ = "wilma@gis.a-star.edu.sg"
-__copyright__ = "2013, 2014 Genome Institute of Singapore"
-__license__ = "The MIT License"
-
-
 #--- standard library imports
 #
 import sys
@@ -34,6 +28,12 @@ try:
     import lofreq2_local
 except ImportError:
     pass
+
+
+__author__ = "Andreas Wilm"
+__email__ = "wilma@gis.a-star.edu.sg"
+__copyright__ = "2013, 2014 Genome Institute of Singapore"
+__license__ = "The MIT License"
 
 
 Region = namedtuple('Region', ['chrom', 'start', 'end'])
@@ -67,8 +67,11 @@ def prob_to_phredqual(prob):
         return int(round(-10.0 * log10(prob)))
     except ValueError:
         # prob is zero
-        return sys.maxint
         #return MAX_INT
+        if sys.version_info >= (3, 0):
+            return sys.maxsize
+        else:
+            return sys.maxint    
 
 def split_region_(start, end):
     """split region (given in zero-based half-open start and end
@@ -117,9 +120,9 @@ def read_bed_coords(fbed):
                     continue
                 else:
                     #import pdb; pdb.set_trace()
-                    raise ValueError, (
+                    raise ValueError(
                         "Couldn't parse the following line"
-                        " from bed-file %s: %s" % (fbed, line))
+                        " from bed-file {}: {}".format(fbed, line))
 
             if end <= start or end < 0 or start < 0:
                 LOG.fatal("Invalid coordinates start=%d end=%d read from %s" % (
@@ -393,7 +396,7 @@ def main():
         sys.exit(1)
     if num_threads > multiprocessing.cpu_count():
         LOG.fatal("Requested number of threads higher than number"
-                 " of CPUs. Will reduce value to match number of CPUs")
+                  " of CPUs. Will reduce value to match number of CPUs")
         #num_threads = multiprocessing.cpu_count()
         sys.exit(1)
 
@@ -536,7 +539,7 @@ def main():
     #import pdb; pdb.set_trace()
 
     LOG.info("Using %d threads with following basic args: %s\n" % (
-            num_threads, ' '.join(lofreq_call_args)))
+        num_threads, ' '.join(lofreq_call_args)))
 
 
     # At this stage all basic args are known. In theory there are
@@ -591,7 +594,7 @@ def main():
         if biggest_length < total_length/(BIN_PER_THREAD*num_threads):
             break
         elif biggest_length < 100:
-            LOG.warn("Regions getting too small to be efficiently processed")
+            LOG.warning("Regions getting too small to be efficiently processed")
             break
 
         biggest = bins.pop()
@@ -632,7 +635,7 @@ def main():
     LOG.debug("cmd_list = %s" % cmd_list)
     if dryrun:
         for cmd in cmd_list:
-            print "%s" % (cmd)
+            print("%s" % (cmd))
         LOG.critical("dryrun ending here")
         sys.exit(1)
 
@@ -728,7 +731,7 @@ def main():
         LOG.info("Executing %s\n" % (cmd))
         if subprocess.call(cmd, shell=True):
             LOG.fatal("Final filtering command failed."
-            " Commmand was %s" % (cmd))
+                      " Commmand was %s" % (cmd))
             sys.exit(1)
 
     # remove temp files/dir

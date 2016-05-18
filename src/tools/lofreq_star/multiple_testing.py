@@ -17,27 +17,35 @@ Email: tanghaibao@gmail.com
 License: BSD
 """
 
+
+import sys
+from itertools import groupby
+
+
 __author__ = "Haibao Tang, Brent Pedersen, Aurelien Naldi"
 __email__ = "tanghaibao@gmail.com"
 #__copyright__ = ""
 __license__ = "BSD"
 
-from itertools import groupby
+
+if sys.version_info >= (3, 0):
+    def xrange(*args, **kwargs):
+        return iter(range(*args, **kwargs))
 
 
 class AbstractCorrection(object):
-    
+
     def __init__(self, pvals, a=.05, n=None):
         self.pvals = self.corrected_pvals = list(pvals)
 
         # number of multiple tests
         if n:
-            assert n>len(pvals)
-            self.n = n 
+            assert n > len(pvals)
+            self.n = n
         else:
             self.n = len(self.pvals)
-        # type-1 error cutoff for each test   
-        self.a = a                  
+        # type-1 error cutoff for each test
+        self.a = a
 
         self.set_correction()
 
@@ -47,19 +55,19 @@ class AbstractCorrection(object):
         pass
 
 
-    
+
 class Bonferroni(AbstractCorrection):
     """http://en.wikipedia.org/wiki/Bonferroni_correction
     >>> ["%.4f" % v for v in Bonferroni([0.01, 0.01, 0.03, 0.05, 0.005], a=0.05).corrected_pvals]
     ['0.0500', '0.0500', '0.1500', '0.2500', '0.0250']
     """
-    
+
     def set_correction(self):
         self.corrected_pvals = [pv * self.n
                                 for pv in self.corrected_pvals]
 
 
-        
+
 class Sidak(AbstractCorrection):
     """http://en.wikipedia.org/wiki/Bonferroni_correction
     >>> ["%.8f" % v for v in Sidak([0.01, 0.01, 0.03, 0.05, 0.005], a=0.05).corrected_pvals]
@@ -74,7 +82,7 @@ class Sidak(AbstractCorrection):
                                 for pv in self.corrected_pvals]
 
 
-        
+
 class HolmBonferroni(AbstractCorrection):
     """http://en.wikipedia.org/wiki/Holm-Bonferroni_method
     given a list of pvals, perform the Holm-Bonferroni correction
@@ -88,21 +96,21 @@ class HolmBonferroni(AbstractCorrection):
         if len(self.pvals):
             for (i, c) in self.generate_significant():
                 self.corrected_pvals[i] *= c
-        
+
     def generate_significant(self):
         pvals = self.pvals
         pvals_idxs = zip(pvals, xrange(len(pvals)))
-        pvals_idxs.sort()
+        pvals_idxs = sorted(pvals_idxs)
 
         #lp = len(self.pvals)
         lp = self.n
 
-        for pval, idxs in groupby(pvals_idxs, lambda x: x[0]):
+        for _pval, idxs in groupby(pvals_idxs, lambda x: x[0]):
             idxs = list(idxs)
             for p, i in idxs:
                 if p * 1. / lp < self.a:
                     yield (i, lp)
-            lp -= len(idxs) 
+            lp -= len(idxs)
 
 # also in the original file, but removed here:
 #class FDR
@@ -110,4 +118,4 @@ class HolmBonferroni(AbstractCorrection):
 
 if __name__ == '__main__':
     import doctest
-    doctest.testmod()        
+    doctest.testmod()

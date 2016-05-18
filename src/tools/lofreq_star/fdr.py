@@ -1,17 +1,14 @@
 """FDR routines
 """
 
-
-__author__ = "Grace Hui Ting Yeo"
-__email__ = "yeohtg@gis.a-star.edu.sg"
-__copyright__ = "2014 Genome Institute of Singapore"
-__license__ = "The MIT License"
-
-
-
 #--- standard library imports
 #
-from itertools import izip
+import sys
+try:
+    from itertools import izip
+except ImportError:
+    def izip(a, b):
+        return zip(a, b)
 
 #--- third-party imports
 #
@@ -22,12 +19,23 @@ from itertools import izip
 # /
 
 
+__author__ = "Grace Hui Ting Yeo"
+__email__ = "yeohtg@gis.a-star.edu.sg"
+__copyright__ = "2014 Genome Institute of Singapore"
+__license__ = "The MIT License"
+
+
+if sys.version_info >= (3, 0):
+    def xrange(*args, **kwargs):
+        return iter(range(*args, **kwargs))
+
+
 def fdr(pvals, a=0.05, n=None):
-    """ 
+    """
     Implementation of the Benjamini-Hochberg procedure.
-    Takes a list of p-values and returns a list of the indices of those p-values that pass. 
-    Does not adjust p-values.  
-    See http://sas-and-r.blogspot.sg/2012/05/example-931-exploring-multiple-testing.html 
+    Takes a list of p-values and returns a list of the indices of those p-values that pass.
+    Does not adjust p-values.
+    See http://sas-and-r.blogspot.sg/2012/05/example-931-exploring-multiple-testing.html
     for pseudocode.
 
     Test data from : http://udel.edu/~mcdonald/statmultcomp.html
@@ -43,13 +51,13 @@ def fdr(pvals, a=0.05, n=None):
     """
 
     if n != None:
-        assert n>=len(pvals)
+        assert n >= len(pvals)
     else:
-        n=len(pvals)
-        
-    sorted_pvals_indices = sorted(xrange(len(pvals)), key=lambda k:pvals[k])
-    t = next((rank for rank, spi in izip(xrange(len(pvals), 0, -1), 
-                                         reversed(sorted_pvals_indices)) 
+        n = len(pvals)
+
+    sorted_pvals_indices = sorted(xrange(len(pvals)), key=lambda k: pvals[k])
+    t = next((rank for rank, spi in izip(xrange(len(pvals), 0, -1),
+                                         reversed(sorted_pvals_indices))
               if pvals[spi] < rank*a/n), None)
     if t:
         return sorted_pvals_indices[:t]
