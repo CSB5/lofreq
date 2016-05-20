@@ -3,6 +3,10 @@
 listed in header (used as region to make use of indexing feature) and
 bed file (if given) and combines results at the end.
 """
+from __future__ import division
+from __future__ import print_function
+from builtins import range
+from past.utils import old_div
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
@@ -67,7 +71,7 @@ def prob_to_phredqual(prob):
         return int(round(-10.0 * log10(prob)))
     except ValueError:
         # prob is zero
-        return sys.maxint
+        return sys.maxsize
         #return MAX_INT
 
 def split_region_(start, end):
@@ -117,7 +121,7 @@ def read_bed_coords(fbed):
                     continue
                 else:
                     #import pdb; pdb.set_trace()
-                    raise ValueError, (
+                    raise ValueError(
                         "Couldn't parse the following line"
                         " from bed-file %s: %s" % (fbed, line))
 
@@ -560,7 +564,7 @@ def main():
         # argument
         bam_sqs = set([b[0] for b in bam_bins])
         bed_sqs = set([b[0] for b in bed_bins])
-        if len(bed_bins) > 100*len(bam_bins) and len(bed_sqs) > len(bam_sqs)/10.0:
+        if len(bed_bins) > 100*len(bam_bins) and len(bed_sqs) > old_div(len(bam_sqs),10.0):
             bed_sqs = set([b[0] for b in bed_bins])
             bins = [b for b in bam_bins if b[0] in bed_sqs]
             lofreq_call_args.extend(['-l', bed_file])
@@ -587,8 +591,8 @@ def main():
         biggest_length = region_length(biggest)
 
         LOG.debug("biggest_length=%d total_length/(%d*num_threads)=%f" % (
-            biggest_length, BIN_PER_THREAD, total_length/(BIN_PER_THREAD*num_threads)))
-        if biggest_length < total_length/(BIN_PER_THREAD*num_threads):
+            biggest_length, BIN_PER_THREAD, old_div(total_length,(BIN_PER_THREAD*num_threads))))
+        if biggest_length < old_div(total_length,(BIN_PER_THREAD*num_threads)):
             break
         elif biggest_length < 100:
             LOG.warn("Regions getting too small to be efficiently processed")
@@ -632,7 +636,7 @@ def main():
     LOG.debug("cmd_list = %s" % cmd_list)
     if dryrun:
         for cmd in cmd_list:
-            print "%s" % (cmd)
+            print("%s" % (cmd))
         LOG.critical("dryrun ending here")
         sys.exit(1)
 
@@ -687,8 +691,8 @@ def main():
             sub_bonf = 1
         if indel_bonf == 0:
             indel_bonf = 1
-        sub_phredqual = prob_to_phredqual(sig_opt/float(sub_bonf))
-        indel_phredqual = prob_to_phredqual(sig_opt/float(indel_bonf))
+        sub_phredqual = prob_to_phredqual(old_div(sig_opt,float(sub_bonf)))
+        indel_phredqual = prob_to_phredqual(old_div(sig_opt,float(indel_bonf)))
         cmd.extend(['--snvqual-thresh', "%s" % sub_phredqual])
         cmd.extend(['--indelqual-thresh', "%s" % indel_phredqual])
 

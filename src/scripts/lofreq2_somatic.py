@@ -4,6 +4,8 @@ normal/disease sample.
 
 The script will produce several output files using the prefix specified.
 """
+from builtins import str
+from builtins import object
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
@@ -375,11 +377,11 @@ class SomaticSNVCaller(object):
         return self.num_tests_from_log(elines)
 
 
-    def rlx_to_str(self, sample_type, (num_snv_tests, num_indel_tests)):
+    def rlx_to_str(self, sample_type, xxx_todo_changeme):
         """Using tumor filtering settings to create stringent calls
         from relaxed calls
         """
-
+        (num_snv_tests, num_indel_tests) = xxx_todo_changeme
         assert sample_type in ['normal', 'tumor']
 
         # filtering stringently using tumor stringent settings

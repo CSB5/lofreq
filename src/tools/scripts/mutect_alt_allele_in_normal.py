@@ -14,6 +14,9 @@ Note, this only makes senseif you're working in similar coverage and
 quality ranges.
 
 """
+from __future__ import division
+from builtins import str
+from past.utils import old_div
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
@@ -147,7 +150,7 @@ def main():
         if var_no % 500 == 1:
             LOG.info("Analyzing variant %d" % (var_no))
 
-        if var.INFO.has_key('INDEL'):
+        if 'INDEL' in var.INFO:
             LOG.warn("Skipping indel %s:%d" % (var.CHROM, var.POS))
             continue
         if len(var.REF)>1 or len(var.ALT)>1:
@@ -211,7 +214,7 @@ def main():
             LOG.warn("No alt or ref bases for var %s" % var)
             print_this_var = True
         else:
-            if (num_alt>=2 or num_alt/float(num_both)>=0.03) and sum(alt_bquals)>20:
+            if (num_alt>=2 or old_div(num_alt,float(num_both))>=0.03) and sum(alt_bquals)>20:
                 var.FILTER.append(FILTER_TAG)
                 if args.pass_only:
                     print_this_var = False

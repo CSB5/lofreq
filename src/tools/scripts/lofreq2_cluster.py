@@ -1,6 +1,12 @@
 #!/usr/bin/env python
 """Cluster SNVs based on SNV freqs confidence interval
 """
+from __future__ import division
+from __future__ import print_function
+from builtins import zip
+from builtins import str
+from builtins import range
+from past.utils import old_div
 
 
 __author__ = "Andreas Wilm, Niranjan Nagarajan"
@@ -57,7 +63,7 @@ def compute_ci(coverage, var_count):
     ci: p~ +- 2*sqrt(1/n~ * p~ * (1-p~)
     """
     n_t = float(coverage + 4)
-    p_t = (var_count + 2) / n_t
+    p_t = old_div((var_count + 2), n_t)
     ci = 2 * sqrt(p_t * (1-p_t) / n_t)
     min_ci = p_t - 3*ci
     if min_ci < 0.0:
@@ -82,7 +88,7 @@ def fasta_iter(fasta_name):
         #header = header.next()[1:].strip()
         header = header.next()[1:].strip().split(" ")[0]
         # join all sequence lines to one.
-        seq = "".join(s.strip() for s in faiter.next())
+        seq = "".join(s.strip() for s in next(faiter))
         yield header, seq
         
 
@@ -187,12 +193,12 @@ def main():
     
     
 
-    assert all([x.INFO.has_key('AF') and x.INFO.has_key('DP')
+    assert all(['AF' in x.INFO and 'DP' in x.INFO
                 for x in var_list])
     var_list = sorted(var_list, key=lambda x: x.INFO['AF'], reverse=True)
     ci_list = [compute_ci(v.INFO['DP'], int(v.INFO['AF'] * v.INFO['DP'])) 
                for v in var_list]
-    var_ci_list = zip(var_list, ci_list)
+    var_ci_list = list(zip(var_list, ci_list))
     del var_list, ci_list# paranoia
 
 
@@ -248,7 +254,7 @@ def main():
         
     if fh_out != sys.stdout:
         fh_out.close()
-    print "%d clusters found (written to %s)" % (clu_no+1, fh_out.name)
+    print("%d clusters found (written to %s)" % (clu_no+1, fh_out.name))
  
 
 if __name__ == "__main__":

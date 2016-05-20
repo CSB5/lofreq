@@ -10,6 +10,7 @@ The VCF meta information will be copied from first file.
 The exact SNV annotation will always be taken from SNV coming from
 first file.
 """
+from builtins import str
 
 
 __author__ = "Andreas Wilm"
@@ -63,7 +64,7 @@ def key_for_var(var):
     """FIXME:add-doc"""
 
     return "%s %d %s %s %s" % (var.CHROM, var.POS, 
-                            var.REF, ''.join(var.ALT), "INDEL" if var.INFO.has_key('INDEL') else "SNV")
+                            var.REF, ''.join(var.ALT), "INDEL" if 'INDEL' in var.INFO else "SNV")
 
 
 def get_vcfreader(vcffile):
@@ -198,7 +199,7 @@ def main():
         #        " : %s" % str(var))
         
         k = key_for_var(var)
-        assert not snvs2.has_key(k), (
+        assert k not in snvs2, (
             "I'm confused. Looks like I've already seen a SNV with"
             " key %s" % k)
         snvs2[k] = var        
@@ -212,13 +213,13 @@ def main():
 
         if args.action == 'complement':
             # relative complement : elements in A but not B
-            if not snvs2.has_key(k):
+            if k not in snvs2:
                 vcf_writer.write_rec(var)
                 num_vars_stats['vcfout total'] += 1
             else:
                 del snvs2[k]
         elif args.action == 'intersect':
-            if snvs2.has_key(k):
+            if k in snvs2:
                 vcf_writer.write_rec(var)
                 num_vars_stats['vcfout total'] += 1
         else:

@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 """Experimental implementation of various quality bias checks
 """
+from __future__ import division
+from builtins import str
+from past.utils import old_div
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
@@ -60,7 +63,7 @@ def mean(values):
     size = len(values)
     if size==0:
         return ValueError
-    return sum(values)/float(size)
+    return old_div(sum(values),float(size))
 
            
 def cmdline_parser():
@@ -190,7 +193,7 @@ def main():
         if var_no%500==1:
             LOG.info("Computing bias for var %d of %d" % (var_no, len(variants)))
             
-        if var.INFO.has_key('INDEL'):
+        if 'INDEL' in var.INFO:
             LOG.warn("Skipping unsupported indel variant %s:%d" % (var.CHROM, var.POS))
             continue
         
@@ -324,7 +327,7 @@ def main():
             rej_idxs = fdr.fdr(pvalues, a=args.mtc_alpha)
     
         else:
-            raise ValueError(), ("unknown MTC method %s" % args.mtc)
+            raise ValueError()("unknown MTC method %s" % args.mtc)
 
         for i in rej_idxs:
             # pyvcf filter is empty if not set. lofreq's vcf clone was . or PASS
