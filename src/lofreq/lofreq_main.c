@@ -190,7 +190,6 @@ static void usage(const char *myname)
      fprintf(stderr, "\n");
      fprintf(stderr, "  Extra Tools (if installed):\n");
      fprintf(stderr, "    vcfplot       : Plot VCF statistics\n");
-     fprintf(stderr, "    cluster       : Cluster variants in VCF file (supports legacy SNP format)\n");
      fprintf(stderr, "\n");
 
      fprintf(stderr, "\n");
@@ -250,15 +249,13 @@ int main(int argc, char *argv[])
 
      } else if (strcmp(argv[1], "somatic") == 0 ||
                 strcmp(argv[1], "vcfplot") == 0 ||
-                strcmp(argv[1], "call-parallel") == 0 ||
-                strcmp(argv[1], "cluster") == 0) {
+                strcmp(argv[1], "call-parallel") == 0) {
           char **argv_execvp = calloc(argc, sizeof(char*));
           int i;
           char *somatic_script = "lofreq2_somatic.py";
           char *parallel_script = "lofreq2_call_pparallel.py";
           char *vcfset_script = "lofreq2_vcfset.py";
           char *vcfplot_script = "lofreq2_vcfplot.py";
-          char *cluster_script = "lofreq2_cluster.py";
           char *alnqual_binary = "lofreq2_alnqual";
           char *script_to_call;
 
@@ -270,8 +267,6 @@ int main(int argc, char *argv[])
                script_to_call = vcfset_script;
           } else if (strcmp(argv[1], "vcfplot") == 0) {
                script_to_call = vcfplot_script;
-          } else if (strcmp(argv[1], "cluster") == 0) {
-               script_to_call = cluster_script;
           } else if (strcmp(argv[1], "alnqual") == 0) {
                script_to_call = alnqual_binary;
           } else {

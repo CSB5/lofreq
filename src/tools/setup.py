@@ -39,7 +39,6 @@ setup(name = setup_conf.PACKAGE_NAME,
       # requires = ['pysam (>=0.7.5)', 'scipy (>=0.12.0)', 'numpy (>=1.7.1)', 'huddel'],
       #url='https://sourceforge.net/p/lofreq/',
       scripts = [
-          'scripts/lofreq2_cluster.py',
           'scripts/lofreq2_vcfplot.py',
           'scripts/lofreq2_indel_ovlp.py'
       ],
