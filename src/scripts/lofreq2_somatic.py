@@ -480,7 +480,7 @@ class SomaticSNVCaller(object):
         """Run LoFreq uniq as final check on somatic variants
         """
 
-        uniq_base_cmd = [self.LOFREQ, 'uniq', '--uni-freq', "0.5"]
+        uniq_base_cmd = [self.LOFREQ, 'uniq', '--uni-freq', "0.5", "--is-somatic"]
 
 
         uniq_snv_cmd = uniq_base_cmd + [

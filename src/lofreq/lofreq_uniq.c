@@ -446,6 +446,7 @@ main_uniq(int argc, char *argv[])
      static int use_det_lim = 0;
      static int use_orphan = 0;
      static int output_all = 0;
+     static int is_somatic = 0;
 
      /* default uniq options */
      memset(&uniq_conf, 0, sizeof(uniq_conf_t));
@@ -478,6 +479,7 @@ main_uniq(int argc, char *argv[])
               {"use-det-lim", no_argument, &use_det_lim, 1},
               {"use-orphan", no_argument, &use_orphan, 1},
               {"output-all", no_argument, &output_all, 1},
+              {"is-somatic", no_argument, &is_somatic, 1},
 
               {"vcf-in", required_argument, NULL, 'v'},
               {"vcf-out", required_argument, NULL, 'o'},
@@ -652,8 +654,9 @@ main_uniq(int argc, char *argv[])
     } else {
          vcf_header_add(&vcf_header, "##INFO=<ID=UNIQ,Number=0,Type=Flag,Description=\"Unique, i.e. not detectable in paired sample\">\n");
          vcf_header_add(&vcf_header, "##INFO=<ID=UQ,Number=1,Type=Integer,Description=\"Phred-scaled uniq score at this position\">\n");
-
-
+         if (is_somatic) {
+              vcf_header_add(&vcf_header, "##INFO=<ID=SOMATIC,Number=0,Type=Flag,Description=\"Somatic event\">\n");
+         }
          if (! uniq_conf.use_det_lim) {
               char full_filter_str[FILTER_STRSIZE];
               if (uniq_conf.uniq_filter.thresh > 0) {
