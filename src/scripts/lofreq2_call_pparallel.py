@@ -67,7 +67,7 @@ def prob_to_phredqual(prob):
         return int(round(-10.0 * log10(prob)))
     except ValueError:
         # prob is zero
-        return sys.maxint
+        return sys.maxsize
         #return MAX_INT
 
 def split_region_(start, end):
@@ -117,7 +117,7 @@ def read_bed_coords(fbed):
                     continue
                 else:
                     #import pdb; pdb.set_trace()
-                    raise ValueError, (
+                    raise ValueError(
                         "Couldn't parse the following line"
                         " from bed-file %s: %s" % (fbed, line))
 
@@ -632,7 +632,7 @@ def main():
     LOG.debug("cmd_list = %s" % cmd_list)
     if dryrun:
         for cmd in cmd_list:
-            print "%s" % (cmd)
+            print("%s" % (cmd))
         LOG.critical("dryrun ending here")
         sys.exit(1)
 

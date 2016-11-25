@@ -20,6 +20,7 @@ import argparse
 import subprocess
 import tempfile
 from socket import gethostname
+import collections
 
 #--- third-party imports
 #
@@ -375,11 +376,11 @@ class SomaticSNVCaller(object):
         return self.num_tests_from_log(elines)
 
 
-    def rlx_to_str(self, sample_type, (num_snv_tests, num_indel_tests)):
+    def rlx_to_str(self, sample_type, xxx_todo_changeme):
         """Using tumor filtering settings to create stringent calls
         from relaxed calls
         """
-
+        (num_snv_tests, num_indel_tests) = xxx_todo_changeme
         assert sample_type in ['normal', 'tumor']
 
         # filtering stringently using tumor stringent settings
@@ -564,7 +565,7 @@ class SomaticSNVCaller(object):
 
         for (k, v) in [(x, self.__getattribute__(x)) for x in dir(self)
                        if not x.startswith('_')]:
-            if callable(v):
+            if isinstance(v, collections.Callable):
                 continue
             LOG.debug("%s %s" % (k, v))
         #import pdb; pdb.set_trace()
