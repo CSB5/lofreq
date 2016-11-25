@@ -48,7 +48,7 @@ def qual_from_var(var):
     """takes care of missing values, int conversion and ties in comparisons
     """
     if var.qual==".":
-        return sys.maxint
+        return sys.maxsize
     else:
         # add AF to deal with ties
         return int(var.qual)+af_from_var(var)
@@ -84,7 +84,7 @@ def main():
     for line in fh:
         line = line.rstrip()
         if line.startswith('#'):
-            print line
+            print(line)
             continue
         
         cur_var = vcf_line_to_var(line)

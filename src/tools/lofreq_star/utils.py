@@ -96,7 +96,7 @@ def complement(strand, na_type='DNA'):
     elif na_type == 'RNA':
         tr = string.maketrans('UTAGCutagc', 'AAUCGaaucg')
     else:
-        raise ValueError, ("Unknown NA type %s" % na_type)
+        raise ValueError("Unknown NA type %s" % na_type)
     return strand.translate(tr)
 
 

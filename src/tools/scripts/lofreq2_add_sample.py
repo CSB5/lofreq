@@ -234,7 +234,7 @@ def add_plp_to_vcf(vcf_in, vcf_out, bam_files):
                     "variant incomplete or FORMAT column already exists")
 
                 # before writing header, add our format description.
-                for fmt in formats.values():
+                for fmt in list(formats.values()):
                     vcf_writer.writerow([fmt_to_line(fmt)])
 
                 row.append("FORMAT")
@@ -256,15 +256,15 @@ def add_plp_to_vcf(vcf_in, vcf_out, bam_files):
                     var.CHROM, var.POS, var.REF))
                 continue
 
-            row.append(':'.join(formats.keys()))
+            row.append(':'.join(list(formats.keys())))
             for bam in bam_files:
                 assert os.path.exists(bam)
                 sam_fh = pysam.AlignmentFile(bam)
 
                 sample_data = gen_plp_data(sam_fh, var)
-                assert sample_data.keys() == formats.keys(), (
-                    "sample keys (%s) != format keys (%s)" % (sample_data.keys(), formats.keys()))
-                row.append(':'.join(sample_data.values()))
+                assert list(sample_data.keys()) == list(formats.keys()), (
+                    "sample keys (%s) != format keys (%s)" % (list(sample_data.keys()), list(formats.keys())))
+                row.append(':'.join(list(sample_data.values())))
             vcf_writer.writerow(row)
 
 
