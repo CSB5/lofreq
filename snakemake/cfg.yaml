@@ -1,0 +1,16 @@
+# sample definition with one fastq pair per sample
+samples:
+  isolate1:
+    - data/sample1_R1.fastq.gz
+    - data/sample1_R2.fastq.gz
+  isolate2:
+    - data/sample2.fastq.gz
+outdir: out/
+reference:
+  data/ref.fa
+# optional: regions. leave blank if none
+bed: data/regions.bed
+# optional: max coverage (see snakefile for default)
+maxdepth: 10000
+# mark short split hits as secondary in BWA MEM
+mark_short_splits: true

@@ -1,0 +1,144 @@
+"""A best-practices variant calling implementation LoFreq ( # losely
+based on https://github.com/gis-rpd/pipelines. Starts with short
+reads and finishes with a bgzipped vcf file. The workflow is kept
+simple, i.e. no tricks are applied to speed the analysis up
+(splitting fastq, running viterbi by chrom etc.).
+
+# Input: config-file with following fields:
+- bool mark_short_splits: for bwa mem -M
+- string bed: for bed-file limiting analysis to certain regions
+- int optional 'maxdepth': for limit per-site coverage in analysis
+- dict 'samples': sample names as keys and one fastq-pair each as value
+- string reference: reference fasta file
+- string outdir: where to save output
+
+# Pre-installed programs:
+- lofreq 2.1.2
+- bwa (with mem support e.g. 0.7.12)
+- samtools >= 1.3
+
+Notes:
+- If missing, the workflow will try to index your reference with 
+  samtools and bwa. This can lead to race conditions so is best
+  done in advance.
+
+"""
+
+import os
+
+
+shell.executable("/bin/bash")
+shell.prefix("set -euo pipefail;")
+
+
+rule all:
+    input:
+        expand(os.path.join(config['outdir'], "{sample}/{sample}.bwamem.lofreq.vcf.gz"),
+               sample=config['samples'])
+
+    
+rule bwa_index:
+    input:
+        "{prefix}.{suffix}"
+    output:
+        "{prefix}.{suffix,(fasta|fa)}.pac",
+        "{prefix}.{suffix,(fasta|fa)}.bwt",
+        "{prefix}.{suffix,(fasta|fa)}.sa"
+    log:
+        "{prefix}.{suffix,(fasta|fa)}.index.log"
+    shell:
+        "bwa index {input} >& {log};"
+
+        
+rule samtools_faidx:
+    input:
+        "{prefix}.{suffix}"
+    output:
+        "{prefix}.{suffix,(fasta|fa)}.fai",
+    log:
+        "{prefix}.{suffix,(fasta|fa)}.index.log"
+    shell:
+        "samtools faidx {input} >& {log};"
+
+
+rule samtools_index:
+    input:
+        "{prefix}.bam"
+    output:
+        "{prefix}.bam.bai",
+    log:
+        "{prefix}.bam.bai.log"
+    shell:
+        "samtools index {input} >& {log};"
+        
+        
+rule bwamem_align:
+    input:
+        reffa = config['reference'],
+        bwaindex = config['reference'] + ".bwt",
+        fastqs = lambda wc: config['samples'][wc.sample]
+    output:
+        bam = '{prefix}/{sample}.bwamem.bam'
+    log:
+        '{prefix}/{sample}.bwamem.bam.log'
+    params:
+        mark_short_splits = "-M" if config['mark_short_splits'] else "",
+    message:
+        'Aligning PE reads, fixing mate information and converting to sorted BAM'
+    threads:
+        8
+    shell:
+        "{{ bwa mem {params.mark_short_splits} -t {threads}"
+        " {input.reffa} {input.fastqs} |"
+        " samtools fixmate - - |"
+        " samtools sort -o {output.bam} -T {output.bam}.tmp -; }} >& {log}"
+    
+
+rule lofreq_bam_processing:
+    """Runs BAM through full LoFreq preprocessing pipeline,
+    i.e. viterbi, alnqual, indelqual, followed by sort (required by
+    viterbi).
+
+    WARNING: running this on unsorted input files will be inefficient
+    because of constant reloading of the reference
+    """
+    input:
+        bam = '{prefix}.bam',
+        reffa = config['reference'],
+        reffai = config['reference'] + ".fai"
+    output:
+        bam = '{prefix}.lofreq.bam'
+    log:
+        '{prefix}.lofreq.log'
+    message:
+        "Preprocessing BAMs with LoFreq"
+    threads:
+        1
+    shell:
+        "{{ lofreq viterbi -f {input.reffa} {input.bam} | "
+        " lofreq alnqual -u - {input.reffa} | "
+        " lofreq indelqual --dindel -f {input.reffa} - | "
+        " samtools sort -o {output.bam} -T {output.bam}.tmp -; }} >& {log}"
+
+
+rule lofreq_call:
+    input:
+        bam = '{prefix}.bam',
+        bai = '{prefix}.bam.bai',
+        reffa = config['reference'],
+        refidx = config['reference'] + ".fai",
+    output:
+        vcf = '{prefix}.vcf.gz'
+    log:
+        '{prefix}.vcf.log'
+    message:
+        "Calling variants with LoFreq"
+    threads:
+        8
+    params:
+        maxdepth = config.get('maxdepth', 10000),
+        bed_arg = "-l {}".format(config['bed']) if config['bed'] else ""
+    shell:
+        "lofreq call-parallel --pp-threads {threads} --call-indels"
+        " {params.bed_arg} -f {input.reffa} -o {output.vcf}"
+        " -d {params.maxdepth} {input.bam} >& {log}"

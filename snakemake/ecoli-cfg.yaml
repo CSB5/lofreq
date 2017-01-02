@@ -1,0 +1,14 @@
+outdir: /mnt/projects/wilma/lofreq/tmp
+samples:
+  sample1:
+    - /mnt/projects/wilma/lofreq//testing/data/ecoli-clone/EColi_EAS20_8/EAS20_8_R1.1M.fastq.gz
+    - /mnt/projects/wilma/lofreq//testing/data/ecoli-clone/EColi_EAS20_8/EAS20_8_R2.1M.fastq.gz
+  sample2:
+    # fake for SE testing
+    - /mnt/projects/wilma/lofreq//testing/data/ecoli-clone/EColi_EAS20_8/EAS20_8_R2.1M.fastq.gz
+reference:
+  /mnt/projects/wilma/lofreq//testing/data/ecoli-clone/ref/Ecoli_K12_MG1655_NC_000913.fa
+bed:
+maxdepth: 1000
+mark_short_splits: true
+
