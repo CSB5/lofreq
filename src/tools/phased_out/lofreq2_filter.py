@@ -4,6 +4,8 @@
 Each filter is applied to all SNVs, i.e. not just the previously
 PASSED ones!
 """
+from builtins import zip
+from builtins import range
 
 
 __author__ = "Andreas Wilm"
@@ -76,7 +78,7 @@ def win_filter(snvs_on_cur_chrom, win_size, vcf_info_id):
         
         # prev_snv: snv at < pos on same chrom
         prev_snv = None
-        for pi in reversed(xrange(ci)):
+        for pi in reversed(range(ci)):
             tmp = snvs_on_cur_chrom[pi]
             assert tmp.POS <= cur_snv.POS
             assert tmp.CHROM == cur_snv.CHROM
@@ -86,7 +88,7 @@ def win_filter(snvs_on_cur_chrom, win_size, vcf_info_id):
             
         # next_snv: snv at > pos on same chrom
         next_snv = None
-        for ni in xrange(ci+1, len(snvs_on_cur_chrom)):
+        for ni in range(ci+1, len(snvs_on_cur_chrom)):
             tmp = snvs_on_cur_chrom[ni]
             assert tmp.POS >= cur_snv.POS
             assert tmp.CHROM == cur_snv.CHROM
@@ -226,7 +228,7 @@ def main():
     # WARNING: undocumented arg to remove all defaults (and the reason
     # why we have to use OptParse)
     if '--no-defaults' in sys.argv:
-        for (k, v) in parser.defaults.items():
+        for (k, v) in list(parser.defaults.items()):
             parser.defaults[k] = None
         sys.argv = [x for x in sys.argv if x != "--no-defaults"]
 
@@ -293,7 +295,7 @@ def main():
 
 
     if opts.max_cov != None:
-        if not all([s.INFO.has_key('DP') for s in snvs]):
+        if not all(['DP' in s.INFO for s in snvs]):
             LOG.error("At least one SNV was not annotated with depth info (DP)"
                       " (was this file produced with LoFreq?).")
             sys.exit(1)
@@ -310,7 +312,7 @@ def main():
 
 
     if opts.min_cov != None:
-        if not all([s.INFO.has_key('DP') for s in snvs]):
+        if not all(['DP' in s.INFO for s in snvs]):
             LOG.error("At least one SNV was not annotated with depth info (DP)"
                       " (was this file produced with LoFreq?).")
             sys.exit(1)
@@ -550,7 +552,7 @@ def main():
     # remove temporary markup
     for tmpkey in tmp_vcf_markup:
         for s in snvs:
-            if s.INFO.has_key(tmpkey):
+            if tmpkey in s.INFO:
                 del s.INFO[tmpkey]
 
     if opts.pass_only:

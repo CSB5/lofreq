@@ -1,5 +1,8 @@
 """FDR routines
 """
+from builtins import next
+from builtins import zip
+from builtins import range
 
 
 __author__ = "Grace Hui Ting Yeo"
@@ -11,7 +14,7 @@ __license__ = "The MIT License"
 
 #--- standard library imports
 #
-from itertools import izip
+
 
 #--- third-party imports
 #
@@ -47,8 +50,8 @@ def fdr(pvals, a=0.05, n=None):
     else:
         n=len(pvals)
         
-    sorted_pvals_indices = sorted(xrange(len(pvals)), key=lambda k:pvals[k])
-    t = next((rank for rank, spi in izip(xrange(len(pvals), 0, -1), 
+    sorted_pvals_indices = sorted(range(len(pvals)), key=lambda k:pvals[k])
+    t = next((rank for rank, spi in zip(range(len(pvals), 0, -1), 
                                          reversed(sorted_pvals_indices)) 
               if pvals[spi] < rank*a/n), None)
     if t:

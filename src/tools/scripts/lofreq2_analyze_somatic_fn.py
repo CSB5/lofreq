@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """If you know about false negative somatic calls, find where they were lost along the way
 """
+from __future__ import print_function
 
 
 __author__ = "Andreas Wilm"
@@ -95,7 +96,7 @@ def main():
     ORDER = ['normal_rlx', 'normal_str', 'tumor_rlx', 'tumor_str', 'somatic_raw', 'somatic_final', 'somatic_final_minus_dbsnp']
     
     
-    print "#CHROM\tPOS\tREF\tALT\t%s" % ('\t'.join(ORDER))
+    print("#CHROM\tPOS\tREF\tALT\t%s" % ('\t'.join(ORDER)))
     for fn in vcf_fh['FN']:
         present_in = dict()
         for k in ORDER:
@@ -115,8 +116,8 @@ def main():
                         sys.stderr.write("Key Error. Dropping to debugger\n")
                         import pdb; pdb.set_trace()
                     break
-        print "%s\t%s\t%s\t%s\t%s" % (
-            fn.CHROM, fn.POS, fn.REF, fn.ALT[0], '\t'.join(["%s" % present_in[k] for k in ORDER]))
+        print("%s\t%s\t%s\t%s\t%s" % (
+            fn.CHROM, fn.POS, fn.REF, fn.ALT[0], '\t'.join(["%s" % present_in[k] for k in ORDER])))
     
     
 if __name__ == "__main__":

@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 """Plot characteristics of variants listed in VCF file
 """
+from __future__ import division
+from __future__ import print_function
+from builtins import str
+from builtins import range
+from past.utils import old_div
 
 __author__ = "Andreas Wilm"
 __email__ = "wilma@gis.a-star.edu.sg"
@@ -132,7 +137,7 @@ def ts_tv_ratio(vars):
         t = ts_or_tv(ref, alt)
         if t:
             counts[t] = counts.get(t, 0) + 1
-    ratio = counts['ts']/float(counts['tv'])
+    ratio = old_div(counts['ts'],float(counts['tv']))
     #print "DEBUG: %d vars. %d ts. %d tv. ratio %2.f" % (num_vars, counts['ts'], counts['tv'], ratio)
     return ratio
 
@@ -162,14 +167,14 @@ def subst_perc(ax, subst_type_counts):
     # FIXME sort by transition/transversion type. Add Ts/Tv ratio to plot
 
     #colors = [cm.jet(1.*i/len(subst_type_counts)) for i in xrange(len(subst_type_counts))]
-    colors = [COLORS[i % len(COLORS)] for i in xrange(len(subst_type_counts))]
+    colors = [COLORS[i % len(COLORS)] for i in range(len(subst_type_counts))]
 
     count_sum = sum([x[1] for x in subst_type_counts])
-    percs = [x[1]/float(count_sum) for x in subst_type_counts]
-    ax.bar(xrange(len(subst_type_counts)), percs, color=colors)
+    percs = [old_div(x[1],float(count_sum)) for x in subst_type_counts]
+    ax.bar(range(len(subst_type_counts)), percs, color=colors)
 
     ticks = [x[0] for x in subst_type_counts]
-    ax.set_xticks(xrange(len(ticks))) # forced display of all
+    ax.set_xticks(range(len(ticks))) # forced display of all
     ax.set_xticklabels(ticks, rotation=45, ha="left")
     # FIXME rotation=45 doesnt't work
     # FIXME ha="left" doesn't work
@@ -244,7 +249,7 @@ def calc_dist_min(variants):
             dists.append(-1)
             continue
 
-        left_dist = sys.maxint
+        left_dist = sys.maxsize
         for elem in vars_on_chrom:
             right_dist = deck[1].POS - deck[0].POS
             min_dist = min([left_dist, right_dist])
@@ -294,7 +299,7 @@ def violin_plot(ax, data):
     m = min(k.dataset) #lower bound of violin
     M = max(k.dataset) #upper bound of violin
     try:
-        x = np.arange(m, M, (M-m)/100.) # support for violin
+        x = np.arange(m, M, old_div((M-m),100.)) # support for violin
     except TypeError:
         # FIXME TypeError: only length-1 arrays can be converted to Python scalars
         LOG.warn("arange failed in violint plot. skipping...")
@@ -467,7 +472,7 @@ def main():
 
     summary_txt.append("#vars = %d (of which %d are CONSVARs)" % (
         len(vars),
-        sum([1 for v in vars if v.INFO.has_key('CONSVAR')])))
+        sum([1 for v in vars if 'CONSVAR' in v.INFO])))
     LOG.info(summary_txt[-1])
 
     # np.histogram([v.INFO['DP'] for v in vars if v.INFO['DP']<1000], bins=20)
@@ -485,7 +490,7 @@ def main():
     #props['QUAL (non-CONSVARs only)'] = np.array([v.QUAL for v in vars if not v.INFO.has_key('CONSVAR')])
 
     if args.summary_only:
-        for p in props.keys():
+        for p in list(props.keys()):
             x = np.array(props[p])
             for (name, val) in [("minimum", np.min(x)),
                                 ("1st %ile", np.percentile(x, 1)),
@@ -494,11 +499,11 @@ def main():
                                 ("75th %ile", np.percentile(x, 75)),
                                 ("99th %ile", np.percentile(x, 99)),
                                 ("maximum", np.max(x))]:
-                print "%s\t%s\t%f" % (p, name, val)
-            print "%s\trange-min\trange-max\tcount" % (p)
+                print("%s\t%s\t%f" % (p, name, val))
+            print("%s\trange-min\trange-max\tcount" % (p))
             (hist, bin_edges) = np.histogram(x)
             for (i, val) in enumerate(hist):
-                print "%f\t%f\t%d" % (bin_edges[i], bin_edges[i+1], val)
+                print("%f\t%f\t%d" % (bin_edges[i], bin_edges[i+1], val))
         return
     
     pp = PdfPages(args.outplot)
@@ -516,7 +521,7 @@ def main():
 
     # boxplots and histograms first
     #
-    for p in [p for p in props.keys()]:
+    for p in [p for p in list(props.keys())]:
         LOG.info("Printing boxplot, histogram and scatter plot for %s" % p)
         
         # boxplots
@@ -550,7 +555,7 @@ def main():
         fig = plt.figure()
         ax = plt.subplot(1, 1, 1)
         y = props[p]
-        ax.scatter(range(len(y)), y)
+        ax.scatter(list(range(len(y))), y)
         ax.set_xlim([0, len(y)])
         ax.set_ylabel(p)
         ax.set_xlabel("Neighbourhood")
@@ -582,7 +587,7 @@ def main():
     if not args.simple:
         # heatmaps of all combinations
         #
-        for (x, y) in itertools.combinations(props.keys(), 2):
+        for (x, y) in itertools.combinations(list(props.keys()), 2):
             fig = plt.figure()
             ax = plt.subplot(1, 1, 1)
 

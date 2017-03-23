@@ -16,6 +16,11 @@ Original Authors:
 Email: tanghaibao@gmail.com
 License: BSD
 """
+from __future__ import division
+from builtins import zip
+from builtins import range
+from past.utils import old_div
+from builtins import object
 
 __author__ = "Haibao Tang, Brent Pedersen, Aurelien Naldi"
 __email__ = "tanghaibao@gmail.com"
@@ -67,7 +72,7 @@ class Sidak(AbstractCorrection):
     """
     def set_correction(self):
         if self.n != 0:
-            correction = self.a * 1. / (1 - (1 - self.a) ** (1. / self.n))
+            correction = self.a * 1. / (1 - (1 - self.a) ** (old_div(1., self.n)))
         else:
             correction = 1
         self.corrected_pvals = [pv * correction
@@ -91,7 +96,7 @@ class HolmBonferroni(AbstractCorrection):
         
     def generate_significant(self):
         pvals = self.pvals
-        pvals_idxs = zip(pvals, xrange(len(pvals)))
+        pvals_idxs = list(zip(pvals, range(len(pvals))))
         pvals_idxs.sort()
 
         #lp = len(self.pvals)

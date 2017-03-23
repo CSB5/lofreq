@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """Generic utils for LoFreq
 """
+from __future__ import division
+from past.utils import old_div
 
 
 __author__ = "Andreas Wilm"
@@ -96,7 +98,7 @@ def complement(strand, na_type='DNA'):
     elif na_type == 'RNA':
         tr = string.maketrans('UTAGCutagc', 'AAUCGaaucg')
     else:
-        raise ValueError, ("Unknown NA type %s" % na_type)
+        raise ValueError("Unknown NA type %s" % na_type)
     return strand.translate(tr)
 
 
@@ -133,7 +135,7 @@ def phredqual_to_prob(phredqual):
     assert isinstance(phredqual, int)
     #assert phredqual >= 0, ("Phred-quality must be >= 0, but is %s" % phredqual)
     # also works for phredqual=0
-    return 10**(-phredqual/10.0)
+    return 10**(old_div(-phredqual,10.0))
 
     
 if __name__ == '__main__':

@@ -90,6 +90,11 @@ For example::
     'Ancestral Allele'
 
 '''
+from __future__ import print_function
+from future import standard_library
+standard_library.install_aliases()
+from builtins import zip
+from builtins import object
 
 
 __author__ = "James Casbon"
@@ -311,7 +316,7 @@ class VCFReader(object):
 
         parser = _vcf_metadata_parser()
 
-        line = self.reader.next()
+        line = next(self.reader)
         while line.startswith('##'):
             line = line.strip()
             if line.startswith('##INFO'):
@@ -330,7 +335,7 @@ class VCFReader(object):
                 key, val = parser.read_meta(line.strip())
                 self._metadata[key] = val
 
-            line = self.reader.next()
+            line = next(self.reader)
 
         # AW check for vcf files without header. could assume default
         # header but can't easily unget already read variant line
@@ -399,7 +404,7 @@ class VCFReader(object):
         samp_data = []
         samp_fmt = samp_fmt.split(':')
         for sample in samples:
-            sampdict = dict(zip(samp_fmt, sample.split(':')))
+            sampdict = dict(list(zip(samp_fmt, sample.split(':'))))
             for fmt in sampdict:
                 vals = sampdict[fmt].split(',')
                 try:
@@ -424,7 +429,7 @@ class VCFReader(object):
 
         return samp_data
 
-    def next(self):
+    def __next__(self):
         '''Return the next record in the file.'''
         if self._samples is None:
             self._parse_metainfo()
@@ -527,7 +532,7 @@ class VCFWriter(object):
         #
         PRIO_KEYS = ['fileformat', 'fileDate', 'source']
         for prio_key in PRIO_KEYS:
-            if self.metadata.has_key(prio_key):
+            if prio_key in self.metadata:
                 self.handle.write("##%s=%s\n" % (prio_key, self.metadata[prio_key]))
         for (k, v) in sorted(self.metadata.items()):
             if k not in PRIO_KEYS:
@@ -548,7 +553,7 @@ class VCFWriter(object):
     
         # formats
         # list, therefore ordered and no need to sort
-        for (k, v) in self.formats.items():
+        for (k, v) in list(self.formats.items()):
             self.handle.write("##FORMAT=<ID=%s,Number=%s,Type=%s,Description=\"%s\">\n" % (
                 v.id, v.num, v.type, v.desc))
     
@@ -630,14 +635,14 @@ def test_parse():
     '''Parse the example VCF file from the specification and print every
     record.'''
     import contextlib
-    import StringIO
+    import io
     import textwrap
     records = []
     buff = EXAMPLE_VCF_STR
-    with contextlib.closing(StringIO.StringIO(textwrap.dedent(buff))) as sock:
+    with contextlib.closing(io.StringIO(textwrap.dedent(buff))) as sock:
         vcf_file = VCFReader(sock, aggressive=True)
         for record in vcf_file:
-            print record
+            print(record)
             records.append(record)
 
     vcf_writer = VCFWriter(sys.stdout)
