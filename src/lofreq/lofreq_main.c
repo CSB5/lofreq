@@ -258,6 +258,7 @@ int main(int argc, char *argv[])
           char *parallel_script = "lofreq2_call_pparallel.py";
           char *vcfset_script = "lofreq2_vcfset.py";
           char *vcfplot_script = "lofreq2_vcfplot.py";
+          char *cluster_script = "lofreq2_cluster.py";
           char *alnqual_binary = "lofreq2_alnqual";
           char *script_to_call;
 
@@ -270,7 +271,7 @@ int main(int argc, char *argv[])
           } else if (strcmp(argv[1], "vcfplot") == 0) {
                script_to_call = vcfplot_script;
           } else if (strcmp(argv[1], "cluster") == 0) {
-              script_to_call = cluster_script;
+               script_to_call = cluster_script;
           } else if (strcmp(argv[1], "alnqual") == 0) {
                script_to_call = alnqual_binary;
           } else {
