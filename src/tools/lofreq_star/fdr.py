@@ -55,19 +55,11 @@ def fdr(pvals, a=0.05, n=None):
     if n != None:
         assert n >= len(pvals)
     else:
-<<<<<<< HEAD
-        n=len(pvals)
-
-    sorted_pvals_indices = sorted(range(len(pvals)), key=lambda k:pvals[k])
-    t = next((rank for rank, spi in zip(range(len(pvals), 0, -1),
-                                         reversed(sorted_pvals_indices))
-=======
         n = len(pvals)
 
     sorted_pvals_indices = sorted(xrange(len(pvals)), key=lambda k: pvals[k])
     t = next((rank for rank, spi in izip(xrange(len(pvals), 0, -1),
                                          reversed(sorted_pvals_indices))
->>>>>>> py3
               if pvals[spi] < rank*a/n), None)
     if t:
         return sorted_pvals_indices[:t]
