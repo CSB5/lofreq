@@ -249,11 +249,7 @@ def main():
     if fh_out != sys.stdout:
         fh_out.close()
     print("%d clusters found (written to %s)" % (clu_no+1, fh_out.name))
-<<<<<<< HEAD
- 
-=======
 
->>>>>>> py3
 
 if __name__ == "__main__":
     main()
