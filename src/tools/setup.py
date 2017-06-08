@@ -47,6 +47,7 @@ setup(name=setup_conf.PACKAGE_NAME,
                    'Operating System :: Unix',
                    'Programming Language :: C',
                    'Programming Language :: Python :: 2.7',
+                   'Programming Language :: Python :: 3',
                    'Topic :: Scientific/Engineering :: Bio-Informatics'],
       keywords='bioinformatics'
   )
