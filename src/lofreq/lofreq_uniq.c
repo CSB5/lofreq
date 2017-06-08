@@ -1,9 +1,9 @@
 /* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*- */
 /*********************************************************************
 * The MIT License (MIT)
-* 
+*
 * Copyright (c) 2013,2014 Genome Institute of Singapore
-* 
+*
 * Permission is hereby granted, free of charge, to any person
 * obtaining a copy of this software and associated documentation files
 * (the "Software"), to deal in the Software without restriction,
@@ -11,10 +11,10 @@
 * publish, distribute, sublicense, and/or sell copies of the Software,
 * and to permit persons to whom the Software is furnished to do so,
 * subject to the following conditions:
-* 
+*
 * The above copyright notice and this permission notice shall be
 * included in all copies or substantial portions of the Software.
-* 
+*
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -119,7 +119,7 @@ uniq_phred_from_var(var_t *var) {
           int uq = (int) strtol(uq_char, (char **)NULL, 10);/* atoi replacement */
           free(uq_char);
           return uq;
-     }          
+     }
 }
 
 
@@ -135,14 +135,14 @@ void apply_uniq_threshold(var_t *var, uniq_filter_t *uniq_filter)
 }
 
 
-/* returns -1 on error 
+/* returns -1 on error
  *
  * filter everything that's not significant
- * 
+ *
  * FIXME should be part of lofreq filter.
  *
  */
-int 
+int
 apply_uniq_filter_mtc(uniq_filter_t *uniq_filter, var_t **vars, const int num_vars)
 {
      double *uniq_probs = NULL;
@@ -170,27 +170,27 @@ apply_uniq_filter_mtc(uniq_filter_t *uniq_filter, var_t **vars, const int num_va
      /* multiple testing correction
       */
      if (uniq_filter->mtc_type == MTC_BONF) {
-          bonf_corr(uniq_probs, num_vars, 
+          bonf_corr(uniq_probs, num_vars,
                     uniq_filter->ntests);
-          
+
      } else if (uniq_filter->mtc_type == MTC_HOLMBONF) {
-          holm_bonf_corr(uniq_probs, num_vars, 
+          holm_bonf_corr(uniq_probs, num_vars,
                          uniq_filter->alpha, uniq_filter->ntests);
-          
+
      } else if (uniq_filter->mtc_type == MTC_FDR) {
           int num_rej = 0;
           long int *idx_rej; /* indices of rejected i.e. significant values */
           int i;
-          
-          num_rej = fdr(uniq_probs, num_vars, 
-                        uniq_filter->alpha, uniq_filter->ntests, 
+
+          num_rej = fdr(uniq_probs, num_vars,
+                        uniq_filter->alpha, uniq_filter->ntests,
                         &idx_rej);
           for (i=0; i<num_rej; i++) {
                int idx = idx_rej[i];
                uniq_probs[idx] = -1;
           }
           free(idx_rej);
-          
+
      } else {
           LOG_FATAL("Internal error: unknown MTC type %d\n", uniq_filter->mtc_type);
           return -1;
@@ -299,7 +299,7 @@ uniq_snv(const plp_col_t *p, void *confp)
           plp_to_errprobs(&err_probs, &num_err_probs,
                           alt_bases, alt_counts, alt_raw_counts,
                           p, &varcall_conf);
-          LOG_DEBUG("at %s:%d with cov %d and num_err_probs %d\n", 
+          LOG_DEBUG("at %s:%d with cov %d and num_err_probs %d\n",
               p->target, p->pos, coverage, num_err_probs);
 
           /* Now pretend we see AF(SNV-to-test)*coverage variant
@@ -323,7 +323,7 @@ uniq_snv(const plp_col_t *p, void *confp)
                * uncalled SNV had it been present at the given
                * frequency. But since we didn't this is a uniq
                * variant.
-               * 
+               *
                * No point in adding this as phred qual because it
                * means the opposite of UQ
                */
@@ -334,7 +334,7 @@ uniq_snv(const plp_col_t *p, void *confp)
           LOG_VERBOSE("%s %d num_quals=%d assumed-var-counts=%d would-have-been-detectable=%d\n",
                conf->var->chrom, conf->var->pos+1, num_err_probs, alt_counts[0], is_uniq);
           free(err_probs);
-          
+
      } else {
           int alt_count;
           double pvalue;
@@ -376,7 +376,7 @@ uniq_snv(const plp_col_t *p, void *confp)
           LOG_DEBUG("Now testing af=%f cov=%d alt_count=%d at %s %d for var:",
                     af, coverage, alt_count, p->target, p->pos+1);
 #endif
-          
+
           /* this is a one sided test */
           if (0 != binom(&pvalue, NULL, coverage, alt_count, af)) {
                LOG_ERROR("%s\n", "binom() failed");
@@ -416,7 +416,7 @@ usage(const uniq_conf_t* uniq_conf)
      fprintf(stderr, "  -f | --uni-freq         Assume variants have uniform test frequency of this value (unused if <=0) [%f]\n", uniq_conf->uni_freq);
      fprintf(stderr, "  -t | --uniq-thresh INT  Minimum uniq phred-value required. Conflicts with -m. 0 for off (default=%d)\n", uniq_conf->uniq_filter.thresh);
      fprintf(stderr, "  -m | --uniq-mtc STRING  Uniq multiple testing correction type. One of 'bonf', 'holm' or 'fdr'. (default=%s)\n", mtc_type_str[uniq_conf->uniq_filter.mtc_type]);
-     fprintf(stderr, "  -a | --uniq-alpha FLOAT Uniq Multiple testing correction p-value threshold (default=%f)\n", uniq_conf->uniq_filter.alpha); 
+     fprintf(stderr, "  -a | --uniq-alpha FLOAT Uniq Multiple testing correction p-value threshold (default=%f)\n", uniq_conf->uniq_filter.alpha);
      fprintf(stderr, "  -n | --uniq-ntests INT  Uniq multiple testing correction p-value threshold (default=#vars)\n");
      fprintf(stderr, "       --output-all       Report all variants instead of only the ones, marked unique.\n");
      fprintf(stderr, "                          Note, that variants already filtered in input will not be printed.\n");
@@ -595,7 +595,7 @@ main_uniq(int argc, char *argv[])
     LOG_DEBUG("uniq_conf.uniq_filter.alpha = %f\n", uniq_conf.uniq_filter.alpha);
     LOG_DEBUG("uniq_conf.uniq_filter.ntests = %d\n", uniq_conf.uniq_filter.ntests);
 #endif
-    
+
     if (uniq_conf.uniq_filter.thresh && uniq_conf.uniq_filter.mtc_type != MTC_NONE) {
          LOG_FATAL("%s\n", "Can't use fixed Unique quality threshold *and* multiple testing correction.");
          return 1;
@@ -665,7 +665,7 @@ main_uniq(int argc, char *argv[])
                             "##FILTER=<ID=%s,Description=\"Minimum Uniq Phred %d\">\n",
                             uniq_conf.uniq_filter.id, uniq_conf.uniq_filter.thresh);
                    vcf_header_add(&vcf_header, full_filter_str);
-                   
+
               } else if (uniq_conf.uniq_filter.mtc_type != MTC_NONE) {
                    char buf[64];
                    mtc_str(buf, uniq_conf.uniq_filter.mtc_type);
@@ -730,7 +730,7 @@ main_uniq(int argc, char *argv[])
 
 
     /* print whatever we've got. there's no UQ to test or we
-     * are supposed to print all 
+     * are supposed to print all
      */
     if (uniq_conf.use_det_lim) {
          for (i=0; i<num_vars; i++) {
@@ -749,7 +749,7 @@ main_uniq(int argc, char *argv[])
               return -1;
          }
     }
-    
+
     for (i=0; i<num_vars; i++) {
          var_t *var = vars[i];
          if (VCF_VAR_PASSES(var) || uniq_conf.output_all) {
@@ -778,4 +778,3 @@ clean_and_exit:
     return rc;
 }
 /* main_uniq */
-
