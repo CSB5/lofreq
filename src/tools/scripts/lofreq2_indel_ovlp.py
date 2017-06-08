@@ -48,7 +48,14 @@ def qual_from_var(var):
     """takes care of missing values, int conversion and ties in comparisons
     """
     if var.qual==".":
+<<<<<<< HEAD
         return sys.maxsize
+=======
+        if sys.version_info >= (3, 0):
+            return sys.maxsize
+        else:
+            return sys.maxint    
+>>>>>>> py3
     else:
         # add AF to deal with ties
         return int(var.qual)+af_from_var(var)

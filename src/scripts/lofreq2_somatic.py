@@ -5,12 +5,6 @@ normal/disease sample.
 The script will produce several output files using the prefix specified.
 """
 
-__author__ = "Andreas Wilm"
-__email__ = "wilma@gis.a-star.edu.sg"
-__copyright__ = "2013,2014 Genome Institute of Singapore"
-__license__ = "The MIT License"
-
-
 #--- standard library imports
 #
 import sys
@@ -36,6 +30,11 @@ try:
 except ImportError:
     pass
 
+
+__author__ = "Andreas Wilm"
+__email__ = "wilma@gis.a-star.edu.sg"
+__copyright__ = "2013,2014 Genome Institute of Singapore"
+__license__ = "The MIT License"
 
 
 #global logger
@@ -376,7 +375,7 @@ class SomaticSNVCaller(object):
         return self.num_tests_from_log(elines)
 
 
-    def rlx_to_str(self, sample_type, xxx_todo_changeme):
+    def rlx_to_str(self, sample_type, num_snv_tests, num_indel_tests):
         """Using tumor filtering settings to create stringent calls
         from relaxed calls
         """
@@ -458,7 +457,7 @@ class SomaticSNVCaller(object):
         """
 
         vcfset_base_cmd = [self.LOFREQ, 'vcfset', '-a', 'complement',
-                            '-2', self.vcf_n_rlx, '--add-info', 'SOMATIC']
+                           '-2', self.vcf_n_rlx, '--add-info', 'SOMATIC']
         vcfset_snv_cmd = vcfset_base_cmd + [
             '--only-snvs', '-1', self.vcf_t_str, '-o', self.vcf_som_raw]
         vcfset_indels_cmd = vcfset_base_cmd + [
@@ -509,7 +508,7 @@ class SomaticSNVCaller(object):
 
             (o, e) = self.subprocess_wrapper(cmd, close_tmp=False)
             for l in e.readlines():
-                LOG.warn("uniq stderr: %s" % l)
+                LOG.warning("uniq stderr: %s" % l)
             o.close()
             e.close()
 
@@ -573,10 +572,10 @@ class SomaticSNVCaller(object):
 
         try:
             (num_subst_tests, num_indel_tests) = self.call_rlx("normal")
-            self.rlx_to_str("normal", (num_subst_tests, num_indel_tests))
+            self.rlx_to_str("normal", num_subst_tests, num_indel_tests)
 
             (num_subst_tests, num_indel_tests) = self.call_rlx("tumor")
-            self.rlx_to_str("tumor", (num_subst_tests, num_indel_tests))
+            self.rlx_to_str("tumor", num_subst_tests, num_indel_tests)
         except:
             #return False
             raise
@@ -604,32 +603,32 @@ def cmdline_parser():
     basic = parser.add_argument_group('Basic Options')
 
     basic.add_argument("-v", "--verbose",
-                        action="store_true",
-                        help="Be verbose")
+                       action="store_true",
+                       help="Be verbose")
     basic.add_argument("-n", "--normal",
-                        required=True,
-                        help="Normal BAM file")
+                       required=True,
+                       help="Normal BAM file")
     basic.add_argument("-t", "--tumor",
-                        required=True,
-                        help="Tumor BAM file")
+                       required=True,
+                       help="Tumor BAM file")
     basic.add_argument("-o", "--outprefix",
-                        required=True,
-                        help="Prefix for output files")
+                       required=True,
+                       help="Prefix for output files")
     basic.add_argument("-f", "--ref",
-                        required=True,
-                        help="Reference fasta file")
+                       required=True,
+                       help="Reference fasta file")
     basic.add_argument("-l", "--bed",
-                        help="BED file listing regions to restrict analysis to")
+                       help="BED file listing regions to restrict analysis to")
     basic.add_argument("-d", "--dbsnp",
-                        help="vcf-file (bgzipped and index with tabix)"
+                       help="vcf-file (bgzipped and index with tabix)"
                        " containing known germline variants (e.g. dbsnp for human")
 
     default = SomaticSNVCaller.DEFAULT_NUM_THREADS
     basic.add_argument("--threads",
-                        type=int,
-                        default=default,
-                        dest="num_threads",
-                        help="Use this many threads for each call")
+                       type=int,
+                       default=default,
+                       dest="num_threads",
+                       help="Use this many threads for each call")
 
     ###
 
@@ -638,52 +637,52 @@ def cmdline_parser():
     default = SomaticSNVCaller.DEFAULT_MTC_T
     choices = ['bonf', 'holm-bonf', 'fdr']
     advanced.add_argument("--tumor-mtc",
-                        #required=True,
-                        default=default,
-                        choices=choices,
-                        help="Type of multiple testing correction for tumor"
-                        " (default: %s)" % default)
+                          #required=True,
+                          default=default,
+                          choices=choices,
+                          help="Type of multiple testing correction for tumor"
+                          " (default: %s)" % default)
 
     default = SomaticSNVCaller.DEFAULT_MTC_ALPHA_T
     advanced.add_argument("--tumor-mtc-alpha",
-                        #required=True,
-                        default=default,
-                        type=float,
-                        help="Multiple testing correction alpha for tumor"
-                        " (default: %f)" % default)
+                          #required=True,
+                          default=default,
+                          type=float,
+                          help="Multiple testing correction alpha for tumor"
+                          " (default: %f)" % default)
 
     default = SomaticSNVCaller.DEFAULT_INDEL_MTC_T
     choices = ['bonf', 'holm-bonf', 'fdr']
     advanced.add_argument("--indel-tumor-mtc",
-                        #required=True,
-                        default=default,
-                        choices=choices,
-                        help="Type of multiple testing correction for tumor"
-                        " (default: %s)" % default)
+                          #required=True,
+                          default=default,
+                          choices=choices,
+                          help="Type of multiple testing correction for tumor"
+                          " (default: %s)" % default)
 
     default = SomaticSNVCaller.DEFAULT_INDEL_MTC_ALPHA_T
     advanced.add_argument("--indel-tumor-mtc-alpha",
-                        #required=True,
-                        default=default,
-                        type=float,
-                        help="Multiple testing correction alpha for tumor"
-                        " (default: %f)" % default)
+                          #required=True,
+                          default=default,
+                          type=float,
+                          help="Multiple testing correction alpha for tumor"
+                          " (default: %f)" % default)
 
     advanced.add_argument("--call-indels",
-                        action="store_true",
-                        help="Also call indels (see documentation  on how to preprocess your BAM files)")
+                          action="store_true",
+                          help="Also call indels (see documentation  on how to preprocess your BAM files)")
 
 
     default = SomaticSNVCaller.DEFAULT_MIN_COV
     advanced.add_argument("--min-cov",
-                        type=int,
-                        default=default,
-                        help="Minimum coverage for somatic calls"
-                        " (default: %d)" % default)
+                          type=int,
+                          default=default,
+                          help="Minimum coverage for somatic calls"
+                          " (default: %d)" % default)
 
     advanced.add_argument("--germline",
-                        action="store_true",
-                        help="Also list germline calls in separate file")
+                          action="store_true",
+                          help="Also list germline calls in separate file")
 
 
     ###
@@ -693,55 +692,55 @@ def cmdline_parser():
 
     default = SomaticSNVCaller.DEFAULT_ALPHA_N
     experts.add_argument("--normal-alpha",
-                        #required=True,
-                        default=default,
-                        type=float,
-                        help=argparse.SUPPRESS,
-                        #help="Significance threshold (alpha) for SNV pvalues"
-                        #"  in (relaxed) normal vcf"
-                        #" (default: %f)" % default
-                     )
+                         #required=True,
+                         default=default,
+                         type=float,
+                         help=argparse.SUPPRESS)
+                         #help="Significance threshold (alpha) for SNV pvalues"
+                         #"  in (relaxed) normal vcf"
+                         #" (default: %f)" % default
+
     default = SomaticSNVCaller.DEFAULT_ALPHA_T
     experts.add_argument("--tumor-alpha",
                          #required=True,
                          default=default,
                          type=float,
-                         help=argparse.SUPPRESS,
+                         help=argparse.SUPPRESS)
                          #help="Significance threshold (alpha) for SNV pvalues"
                          #"  in (relaxed) tumor vcf"
                          #" (default: %f)" % default
-                     )
+
     default = "normal"
     experts.add_argument("-S", "--ign-vcf",
-                        default=default,
-                        help="Ignore variants in this vcf-file for source"
-                        " quality computation in tumor (collides with "
-                        " --no-src-qual). Default is to use (stringently"
+                         default=default,
+                         help="Ignore variants in this vcf-file for source"
+                         " quality computation in tumor (collides with "
+                         " --no-src-qual). Default is to use (stringently"
                          " filtered) predictions in normal sample")
 
     experts.add_argument("--use-orphan",
-                              action="store_true",
-                              help="Use orphaned/anomalous reads from pairs"
-                              " in all samples")
+                         action="store_true",
+                         help="Use orphaned/anomalous reads from pairs"
+                         " in all samples")
     experts.add_argument("--baq-off",
-                              action="store_true",
-                              help="Switch use of BAQ off in all samples")
+                         action="store_true",
+                         help="Switch use of BAQ off in all samples")
     experts.add_argument("--call-rlx-extra-args",
-                              dest="call_rlx_extra_args",
-                              help="Extra arguments to call_rlx (replace dashes with @)")
+                         dest="call_rlx_extra_args",
+                         help="Extra arguments to call_rlx (replace dashes with @)")
 
     experts.add_argument("--no-src-qual",
-                        action="store_true",
-                        help="Disable use of source quality in tumor (see also -V)")
+                         action="store_true",
+                         help="Disable use of source quality in tumor (see also -V)")
     experts.add_argument("--debug",
-                          action="store_true",
-                          help="Enable debugging")
+                         action="store_true",
+                         help="Enable debugging")
     experts.add_argument("--continue",
-                              dest="continue_interrupted",
-                              action="store_true",
-                              help="continue interrupted run. Will reuse"
-                              " existing files, assuming they are complete"
-                              " and created with identical options!")
+                         dest="continue_interrupted",
+                         action="store_true",
+                         help="continue interrupted run. Will reuse"
+                         " existing files, assuming they are complete"
+                         " and created with identical options!")
 
     return parser
 
@@ -780,12 +779,12 @@ def main():
         sys.exit(1)
 
     if not args.dbsnp:
-        LOG.warn("No dbsnp file given. Using dbsnp is highly recommended"
-                 " when dealing with human data.")
+        LOG.warning("No dbsnp file given. Using dbsnp is highly recommended"
+                    " when dealing with human data.")
     elif not os.path.exists(args.dbsnp + ".tbi"):
-        LOG.warn("Looks like dbsnp was not indexed. Please run bgzip and tabix"
-                 " on your dbsnp vcf if 'lofreq somatic' fails and rerun with"
-                 " --continue")
+        LOG.warning("Looks like dbsnp was not indexed. Please run bgzip and tabix"
+                    " on your dbsnp vcf if 'lofreq somatic' fails and rerun with"
+                    " --continue")
     try:
         somatic_snv_caller = SomaticSNVCaller(
             bam_n=args.normal, bam_t=args.tumor, ref=args.ref,
@@ -803,14 +802,9 @@ def main():
     somatic_snv_caller.indel_mtc_alpha_t = args.indel_tumor_mtc_alpha
     somatic_snv_caller.num_threads = args.num_threads
     somatic_snv_caller.min_cov = args.min_cov
-    if args.baq_off:
-        somatic_snv_caller.baq_off = True
-    else:
-        somatic_snv_caller.baq_off = False
-    if args.use_orphan:
-        somatic_snv_caller.use_orphan = True
-    else:
-        somatic_snv_caller.use_orphan = False
+    somatic_snv_caller.baq_off = args.baq_off
+    somatic_snv_caller.use_orphan = args.use_orphan
+    somatic_snv_caller.use_orphan = False
     if args.call_indels:
         somatic_snv_caller.call_indels = True
     if args.call_rlx_extra_args:
