@@ -65,8 +65,7 @@ def prob_to_phredqual(prob):
         "Probability must be >=0 and <=1, but got %f" % prob)
     try:
         return int(round(-10.0 * log10(prob)))
-    except ValueError:
-        # prob is zero
+    except ValueError: #  prob is zero
         #return MAX_INT
         if sys.version_info >= (3, 0):
             return sys.maxsize
