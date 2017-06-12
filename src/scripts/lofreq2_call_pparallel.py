@@ -235,7 +235,8 @@ def sq_list_from_bam(bam):
     process = subprocess.Popen(cmd.split(),
                                shell=False,
                                stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE)
+                               stderr=subprocess.PIPE,
+                               universal_newlines=True)
     (stdoutdata, stderrdata) = process.communicate()
 
     retcode = process.returncode
