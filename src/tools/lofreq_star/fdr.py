@@ -3,12 +3,14 @@
 
 #--- standard library imports
 #
+
 import sys
 try:
     from itertools import izip
 except ImportError:
     def izip(a, b):
         return zip(a, b)
+
 
 #--- third-party imports
 #

@@ -82,7 +82,7 @@ def fasta_iter(fasta_name):
         #header = header.next()[1:].strip()
         header = header.next()[1:].strip().split(" ")[0]
         # join all sequence lines to one.
-        seq = "".join(s.strip() for s in faiter.next())
+        seq = "".join(s.strip() for s in next(faiter))
         yield header, seq
 
 
@@ -187,12 +187,12 @@ def main():
 
 
 
-    assert all([x.INFO.has_key('AF') and x.INFO.has_key('DP')
+    assert all(['AF' in x.INFO and 'DP' in x.INFO
                 for x in var_list])
     var_list = sorted(var_list, key=lambda x: x.INFO['AF'], reverse=True)
     ci_list = [compute_ci(v.INFO['DP'], int(v.INFO['AF'] * v.INFO['DP']))
                for v in var_list]
-    var_ci_list = zip(var_list, ci_list)
+    var_ci_list = list(zip(var_list, ci_list))
     del var_list, ci_list# paranoia
 
 

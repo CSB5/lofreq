@@ -15,7 +15,7 @@ $LOFREQ call -f $reffa -l $bed -o $vcf $bam || exit 1
 # this tests 'filter' as well as it's part of call
 #export  PERL5LIB=/Users/wilma/local/lib/
 #if perl -mVcf -e validate ../tests/denv2-pseudoclonal.vcf; then
-if vcf-validator $vcf; then
+if bcftools view $vcf >/dev/null; then
     echook "Got valid VCF output"
 else
     echoerror "Invalid VCF output"

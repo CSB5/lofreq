@@ -14,6 +14,7 @@ import argparse
 import subprocess
 import tempfile
 from socket import gethostname
+import collections
 
 #--- third-party imports
 #
@@ -378,7 +379,7 @@ class SomaticSNVCaller(object):
         """Using tumor filtering settings to create stringent calls
         from relaxed calls
         """
-
+        (num_snv_tests, num_indel_tests) = xxx_todo_changeme
         assert sample_type in ['normal', 'tumor']
 
         # filtering stringently using tumor stringent settings
@@ -479,7 +480,7 @@ class SomaticSNVCaller(object):
         """Run LoFreq uniq as final check on somatic variants
         """
 
-        uniq_base_cmd = [self.LOFREQ, 'uniq', '--uni-freq', "0.5"]
+        uniq_base_cmd = [self.LOFREQ, 'uniq', '--uni-freq', "0.5", "--is-somatic"]
 
 
         uniq_snv_cmd = uniq_base_cmd + [
@@ -563,7 +564,7 @@ class SomaticSNVCaller(object):
 
         for (k, v) in [(x, self.__getattribute__(x)) for x in dir(self)
                        if not x.startswith('_')]:
-            if callable(v):
+            if isinstance(v, collections.Callable):
                 continue
             LOG.debug("%s %s" % (k, v))
         #import pdb; pdb.set_trace()

@@ -22,11 +22,11 @@ import gzip
 VCFEntry = namedtuple('VCFEntry', ['chrom', 'pos', 'dbsnpid', 'ref', 'alt', 'qual', 'filter', 'info'])
 
 
-def write_var(var, fh=sys.stdout):    
+def write_var(var, fh=sys.stdout):
     var = var._replace(pos=str(var.pos))
     fh.write("%s\n" % '\t'.join(var))
 
-    
+
 def vcf_line_to_var(line):
     fields = line.rstrip().split('\t')[:8]
     e = VCFEntry._make(fields)
@@ -40,7 +40,7 @@ def vcf_line_to_var(line):
 def af_from_var(var):
     for f in var.info.split(';'):
         if f.startswith('AF='):
-            return float(f[3:]) 
+            return float(f[3:])
     return None
 
 
@@ -51,7 +51,7 @@ def qual_from_var(var):
         if sys.version_info >= (3, 0):
             return sys.maxsize
         else:
-            return sys.maxint    
+            return sys.maxint
     else:
         # add AF to deal with ties
         return int(var.qual)+af_from_var(var)
@@ -71,7 +71,7 @@ def main():
     if len(sys.argv) != 2:
         sys.stderr.write("FATAL: Need (one) vcf file as only argument\n")
         sys.exit(1)
-        
+
     vcf = sys.argv[1]
     if vcf == "-":
         fh = sys.stdin
@@ -79,7 +79,7 @@ def main():
         fh = gzip.open(vcf)
     else:
         fh = open(vcf)
-    
+
     #pic_best_func = af_from_var
     pick_best_func = qual_from_var
 
@@ -89,7 +89,7 @@ def main():
         if line.startswith('#'):
             print(line)
             continue
-        
+
         cur_var = vcf_line_to_var(line)
         if False:
             sys.stderr.write("INFO: looking at %d:%s>%s\n" % (cur_var.pos, cur_var.ref, cur_var.alt))
@@ -103,15 +103,15 @@ def main():
                 write_var(picked_var)
                 prev_vars = []
         prev_vars.append(cur_var)
-    
+
     # don't forget remaining ones
     picked_var = sorted(prev_vars, key=lambda e: pick_best_func(e), reverse=True)[0]
     write_var(picked_var)
-    
-        
+
+
     if fh != sys.stdout:
         fh.close()
-        
+
     #print "%d prev_vars left" % (len(prev_vars))
 
 if __name__ == "__main__":

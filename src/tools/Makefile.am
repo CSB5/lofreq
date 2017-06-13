@@ -12,7 +12,6 @@
 EXTRA_DIST = setup.py \
 	lofreq_star/__init__.py \
 	lofreq_star/utils.py \
-	scripts/lofreq2_cluster.py \
 	scripts/lofreq2_indel_ovlp.py \
 	scripts/lofreq2_local.py \
 	scripts/lofreq2_vcfplot.py \

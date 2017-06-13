@@ -136,7 +136,7 @@ def ts_tv_ratio(vars):
     #print "DEBUG: %d vars. %d ts. %d tv. ratio %2.f" % (num_vars, counts['ts'], counts['tv'], ratio)
     return ratio
 
-            
+
 def subst_type_str(ref, alt, strand_specific=False):
     """FIXME:add-doc
     """
@@ -162,14 +162,14 @@ def subst_perc(ax, subst_type_counts):
     # FIXME sort by transition/transversion type. Add Ts/Tv ratio to plot
 
     #colors = [cm.jet(1.*i/len(subst_type_counts)) for i in xrange(len(subst_type_counts))]
-    colors = [COLORS[i % len(COLORS)] for i in xrange(len(subst_type_counts))]
+    colors = [COLORS[i % len(COLORS)] for i in range(len(subst_type_counts))]
 
     count_sum = sum([x[1] for x in subst_type_counts])
     percs = [x[1]/float(count_sum) for x in subst_type_counts]
-    ax.bar(xrange(len(subst_type_counts)), percs, color=colors)
+    ax.bar(range(len(subst_type_counts)), percs, color=colors)
 
     ticks = [x[0] for x in subst_type_counts]
-    ax.set_xticks(xrange(len(ticks))) # forced display of all
+    ax.set_xticks(range(len(ticks))) # forced display of all
     ax.set_xticklabels(ticks, rotation=45, ha="left")
     # FIXME rotation=45 doesnt't work
     # FIXME ha="left" doesn't work
@@ -224,7 +224,7 @@ def calc_dist_min(variants):
 
     """
 
-    
+
     #print "starting at %s" % now()
 
     dists = []
@@ -244,7 +244,7 @@ def calc_dist_min(variants):
             dists.append(-1)
             continue
 
-        left_dist = sys.maxint
+        left_dist = sys.maxsize
         for elem in vars_on_chrom:
             right_dist = deck[1].POS - deck[0].POS
             min_dist = min([left_dist, right_dist])
@@ -364,14 +364,14 @@ def cmdline_parser():
     parser.add_argument("--ign-filter",
                       action="store_true",
                       dest="ign_filter",
-                      help="Use all, not just passed variants")                      
+                      help="Use all, not just passed variants")
     parser.add_argument("--maxdp",
                       dest="maxdp",
                       type=int,
                       help="Maximum DP")
     parser.add_argument("-o", "--outplot",
                       dest="outplot",
-                      #required=True, not needed if summary only and otherwise tested separately 
+                      #required=True, not needed if summary only and otherwise tested separately
                       help="Output plot (pdf) filename")
     parser.add_argument("--indels",
                       action="store_true",
@@ -426,9 +426,9 @@ def main():
         vcfreader = vcf.VCFReader(sys.stdin)
     else:
         vcfreader = vcf.VCFReader(filename=args.vcf)
-        
+
     vars = [v for v in vcfreader]
-    
+
     if not args.ign_filter:
         vars = [v for v in vars if not v.FILTER]
     summary_txt.append("Loaded %d variants" % (len(vars)))
@@ -467,7 +467,7 @@ def main():
 
     summary_txt.append("#vars = %d (of which %d are CONSVARs)" % (
         len(vars),
-        sum([1 for v in vars if v.INFO.has_key('CONSVAR')])))
+        sum([1 for v in vars if 'CONSVAR' in v.INFO])))
     LOG.info(summary_txt[-1])
 
     # np.histogram([v.INFO['DP'] for v in vars if v.INFO['DP']<1000], bins=20)
@@ -485,7 +485,7 @@ def main():
     #props['QUAL (non-CONSVARs only)'] = np.array([v.QUAL for v in vars if not v.INFO.has_key('CONSVAR')])
 
     if args.summary_only:
-        for p in props.keys():
+        for p in list(props.keys()):
             x = np.array(props[p])
             for (name, val) in [("minimum", np.min(x)),
                                 ("1st %ile", np.percentile(x, 1)),
@@ -494,13 +494,13 @@ def main():
                                 ("75th %ile", np.percentile(x, 75)),
                                 ("99th %ile", np.percentile(x, 99)),
                                 ("maximum", np.max(x))]:
-                print "%s\t%s\t%f" % (p, name, val)
-            print "%s\trange-min\trange-max\tcount" % (p)
+                print("%s\t%s\t%f" % (p, name, val))
+            print("%s\trange-min\trange-max\tcount" % (p))
             (hist, bin_edges) = np.histogram(x)
             for (i, val) in enumerate(hist):
-                print "%f\t%f\t%d" % (bin_edges[i], bin_edges[i+1], val)
+                print("%f\t%f\t%d" % (bin_edges[i], bin_edges[i+1], val))
         return
-    
+
     pp = PdfPages(args.outplot)
 
     # create a summary table
@@ -516,9 +516,9 @@ def main():
 
     # boxplots and histograms first
     #
-    for p in [p for p in props.keys()]:
+    for p in [p for p in list(props.keys())]:
         LOG.info("Printing boxplot, histogram and scatter plot for %s" % p)
-        
+
         # boxplots
         fig = plt.figure()
         ax = plt.subplot(1, 1, 1)
@@ -550,7 +550,7 @@ def main():
         fig = plt.figure()
         ax = plt.subplot(1, 1, 1)
         y = props[p]
-        ax.scatter(range(len(y)), y)
+        ax.scatter(list(range(len(y))), y)
         ax.set_xlim([0, len(y)])
         ax.set_ylabel(p)
         ax.set_xlabel("Neighbourhood")
@@ -560,29 +560,29 @@ def main():
 
 
     if not args.indels_only:
-	# substitution types
-	#	
-	# FIXME needs percentages
-	subst_type_counts = Counter([subst_type_str(v.REF, v.ALT) for v in vars])
-	# turn into list of tuples sorted by key
-	# subst_type_counts = sorted((k, v/101.0*len(vars)) for (k, v) in subst_type_counts.items())
-	subst_type_counts = sorted(subst_type_counts.items())
-	# FIXME should go to text report
-	#for (k, v) in subst_type_counts:
-	#    print "%s %d" % (k, v)
-	#print
-	fig = plt.figure()
-	ax = plt.subplot(1, 1, 1)
-	subst_perc(ax, subst_type_counts)
-	plt.title('Substitution Types (Ts/Tv=%.2f)' % (ts_tv_ratio(vars)))
-	pp.savefig()
-	plt.close()
+        # substitution types
+        #	
+        # FIXME needs percentages
+        subst_type_counts = Counter([subst_type_str(v.REF, v.ALT) for v in vars])
+        # turn into list of tuples sorted by key
+        # subst_type_counts = sorted((k, v/101.0*len(vars)) for (k, v) in subst_type_counts.items())
+        subst_type_counts = sorted(subst_type_counts.items())
+        # FIXME should go to text report
+        #for (k, v) in subst_type_counts:
+        #    print "%s %d" % (k, v)
+        #print
+        fig = plt.figure()
+        ax = plt.subplot(1, 1, 1)
+        subst_perc(ax, subst_type_counts)
+        plt.title('Substitution Types (Ts/Tv=%.2f)' % (ts_tv_ratio(vars)))
+        pp.savefig()
+        plt.close()
 
 
     if not args.simple:
         # heatmaps of all combinations
         #
-        for (x, y) in itertools.combinations(props.keys(), 2):
+        for (x, y) in itertools.combinations(list(props.keys()), 2):
             fig = plt.figure()
             ax = plt.subplot(1, 1, 1)
 
@@ -592,16 +592,16 @@ def main():
             except:
                 LOG.warn("Plotting %s (#%d) against %s (#%d) failed" % (
                     x, len(props[x]), y, len(props[y])))
-                
+
             ax.set_ylim([0, plt.ylim()[1]])
             ax.set_xlim([0, plt.xlim()[1]])
-    
+
             ax.set_xlabel(x)
             ax.set_ylabel(y)
             plt.title('%s vs. %s' % (x, y))
             pp.savefig()
             plt.close()
-    
+
 
     # FIXME Put related plots together. See http://blog.marmakoide.org/?p=94"
 

@@ -147,7 +147,7 @@ def main():
         if var_no % 500 == 1:
             LOG.info("Analyzing variant %d" % (var_no))
 
-        if var.INFO.has_key('INDEL'):
+        if 'INDEL' in var.INFO:
             LOG.warn("Skipping indel %s:%d" % (var.CHROM, var.POS))
             continue
         if len(var.REF)>1 or len(var.ALT)>1:

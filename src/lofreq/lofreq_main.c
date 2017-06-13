@@ -1,9 +1,9 @@
 /* -*- c-file-style: "k&r"; indent-tabs-mode: nil; -*- */
 /*********************************************************************
 * The MIT License (MIT)
-* 
+*
 * Copyright (c) 2013,2014 Genome Institute of Singapore
-* 
+*
 * Permission is hereby granted, free of charge, to any person
 * obtaining a copy of this software and associated documentation files
 * (the "Software"), to deal in the Software without restriction,
@@ -11,10 +11,10 @@
 * publish, distribute, sublicense, and/or sell copies of the Software,
 * and to permit persons to whom the Software is furnished to do so,
 * subject to the following conditions:
-* 
+*
 * The above copyright notice and this permission notice shall be
 * included in all copies or substantial portions of the Software.
-* 
+*
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -87,9 +87,9 @@ add_local_dir_to_path(char *argv0) {
      char *dirname_argv0 = NULL;
      int i;
      char *extra_scripts[] = {/* used to determine directories to add */
-          "../scripts/lofreq2_somatic.py", "../tools/scripts/lofreq2_vcfplot.py", 
+          "../scripts/lofreq2_somatic.py", "../tools/scripts/lofreq2_vcfplot.py",
           NULL};
-     
+
 
      /* add lofreq dir
       */
@@ -140,7 +140,7 @@ add_local_dir_to_path(char *argv0) {
           free(abs_path);
           free(add_dir);
      }
-     
+
      free(dirname_argv0);
 }
 
@@ -158,8 +158,8 @@ static void usage(const char *myname)
 "      _____| \\___/  _|   _|   \\___| \\__, | \n"
 "                                        _| \n");
      fprintf(stderr, "\n");
-     fprintf(stderr, "Fast and sensitive inference of SNVs and indels\n");     
-     fprintf(stderr, "\n");     
+     fprintf(stderr, "Fast and sensitive inference of SNVs and indels\n");
+     fprintf(stderr, "\n");
      fprintf(stderr, "Usage: %s <command> [options]\n\n", myname);
      fprintf(stderr, "  Main Commands:\n");
      fprintf(stderr, "    call          : Call variants\n");
