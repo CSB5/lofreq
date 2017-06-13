@@ -48,7 +48,7 @@ test -d "$reldir" && exit 1
 mkdir "$reldir"
 # use tar to preserve directory structure as if untouched src tree
 # but removing unwanted stuff
-tar c src/cdflib90.README src/lofreq/lofreq "$(find src/scripts/ -name \*py -or -name \*py.README | grep -v '/build/' | grep -v setup)" | tar x --strip-components 1 -C "$reldir" || exit 1
+tar c src/cdflib90.README src/lofreq/lofreq $(find src/scripts/ -name \*py -or -name \*py.README | grep -v '/build/' | grep -v setup) | tar x --strip-components 1 -C "$reldir" || exit 1
 cp README.md LICENSE "$reldir"
 tar cvzf "$(basename $reldir)".tgz "$reldir" && rm -rf "${reldir:?}/"* && rmdir "$reldir"
 echo "release in $(basename $reldir).tgz. rename to architecture. unpack and test" 1>&2
