@@ -199,8 +199,10 @@ def sq_list_from_bam_samtools(bam):
                   " Command was '%s'. stderr was: '%s'" % (
                       cmd.split()[0], retcode, cmd, stderrdata))
         raise OSError
+    if sys.version_info[0] > 2:
+        stdoutdata = stdoutdata.decode()
     stdout_lines = str.splitlines(stdoutdata)
-
+        
     sq_list = []
 
     for line in stdout_lines:
@@ -242,6 +244,8 @@ def sq_list_from_bam(bam):
                   " Command was '%s'. stderr was: '%s'" % (
                       cmd.split()[0], retcode, cmd, stderrdata))
         raise OSError
+    if sys.version_info[0] > 2:
+        stdoutdata = stdoutdata.decode()
     stdout_lines = str.splitlines(stdoutdata)
 
     # orig src: sq_list_from_header()

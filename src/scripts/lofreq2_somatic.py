@@ -352,7 +352,7 @@ class SomaticSNVCaller(object):
 
                 LOG.info("Parsing number of tests from log file %s" % out_log)
                 fh = open(out_log, 'r')
-                elines = [l.replace("stderr: ", "") for l in fh.readlines()]
+                elines = [l.decode().replace("stderr: ", "") for l in fh.readlines()]
                 fh.close()
                 return self.num_tests_from_log(elines)
             else:
@@ -361,8 +361,8 @@ class SomaticSNVCaller(object):
         (o, e) = self.subprocess_wrapper(cmd, close_tmp=False)
         fh = open(out_log, 'w')
         fh.write('# %s\n' % ' '.join(cmd))
-        olines = o.readlines()
-        elines = e.readlines()
+        olines = [l.decode() for l in o.readlines()]
+        elines = [l.decode() for l in e.readlines()]
         for l in elines:
             fh.write("stderr: %s" % l)
             LOG.info("cmd stderr: %s" % l.rstrip())
@@ -509,7 +509,7 @@ class SomaticSNVCaller(object):
 
             (o, e) = self.subprocess_wrapper(cmd, close_tmp=False)
             for l in e.readlines():
-                LOG.warn("uniq stderr: %s" % l)
+                LOG.warn("uniq stderr: %s" % l.decode())
             o.close()
             e.close()
 
