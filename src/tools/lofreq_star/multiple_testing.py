@@ -91,8 +91,8 @@ class HolmBonferroni(AbstractCorrection):
         
     def generate_significant(self):
         pvals = self.pvals
-        pvals_idxs = zip(pvals, xrange(len(pvals)))
-        pvals_idxs.sort()
+        pvals_idxs = zip(pvals, range(len(pvals)))
+        pvals_idxs = sorted(pvals_idxs)
 
         #lp = len(self.pvals)
         lp = self.n

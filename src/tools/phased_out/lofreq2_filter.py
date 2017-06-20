@@ -76,7 +76,7 @@ def win_filter(snvs_on_cur_chrom, win_size, vcf_info_id):
         
         # prev_snv: snv at < pos on same chrom
         prev_snv = None
-        for pi in reversed(xrange(ci)):
+        for pi in reversed(range(ci)):
             tmp = snvs_on_cur_chrom[pi]
             assert tmp.POS <= cur_snv.POS
             assert tmp.CHROM == cur_snv.CHROM
@@ -86,7 +86,7 @@ def win_filter(snvs_on_cur_chrom, win_size, vcf_info_id):
             
         # next_snv: snv at > pos on same chrom
         next_snv = None
-        for ni in xrange(ci+1, len(snvs_on_cur_chrom)):
+        for ni in range(ci+1, len(snvs_on_cur_chrom)):
             tmp = snvs_on_cur_chrom[ni]
             assert tmp.POS >= cur_snv.POS
             assert tmp.CHROM == cur_snv.CHROM

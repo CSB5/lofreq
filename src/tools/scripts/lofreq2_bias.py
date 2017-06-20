@@ -324,7 +324,7 @@ def main():
             rej_idxs = fdr.fdr(pvalues, a=args.mtc_alpha)
     
         else:
-            raise ValueError(), ("unknown MTC method %s" % args.mtc)
+            raise ValueError("unknown MTC method %s" % args.mtc)
 
         for i in rej_idxs:
             # pyvcf filter is empty if not set. lofreq's vcf clone was . or PASS

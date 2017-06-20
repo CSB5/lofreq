@@ -89,14 +89,29 @@ def complement(strand, na_type='DNA'):
     Nadia Alramli
 
     Added DNA/RNA handling
+
+    >>> complement("UTAGC")
+    'AATCG'
+    >>> complement("utagc")
+    'aatcg'
+    >>> complement("UTAGC", na_type="RNA")
+    'AAUCG'
+    >>> complement("utagc", na_type="RNA")
+    'aaucg'
     """
 
     if na_type == 'DNA':
-        tr = string.maketrans('UTAGCutagc', 'AATCGaatcg')
+        if sys.version_info[0] > 2:
+            tr = bytes.maketrans(b'UTAGCutagc', b'AATCGaatcg')
+        else:
+            tr = string.maketrans('UTAGCutagc', 'AATCGaatcg')
     elif na_type == 'RNA':
-        tr = string.maketrans('UTAGCutagc', 'AAUCGaaucg')
+        if sys.version_info[0] > 2:
+            tr = bytes.maketrans(b'UTAGCutagc', b'AAUCGaaucg')
+        else:
+            tr = string.maketrans('UTAGCutagc', 'AAUCGaaucg')
     else:
-        raise ValueError, ("Unknown NA type %s" % na_type)
+        raise ValueError("Unknown NA type %s" % na_type)
     return strand.translate(tr)
 
 

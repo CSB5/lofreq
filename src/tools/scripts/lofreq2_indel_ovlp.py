@@ -21,6 +21,8 @@ import gzip
 
 VCFEntry = namedtuple('VCFEntry', ['chrom', 'pos', 'dbsnpid', 'ref', 'alt', 'qual', 'filter', 'info'])
 
+# py2to3
+MAX_INT = 2147483647
 
 def write_var(var, fh=sys.stdout):    
     var = var._replace(pos=str(var.pos))
@@ -48,7 +50,7 @@ def qual_from_var(var):
     """takes care of missing values, int conversion and ties in comparisons
     """
     if var.qual==".":
-        return sys.maxint
+        return MAX_INT
     else:
         # add AF to deal with ties
         return int(var.qual)+af_from_var(var)
@@ -84,7 +86,7 @@ def main():
     for line in fh:
         line = line.rstrip()
         if line.startswith('#'):
-            print line
+            print(line)
             continue
         
         cur_var = vcf_line_to_var(line)

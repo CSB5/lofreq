@@ -40,6 +40,9 @@ try:
 except ImportError:
     pass
 
+# py2to3
+MAX_INT = 2147483647
+
 #try:
 #    #from lofreq_star import vcf
 #except ImportError:
@@ -162,14 +165,14 @@ def subst_perc(ax, subst_type_counts):
     # FIXME sort by transition/transversion type. Add Ts/Tv ratio to plot
 
     #colors = [cm.jet(1.*i/len(subst_type_counts)) for i in xrange(len(subst_type_counts))]
-    colors = [COLORS[i % len(COLORS)] for i in xrange(len(subst_type_counts))]
+    colors = [COLORS[i % len(COLORS)] for i in range(len(subst_type_counts))]
 
     count_sum = sum([x[1] for x in subst_type_counts])
     percs = [x[1]/float(count_sum) for x in subst_type_counts]
-    ax.bar(xrange(len(subst_type_counts)), percs, color=colors)
+    ax.bar(range(len(subst_type_counts)), percs, color=colors)
 
     ticks = [x[0] for x in subst_type_counts]
-    ax.set_xticks(xrange(len(ticks))) # forced display of all
+    ax.set_xticks(range(len(ticks))) # forced display of all
     ax.set_xticklabels(ticks, rotation=45, ha="left")
     # FIXME rotation=45 doesnt't work
     # FIXME ha="left" doesn't work
@@ -244,7 +247,7 @@ def calc_dist_min(variants):
             dists.append(-1)
             continue
 
-        left_dist = sys.maxint
+        left_dist = MAX_INT
         for elem in vars_on_chrom:
             right_dist = deck[1].POS - deck[0].POS
             min_dist = min([left_dist, right_dist])
@@ -494,11 +497,11 @@ def main():
                                 ("75th %ile", np.percentile(x, 75)),
                                 ("99th %ile", np.percentile(x, 99)),
                                 ("maximum", np.max(x))]:
-                print "%s\t%s\t%f" % (p, name, val)
-            print "%s\trange-min\trange-max\tcount" % (p)
+                print("%s\t%s\t%f" % (p, name, val))
+            print("%s\trange-min\trange-max\tcount" % (p))
             (hist, bin_edges) = np.histogram(x)
             for (i, val) in enumerate(hist):
-                print "%f\t%f\t%d" % (bin_edges[i], bin_edges[i+1], val)
+                print("%f\t%f\t%d" % (bin_edges[i], bin_edges[i+1], val))
         return
     
     pp = PdfPages(args.outplot)
@@ -560,23 +563,22 @@ def main():
 
 
     if not args.indels_only:
-	# substitution types
-	#	
-	# FIXME needs percentages
-	subst_type_counts = Counter([subst_type_str(v.REF, v.ALT) for v in vars])
-	# turn into list of tuples sorted by key
-	# subst_type_counts = sorted((k, v/101.0*len(vars)) for (k, v) in subst_type_counts.items())
-	subst_type_counts = sorted(subst_type_counts.items())
-	# FIXME should go to text report
-	#for (k, v) in subst_type_counts:
-	#    print "%s %d" % (k, v)
-	#print
-	fig = plt.figure()
-	ax = plt.subplot(1, 1, 1)
-	subst_perc(ax, subst_type_counts)
-	plt.title('Substitution Types (Ts/Tv=%.2f)' % (ts_tv_ratio(vars)))
-	pp.savefig()
-	plt.close()
+        # substitution types
+        # FIXME needs percentages
+        subst_type_counts = Counter([subst_type_str(v.REF, v.ALT) for v in vars])
+        # turn into list of tuples sorted by key
+        # subst_type_counts = sorted((k, v/101.0*len(vars)) for (k, v) in subst_type_counts.items())
+        subst_type_counts = sorted(subst_type_counts.items())
+        # FIXME should go to text report
+        #for (k, v) in subst_type_counts:
+        #    print "%s %d" % (k, v)
+        #print
+        fig = plt.figure()
+        ax = plt.subplot(1, 1, 1)
+        subst_perc(ax, subst_type_counts)
+        plt.title('Substitution Types (Ts/Tv=%.2f)' % (ts_tv_ratio(vars)))
+        pp.savefig()
+        plt.close()
 
 
     if not args.simple:

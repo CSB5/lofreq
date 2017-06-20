@@ -375,11 +375,12 @@ class SomaticSNVCaller(object):
         return self.num_tests_from_log(elines)
 
 
-    def rlx_to_str(self, sample_type, (num_snv_tests, num_indel_tests)):
+    def rlx_to_str(self, sample_type, num_tests):
         """Using tumor filtering settings to create stringent calls
         from relaxed calls
         """
 
+        num_snv_tests, num_indel_tests = num_tests 
         assert sample_type in ['normal', 'tumor']
 
         # filtering stringently using tumor stringent settings
