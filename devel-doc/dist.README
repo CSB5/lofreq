@@ -12,11 +12,7 @@ To create a new distribution:
   - ./configure --enable-static
   - make
   - compile against static libz if necessary, check with ldd ./src/lofreq/lofreq (or otool -L)
-  - find src -name \*.[choa] -or -name Makefile\*  | xargs rm;
-  -  rm -rf src//tools/build/
-  -  find src -name .deps | xargs rm -rf;
-  -  find src -name .libs | xargs rm -rf;
-  - cd .. and pack
+  - bash binary_installer -p somewhere and pack
 - Commit your changes
 - Tag this version
   e.g git tag -a v0.3.1 -m 'my version 0.3.1')
