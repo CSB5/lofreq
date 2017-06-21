@@ -561,7 +561,8 @@ void add_ins_sequence(ins_event **head_ins_counts, char seq[],
      int fw_rv) {
      ins_event *it = NULL;
      int seq_length = strlen(seq);
-
+     const int grow_by_size = 16384;
+    
      HASH_FIND(hh_ins, *head_ins_counts, seq, seq_length, it);
      if (it) {
           it->count += 1;
@@ -583,10 +584,10 @@ void add_ins_sequence(ins_event **head_ins_counts, char seq[],
           it->fw_rv[0] = it->fw_rv[1] = 0;
           it->fw_rv[fw_rv] += 1;
 
-          int_varray_init(& it->ins_quals, 0);
-          int_varray_init(& it->ins_aln_quals, 0);
-          int_varray_init(& it->ins_map_quals, 0);
-          int_varray_init(& it->ins_source_quals, 0);
+          int_varray_init(& it->ins_quals, grow_by_size);
+          int_varray_init(& it->ins_aln_quals, grow_by_size);
+          int_varray_init(& it->ins_map_quals, grow_by_size);
+          int_varray_init(& it->ins_source_quals, grow_by_size);
           
           int_varray_add_value(& it->ins_quals, ins_qual);
           int_varray_add_value(& it->ins_aln_quals, ins_aln_qual);
@@ -620,6 +621,7 @@ void add_del_sequence(del_event **head_del_counts, char seq[],
      int fw_rv) {
      del_event *it = NULL;
      int seq_length = strlen(seq);
+     const int grow_by_size = 16384;
 
      HASH_FIND(hh_del, *head_del_counts, seq, seq_length, it);
      if (it) {
@@ -642,10 +644,10 @@ void add_del_sequence(del_event **head_del_counts, char seq[],
           it->fw_rv[0] = it->fw_rv[1] = 0;
           it->fw_rv[fw_rv] += 1;
 
-          int_varray_init(& it->del_quals, 0);
-          int_varray_init(& it->del_aln_quals, 0);
-          int_varray_init(& it->del_map_quals, 0);
-          int_varray_init(& it->del_source_quals, 0);
+          int_varray_init(& it->del_quals, grow_by_size);
+          int_varray_init(& it->del_aln_quals, grow_by_size);
+          int_varray_init(& it->del_map_quals, grow_by_size);
+          int_varray_init(& it->del_source_quals, grow_by_size);
 
           int_varray_add_value(& it->del_quals, del_qual);
           int_varray_add_value(& it->del_aln_quals, del_aln_qual);

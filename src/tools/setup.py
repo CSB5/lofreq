@@ -17,10 +17,6 @@ if sys.version_info < (2 , 6):
     sys.stderr.write("FATAL: sorry, Python versions"
                      " below 2.6 are not supported\n")
     sys.exit(1)
-if sys.version_info >= (2 , 8):
-    sys.stderr.write("FATAL: sorry, Python versions"
-                     " above 2.8 are not supported\n")
-    sys.exit(1)
 
    
 # where modules reside:
