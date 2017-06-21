@@ -1287,7 +1287,7 @@ for cov in coverage_range:
          }
     }
 
-    if (0 != strcmp(vcf_out, "-")) {
+    if (vcf_out && 0 != strcmp(vcf_out, "-")) {
          if (file_exists(vcf_out)) {
               if (! force_overwrite) {
                    LOG_FATAL("Cowardly refusing to overwrite file '%s'. Exiting...\n", vcf_out);
