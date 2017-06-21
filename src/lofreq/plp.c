@@ -141,7 +141,7 @@ void
 plp_col_init(plp_col_t *p) {
     int i;
 
-    const int grow_by_size = 1000;
+    const int grow_by_size = 16384;
 
     p->target =  NULL;
     p->pos = -INT_MAX;
@@ -166,15 +166,15 @@ plp_col_init(plp_col_t *p) {
     p->num_heads = p->num_tails = 0;
 
     p->num_ins = p->sum_ins = 0;
-    int_varray_init(& p->ins_quals, 0);
-    int_varray_init(& p->ins_map_quals, 0);
-    int_varray_init(& p->ins_source_quals, 0);
+    int_varray_init(& p->ins_quals, grow_by_size);
+    int_varray_init(& p->ins_map_quals, grow_by_size);
+    int_varray_init(& p->ins_source_quals, grow_by_size);
     p->ins_event_counts = NULL;
 
     p->num_dels = p->sum_dels = 0;
-    int_varray_init(& p->del_quals, 0);
-    int_varray_init(& p->del_map_quals, 0);
-    int_varray_init(& p->del_source_quals, 0);
+    int_varray_init(& p->del_quals, grow_by_size);
+    int_varray_init(& p->del_map_quals, grow_by_size);
+    int_varray_init(& p->del_source_quals, grow_by_size);
     p->del_event_counts = NULL;
 
     p->non_ins_fw_rv[0] = p->non_ins_fw_rv[1] = 0;
