@@ -192,7 +192,7 @@ def main():
     var_list = sorted(var_list, key=lambda x: x.INFO['AF'], reverse=True)
     ci_list = [compute_ci(v.INFO['DP'], int(v.INFO['AF'] * v.INFO['DP'])) 
                for v in var_list]
-    var_ci_list = zip(var_list, ci_list)
+    var_ci_list = list(zip(var_list, ci_list))
     del var_list, ci_list# paranoia
 
 
@@ -248,7 +248,7 @@ def main():
         
     if fh_out != sys.stdout:
         fh_out.close()
-    print "%d clusters found (written to %s)" % (clu_no+1, fh_out.name)
+    print("%d clusters found (written to %s)" % (clu_no+1, fh_out.name))
  
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ for f in $(ls *sh | grep -v run_all*sh | grep -v lib.sh); do
 		name="lf-test-$(basename $f)"
 		log=${f}.$(date +%Y%m%d-%H%M).log		
 #cat<<EOF
-		qsub -N $name -pe OpenMP $threads $mail -l h_vmem=8G -l h_rt=3:00:00 -o $log -j y -V -b y -cwd "bash $f"
+		qsub -N $name -pe OpenMP $threads $mail -l mem_free=8G -l h_rt=3:00:00 -o $log -j y -V -b y -cwd "bash $f"
 #EOF
 	else
 		echo "*** Running $f";	

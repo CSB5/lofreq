@@ -985,6 +985,7 @@ usage(const mplp_conf_t *mplp_conf, const varcall_conf_t *varcall_conf)
      fprintf(stderr, "            --use-orphan            Count anomalous read pairs (i.e. where mate is not aligned properly)\n");
      fprintf(stderr, "            --plp-summary-only      No variant calling. Just output pileup summary per column\n");
      fprintf(stderr, "            --no-default-filter     Don't run default 'lofreq filter' automatically after calling variants\n");
+     fprintf(stderr, "            --force-overwrite       Overwrite any existing output\n");
      fprintf(stderr, "            --verbose               Be verbose\n");
      fprintf(stderr, "            --debug                 Enable debugging\n");
 }
@@ -1002,6 +1003,7 @@ main_call(int argc, char *argv[])
 
      static int plp_summary_only = 0;
      static int no_default_filter = 0;
+     static int force_overwrite = 0;
      static int illumina_1_3 = 0;
      char *bam_file = NULL;
      char *bed_file = NULL;
@@ -1091,6 +1093,7 @@ for cov in coverage_range:
               {"illumina-1.3", no_argument, &illumina_1_3, 1},
               {"use-orphan", no_argument, &use_orphan, 1},
               {"plp-summary-only", no_argument, &plp_summary_only, 1},
+              {"force-overwrite", no_argument, &force_overwrite, 1},
               {"no-default-filter", no_argument, &no_default_filter, 1},
               {"verbose", no_argument, &verbose, 1},
               {"debug", no_argument, &debug, 1},
@@ -1160,12 +1163,6 @@ for cov in coverage_range:
               break;
 
          case 'o':
-              if (0 != strcmp(optarg, "-")) {
-                   if (file_exists(optarg)) {
-                        LOG_FATAL("Cowardly refusing to overwrite file '%s'. Exiting...\n", optarg);
-                        return 1;
-                   }
-              }
               vcf_out = strdup(optarg);
               break;
 
@@ -1290,6 +1287,17 @@ for cov in coverage_range:
          }
     }
 
+    if (0 != strcmp(vcf_out, "-")) {
+         if (file_exists(vcf_out)) {
+              if (! force_overwrite) {
+                   LOG_FATAL("Cowardly refusing to overwrite file '%s'. Exiting...\n", vcf_out);
+                   return 1;
+              } else {
+                   /* filter will fail if we don't remove now */
+                   unlink(vcf_out);
+              }
+         }
+    }
 
     varcall_conf.no_indels = no_indels;
     varcall_conf.only_indels = only_indels;

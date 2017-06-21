@@ -142,7 +142,7 @@ def main():
 
     for (out_file, descr) in [(args.vcf_out, "VCF output")]:
         if not out_file:
-            parser.error("%s output file argument missing.", descr)
+            parser.error("%s output file argument missing." % descr)
             sys.exit(1)
         if os.path.exists(out_file) and out_file != "-":
             LOG.fatal("Cowardly refusing to overwrite existing"

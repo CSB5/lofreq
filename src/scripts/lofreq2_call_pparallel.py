@@ -35,6 +35,8 @@ try:
 except ImportError:
     pass
 
+# py2to3
+MAXINT = 9223372036854775807
 
 Region = namedtuple('Region', ['chrom', 'start', 'end'])
 # coordinates in Python-slice / bed format, i.e. zero-based half-open
@@ -59,7 +61,6 @@ def prob_to_phredqual(prob):
     """
 
     from math import log10
-    #MAX_INT = 2147483647
 
     assert prob >= 0.0 and prob <= 1.0, (
         "Probability must be >=0 and <=1, but got %f" % prob)
@@ -67,9 +68,9 @@ def prob_to_phredqual(prob):
         return int(round(-10.0 * log10(prob)))
     except ValueError:
         # prob is zero
-        return sys.maxint
-        #return MAX_INT
+        return MAXINT
 
+    
 def split_region_(start, end):
     """split region (given in zero-based half-open start and end
     coordinates) in two halves
@@ -117,9 +118,8 @@ def read_bed_coords(fbed):
                     continue
                 else:
                     #import pdb; pdb.set_trace()
-                    raise ValueError, (
-                        "Couldn't parse the following line"
-                        " from bed-file %s: %s" % (fbed, line))
+                    raise ValueError("Couldn't parse the following line"
+                                     " from bed-file %s: %s" % (fbed, line))
 
             if end <= start or end < 0 or start < 0:
                 LOG.fatal("Invalid coordinates start=%d end=%d read from %s" % (
@@ -199,8 +199,10 @@ def sq_list_from_bam_samtools(bam):
                   " Command was '%s'. stderr was: '%s'" % (
                       cmd.split()[0], retcode, cmd, stderrdata))
         raise OSError
+    if sys.version_info[0] > 2:
+        stdoutdata = stdoutdata.decode()
     stdout_lines = str.splitlines(stdoutdata)
-
+        
     sq_list = []
 
     for line in stdout_lines:
@@ -242,6 +244,8 @@ def sq_list_from_bam(bam):
                   " Command was '%s'. stderr was: '%s'" % (
                       cmd.split()[0], retcode, cmd, stderrdata))
         raise OSError
+    if sys.version_info[0] > 2:
+        stdoutdata = stdoutdata.decode()
     stdout_lines = str.splitlines(stdoutdata)
 
     # orig src: sq_list_from_header()
@@ -632,7 +636,7 @@ def main():
     LOG.debug("cmd_list = %s" % cmd_list)
     if dryrun:
         for cmd in cmd_list:
-            print "%s" % (cmd)
+            print("%s" % cmd)
         LOG.critical("dryrun ending here")
         sys.exit(1)
 
