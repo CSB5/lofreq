@@ -48,9 +48,9 @@ Then follow the instructions given below under
 To build the LoFreq source you will need
 
 - a C compiler (e.g. gcc or clang)
-- a Python 2.7 interpreter (no, 2.6 won't work and neither would >=3.0)
+- a Python 2.7 or Python 3 interpreter (2.6 won't work for sure)
 - zlib developer files
-- a compiled version of samtools (>=1.1) and htslib version >= 1.1
+- a compiled version of samtools 1.1 and htslib 1.1
   (note: [samtools 1.1](http://sourceforge.net/projects/samtools/files/samtools/1.1/samtools-1.1.tar.bz2/download)
   already contains htslib 1.1)
 
