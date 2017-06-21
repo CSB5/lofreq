@@ -22,10 +22,10 @@ The source hosted here on github is mainly for developers!
 You will need:
 
 - a C compiler (e.g. gcc or clang)
-- a Python 2.7 interpreter
+- a Python 2.7 or Python 3 interpreter
 - zlib developer files
-- a compiled version of [samtools (>=1.1)]((http://sourceforge.net/projects/samtools/files/samtools/1.1/samtools-1.1.tar.bz2/download))
-- a compiled version of htslib (>= 1.1; use the one that comes bundled with samtools!)
+- a compiled version of [samtools 1.1]((http://sourceforge.net/projects/samtools/files/samtools/1.1/samtools-1.1.tar.bz2/download))
+- a compiled version of htslib 1.1; use the one that comes bundled with samtools!)
 
 ### Compilation
 

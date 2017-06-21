@@ -2,7 +2,7 @@ To create a new distribution:
 
 - Make sure tests work test/run_all.sh
 - Update version in configure.ac
-- Update top-level README
+- Update top-level README and changelog
 - autoreconf
 - run 'make dist' to compile a tarball
 - Either
