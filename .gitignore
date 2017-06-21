@@ -39,3 +39,4 @@ m4/*m4
 *.plist
 
 tests/*log
+snakemake/.snakemake/
