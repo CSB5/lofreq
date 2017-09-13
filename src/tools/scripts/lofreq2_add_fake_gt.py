@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Complement VCF with unknown genotype
+"""Complement VCF with unknown genotype for sample.
 """
 
 
@@ -34,6 +34,8 @@ logging.basicConfig(level=logging.WARN,
                     format='%(levelname)s [%(asctime)s]: %(message)s')
 
 
+FORMAT_HEADER = '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">'
+
 
 def cmdline_parser():
     """
@@ -61,15 +63,17 @@ def cmdline_parser():
                         default=default,
                         help="Output vcf file (gzip supported; - for stdout;"
                         " default: %s)." % default)
-    parser.add_argument("-s", "--sample",
-                        required=True,
-                        help="Sample name bam")
+    parser.add_argument("-s", "--samples",
+                        required=True, nargs='+',
+                        help="Sample name/s")
     return parser
 
 
-def add_fake_gt(vcf_in, vcf_out, sample_name):
-    """FIXME    """
+def add_fake_gt(vcf_in, vcf_out, sample_names):
+    """Add fake genotype to header and variants"""
 
+    assert len(set(sample_names)) == len(sample_names), ("Duplicate sample names found")
+    
     # set up vcf_reader
     #
     if vcf_in == '-':
@@ -97,17 +101,40 @@ def add_fake_gt(vcf_in, vcf_out, sample_name):
                             quotechar='', quoting=csv.QUOTE_NONE,
                             lineterminator=os.linesep)
 
+    has_our_format_in_header = False
     for row in vcf_reader:
+        # modify row if needed and finally print
+
         if row[0].startswith('##'):
-            pass
-        else:
-            assert len(row) == 8, (
-                "variant incomplete or FORMAT column already exists")
-            if row[0].startswith('#CHROM'):
+            if row[0].startswith('##FORMAT'):
+                if row[0] == FORMAT_HEADER:
+                    has_our_format_in_header = True
+                else:
+                    LOG.fatal("Incompatible, pre-existing format definition found. Exiting")
+                    raise ValueError(row)
+            # don't touch header
+
+        elif row[0].startswith('#CHROM'):
+            # insert genotype format line
+            if not has_our_format_in_header:
+                extrarow = ['##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">']
+                vcf_writer.writerow(extrarow)
+
+            if not "FORMAT" in row:
                 row.append("FORMAT")
-                row.append(sample_name)
+            for name in sample_names:
+                row.append(name)
+        else:
+            # add format and sample columns
+            assert len(row) >= 8, (
+                "variant incomplete or FORMAT column already exists")
+            # Add GT column if not present
+            if len(row) > 8:
+                assert row[8] == 'GT'
             else:
                 row.append("GT")
+            # Add fake GT
+            for _ in sample_names:
                 row.append(".")
 
         vcf_writer.writerow(row)
@@ -146,10 +173,10 @@ def main():
             sys.exit(1)
         if os.path.exists(out_file) and out_file != "-":
             LOG.fatal("Cowardly refusing to overwrite existing"
-                      " output file '%s'.\n" % out_file)
+                      " output file '%s'.\n", out_file)
             sys.exit(1)
 
-    add_fake_gt(args.vcf_in, args.vcf_out, args.sample)
+    add_fake_gt(args.vcf_in, args.vcf_out, args.samples)
 
 
 
