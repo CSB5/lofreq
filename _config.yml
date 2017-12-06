@@ -31,6 +31,7 @@ sourceforge:
   download:     https://sourceforge.net/projects/lofreq/files/
 github:
   repo:         https://github.com/CSB5/lofreq
+  dist:         https://github.com/CSB5/lofreq/tree/master/dist
 
 # exclude this from build
 exclude:	[tmp/, jekyll.README, FIXME, LICENSE.md, .gitignore,

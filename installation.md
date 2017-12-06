@@ -12,7 +12,7 @@ instructions for each of the above listed options.
 # <a name="binary">Installation from Binary Packages</a>
 
 Download the binary LoFreq distribution matching your system (e.g.
-Linux or MacOSX) [from the Files/Download section]({{ site.sourceforge.download }}) on sourceforge and unpack it. LoFreq can
+Linux or MacOSX) [from the dist folder]({{ site.github.dist }}) on Github and unpack it. LoFreq can
 then simply be called with `./lofreq_star-2.1.0/bin/lofreq` (assuming
 you downloaded version 2.1.0). You can move the folder anywhere you
 like (just preserve its structure) or copy its contents to a
@@ -55,7 +55,7 @@ To build the LoFreq source you will need
   already contains htslib 1.1)
 
 If those requirements are met, download LoFreq's source package
-[from the Files/Download section]({{ site.sourceforge.download }}),
+[from the dist folder]({{ site.github.dist }}) on Github,
 unpack it and `cd` to the newly created directory. Assuming you have
 admin rights, use the following to compile and install LoFreq:
 
