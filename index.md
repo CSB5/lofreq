@@ -36,29 +36,3 @@ an hour to run on a 100X coverage human exome dataset.
 For more details on the original version of LoFreq see
 [Wilm *et al.* (2012)](http://www.ncbi.nlm.nih.gov/pubmed/23066108).
 
----
-
-<!-- show latest post only: -->
-<!-- http://stackoverflow.com/questions/17890493/how-can-i-show-just-the-most-recent-post-on-my-home-page-with-jekyll -->
-
-# Latest Blog Post:
-
-<div class="posts">
-{% for post in site.posts limit:1 %}
-
-  <div class="post">
-    <h2 class="post-title">
-      <a href="{{ post.url }}">
-        {{ post.title }}
-      </a>
-    </h1>
-
-    <span class="post-date">{{ post.date | date_to_string }}</span>
-
-    {{ post.content }}
-  </div>
-
-{% endfor %}
-</div>
-
-### <a href="{{ site.baseurl }}/blog/">Click here to read all blog entries</a>
