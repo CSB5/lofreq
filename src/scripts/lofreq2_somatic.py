@@ -446,6 +446,7 @@ class SomaticSNVCaller(object):
                '-a', 'intersect',
                '-1', self.vcf_n_rlx, '-2', self.vcf_t_str,
                '-o', self.vcf_germl]
+        self.subprocess_wrapper(cmd)
         cmd = [self.LOFREQ, 'vcfset',
                '-a', 'intersect',
                '-1', self.vcf_n_rlx, '-2', self.vcf_indels_t_str,

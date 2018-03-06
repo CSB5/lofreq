@@ -40,3 +40,5 @@ m4/*m4
 
 tests/*log
 snakemake/.snakemake/
+*_flymake.py
+*.DS_Store
