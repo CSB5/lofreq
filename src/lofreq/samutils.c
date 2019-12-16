@@ -32,8 +32,8 @@
 #include <ctype.h>
 #include <assert.h>
 
-/* samtools includes */
-#include "sam.h"
+/* htslib includes */
+#include "htslib/sam.h"
 #include "htslib/kstring.h"
 
 /* lofreq includes */
@@ -42,9 +42,11 @@
 #include "plp.h"
 #include "samutils.h"
 
+#if 0
 /* libbam:bamaux.c */
-extern void bam_init_header_hash(bam_header_t *header);
-extern void bam_destroy_header_hash(bam_header_t *header);
+extern void bam_init_header_hash(bam_hdr_t *header);
+extern void bam_destroy_header_hash(bam_hdr_t *header);
+#endif
 
 #define INDEL_QUAL_DEFAULT 45
 
@@ -123,7 +125,7 @@ normalize_alnerrprof(alnerrprof_t *alnerrprof)
  * alnerrprof. values are allocated here and should be freed with
  * free_alnerrprof */
 int
-parse_alnerrprof_statsfile(alnerrprof_t *alnerrprof, const char *path, bam_header_t *bam_header)
+parse_alnerrprof_statsfile(alnerrprof_t *alnerrprof, const char *path, bam_hdr_t *bam_header)
 {
      char line[BUF_SIZE];
      int i;
@@ -133,12 +135,15 @@ parse_alnerrprof_statsfile(alnerrprof_t *alnerrprof, const char *path, bam_heade
      int rc;
      FILE *in = fopen(path, "r");
 
-
+#if 0
+     // HTSlib does not have ->hash or bam_init_header_hash().
+     // Most likely all this is no longer needed.
      /* needed for finding tid from tname */
      if (bam_header->hash == 0) {
           bam_init_header_hash(bam_header);             
           free_bam_header_hash = 1;
      }
+#endif
 
      max_obs_pos = calloc(bam_header->n_targets, sizeof(int));
      
@@ -172,7 +177,7 @@ parse_alnerrprof_statsfile(alnerrprof_t *alnerrprof, const char *path, bam_heade
          pos = pos - 1;
          assert(pos<MAX_READ_LEN);
 
-         tid = bam_get_tid(bam_header, tname);
+         tid = bam_name2id(bam_header, tname);
          if (-1 == tid) {
               LOG_ERROR("Target name '%s' found in error profile doesn't match any of the sequences in BAM header. Skipping and trying to continue...\n", tname);
               continue;
@@ -227,10 +232,12 @@ free_and_exit:
      
      free(max_obs_pos);
 
+#if 0
      free_bam_header_hash = 0; /* FIXME segfaults often for unknown reason */
      if (free_bam_header_hash) {
           bam_destroy_header_hash(bam_header);
      }
+#endif
      fclose(in);
 
      return rc;
@@ -279,7 +286,7 @@ calc_read_alnerrprof(double *alnerrprof, unsigned long int *used_pos,
      /* modelled after bam.c:bam_calend(), bam_format1_core() and
       * pysam's aligned_pairs (./pysam/csamtools.pyx)
       */
-     uint32_t *cigar = bam1_cigar(b);
+     uint32_t *cigar = bam_get_cigar(b);
      uint32_t k, i;
      const bam1_core_t *c = &b->core;
 #if 0
@@ -289,7 +296,7 @@ calc_read_alnerrprof(double *alnerrprof, unsigned long int *used_pos,
 #endif
      uint32_t pos = c->pos; /* pos on genome */
      uint32_t qpos = 0; /* pos on read/query */
-     uint32_t qpos_org = bam1_strand(b) ? qlen-qpos-1 : qpos;/* original qpos before mapping as possible reverse */
+     uint32_t qpos_org = bam_is_rev(b) ? qlen-qpos-1 : qpos;/* original qpos before mapping as possible reverse */
 
 
      /* loop over cigar to get aligned bases
@@ -309,8 +316,8 @@ calc_read_alnerrprof(double *alnerrprof, unsigned long int *used_pos,
                     assert(qpos < qlen);
                     /* case agnostic */
                     char ref_nt = ref[i];
-                    char read_nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(b), qpos)];
-                    int bq = bam1_qual(b)[qpos];
+                    char read_nt = seq_nt16_str[bam_seqi(bam_get_seq(b), qpos)];
+                    int bq = bam_get_qual(b)[qpos];
 #if 0
                     printf("[M]MATCH qpos,i,ref,read = %d,%d,%c,%c\n", qpos, i, ref_nt, read_nt);
 #endif                    
@@ -322,7 +329,7 @@ calc_read_alnerrprof(double *alnerrprof, unsigned long int *used_pos,
                          used_pos[qpos_org] += 1;
                     }
                     qpos += 1;
-                    qpos_org = bam1_strand(b) ? qlen-qpos-1 : qpos;
+                    qpos_org = bam_is_rev(b) ? qlen-qpos-1 : qpos;
                }
                pos += l;
 
@@ -336,7 +343,7 @@ calc_read_alnerrprof(double *alnerrprof, unsigned long int *used_pos,
                     printf("INS qpos,i = %d,None\n", qpos);
 #endif
                     qpos += 1;
-                    qpos_org = bam1_strand(b) ? qlen-qpos-1 : qpos;
+                    qpos_org = bam_is_rev(b) ? qlen-qpos-1 : qpos;
                }
                
           } else if (op == BAM_CDEL || op == BAM_CREF_SKIP) {
@@ -358,14 +365,14 @@ calc_read_alnerrprof(double *alnerrprof, unsigned long int *used_pos,
                printf("SOFT CLIP qpos = %d\n", qpos);
 #endif
                qpos += l;
-               qpos_org = bam1_strand(b) ? qlen-qpos-1 : qpos;
+               qpos_org = bam_is_rev(b) ? qlen-qpos-1 : qpos;
 
           } else if (op != BAM_CHARD_CLIP) {
                LOG_WARN("Unknown op %d in cigar %s\n", op, cigar_str_from_bam(b));
 
           }
      } /* for k */
-     assert(pos == bam_calend(&b->core, bam1_cigar(b))); /* FIXME correct assert? what if hard clipped? */
+     assert(pos == bam_calend(&b->core, bam_get_cigar(b))); /* FIXME correct assert? what if hard clipped? */
      if (qpos != qlen) {
           LOG_FIXME("got qpos=%d and qlen=%d for cigar %s l_qseq %d\n", qpos, qlen, cigar_str_from_bam(b), b->core.l_qseq);
      }
@@ -383,7 +390,7 @@ calc_read_alnerrprof(double *alnerrprof, unsigned long int *used_pos,
 
 
 
-/* from char *bam_format1_core(const bam_header_t *header, const
+/* from char *bam_format1_core(const bam_hdr_t *header, const
  * bam1_t *b, int of) 
  */
 char *
@@ -394,8 +401,8 @@ cigar_str_from_bam(const bam1_t *b)
      int i;
      str.l = str.m = 0; str.s = 0;
      for (i = 0; i < c->n_cigar; ++i) {
-          kputw(bam1_cigar(b)[i]>>BAM_CIGAR_SHIFT, &str);
-          kputc("MIDNSHP=X"[bam1_cigar(b)[i]&BAM_CIGAR_MASK], &str);
+          kputw(bam_get_cigar(b)[i]>>BAM_CIGAR_SHIFT, &str);
+          kputc("MIDNSHP=X"[bam_get_cigar(b)[i]&BAM_CIGAR_MASK], &str);
      }
      return str.s;
 }
@@ -438,7 +445,7 @@ count_cigar_ops(int *counts, int **quals, const bam1_t *b,
      /* modelled after bam.c:bam_calend(), bam_format1_core() and
       * pysam's aligned_pairs (./pysam/csamtools.pyx)
       */
-     uint32_t *cigar = bam1_cigar(b);
+     uint32_t *cigar = bam_get_cigar(b);
      const bam1_core_t *c = &b->core;
      uint32_t tpos = c->pos; /* pos on genome */
      uint32_t qpos = 0; /* pos on read/query */
@@ -476,8 +483,8 @@ count_cigar_ops(int *counts, int **quals, const bam1_t *b,
                     int actual_op;
                     assert(qpos < qlen);
                     char ref_nt = ref[i];
-                    char read_nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(b), qpos)];
-                    int bq = bam1_qual(b)[qpos];
+                    char read_nt = seq_nt16_str[bam_seqi(bam_get_seq(b), qpos)];
+                    int bq = bam_get_qual(b)[qpos];
 
                     if (ref_nt != read_nt || op == BAM_CDIFF) {
                          actual_op = OP_MISMATCH;
@@ -488,7 +495,7 @@ count_cigar_ops(int *counts, int **quals, const bam1_t *b,
                     /* ignoring base if below min_bq, independent of type */
                     if (bq<min_bq) {
 #ifdef TRACE
-                         fprintf(stderr, "TRACE(%s): [M]MATCH ignoring base because of bq=%d at %d (qpos %d)\n", bam1_qname(b), bq, i, qpos);
+                         fprintf(stderr, "TRACE(%s): [M]MATCH ignoring base because of bq=%d at %d (qpos %d)\n", bam_get_qname(b), bq, i, qpos);
 #endif
                          qpos += 1;
                          continue;
@@ -504,7 +511,7 @@ count_cigar_ops(int *counts, int **quals, const bam1_t *b,
                          if (var_in_ign_list(&fake_var)) {
 
 #ifdef TRACE
-                              fprintf(stderr, "TRACE(%s): MM: ignoring because in ign list at %d (qpos %d)\n", bam1_qname(b), i, qpos);
+                              fprintf(stderr, "TRACE(%s): MM: ignoring because in ign list at %d (qpos %d)\n", bam_get_qname(b), i, qpos);
 #endif
                               qpos += 1;
                               continue;
@@ -512,7 +519,7 @@ count_cigar_ops(int *counts, int **quals, const bam1_t *b,
                     }
 
 #ifdef TRACE
-                    fprintf(stderr, "TRACE(%s): adding [M]MATCH qpos,tpos,ref,read,bq = %d,%d,%c,%c,%d\n", bam1_qname(b), qpos, tpos, ref_nt, read_nt, bq);
+                    fprintf(stderr, "TRACE(%s): adding [M]MATCH qpos,tpos,ref,read,bq = %d,%d,%c,%c,%d\n", bam_get_qname(b), qpos, tpos, ref_nt, read_nt, bq);
 #endif                    
                     counts[actual_op] += 1;
                     if (quals) {
@@ -542,14 +549,14 @@ count_cigar_ops(int *counts, int **quals, const bam1_t *b,
                               qpos += l;
                          }
 #ifdef TRACE
-                         fprintf(stderr, "TRACE(%s): %c: ignoring because in ign list at tpos %d (qpos %d)\n", bam1_qname(b), op == BAM_CINS? 'I':'D', tpos, qpos);
+                         fprintf(stderr, "TRACE(%s): %c: ignoring because in ign list at tpos %d (qpos %d)\n", bam_get_qname(b), op == BAM_CINS? 'I':'D', tpos, qpos);
 #endif
                          continue;
                     }
                }
 
 #ifdef TRACE
-               fprintf(stderr, "TRACE(%s): adding %c qpos,tpos = %d,%d\n", bam1_qname(b), op==BAM_CINS?'I':'D', qpos, tpos);
+               fprintf(stderr, "TRACE(%s): adding %c qpos,tpos = %d,%d\n", bam_get_qname(b), op==BAM_CINS?'I':'D', qpos, tpos);
 #endif                    
 
                if (op == BAM_CINS) {
@@ -586,9 +593,9 @@ count_cigar_ops(int *counts, int **quals, const bam1_t *b,
           }
      } /* for k */
 
-     assert(qpos == bam_calend(&b->core, bam1_cigar(b))); /* FIXME correct assert? what if hard clipped? */
+     assert(qpos == bam_calend(&b->core, bam_get_cigar(b))); /* FIXME correct assert? what if hard clipped? */
      if (qpos != qlen) {
-          LOG_WARN("got qpos=%d and qlen=%d for cigar %s l_qseq %d in read %s\n", qpos, qlen, cigar_str_from_bam(b), b->core.l_qseq, bam1_qname(b));
+          LOG_WARN("got qpos=%d and qlen=%d for cigar %s l_qseq %d in read %s\n", qpos, qlen, cigar_str_from_bam(b), b->core.l_qseq, bam_get_qname(b));
      }
      assert(qpos == qlen);
 
@@ -598,7 +605,7 @@ count_cigar_ops(int *counts, int **quals, const bam1_t *b,
 #ifdef TRACE
           int j;
           for (j=0; j<counts[i]; j++) {
-               fprintf(stderr, "TRACE(%s) op %s #%d: %d\n", bam1_qname(b), op_cat_str[i], j, quals[i][j]);
+               fprintf(stderr, "TRACE(%s) op %s #%d: %d\n", bam_get_qname(b), op_cat_str[i], j, quals[i][j]);
           }
 #endif
      }
@@ -614,11 +621,11 @@ count_cigar_ops(int *counts, int **quals, const bam1_t *b,
 int checkref(char *fasta_file, char *bam_file)
 {
      int i = -1;
-     bam_header_t *header;
+     bam_hdr_t *header;
      faidx_t *fai;
      char *ref;
      int ref_len = -1;
-     bamFile bam_fp;
+     samFile *bam_fp;
      
      if (! file_exists(fasta_file)) {
           LOG_FATAL("Fsata file %s does not exist. Exiting...\n", fasta_file);
@@ -630,8 +637,8 @@ int checkref(char *fasta_file, char *bam_file)
           return 1;
      }     
 
-     bam_fp = strcmp(bam_file, "-") == 0 ? bam_dopen(fileno(stdin), "r") : bam_open(bam_file, "r");
-     header = bam_header_read(bam_fp);
+     bam_fp = sam_open(bam_file, "r");
+     header = sam_hdr_read(bam_fp);
      if (!header) {
           LOG_FATAL("Failed to read BAM header from %s\n", bam_file);
           return 1;
@@ -662,8 +669,8 @@ int checkref(char *fasta_file, char *bam_file)
      }
      
      fai_destroy(fai);
-     bam_header_destroy(header);
-     bam_close(bam_fp);
+     bam_hdr_destroy(header);
+     sam_close(bam_fp);
 
      return 0;
 }

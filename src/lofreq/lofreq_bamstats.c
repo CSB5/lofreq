@@ -35,9 +35,9 @@
 #include <getopt.h>
 #include <assert.h>
 
-/* samtools includes */
-#include "sam.h"
-#include "faidx.h"
+/* htslib includes */
+#include "htslib/sam.h"
+#include "htslib/faidx.h"
 /* from bedidx.c */
 void *bed_read(const char *fn);
 void bed_destroy(void *_h);
@@ -57,6 +57,8 @@ int bed_overlap(const void *_h, const char *chr, int beg, int end);
 
 #define TYPE_MAPERRPROF 0
 #define TYPE_OPCAT 1
+
+#define MAX_READ_LEN 8192
 
 typedef struct {
      int min_mq;
@@ -99,10 +101,10 @@ typedef struct {
 
 /* adopted from sam_view.c:__g_skip_aln */
 static inline int 
-skip_aln(const bam_header_t *h, const bam1_t *b,
+skip_aln(const bam_hdr_t *h, const bam1_t *b,
          const int min_mq, const int flag_on, const int flag_off, void *bed)
 {
-     if (bed && b->core.tid >= 0 && !bed_overlap(bed, h->target_name[b->core.tid], b->core.pos, bam_calend(&b->core, bam1_cigar(b)))) {
+     if (bed && b->core.tid >= 0 && !bed_overlap(bed, h->target_name[b->core.tid], b->core.pos, bam_endpos(b))) {
           /*fprintf(stderr, "Skipping because of bed: h->target_name[b->core.tid=%d] = %s; b->core.pos = %d\n", b->core.tid, h->target_name[b->core.tid], b->core.pos);*/
           return 1;
      }
@@ -174,7 +176,7 @@ write_cat_stats(char *target_name, unsigned long int **read_cat_counts,
 
 
 int 
-bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
+bamstats(samFile *sam, bam_hdr_t *header, bamstats_conf_t *bamstats_conf)
 {
      char *target_name = NULL; /* chrom name */
      char *ref = NULL; /* reference sequence */
@@ -208,10 +210,10 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
           read_cat_counts[i] = calloc(MAX_READ_LEN, sizeof(unsigned long int));
      }
      
-     while ((r = samread(sam, b)) >= 0) { /* read one alignment from `in' */
+     while ((r = sam_read1(sam, header, b)) >= 0) { /* read one alignment from `in' */
           int counts[NUM_OP_CATS];
           int ref_len = -1;
-          if (skip_aln(sam->header, b, bamstats_conf->min_mq, 
+          if (skip_aln(header, b, bamstats_conf->min_mq,
                        bamstats_conf->samflags_on, bamstats_conf->samflags_off,
                        bamstats_conf->bed)) {
                num_ign_reads += 1;
@@ -233,7 +235,7 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
 
           /* load ref only if necessary. also triggers output of
            * stats per chrom */
-          if (ref == NULL || strcmp(target_name, sam->header->target_name[b->core.tid]) != 0) {
+          if (ref == NULL || strcmp(target_name, header->target_name[b->core.tid]) != 0) {
                /* write report. use macro to avoid code duplication with below */
                WRITE_STATS;
 
@@ -249,14 +251,14 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
                max_obs_read_len = 0;
                num_good_reads = num_ign_reads = num_zero_matches = 0;
 
-               target_name = sam->header->target_name[b->core.tid];
+               target_name = header->target_name[b->core.tid];
                ref = faidx_fetch_seq(bamstats_conf->fai, target_name,
                                      0, 0x7fffffff, &ref_len);
                strtoupper(ref);/* safeguard */
           }
 
           if (bamstats_conf->type == TYPE_OPCAT) {
-               if (-1 == count_cigar_ops(counts, NULL, b, ref, bamstats_conf->min_mq, sam->header->target_name[b->core.tid])) {
+               if (-1 == count_cigar_ops(counts, NULL, b, ref, bamstats_conf->min_mq, header->target_name[b->core.tid])) {
                     LOG_WARN("%s\n", "count_cigar_ops failed on read. ignoring"); /* FIXME print read */
                     continue;
                }
@@ -273,7 +275,7 @@ bamstats(samfile_t *sam, bamstats_conf_t *bamstats_conf)
                }
                if (0 == counts[OP_MATCH]) {
                     LOG_DEBUG("Got read with zero matches after filtering with min_mq %d: name:%s cigar:%s qual:%s\n", 
-                              bamstats_conf->min_mq, bam1_qname(b), cigar_str_from_bam(b), bam1_qual(b));
+                              bamstats_conf->min_mq, bam_get_qname(b), cigar_str_from_bam(b), bam_get_qual(b));
                     num_zero_matches += 1;
                }
           }
@@ -308,7 +310,7 @@ main_bamstats(int argc, char *argv[])
 {
      char *bamfile = NULL;
      char *bedfile = NULL;
-     samfile_t *sam =  NULL;
+     samFile *sam =  NULL;
      int rc = 0;
      bamstats_conf_t bamstats_conf;
 #ifdef USE_ALNERRPROF
@@ -458,12 +460,14 @@ main_bamstats(int argc, char *argv[])
 
 
     
-     if ((sam = samopen(bamfile, "rb", NULL)) == 0) {
+     if ((sam = sam_open(bamfile, "rb")) == 0) {
           LOG_FATAL("Failed to open \"%s\" for reading.\n", bamfile);
           rc = 1;
      } else {
-          rc = bamstats(sam, &bamstats_conf);
-          samclose(sam);
+          bam_hdr_t *header = sam_hdr_read(sam);
+          rc = bamstats(sam, header, &bamstats_conf);
+          bam_hdr_destroy(header);
+          sam_close(sam);
      }
 
 free_and_exit:

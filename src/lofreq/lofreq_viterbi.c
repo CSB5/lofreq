@@ -33,7 +33,7 @@
 #include <stdlib.h>
 
 #include "htslib/faidx.h"
-#include "sam.h"
+#include "htslib/sam.h"
 #include "viterbi.h"
 #include "log.h"
 #include "lofreq_viterbi.h"
@@ -46,8 +46,9 @@
 #define RWIN 10
 
 typedef struct {
-     samfile_t *in;
-     bamFile out;
+     samFile *in;
+     samFile *out;
+     bam_hdr_t *header;
      faidx_t *fai;
      uint32_t tid;
      char *ref;
@@ -58,14 +59,14 @@ static void replace_cigar(bam1_t *b, int n, uint32_t *cigar)
 {
     if (n != b->core.n_cigar) {
         int o = b->core.l_qname + b->core.n_cigar * 4;
-        if (b->data_len + (n - b->core.n_cigar) * 4 > b->m_data) {
-            b->m_data = b->data_len + (n - b->core.n_cigar) * 4;
+        if (b->l_data + (n - b->core.n_cigar) * 4 > b->m_data) {
+            b->m_data = b->l_data + (n - b->core.n_cigar) * 4;
             kroundup32(b->m_data);
             b->data = (uint8_t*)realloc(b->data, b->m_data);
         }
-        memmove(b->data + b->core.l_qname + n * 4, b->data + o, b->data_len - o);
+        memmove(b->data + b->core.l_qname + n * 4, b->data + o, b->l_data - o);
         memcpy(b->data + b->core.l_qname, cigar, n * 4);
-        b->data_len += (n - b->core.n_cigar) * 4;
+        b->l_data += (n - b->core.n_cigar) * 4;
         b->core.n_cigar = n;
     } else memcpy(b->data + b->core.l_qname, cigar, n * 4);
 }
@@ -111,8 +112,8 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip
      */
      tmpstruct_t *tmp = (tmpstruct_t*)data;
      bam1_core_t *c = &b->core;
-     uint8_t *seq = bam1_seq(b);
-     uint32_t *cigar = bam1_cigar(b);
+     uint8_t *seq = bam_get_seq(b);
+     uint32_t *cigar = bam_get_cigar(b);
      int reflen;
     
      if (del_flag) {
@@ -145,7 +146,7 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip
      }
 
      if (c->flag & BAM_FUNMAP) {
-          bam_write1(tmp->out, b);
+          sam_write1(tmp->out, tmp->header, b);
           return 0;
      }
 
@@ -153,9 +154,9 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip
      if (tmp->tid != c->tid) {
           if (tmp->ref) free(tmp->ref);
           if ((tmp->ref = 
-               fai_fetch(tmp->fai, tmp->in->header->target_name[c->tid], &reflen)) == 0) {
+               fai_fetch(tmp->fai, tmp->header->target_name[c->tid], &reflen)) == 0) {
                fprintf(stderr, "failed to find reference sequence %s\n", 
-                                tmp->in->header->target_name[c->tid]);
+                                tmp->header->target_name[c->tid]);
           }
           strtoupper(tmp->ref);/* safeguard */
           tmp->tid = c->tid;
@@ -178,8 +179,8 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip
           int j, oplen = cigar[i] >> 4, op = cigar[i]&0xf;
           if (op == BAM_CMATCH || op == BAM_CEQUAL || op == BAM_CDIFF) {
                for (j = 0; j < oplen; j++) {
-                    query[z] = bam_nt16_rev_table[bam1_seqi(seq, y)];
-                    bqual[z] = (char)bam1_qual(b)[y]+33;
+                    query[z] = seq_nt16_str[bam_seqi(seq, y)];
+                    bqual[z] = (char)bam_get_qual(b)[y]+33;
                     x++;
                     y++;
                     z++;
@@ -187,15 +188,15 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip
           } else if (op == BAM_CHARD_CLIP) {
                /* in theory we should do nothing here but hard clipping info gets lost here FIXME
                 */               
-               bam_write1(tmp->out, b);
+               sam_write1(tmp->out, tmp->header, b);
                return 1;
           } else if (op == BAM_CDEL) {
                x += oplen;
                indels += 1;
           } else if (op == BAM_CINS) {
                for (j = 0; j < oplen; j++) {
-                    query[z] = bam_nt16_rev_table[bam1_seqi(seq, y)];
-                    bqual[z] = (char)bam1_qual(b)[y]+33;
+                    query[z] = seq_nt16_str[bam_seqi(seq, y)];
+                    bqual[z] = (char)bam_get_qual(b)[y]+33;
                     y++;
                     z++;
                }
@@ -205,15 +206,15 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip
                     y++;
                }
           } else {
-               LOG_WARN("Unknown cigar op %d. Not touching read %s\n", op, bam1_qname(b));
-               bam_write1(tmp->out, b);
+               LOG_WARN("Unknown cigar op %d. Not touching read %s\n", op, bam_get_qname(b));
+               sam_write1(tmp->out, tmp->header, b);
                return 1;
           }
      }
      query[z] = bqual[z] = '\0';
 
      if (indels == 0) {
-          bam_write1(tmp->out, b);
+          sam_write1(tmp->out, tmp->header, b);
           return 0;
      }
     int len_remaining = 0;
@@ -236,7 +237,7 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip
 			
 			replace_cigar(b,c->n_cigar,cigar);
 		}
-        bam_write1(tmp->out, b);
+        sam_write1(tmp->out, tmp->header, b);
         return 0;
     }
     int remaining[len_remaining+1];
@@ -314,8 +315,8 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip
      /* check if read was shifted */
      if (shift-(c->pos-lower) != 0) {
           LOG_VERBOSE("Read %s with shift of %d at original pos %s:%d\n", 
-                      bam1_qname(b), shift-(c->pos-lower),
-                      tmp->in->header->target_name[c->tid], c->pos);
+                      bam_get_qname(b), shift-(c->pos-lower),
+                      tmp->header->target_name[c->tid], c->pos);
           c->pos = c->pos + (shift - (c->pos - lower));
      }
      
@@ -337,7 +338,7 @@ static int fetch_func(bam1_t *b, void *data, int del_flag, int q2def, int reclip
 		}
 	}
      replace_cigar(b, realn_n_cigar, realn_cigar);
-     bam_write1(tmp->out, b);
+     sam_write1(tmp->out, tmp->header, b);
      free(aln);
      free(realn_cigar);
      return 0;
@@ -444,28 +445,32 @@ int main_viterbi(int argc, char *argv[])
           LOG_FATAL("%s\n", "Need exactly one BAM file as last argument\n");
           return 1;
      }
-     if ((tmp.in = samopen((argv+optind+1)[0], "rb",0)) == 0){
+     if ((tmp.in = sam_open((argv+optind+1)[0], "rb")) == 0){
           LOG_FATAL("Failed to open BAM file %s. Exiting...\n", (argv+optind+1)[0]);
+          return 1;
+     }
+     if ((tmp.header = sam_hdr_read(tmp.in)) == 0) {
+          LOG_FATAL("Failed to read headers from BAM file %s. Exiting...\n", (argv+optind+1)[0]);
           return 1;
      }
 
      if (!bam_out || bam_out[0] == '-') {
-          tmp.out = bam_dopen(fileno(stdout), "w");
+          tmp.out = sam_open("-", "wb");
      } else {
-          tmp.out = bam_open(bam_out, "w");
+          tmp.out = sam_open(bam_out, "wb");
      }
-     bam_header_write(tmp.out, tmp.in->header);
+     sam_hdr_write(tmp.out, tmp.header);
      
      b = bam_init1();
      tmp.tid = -1;
      tmp.ref = 0;
-     while (samread(tmp.in, b) >= 0){
+     while (sam_read1(tmp.in, tmp.header, b) >= 0){
           fetch_func(b, &tmp, del_flag, q2default, reclip);
      }
      bam_destroy1(b);
-     
-     samclose(tmp.in);
-     bam_close(tmp.out);
+     bam_hdr_destroy(tmp.header);
+     sam_close(tmp.in);
+     sam_close(tmp.out);
      if (tmp.ref)
           free(tmp.ref);
      fai_destroy(tmp.fai);
