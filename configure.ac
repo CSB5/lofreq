@@ -63,12 +63,14 @@ AC_PROG_MAKE_SET
 # AC_PROG_RANLIB will allow you to build code in sub-directories into
 # temporary libraries, which make will then link in with the rest of
 # the code.
-# AC_PROG_RANLIB rendered obsolte by LT_INIT
+# AC_PROG_RANLIB rendered obsolte by LT_INIT?
+AC_PROG_RANLIB
+
 #
 # disable-static: Need to disable static libraries, otherwise we can't
 # link them into the dynamically loaded Python extension
 #
-LT_INIT([disable-static])
+#LT_INIT([disable-static])
 
 # AC_PROG_INSTALL will generate an install target so that users may
 # just type 'make install' to install the software.
