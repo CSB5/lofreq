@@ -1,4 +1,5 @@
-AM_CFLAGS = -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -Wall -I../cdflib90/ -I../uthash -I@HTSLIB@ -I@SAMTOOLS@ @AM_CFLAGS@
+AM_CFLAGS = -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -Wall -I../cdflib90/ -I../uthash $(HTSLIB_CPPFLAGS) @AM_CFLAGS@
+AM_LDFLAGS = $(LDFLAGS_for_htslib) @AM_LDFLAGS@
 bin_PROGRAMS = lofreq
 lofreq_SOURCES = bam_md_ext.c bam_md_ext.h \
 bedidx.c bam_index.c \
@@ -26,7 +27,18 @@ vcf.c vcf.h \
 viterbi.c viterbi.h
 #lofreq_bamstats.h lofreq_bamstats.c
 
+if HTSLIB_IS_SRC
+
+include $(HTSDIR)/htslib_static.mk
+LDFLAGS_for_htslib = $(HTSLIB_static_LDFLAGS)
+LIBS_for_htslib = $(HTSDIR)/libhts.a $(HTSLIB_static_LIBS)
+
+else
+
+LDFLAGS_for_htslib = $(HTSLIB_LDFLAGS)
+LIBS_for_htslib = -lhts
+
+endif
 
 # note: order matters
-#lofreq_LDADD = @htslib_dir@/libhts.a @samtools_dir@/libbam.a
-lofreq_LDADD = @HTSLIB@/libhts.a @SAMTOOLS@/libbam.a ../cdflib90/libcdf.a
+lofreq_LDADD = $(LIBS_for_htslib) ../cdflib90/libcdf.a

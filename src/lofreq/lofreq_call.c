@@ -47,9 +47,9 @@
 #include <getopt.h>
 #include <stdlib.h>
 
-/* libbam includes */
+/* htslib includes */
 #include "htslib/faidx.h"
-#include "sam.h"
+#include "htslib/sam.h"
 #include "htslib/kstring.h"
 
 /* from bedidx.c */

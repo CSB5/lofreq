@@ -28,14 +28,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include "htslib/faidx.h"
-#include "sam.h"
+#include "htslib/sam.h"
 
 #include "utils.h"
 #include "bam_md_ext.h"
 #include "defaults.h"
-
-extern const char bam_nt16_nt4_table[];
 
 #define USE_EQUAL 1
 #define DROP_TAG  2
@@ -70,7 +69,7 @@ static void usage()
 int main_alnqual(int argc, char *argv[])
 {
      int c, tid = -2, ret, len, is_bam_out, is_sam_in, is_uncompressed;
-     samfile_t *fp, *fpout = 0;
+     samFile *fp, *fpout = 0;
      faidx_t *fai;
      char *ref = 0, mode_w[8], mode_r[8];
      bam1_t *b;
@@ -126,13 +125,18 @@ int main_alnqual(int argc, char *argv[])
           return 1;
      }
 
-     fp = samopen(argv[optind], mode_r, 0);
+     fp = sam_open(argv[optind], mode_r);
      if (fp == 0) return 1;
-     if (is_sam_in && (fp->header == 0 || fp->header->n_targets == 0)) {
+     bam_hdr_t *header = sam_hdr_read(fp);
+     if (header == 0) {
           fprintf(stderr, "FATAL: %s: input SAM does not have header\n", MYNAME);
           return 1;
      }
-     fpout = samopen("-", mode_w, fp->header);
+     fpout = sam_open("-", mode_w);
+     if (sam_hdr_write(fpout, header) < 0) {
+          fprintf(stderr, "FATAL: %s: failed to copy SAM header to output\n", MYNAME);
+          return 1;
+     }
 
      fai = fai_load(argv[optind+1]);
      if (! fai) {
@@ -141,29 +145,34 @@ int main_alnqual(int argc, char *argv[])
      }
 
      b = bam_init1();
-     while ((ret = samread(fp, b)) >= 0) {
+     while ((ret = sam_read1(fp, header, b)) >= 0) {
           if (b->core.tid >= 0) {
                if (tid != b->core.tid) {
                     free(ref);
-                    ref = fai_fetch(fai, fp->header->target_name[b->core.tid], &len);
+                    ref = fai_fetch(fai, header->target_name[b->core.tid], &len);
                     strtoupper(ref);/* safeguard */
                     tid = b->core.tid;
                     if (ref == 0) {
                          fprintf(stderr, "FATAL: %s failed to find sequence '%s' in the reference.\n",
-                                   MYNAME, fp->header->target_name[tid]);
+                                   MYNAME, header->target_name[tid]);
                          return 1;
                     }
                }
                
                bam_prob_realn_core_ext(b, ref, baq_flag, ext_baq, idaq_flag);
           }
-          samwrite(fpout, b);
+          if (sam_write1(fpout, header, b) < 0) {
+                         fprintf(stderr, "FATAL: %s failed to write record to output\n",
+                                   MYNAME);
+                         return 1;
+          }
      }
      bam_destroy1(b);
      
      free(ref);
      fai_destroy(fai);
-     samclose(fp); 
-     samclose(fpout);
+     bam_hdr_destroy(header);
+     sam_close(fp);
+     sam_close(fpout);
      return 0;
 }

@@ -4,10 +4,11 @@
 
 #include <ctype.h>
 #include <assert.h>
+#include <stdlib.h>
 
-/* samtools includes */
-#include "bam.h"
-#include "sam.h"
+/* htslib includes */
+#include "htslib/faidx.h"
+#include "htslib/sam.h"
 
 /* bam_index actually part of API but bam_idxstats not */
 int bam_index(int argc, char *argv[]);
@@ -26,15 +27,13 @@ int bam_idxstats(int argc, char *argv[]);
 
 int main_faidx(int argc, char *argv[]) 
 {
-     char *fi; char *fa;
+     char *fa;
      
      fa = argv[2];
-     fi = samfaipath(fa);
-     if (! fi) {
+     if (fai_build(fa) < 0) {
           return 1;
      }
 
-     free(fi);
      return 0;
 }
 
@@ -42,7 +41,7 @@ int
 main_index(int argc, char *argv[])
 {
      char *b = argv[2];
-     return bam_index_build(b);
+     return sam_index_build(b, 0);
 }
 
 int

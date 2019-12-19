@@ -75,7 +75,7 @@ void
 normalize_alnerrprof(alnerrprof_t *alnerrprof);
 
 int
-parse_alnerrprof_statsfile(alnerrprof_t *alnerrprof, const char *path, bam_header_t *bam_header);
+parse_alnerrprof_statsfile(alnerrprof_t *alnerrprof, const char *path, bam_hdr_t *bam_header);
 
 void
 calc_read_alnerrprof(double *alnerrprof, unsigned long int *used_pos, 

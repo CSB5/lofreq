@@ -188,25 +188,19 @@ else
     # Could set -O3 but that should be a user choice (env var CFLAGS)
 fi
 
-# currently samtools/libbam and htslib are not properly installed by default
-# so we use an envvar to point us to the directory
-#AC_LIB_LINKFLAGS([hts])
-#AC_LIB_LINKFLAGS([bam])
-AC_ARG_VAR(SAMTOOLS, [*Absolute* path to precompiled samtools source directory])
-if test x"$SAMTOOLS" = x""; then
-   AC_MSG_ERROR([Samtools directory not defined. Please use SAMTOOLS=/fullpath/to/samtoolsdir/])
+if test x"$HTSLIB" != x""; then
+   AC_MSG_ERROR([Use --with-htslib=/fullpath/to/htslibdir instead of HTSLIB variable])
 fi
-AC_ARG_VAR(HTSLIB, [*Absolute* path to precompiled htslib source directory])
-if test x"$HTSLIB" = x""; then
-   AC_MSG_ERROR([Htslib directory not defined. Please use HTSLIB=/fullpath/to/htslibdir/])
+m4_include([m4/ax_with_htslib.m4])
+AX_WITH_HTSLIB
+if test "$ax_cv_htslib" != yes; then
+   AC_MSG_ERROR([HTSlib not found])
 fi
-AC_CHECK_FILE(${SAMTOOLS}/bam.h, [], [AC_MSG_ERROR([bam.h not found])])
-AC_CHECK_FILE(${HTSLIB}/htslib/hts.h, [], [AC_MSG_ERROR([hts.h not found])])
+AM_CONDITIONAL([HTSLIB_IS_SRC], [test "$ax_cv_htslib_which" = source])
 
 AC_SUBST([AM_CFLAGS])
 AC_SUBST([AM_LDFLAGS])
 
-AC_DEFINE([_USE_KNETFILE], [1], [KNETFILE for samtools])
 # AC_DEFINE([SOURCEQUAL_IGNORES_INDELS], [1], [ignore indels in SQ computation as long as we can't predict them])
 
 

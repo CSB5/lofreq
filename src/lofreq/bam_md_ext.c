@@ -35,7 +35,6 @@
 #include <float.h>
 
 #include "htslib/sam.h"
-#include "bam.h"
 #include "htslib/faidx.h"
 #include "htslib/kstring.h"
 
@@ -49,9 +48,6 @@ static int pacbio_msg_printed = 0;
 #endif
 
 
-
-/* bam_md.c */
-const char bam_nt16_nt4_table[] = { 4, 0, 1, 4, 2, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4 };
 
 void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw);
 
@@ -76,7 +72,7 @@ int u_within_limits(int u, int bw) {
 
 void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
 {
-	uint32_t *cigar = bam1_cigar(b);
+	uint32_t *cigar = bam_get_cigar(b);
 	bam1_core_t *c = &b->core;
     // count the number of indels and compute posterior probability
     uint8_t *iaq = 0, *daq = 0;
@@ -84,7 +80,7 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
     int k, x, y, z;
 
 #if 0
-    fprintf(stderr, "Running idaq on %s with cigar %s\n", bam1_qname(b), cigar_str_from_bam(b));
+    fprintf(stderr, "Running idaq on %s with cigar %s\n", bam_get_qname(b), cigar_str_from_bam(b));
 #endif
 
     iaq = calloc(c->l_qseq + 1, 1);
@@ -150,7 +146,7 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
                     */
                    if (! u_within_limits(u, bw)) {
 #if 0
-                        fprintf(stderr, "WARNING u of %d not within limits for %s\n", u, bam1_qname(b));
+                        fprintf(stderr, "WARNING u of %d not within limits for %s\n", u, bam_get_qname(b));
 #endif
                         continue;
                    }
@@ -170,7 +166,7 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
               free(del_seq);
 #ifdef DEBUG
               fprintf(stderr, "DEL %s %d %lg %c %s\n",
-                      del_seq, del_rep+1, ap, daq[qpos-1], bam1_qname(b));
+                      del_seq, del_rep+1, ap, daq[qpos-1], bam_get_qname(b));
 #endif
          } else if (op == BAM_CINS) {
               char *ins_seq;
@@ -186,7 +182,7 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
               if (qpos == 0) continue;
               ins_seq = malloc((oplen+1)*sizeof(char));
               for (j = 0; j < oplen; j++) {
-                   ins_seq[j] = bam_nt16_rev_table[bam1_seqi(bam1_seq(b), y)];
+                   ins_seq[j] = seq_nt16_str[bam_seqi(bam_get_seq(b), y)];
                    y++;
                    z++;
               }
@@ -213,7 +209,7 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
                     */
                    if (! u_within_limits(u, bw)) {
 #if 0
-                        fprintf(stderr, "WARNING u of %d not within limits for %s\n", u, bam1_qname(b));
+                        fprintf(stderr, "WARNING u of %d not within limits for %s\n", u, bam_get_qname(b));
 #endif
                         continue;
                    }
@@ -232,7 +228,7 @@ void idaq(bam1_t *b, const char *ref, double **pd, int xe, int xb, int bw)
               free(ins_seq);
 #ifdef DEBUG
               fprintf(stderr, "INS %s %d %lg %c %s\n", 
-                      ins_seq, ins_rep+1, ap, iaq[qpos-1], bam1_qname(b));
+                      ins_seq, ins_rep+1, ap, iaq[qpos-1], bam_get_qname(b));
 #endif
          } else if (op == BAM_CSOFT_CLIP) {
               for (j = 0; j < oplen; j++) {
@@ -267,7 +263,7 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref,
 {
 /*#define ORIG_BAQ 1*/
      int k, i, bw, x, y, yb, ye, xb, xe;
-     uint32_t *cigar = bam1_cigar(b);
+     uint32_t *cigar = bam_get_cigar(b);
      bam1_core_t *c = &b->core;
 #ifdef PACBIO_REALN
      kpa_ext_par_t conf = kpa_ext_par_lofreq_pacbio;
@@ -278,8 +274,8 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref,
 #else
      kpa_ext_par_t conf = kpa_ext_par_lofreq_illumina;
 #endif
-     /*uint8_t *bq = 0, *zq = 0, *qual = bam1_qual(b);*/
-     uint8_t *qual = bam1_qual(b);
+     /*uint8_t *bq = 0, *zq = 0, *qual = bam_get_qual(b);*/
+     uint8_t *qual = bam_get_qual(b);
      uint8_t *prec_ai, *prec_ad, *prec_baq;
      int has_ins = 0, has_del = 0;
      double **pd = 0;
@@ -350,7 +346,7 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref,
 
 #if 0
     fprintf(stderr, "%s with cigar %s: baq_flag=%d prec_baq=%p has_del=%d prec_ad=%p has_ins=%d prec_ai=%p, idaq_flag=%d\n", 
-            bam1_qname(b), cigar_str_from_bam(b),  baq_flag, prec_baq, has_del, prec_ad, has_ins, prec_ai, idaq_flag);
+            bam_get_qname(b), cigar_str_from_bam(b),  baq_flag, prec_baq, has_del, prec_ad, has_ins, prec_ai, idaq_flag);
 #endif
     /* don't do anything if everything's there already */
     if (baq_flag==0 || prec_baq) {
@@ -363,7 +359,7 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref,
          }
          if (skip) {
 #if 0
-              fprintf(stderr, "Reusing all alignment quality values for read %s!\n", bam1_qname(b));
+              fprintf(stderr, "Reusing all alignment quality values for read %s!\n", bam_get_qname(b));
 #endif
               return 0;
          }
@@ -388,25 +384,25 @@ int bam_prob_realn_core_ext(bam1_t *b, const char *ref,
 
 
 	{ /* glocal */
-		uint8_t *s, *r, *q, *seq = bam1_seq(b), *bq;
+		uint8_t *s, *r, *q, *seq = bam_get_seq(b), *bq;
 		int *state;
         int bw;
 
 		bq = calloc(c->l_qseq + 1, 1);
 		memcpy(bq, qual, c->l_qseq);
 		s = calloc(c->l_qseq, 1);
-		for (i = 0; i < c->l_qseq; ++i) s[i] = bam_nt16_nt4_table[bam1_seqi(seq, i)];
+		for (i = 0; i < c->l_qseq; ++i) s[i] = seq_nt16_int[bam_seqi(seq, i)];
 		r = calloc(xe - xb, 1);
 		for (i = xb; i < xe; ++i) {
 			if (ref[i] == 0) { xe = i; break; }
-			r[i-xb] = bam_nt16_nt4_table[bam_nt16_table[(int)ref[i]]];
+			r[i-xb] = seq_nt16_int[seq_nt16_table[(int)ref[i]]];
 		}
 		state = calloc(c->l_qseq, sizeof(int));
 		q = calloc(c->l_qseq, 1);
           
           
 #ifdef DEBUG
-        fprintf(stderr, "processing read %s\n", bam1_qname(b));
+        fprintf(stderr, "processing read %s\n", bam_get_qname(b));
 #endif
         kpa_ext_glocal(r, xe-xb, s, c->l_qseq, qual, &conf, state, q, pd, &bw);
 

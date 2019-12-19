@@ -32,7 +32,7 @@
 #include <getopt.h>
 
 #include "htslib/faidx.h"
-#include "sam.h" 
+#include "htslib/sam.h"
 #include "log.h"
 #include "utils.h"
 #include "defaults.h"
@@ -44,16 +44,18 @@ char DINDELQ2[] = "!CCCBA;963210/----,"; /* *10 */
 
 
 typedef struct {
-     samfile_t *in;
-     bamFile out;
+     samFile *in;
+     samFile *out;
+     bam_hdr_t *header;
      int iq;
      int dq;
 } data_t_uniform;
 
 
 typedef struct {
-     samfile_t *in;
-     bamFile out;
+     samFile *in;
+     samFile *out;
+     bam_hdr_t *header;
      faidx_t *fai;
      int *hpcount;
      int rlen;
@@ -93,7 +95,7 @@ static int uniform_fetch_func(bam1_t *b, void *data)
      }
      bam_aux_append(b, BD_TAG, 'Z', c->l_qseq+1, (uint8_t*) dq);
 
-     bam_write1(tmp->out, b);
+     sam_write1(tmp->out, tmp->header, b);
 
      free(iq);
      free(dq);
@@ -139,17 +141,17 @@ static int dindel_fetch_func(bam1_t *b, void *data)
      uint8_t *to_delete;
 
      /* don't change reads failing default mask: BAM_FUNMAP | BAM_FSECONDARY | BAM_FQCFAIL | BAM_FDUP */
-     if (c->flag & BAM_DEF_MASK) {
-          /* fprintf(stderr, "skipping read: %s at pos %d\n", bam1_qname(b), c->pos); */
-          bam_write1(tmp->out, b);
+     if (c->flag & (BAM_FUNMAP | BAM_FSECONDARY | BAM_FQCFAIL | BAM_FDUP)) {
+          /* fprintf(stderr, "skipping read: %s at pos %d\n", bam_get_qname(b), c->pos); */
+          sam_write1(tmp->out, tmp->header, b);
           return 0;
      }
 
      /* get the reference sequence and compute homopolymer array */
      if (tmp->tid != c->tid) {
              /*fprintf(stderr, "fetching reference sequence %s\n",
-               tmp->in->header->target_name[c->tid]); */
-          char *ref = fai_fetch(tmp->fai, tmp->in->header->target_name[c->tid], &rlen);
+               tmp->header->target_name[c->tid]); */
+          char *ref = fai_fetch(tmp->fai, tmp->header->target_name[c->tid], &rlen);
           strtoupper(ref);/* safeguard */
           int rlen = strlen(ref);
           tmp->tid = c->tid;
@@ -162,7 +164,7 @@ static int dindel_fetch_func(bam1_t *b, void *data)
      }
 
      /* parse the cigar string */
-     uint32_t *cigar = bam1_cigar(b);
+     uint32_t *cigar = bam_get_cigar(b);
      uint8_t indelq[c->l_qseq+1];
      /* fprintf(stderr, "l_qseq:%d\n", c->l_qseq); */
      int i;
@@ -190,7 +192,7 @@ static int dindel_fetch_func(bam1_t *b, void *data)
                     y++;
                }
           } else {
-               LOG_FATAL("unknown op %d for read %s\n", op, bam1_qname(b));/* FIXME skip? seen this somewhere else properly handled */
+               LOG_FATAL("unknown op %d for read %s\n", op, bam_get_qname(b));/* FIXME skip? seen this somewhere else properly handled */
                exit(1);
           }
      }
@@ -208,7 +210,7 @@ static int dindel_fetch_func(bam1_t *b, void *data)
      }
      bam_aux_append(b, BD_TAG, 'Z', c->l_qseq+1, indelq);
 
-     bam_write1(tmp->out, b);
+     sam_write1(tmp->out, tmp->header, b);
      return 0;
 }
 
@@ -222,8 +224,13 @@ int add_uniform(const char *bam_in, const char *bam_out,
     bam1_t *b = NULL;
     int count = 0;
 
-	if ((tmp.in = samopen(bam_in, "rb", 0)) == 0) {
+	if ((tmp.in = sam_open(bam_in, "rb")) == 0) {
          LOG_FATAL("Failed to open BAM file %s\n", bam_in);
+         return 1;
+    }
+
+    if ((tmp.header = sam_hdr_read(tmp.in)) == 0) {
+         LOG_FATAL("Failed to read headers from BAM file %s\n", bam_in);
          return 1;
     }
 
@@ -231,21 +238,21 @@ int add_uniform(const char *bam_in, const char *bam_out,
     tmp.dq = dq;
 
     if (!bam_out || bam_out[0] == '-') {
-         tmp.out = bam_dopen(fileno(stdout), "w");
+         tmp.out = sam_open("-", "wb");
     } else {
-         tmp.out = bam_open(bam_out, "w");
+         tmp.out = sam_open(bam_out, "wb");
     }
-    bam_header_write(tmp.out, tmp.in->header);
+    sam_hdr_write(tmp.out, tmp.header);
     
     b = bam_init1();
-    while (samread(tmp.in, b) >= 0) {
+    while (sam_read1(tmp.in, tmp.header, b) >= 0) {
          count++;
          uniform_fetch_func(b, &tmp); 
     }
     bam_destroy1(b);
-    
-    samclose(tmp.in);
-    bam_close(tmp.out);
+    bam_hdr_destroy(tmp.header);
+    sam_close(tmp.in);
+    sam_close(tmp.out);
     LOG_VERBOSE("Processed %d reads\n", count);
     return 0;
 }
@@ -257,10 +264,14 @@ int add_dindel(const char *bam_in, const char *bam_out, const char *ref)
     int count = 0;
     bam1_t *b = NULL;
 
-	if ((tmp.in = samopen(bam_in, "rb", 0)) == 0) {
+	if ((tmp.in = sam_open(bam_in, "rb")) == 0) {
          LOG_FATAL("Failed to open BAM file %s\n", bam_in);
              return 1;
         }
+    if ((tmp.header = sam_hdr_read(tmp.in)) == 0) {
+         LOG_FATAL("Failed to read headers from BAM file %s\n", bam_in);
+         return 1;
+    }
     if ((tmp.fai = fai_load(ref)) == 0) {
          LOG_FATAL("Failed to open reference file %s\n", ref);
          return 1;
@@ -268,25 +279,25 @@ int add_dindel(const char *bam_in, const char *bam_out, const char *ref)
     /*warn_old_fai(ref);*/
 
     if (!bam_out || bam_out[0] == '-') {
-         tmp.out = bam_dopen(fileno(stdout), "w");
+         tmp.out = sam_open("-", "wb");
     } else {
-         tmp.out = bam_open(bam_out, "w");
+         tmp.out = sam_open(bam_out, "wb");
     }
-    bam_header_write(tmp.out, tmp.in->header);
+    sam_hdr_write(tmp.out, tmp.header);
     
     b = bam_init1();
     tmp.tid = -1;
     tmp.hpcount = 0;
     tmp.rlen = 0;
-    while (samread(tmp.in, b) >= 0) {
+    while (sam_read1(tmp.in, tmp.header, b) >= 0) {
          count++;
          dindel_fetch_func(b, &tmp); 
     }
     bam_destroy1(b);
-    
+    bam_hdr_destroy(tmp.header);
     if (tmp.hpcount) free(tmp.hpcount);
-    samclose(tmp.in);
-    bam_close(tmp.out);
+    sam_close(tmp.in);
+    sam_close(tmp.out);
     fai_destroy(tmp.fai);
 	LOG_VERBOSE("Processed %d reads\n", count);
 	return 0;

@@ -37,7 +37,7 @@
 #include <fenv.h>
 
 #include "htslib/kstring.h"
-#include "sam.h"
+#include "htslib/sam.h"
 
 #include "log.h"
 #include "plp.h"
@@ -46,10 +46,6 @@
 #include "snpcaller.h"
 #include "bam_md_ext.h"
 
-/* bam_md.c
-const char bam_nt16_nt4_table[] = { 4, 0, 1, 4, 2, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4 };
-*/
-extern const char bam_nt16_nt4_table[];
 const char *bam_nt4_rev_table = "ACGTN";
 
 
@@ -92,9 +88,9 @@ const unsigned char bam_nt4_table[256] = {
 };
 
 typedef struct {
-     bamFile fp;
-     bam_iter_t iter;
-     bam_header_t *h;
+     samFile *fp;
+     hts_itr_t* iter;
+     bam_hdr_t *h;
      int ref_id;
      char *ref;
      const mplp_conf_t *conf;
@@ -471,7 +467,7 @@ source_qual(const bam1_t *b, const char *ref,
      num_err_probs = count_cigar_ops(op_counts, op_quals, b, ref, min_bq, target);
      if (1 > num_err_probs) {
 #ifdef TRACE
-          LOG_DEBUG("count_cigar_ops returned %d counts on read %s\n", num_err_probs, bam1_qname(b));
+          LOG_DEBUG("count_cigar_ops returned %d counts on read %s\n", num_err_probs, bam_get_qname(b));
 #endif
           src_qual = -1;
           goto free_and_exit;
@@ -607,27 +603,27 @@ mplp_func(void *data, bam1_t *b)
 
      do {
           int has_ref;
-          ret = ma->iter? bam_iter_read(ma->fp, ma->iter, b) : bam_read1(ma->fp, b);
+          ret = ma->iter? sam_itr_next(ma->fp, ma->iter, b) : sam_read1(ma->fp, ma->h, b);
           if (ret < 0)
                break;
 
 #ifdef TRACE
-          LOG_DEBUG("Got read %s with flag %d\n", bam1_qname(b), core.flag);
+          LOG_DEBUG("Got read %s with flag %d\n", bam_get_qname(b), core.flag);
 #endif
           if (b->core.tid < 0 || (b->core.flag&BAM_FUNMAP)) { /* exclude unmapped reads */
                skip = 1;
                continue;
           }
          
-          if (b->core.flag & BAM_DEF_MASK) {/* == BAM_FUNMAP | BAM_FSECONDARY | BAM_FQCFAIL | BAM_FDUP */
+          if (b->core.flag & (BAM_FUNMAP | BAM_FSECONDARY | BAM_FQCFAIL | BAM_FDUP)) {
 #ifdef TRACE
-               LOG_DEBUG("%s BAM_DEF_MASK match\n", bam1_qname(b));
+               LOG_DEBUG("%s BAM_DEF_MASK match\n", bam_get_qname(b));
 #endif
                skip = 1; 
                continue;
           }
           if (ma->conf->bed) { /* test overlap */
-               skip = !bed_overlap(ma->conf->bed, ma->h->target_name[b->core.tid], b->core.pos, bam_calend(&b->core, bam1_cigar(b)));
+               skip = !bed_overlap(ma->conf->bed, ma->h->target_name[b->core.tid], b->core.pos, bam_endpos(b));
                if (skip)
                     continue;
           }
@@ -662,8 +658,9 @@ mplp_func(void *data, bam1_t *b)
 #if 0
           {
                fprintf(stderr, "before realn\n");
-               samfile_t *fp = samopen("-", "w",  ma->h);
-               samwrite(fp, b);
+               samFile *fp = sam_open("-", "w");
+               sam_hdr_write(fp, ma->h);
+               sam_write1(fp, ma->h, b);
                fflush(stdout);
           }
 #endif
@@ -681,7 +678,7 @@ mplp_func(void *data, bam1_t *b)
                }                    
 
                if (bam_prob_realn_core_ext(b, ma->ref, baq_flag, baq_ext, idaq_flag)) {
-                    LOG_ERROR("bam_prob_realn_core() failed for %s\n", bam1_qname(b));
+                    LOG_ERROR("bam_prob_realn_core() failed for %s\n", bam_get_qname(b));
                }
 
 #if 0
@@ -699,8 +696,9 @@ mplp_func(void *data, bam1_t *b)
 #if 0
           {
                fprintf(stdout, "after realn\n");
-               samfile_t *fp = samopen("-", "w",  ma->h);
-               samwrite(fp, b);
+               samFile *fp = sam_open("-", "w");
+               sam_hdr_write(fp, ma->h);
+               sam_write1(fp, ma->h, b);
                fflush(stdout);
           }
       
@@ -814,7 +812,7 @@ void compile_plp_col(plp_col_t *plp_col,
      /* computation of depth (after read-level *and* base-level filtering)
       * samtools-0.1.18/bam2depth.c:
       *   if (p->is_del || p->is_refskip) ++m;
-      *   else if (bam1_qual(p->b)[p->qpos] < bq) ++m
+      *   else if (bam_get_qual(p->b)[p->qpos] < bq) ++m
       * n_plp[i] - m
       */
      ref_base = (ref && pos < ref_len)? ref[pos] : 'N';
@@ -899,7 +897,7 @@ void compile_plp_col(plp_col_t *plp_col,
           LOG_FIXME("At %s:%d %c: p->is_del=%d p->is_refskip=%d p->indel=%d p->is_head=%d p->is_tail=%d\n",
                     plp_col->target,
                     plp_col->pos+1,
-                    bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos)],
+                    seq_nt16_str[bam_seqi(bam_get_seq(p->b), p->qpos)],
                     p->is_del, p->is_refskip, p->indel, p->is_head, p->is_tail);
 #endif
           /* no need for check if mq is within user defined
@@ -919,14 +917,14 @@ void compile_plp_col(plp_col_t *plp_col,
 
 #if 0
                /* nt for printing */
-               nt = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos)];
-               nt = bam1_strand(p->b)? tolower(nt) : toupper(nt);
+               nt = seq_nt16_str[bam_seqi(bam_get_seq(p->b), p->qpos)];
+               nt = bam_is_rev(p->b)? tolower(nt) : toupper(nt);
 #endif
 
                /* nt4 for indexing */
-               nt4 = bam_nt16_nt4_table[bam1_seqi(bam1_seq(p->b), p->qpos)];
+               nt4 = seq_nt16_int[bam_seqi(bam_get_seq(p->b), p->qpos)];
 
-               bq = bam1_qual(p->b)[p->qpos];
+               bq = bam_get_qual(p->b)[p->qpos];
 
                /* minimal base-call quality filtering. doing this here
                 * will make all downstream analysis blind to filtering
@@ -946,7 +944,7 @@ void compile_plp_col(plp_col_t *plp_col,
                 */
                if (bq > SANGER_PHRED_MAX) {
                     /* bq = SANGER_PHRED_MAX; /@ Sanger/Phred max */
-                    LOG_WARN("Base quality above allowed maximum detected (%d > %d). Using max instead\n", bq, SANGER_PHRED_MAX, bam1_qname(p->b));
+                    LOG_WARN("Base quality above allowed maximum detected (%d > %d). Using max instead\n", bq, SANGER_PHRED_MAX, bam_get_qname(p->b));
                     bq = SANGER_PHRED_MAX;
                }
                PLP_COL_ADD_QUAL(& plp_col->base_quals[nt4], bq);
@@ -1003,7 +1001,7 @@ void compile_plp_col(plp_col_t *plp_col,
                }
 
                base_counts[nt4] += count_incr;
-               if (bam1_strand(p->b)) {
+               if (bam_is_rev(p->b)) {
                     plp_col->rv_counts[nt4] += 1;
                } else {
                     plp_col->fw_counts[nt4] += 1;
@@ -1087,7 +1085,7 @@ check_indel:
 
                          /* get inserted sequence */
                          for (j = 1; j <= p->indel; ++j) {
-                              int c = bam_nt16_rev_table[bam1_seqi(bam1_seq(p->b), p->qpos+j)];
+                              int c = seq_nt16_str[bam_seqi(bam_get_seq(p->b), p->qpos+j)];
                               ins_seq[j-1] = toupper(c);
                          }
                          ins_seq[j-1] = '\0';
@@ -1096,13 +1094,13 @@ check_indel:
                          /*LOG_DEBUG("Insertion of %s at %d with iq %d iaq %d\n", ins_seq, pos, iq, iaq);*/
                          add_ins_sequence(&plp_col->ins_event_counts,
                               ins_seq, iq, iaq, mq, sq,
-                              bam1_strand(p->b)? 1: 0);
+                              bam_is_rev(p->b)? 1: 0);
 
                          PLP_COL_ADD_QUAL(& plp_col->del_quals, dq);
                          PLP_COL_ADD_QUAL(& plp_col->del_map_quals, mq);
                          PLP_COL_ADD_QUAL(& plp_col->del_source_quals, sq);
                          del_nonevent_qual += dq;
-                         if (bam1_strand(p->b)) {
+                         if (bam_is_rev(p->b)) {
                               plp_col->non_del_fw_rv[1] += 1;
                          } else {
                               plp_col->non_del_fw_rv[0] += 1;
@@ -1152,12 +1150,12 @@ check_indel:
 #endif
                          add_del_sequence(&plp_col->del_event_counts,
                               del_seq, dq, daq, mq, sq,
-                              bam1_strand(p->b)? 1: 0);
+                              bam_is_rev(p->b)? 1: 0);
                          PLP_COL_ADD_QUAL(& plp_col->ins_quals, iq);
                          PLP_COL_ADD_QUAL(& plp_col->ins_map_quals, mq);
                          PLP_COL_ADD_QUAL(& plp_col->ins_source_quals, sq);
                          ins_nonevent_qual += iq;
-                         if (bam1_strand(p->b)) {
+                         if (bam_is_rev(p->b)) {
                               plp_col->non_ins_fw_rv[1] += 1;
                          } else {
                               plp_col->non_ins_fw_rv[0] += 1;
@@ -1171,7 +1169,7 @@ check_indel:
                     PLP_COL_ADD_QUAL(& plp_col->ins_quals, iq);
                     PLP_COL_ADD_QUAL(& plp_col->ins_map_quals, mq);
                     ins_nonevent_qual += iq;
-                    if (bam1_strand(p->b)) {
+                    if (bam_is_rev(p->b)) {
                          plp_col->non_ins_fw_rv[1] += 1;
                     } else {
                          plp_col->non_ins_fw_rv[0] += 1;
@@ -1181,7 +1179,7 @@ check_indel:
                     PLP_COL_ADD_QUAL(& plp_col->del_quals, dq);
                     PLP_COL_ADD_QUAL(& plp_col->del_map_quals, mq);
                     del_nonevent_qual += dq;
-                    if (bam1_strand(p->b)) {
+                    if (bam_is_rev(p->b)) {
                          plp_col->non_del_fw_rv[1] += 1;
                     } else {
                          plp_col->non_del_fw_rv[0] += 1;
@@ -1273,7 +1271,7 @@ check_indel:
           plp_col_debug_print(plp_col, stderr);
      }
 #if 0
-     plp_col_mpileup_print(plp_col, conf, stdout);
+     plp_col_mpileup_print(plp_col, stdout);
 #endif
 
      for (i = 0; i < NUM_NT4; ++i) {
@@ -1298,7 +1296,7 @@ mpileup(const mplp_conf_t *mplp_conf,
     int i, tid, pos, *n_plp, tid0 = -1, beg0 = 0, end0 = 1u<<29, ref_len = -1, ref_tid = -1, max_depth;
     const bam_pileup1_t **plp;
     bam_mplp_t iter;
-    bam_header_t *h = 0;
+    bam_hdr_t *h = 0;
     char *ref;
     kstring_t buf;
     long long int plp_counter = 0; /* note: some cols are simply skipped */
@@ -1329,7 +1327,7 @@ mpileup(const mplp_conf_t *mplp_conf,
      *
      */
     for (i = 0; i < n; ++i) {
-        bam_header_t *h_tmp;
+        bam_hdr_t *h_tmp;
         if (0 != strcmp(fn[i], "-")) {
           if (! file_exists(fn[i])) {
             fprintf(stderr, "File '%s' does not exist. Exiting...\n", fn[i]);
@@ -1337,9 +1335,9 @@ mpileup(const mplp_conf_t *mplp_conf,
           }
         }
         data[i] = calloc(1, sizeof(mplp_aux_t));
-        data[i]->fp = strcmp(fn[i], "-") == 0? bam_dopen(fileno(stdin), "r") : bam_open(fn[i], "r");
+        data[i]->fp = sam_open(fn[i], "r");
         data[i]->conf = mplp_conf;
-        h_tmp = bam_header_read(data[i]->fp);
+        h_tmp = sam_hdr_read(data[i]->fp);
         if ( !h_tmp ) {
              fprintf(stderr,"[%s] fail to read the header of %s\n", __func__, fn[i]);
              exit(1);
@@ -1347,25 +1345,23 @@ mpileup(const mplp_conf_t *mplp_conf,
         data[i]->h = i? h : h_tmp; /* for i==0, "h" has not been set yet */
 
         if (mplp_conf->reg) {
-            int beg, end;
-            bam_index_t *idx;
-            idx = bam_index_load(fn[i]);
+            hts_idx_t *idx;
+            idx = sam_index_load(data[i]->fp, fn[i]);
             if (idx == 0) {
                 fprintf(stderr, "[%s] fail to load index for %d-th input.\n", __func__, i+1);
                 exit(1);
             }
-            if (bam_parse_region(h_tmp, mplp_conf->reg, &tid, &beg, &end) < 0) {
+            if ((data[i]->iter = sam_itr_querys(idx, h_tmp, mplp_conf->reg)) == NULL) {
                 fprintf(stderr, "[%s] malformatted region or wrong seqname for %d-th input.\n", __func__, i+1);
                 exit(1);
             }
-            if (i == 0) tid0 = tid, beg0 = beg, end0 = end;
-            data[i]->iter = bam_iter_query(idx, tid, beg, end);
-            bam_index_destroy(idx);
+            if (i == 0) tid0 = data[i]->iter->tid, beg0 = data[i]->iter->beg, end0 = data[i]->iter->end;
+            hts_idx_destroy(idx);
         }
         if (i == 0) {
              h = h_tmp;
         } else {
-            bam_header_destroy(h_tmp);
+            bam_hdr_destroy(h_tmp);
         }
     }
     LOG_DEBUG("%s\n", "BAM header initialized");
@@ -1454,10 +1450,10 @@ mpileup(const mplp_conf_t *mplp_conf,
 #endif
     free(buf.s);
     bam_mplp_destroy(iter);
-    bam_header_destroy(h);
+    bam_hdr_destroy(h);
     for (i = 0; i < n; ++i) {
-        bam_close(data[i]->fp);
-        if (data[i]->iter) bam_iter_destroy(data[i]->iter);
+        sam_close(data[i]->fp);
+        if (data[i]->iter) bam_itr_destroy(data[i]->iter);
         free(data[i]);
     }
     free(data); free(plp); free(ref); free(n_plp);

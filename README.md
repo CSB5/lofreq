@@ -24,8 +24,7 @@ You will need:
 - a C compiler (e.g. gcc or clang)
 - a Python 2.7 or Python 3 interpreter
 - zlib developer files
-- a compiled version of [samtools 1.1]((http://sourceforge.net/projects/samtools/files/samtools/1.1/samtools-1.1.tar.bz2/download))
-- a compiled version of htslib 1.1; use the one that comes bundled with samtools!)
+- a compiled version of [HTSlib 1.4 or later](https://github.com/samtools/htslib)
 
 ### Compilation
 
@@ -36,9 +35,8 @@ You will need:
     `bootstrap` again
   - Subsequent pulls won't require rerunning `./bootstrap`. This is
     only necesary when changing `configure.ac` or any of the `Makefile.am`
-- Run `./configure` with the **absolute** path to samtools and htslib
-  (e.g. `./configure SAMTOOLS=/path-to-samtools HTSLIB=/path-to-htslib
-  [--prefix=inst-path]`)
+- Run `./configure` with the **absolute** path to HTSlib
+  (e.g. `./configure --with-htslib=/path-to-htslib [--prefix=inst-path]`)
 - Run `make`
   - At this point you can already start using lofreq: `./bin/lofreq`
 - Run `make install` to properly install the package
