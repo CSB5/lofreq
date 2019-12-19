@@ -5,9 +5,11 @@ title: Installation
 
 
 LoFreq comes bundled as two packages: [(i) a source package](#source)
-or [(ii) a binary/precompiled package](#binary). Installing the binary
-package will be the simplest for most users. See below for specific
+or [(ii) a binary/precompiled package](#binary). See below for specific
 instructions for each of the above listed options.
+
+LoFreq is also available via [Bioconda](https://bioconda.github.io/) and [Homebrew](https://docs.brew.sh/Homebrew-on-Linux), which might be the most
+convenient installation option for most.
 
 # <a name="binary">Installation from Binary Packages</a>
 
@@ -50,16 +52,14 @@ To build the LoFreq source you will need
 - a C compiler (e.g. gcc or clang)
 - a Python 2.7 or Python 3 interpreter (2.6 won't work for sure)
 - zlib developer files
-- a compiled version of samtools 1.1 and htslib 1.1
-  (note: [samtools 1.1](http://sourceforge.net/projects/samtools/files/samtools/1.1/samtools-1.1.tar.bz2/download)
-  already contains htslib 1.1)
+- [HTSlib 1.4 or later](https://github.com/samtools/htslib)
 
 If those requirements are met, download LoFreq's source package
 [from the dist folder]({{ site.github.dist }}) on Github,
 unpack it and `cd` to the newly created directory. Assuming you have
 admin rights, use the following to compile and install LoFreq:
 
-    ./configure SAMTOOLS=/path-to-samtools HTSLIB=/path-to-htslib
+    ./configure --with-htslib=/path-to-htslib 
     make install
 
 If you don't have admin rights or want to install LoFreq to a
@@ -86,7 +86,6 @@ with the GNU triplejump:
 - `make install`
 
 
- 
 # <a name="prefix">Installation to a Non-Standard Directory</a>
 
 If you installed LoFreq to a non-system directory (e.g. your
@@ -95,7 +94,7 @@ bin sub-directory is part of your `PATH` environment
 variable.
 
 If you also want to use the non-essential Python tools that come with
-LoFreq, please also make sure to add the corresponding 
+LoFreq, please also make sure to add the corresponding
 sub-directory to your `PYTHONPATH`.
 
 For example, for the prefix setting mentioned above (i.e.
