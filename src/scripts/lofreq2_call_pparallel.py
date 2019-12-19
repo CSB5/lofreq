@@ -19,8 +19,9 @@ import multiprocessing
 import tempfile
 import shutil
 import os
-import gzip
 from collections import namedtuple
+from math import log10
+
 
 #--- third-party imports
 #
@@ -60,8 +61,6 @@ def prob_to_phredqual(prob):
     20
     """
 
-    from math import log10
-
     assert prob >= 0.0 and prob <= 1.0, (
         "Probability must be >=0 and <=1, but got %f" % prob)
     try:
@@ -70,7 +69,7 @@ def prob_to_phredqual(prob):
         # prob is zero
         return MAXINT
 
-    
+
 def split_region_(start, end):
     """split region (given in zero-based half-open start and end
     coordinates) in two halves
@@ -196,13 +195,13 @@ def sq_list_from_bam_samtools(bam):
     retcode = process.returncode
     if retcode != 0:
         LOG.fatal("%s exited with error code '%d'." \
-                  " Command was '%s'. stderr was: '%s'" % (
-                      cmd.split()[0], retcode, cmd, stderrdata))
+                  " Command was '%s'. stderr was: '%s'",
+                  cmd.split()[0], retcode, cmd, stderrdata)
         raise OSError
     if sys.version_info[0] > 2:
         stdoutdata = stdoutdata.decode()
     stdout_lines = str.splitlines(stdoutdata)
-        
+ 
     sq_list = []
 
     for line in stdout_lines:
@@ -354,6 +353,8 @@ def main():
                          " be passed down to 'lofreq call'. Make sure that"
                          " the\nremaining args are valid 'lofreq call'"
                          " args as no syntax check will be\nperformed.\n")
+        sys.stderr.write("Note that the output is always compressed vcf and"
+                         " stdout is not supported\n")
         sys.exit(1)
 
     verbose = True
@@ -396,10 +397,7 @@ def main():
                   " [int] as arg (number of threads)")
         sys.exit(1)
     if num_threads > multiprocessing.cpu_count():
-        LOG.fatal("Requested number of threads higher than number"
-                 " of CPUs. Will reduce value to match number of CPUs")
-        #num_threads = multiprocessing.cpu_count()
-        sys.exit(1)
+        LOG.warning("Requested number of threads higher than number of CPUs.")
 
 
     # reference. if not indexed, multiple threads might want to index it
@@ -445,8 +443,8 @@ def main():
 
     # get final/original output file name and remove arg
     #
-    final_vcf_out = "-"# default
     idx = -1
+    final_vcf_out = "-"
     for arg in ['-o', '--out']:
         if arg in lofreq_call_args:
             idx = lofreq_call_args.index(arg)
@@ -458,6 +456,11 @@ def main():
                       " VCF output file %s" % final_vcf_out)
             sys.exit(1)
         lofreq_call_args = lofreq_call_args[0:idx] +  lofreq_call_args[idx+2:]
+    if final_vcf_out == "-":
+        LOG.fatal("VCF output file not set. Please note that output is vcf.gz and"
+                  " stdout is not supported.")
+        sys.exit(1)
+
 
     # bed-file
     #
@@ -539,8 +542,8 @@ def main():
     LOG.debug("lofreq_call_args = %s" % (lofreq_call_args))
     #import pdb; pdb.set_trace()
 
-    LOG.info("Using %d threads with following basic args: %s\n" % (
-            num_threads, ' '.join(lofreq_call_args)))
+    LOG.info("Using %d threads with following basic args: %s\n",
+             num_threads, ' '.join(lofreq_call_args))
 
 
     # At this stage all basic args are known. In theory there are
@@ -590,12 +593,12 @@ def main():
         biggest = bins[-1]
         biggest_length = region_length(biggest)
 
-        LOG.debug("biggest_length=%d total_length/(%d*num_threads)=%f" % (
-            biggest_length, BIN_PER_THREAD, total_length/(BIN_PER_THREAD*num_threads)))
+        LOG.debug("biggest_length=%d total_length/(%d*num_threads)=%f",
+                  biggest_length, BIN_PER_THREAD, total_length/(BIN_PER_THREAD*num_threads))
         if biggest_length < total_length/(BIN_PER_THREAD*num_threads):
             break
         elif biggest_length < 100:
-            LOG.warn("Regions getting too small to be efficiently processed")
+            LOG.warning("Regions getting too small to be efficiently processed")
             break
 
         biggest = bins.pop()
@@ -707,37 +710,32 @@ def main():
         LOG.info("Copying concatenated vcf file to final destination")
         LOG.debug("vcf_concat=%s final_vcf_out=%s" % (vcf_concat, final_vcf_out))
 
-        if final_vcf_out == "-":
-            fh_in = gzip.open(vcf_concat, 'r')
-            fh_out = sys.stdout
-            shutil.copyfileobj(fh_in, fh_out)
-            fh_in.close()
-        else:
-            # check again if final output doesn't exist, just to be sure
-            if os.path.exists(final_vcf_out):
-                LOG.fatal("Cowardly refusing to overwrite %s with %s" % (
-                    final_vcf_out, vcf_concat))
-                sys.exit(1)
+        assert final_vcf_out != "-"
+        # check again if final output doesn't exist, just to be sure
+        if os.path.exists(final_vcf_out):
+            LOG.fatal("Cowardly refusing to overwrite %s with %s" % (
+                final_vcf_out, vcf_concat))
+            sys.exit(1)
 
-            shutil.copy(vcf_concat, final_vcf_out)
+        shutil.copy(vcf_concat, final_vcf_out)
 
-            # try to copy index as well if exists
-            tidx_src = vcf_concat + ".tbi"
-            if os.path.exists(tidx_src):
-                tidx_dst = final_vcf_out + ".tbi"
-                shutil.copy(tidx_src, tidx_dst)
+        # try to copy index as well if exists
+        tidx_src = vcf_concat + ".tbi"
+        if os.path.exists(tidx_src):
+            tidx_dst = final_vcf_out + ".tbi"
+            shutil.copy(tidx_src, tidx_dst)
 
     else:
         cmd = ' '.join(cmd)# subprocess.call takes string
         LOG.info("Executing %s\n" % (cmd))
         if subprocess.call(cmd, shell=True):
             LOG.fatal("Final filtering command failed."
-            " Commmand was %s" % (cmd))
+                      " Commmand was %s" % (cmd))
             sys.exit(1)
 
     # remove temp files/dir
     if False:
-        LOG.warn("Not deleting tmp dir %s" % tmp_dir)
+        LOG.warning("Not deleting tmp dir %s" % tmp_dir)
     else:
         shutil.rmtree(tmp_dir)
 
