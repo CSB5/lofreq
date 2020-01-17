@@ -819,7 +819,7 @@ call_snvs(const plp_col_t *p, varcall_conf_t *conf)
            long double pvalue = pvalues[i];
            int reported_snv_ref = p->ref_base;
 
-           if (alt_base==reported_snv_ref) { 
+           if (alt_base==reported_snv_ref) {
                 /* self comparison */
 #if DEBUG
                 LOG_DEBUG("%s\n", "continue because self comparison")
@@ -830,8 +830,13 @@ call_snvs(const plp_col_t *p, varcall_conf_t *conf)
            if (pvalue * (double)conf->bonf_subst < conf->sig) {
                 const int is_indel = 0;
                 const int is_consvar = 0;
-                float af = alt_raw_count/(float)p->coverage_plp;
-
+		float af = alt_raw_count/(float)p->coverage_plp;
+                /* can we make sure base filtering doesn't affect AF?
+		 * See eg https://github.com/CSB5/lofreq/issues/80
+		 * float af = alt_raw_count/(float)p->num_bases;
+		 * doesn't help either 
+		 */
+                assert(p->num_bases >= alt_raw_count);
                 char report_ref[2];
                 char report_alt[2];
                 report_ref[0] = reported_snv_ref;
