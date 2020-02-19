@@ -25,8 +25,10 @@ A few things to note:
   [GATK's best practice protocol](http://www.broadinstitute.org/gatk/guide/best-practices),
   i.e. that you mark duplicates (not for very high coverage data though),
   realign indels and recalibrate base qualities with GATK (BQSR). The
-  latter will also add indel qualities, which is needed for indel
-  calling (alternatively use `lofreq indelqual`).
+  latter also used to add indel qualities, which is needed for indel
+  calling. Newer versions of GATK's BQSR (known for at least 4.1.4) do not add
+  indel qualities (BI/BD tags) anymore. Please check with `samtools view your.bam | grep 'B[ID]:Z:'`. If these tags don't show, please run `lofreq indelqual` after
+  BQSR (if you want to call indels later).
 - If you are working with exome or targeted resequencing data, don't
   forget to provide LoFreq with the corresponding bed-file (`-l
   region.bed`). Otherwise the automatically applied Bonferroni
