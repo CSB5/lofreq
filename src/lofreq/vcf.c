@@ -595,12 +595,10 @@ void vcf_var_sprintf_info(var_t *var,
           snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), ";HRUN=%d", hrun);
      }
      if (consvar) {
-          strcat(buf, "%s;CONSVAR");
+          strcat(buf, ";CONSVAR");
      }
 
      var->info = strdup(buf);
-
-     /* FIXME format and samples not supported */
 }
 
 
