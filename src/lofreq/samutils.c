@@ -372,7 +372,7 @@ calc_read_alnerrprof(double *alnerrprof, unsigned long int *used_pos,
 
           }
      } /* for k */
-     /* calend not part of HTSlib API anymore? assert(pos == bam_calend(&b->core, bam_get_cigar(b))); FIXME correct assert? what if hard clipped? */
+     assert(pos == bam_endpos(b)); /* FIXME correct assert? what if hard clipped? */
      if (qpos != qlen) {
           LOG_FIXME("got qpos=%d and qlen=%d for cigar %s l_qseq %d\n", qpos, qlen, cigar_str_from_bam(b), b->core.l_qseq);
      }
@@ -593,7 +593,7 @@ count_cigar_ops(int *counts, int **quals, const bam1_t *b,
           }
      } /* for k */
 
-     /* bam_calend not part of new HTSlib API assert(qpos == bam_calend(&b->core, bam_get_cigar(b)));  FIXME correct assert? what if hard clipped? */
+     assert(qpos == bam_endpos(b)); /* FIXME correct assert? what if hard clipped? */
      if (qpos != qlen) {
           LOG_WARN("got qpos=%d and qlen=%d for cigar %s l_qseq %d in read %s\n", qpos, qlen, cigar_str_from_bam(b), b->core.l_qseq, bam_get_qname(b));
      }
