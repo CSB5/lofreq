@@ -587,15 +587,15 @@ void vcf_var_sprintf_info(var_t *var,
                           const int consvar)
 {
      char buf[LINE_BUF_SIZE];
-     snprintf(buf, sizeof(buf)-32, /* leave some for INDEL and other flags below */
+     snprintf(buf, sizeof(buf),
               "DP=%d;AF=%f;SB=%d;DP4=%d,%d,%d,%d",
               dp, af, sb, dp4->ref_fw, dp4->ref_rv, dp4->alt_fw, dp4->alt_rv);
      if (indel) {
-          sprintf(buf, "%s;INDEL", buf);
-          sprintf(buf, "%s;HRUN=%d", buf, hrun);
+          strcat(buf, ";INDEL");
+          snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), ";HRUN=%d", hrun);
      }
      if (consvar) {
-          sprintf(buf, "%s;CONSVAR", buf);
+          strcat(buf, "%s;CONSVAR");
      }
 
      var->info = strdup(buf);

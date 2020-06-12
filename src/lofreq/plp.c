@@ -1278,7 +1278,7 @@ check_indel:
           assert(plp_col->fw_counts[i] + plp_col->rv_counts[i] == plp_col->base_quals[i].n);
           assert(plp_col->base_quals[i].n == plp_col->baq_quals[i].n);
           assert(plp_col->base_quals[i].n == plp_col->map_quals[i].n);
-          assert(plp_col->map_quals[i].n == plp_col->source_quals[i].n);
+          /* assert(plp_col->map_quals[i].n == plp_col->source_quals[i].n);*/
      }
 }
 /* compile_plp_col() */
