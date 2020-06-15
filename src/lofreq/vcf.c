@@ -324,6 +324,7 @@ vcf_var_has_info_key(char **value, const var_t *var, const char *key) {
      char *token;
      char *info;
      char *info_ptr;
+     size_t key_len = strlen(key);
 
      if (value) {
           (*value) = NULL;
@@ -347,7 +348,9 @@ vcf_var_has_info_key(char **value, const var_t *var, const char *key) {
      while (token) {
           strsep(&info_ptr, field_delimiter);
           /*fprintf(stderr, "token=%s key=%s\n", token, key);*/
-          if (0 == strncasecmp(key, token, MIN(strlen(token), strlen(key)))) {
+          if (strlen(token) >= key_len &&
+              0 == strncasecmp(key, token, key_len) &&
+              (token[key_len] == '=' || token[key_len] == '\0')) {
                if (value) {
                     char *s = strchr(token, '=');
                     if (NULL != s) {
