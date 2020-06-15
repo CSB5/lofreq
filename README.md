@@ -1,15 +1,11 @@
 # LoFreq*: A sequence-quality aware, ultra-sensitive variant caller for NGS data
 
-
-
 ## Note
 
 Most users will want to use either the binary or the source-code
 package. Both are distributed via
 [LoFreq's Sourceforge site](https://sourceforge.net/projects/lofreq/files/).
 The source hosted here on github is mainly for developers!
-
-
 
 ## Building the Source
 
@@ -22,8 +18,8 @@ The source hosted here on github is mainly for developers!
 You will need:
 
 - a C compiler (e.g. gcc or clang)
-- a Python 2.7 or Python 3 interpreter
-- zlib developer files
+- a Python 3 interpreter
+- zlib developer filesi (zlib1g-dev on Ubuntu)
 - a compiled version of [HTSlib 1.4 or later](https://github.com/samtools/htslib)
 
 ### Compilation
@@ -36,7 +32,7 @@ You will need:
   - Subsequent pulls won't require rerunning `./bootstrap`. This is
     only necesary when changing `configure.ac` or any of the `Makefile.am`
 - Run `./configure` with the **absolute** path to HTSlib
-  (e.g. `./configure --with-htslib=/path-to-htslib [--prefix=inst-path]`)
+  (e.g. `./configure --with-htslib=/home/user/miniconda [--prefix=inst-path]`)
 - Run `make`
   - At this point you can already start using lofreq: `./bin/lofreq`
 - Run `make install` to properly install the package
@@ -44,14 +40,12 @@ You will need:
     the corresponding argument is used
   - Depending on the used prefix you might need to adjust your PATH (and PYTHONPATH).
 
-
 ## Documentation
 
 - Simply calling `lofreq` on the command line will display a list of
 subcommands
 - `lofreq cmd` will then display help for `cmd`
 - See [LoFreq's website](http://csb5.github.io/lofreq/) for full documentation
-
 
 ## License
 
