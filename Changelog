@@ -1,18 +1,23 @@
-2019-01-04      Changes in 2.1.4        Andreas Wilm <andreas.wilm@gmail.com>
-        * Now using htslib API thanks to John Marshall. Requires htslib >= 1.4. New configure flags
+2020-06-15      Changes in 2.1.5        Andreas Wilm <andreas.wilm@gmail.com>
+    * Fixed a long-standing Heisenbug related to indel formatting (closes #89)
+
+2020-01-04      Changes in 2.1.4        Andreas Wilm <andreas.wilm@gmail.com>
+    * Now using htslib API thanks to John Marshall. Requires htslib >= 1.4. New configure flags
 	replacing SAMTOOLS and HTSLIB: --with-htslib
 	* Minor fixes in parallel caller closing #85
 	* Fixed #58
 	* Enhancements to lofreq2_add_fake_gt.py
+
 2017-06-21	Changes in 2.1.3.1	Andreas Wilm <wilma@gis.a-star.edu.sg>
 	* Fixed bug introduced last minute in 2.1.3 that creates segfault if call is used without -o
+
 2017-06-21	Changes in 2.1.3	Andreas Wilm <wilma@gis.a-star.edu.sg>
 	* Maintenance release before major rewrite
 	* Added Python3 support
 	* Added best practices snakemake workflow
 	* Little easier on memory in high coverage situations
 	* Added --force-overwrite option to 'call'
-	
+
 2015-05-19	Changes in 2.1.2	Andreas Wilm <wilma@gis.a-star.edu.sg>
 	* 'indelqual' now allows to read bam from stdin
 	* Fixed bug in 'call' which resulted in negative phred quality

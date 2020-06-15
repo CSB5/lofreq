@@ -5,7 +5,7 @@ AC_PREREQ(2.63)
 # 2.64 which allows to define a URL as well
 # 2.68 seems to have updated ax_pthread
 
-AC_INIT([LoFreq_Star], [2.1.4], [wilma@gis.a-star.edu.sg])
+AC_INIT([LoFreq_Star], [2.1.5], [wilma@gis.a-star.edu.sg])
 
 # The AC_INIT macro can take any source file as an argument. It just
 # checks that the file is there, which should, in turn, mean that the
