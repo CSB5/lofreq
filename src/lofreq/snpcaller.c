@@ -43,6 +43,8 @@
 #include "fet.h"
 #include "utils.h"
 #include "log.h"
+#include "gsl/gsl_randist.h"
+#include "gsl/gsl_cdf.h"
 
 #include "snpcaller.h"
 #if TIMING
@@ -1044,7 +1046,6 @@ poissbin(long double *pvalue, const double *err_probs,
               *pvalue = LDBL_MAX; /* otherwise set to 1 which might pass filters */
          }
     }
-
     return probvec;
 }
 
@@ -1100,6 +1101,14 @@ snpcaller(long double *snp_pvalues,
         goto free_and_exit;
     }
 
+    double mu = 0;
+    for (int i = 0; i < num_err_probs; ++i) {
+        mu += err_probs[i];
+    }
+    const long double poibin_approximation = 1 - gsl_cdf_poisson_P(max_noncons_count - 1, mu);
+    if (poibin_approximation > sig_level + 0.01) {
+        goto free_and_exit;
+    }
     probvec = poissbin(&pvalue, err_probs, num_err_probs,
                        max_noncons_count, bonf_factor, sig_level);
 
@@ -1130,7 +1139,6 @@ snpcaller(long double *snp_pvalues,
              feclearexcept(FE_ALL_EXCEPT);
 
              pvalue = expl(probvec_tailsum(probvec, noncons_counts[i], max_noncons_count+1));
-
              errsv = errno;
              if (errsv || fetestexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW)) {
                   /* failed expl will set pvalue either to 0 or 1,
