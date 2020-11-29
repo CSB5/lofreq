@@ -1046,6 +1046,7 @@ poissbin(long double *pvalue, const double *err_probs,
               *pvalue = LDBL_MAX; /* otherwise set to 1 which might pass filters */
          }
     }
+
     return probvec;
 }
 
@@ -1139,6 +1140,7 @@ snpcaller(long double *snp_pvalues,
              feclearexcept(FE_ALL_EXCEPT);
 
              pvalue = expl(probvec_tailsum(probvec, noncons_counts[i], max_noncons_count+1));
+
              errsv = errno;
              if (errsv || fetestexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW)) {
                   /* failed expl will set pvalue either to 0 or 1,
