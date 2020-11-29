@@ -1,5 +1,5 @@
 AM_CFLAGS = -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -Wall -I../cdflib90/ -I../uthash $(HTSLIB_CPPFLAGS) @AM_CFLAGS@
-AM_LDFLAGS = $(LDFLAGS_for_htslib) @AM_LDFLAGS@ -Wl,-rpath,${CONDA_PREFIX}/lib
+AM_LDFLAGS = $(LDFLAGS_for_htslib) @AM_LDFLAGS@ 
 bin_PROGRAMS = lofreq
 lofreq_SOURCES = bam_md_ext.c bam_md_ext.h \
 bedidx.c bam_index.c \
