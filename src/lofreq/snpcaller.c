@@ -1102,13 +1102,15 @@ snpcaller(long double *snp_pvalues,
         goto free_and_exit;
     }
 
-    double mu = 0;
-    for (int i = 0; i < num_err_probs; ++i) {
-        mu += err_probs[i];
-    }
-    const long double poibin_approximation = 1 - gsl_cdf_poisson_P(max_noncons_count - 1, mu);
-    if (poibin_approximation > sig_level + 0.01) {
-        goto free_and_exit;
+    if (num_err_probs > 1000) {
+        double mu = 0;
+        for (int i = 0; i < num_err_probs; ++i) {
+            mu += err_probs[i];
+        }
+        const long double poibin_approximation = 1 - gsl_cdf_poisson_P(max_noncons_count - 1, mu);
+        if (poibin_approximation > sig_level + 0.01) {
+            goto free_and_exit;
+        }
     }
     probvec = poissbin(&pvalue, err_probs, num_err_probs,
                        max_noncons_count, bonf_factor, sig_level);
