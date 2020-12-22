@@ -1276,8 +1276,8 @@ check_indel:
 
      for (i = 0; i < NUM_NT4; ++i) {
           assert(plp_col->fw_counts[i] + plp_col->rv_counts[i] == plp_col->base_quals[i].n);
-          assert(plp_col->base_quals[i].n == plp_col->baq_quals[i].n);
-          assert(plp_col->base_quals[i].n == plp_col->map_quals[i].n);
+          /* FIXME only makes sense if BAQ is on assert(plp_col->base_quals[i].n == plp_col->baq_quals[i].n); */
+          /* FIXME only makes sense if MQ is on assert(plp_col->base_quals[i].n == plp_col->map_quals[i].n); */
           /* assert(plp_col->map_quals[i].n == plp_col->source_quals[i].n);*/
      }
 }
