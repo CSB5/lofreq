@@ -11,6 +11,10 @@ instructions for each of the above listed options.
 LoFreq is also available via [Bioconda](https://bioconda.github.io/) and [Homebrew](https://docs.brew.sh/Homebrew-on-Linux), which might be the most
 convenient installation option for most.
 
+# Prerequisites
+
+From version 2.1.6 onwards LoFreq (`lofreq call-parallel` to be exact) requires `bcftools` to be installed.
+
 # <a name="binary">Installation from Binary Packages</a>
 
 Download the binary LoFreq distribution matching your system (e.g.
