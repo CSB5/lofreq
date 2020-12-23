@@ -41,4 +41,5 @@ LIBS_for_htslib = -lhts
 endif
 
 # note: order matters
-lofreq_LDADD = $(LIBS_for_htslib) ../cdflib90/libcdf.a -l:libgsl.a -lcblas -lm
+lofreq_LDADD = $(LIBS_for_htslib) ../cdflib90/libcdf.a
+# -l:libgsl.a -lm

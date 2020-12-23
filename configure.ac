@@ -146,11 +146,12 @@ AX_PTHREAD([
         AC_MSG_ERROR([No pthread support on this machine]))
 #AX_PTHREAD()
 
-
-# explicit libm check
+# if any of these sit in unusual places use
+# export LDFLAGS="-L$path" before calling configure
 AC_CHECK_LIB(m, log,, AC_MSG_ERROR([Could not find libm]))
 AC_CHECK_LIB(z, gzread,, AC_MSG_ERROR([Could not find libz]))
-
+AC_CHECK_LIB([gslcblas],[cblas_dgemm])
+AC_CHECK_LIB(gsl, gsl_cdf_poisson_P,, AC_MSG_WARN([libgsl not found. Not using fast approximation]))
 
 # http://www.gnu.org/software/automake/manual/html_node/Python.html
 AM_PATH_PYTHON([2.7])
