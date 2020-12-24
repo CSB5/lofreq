@@ -637,6 +637,7 @@ init_varcall_conf(varcall_conf_t *c)
      c->flag |= VARCALL_USE_IDAQ;
      c->only_indels = 0;
      c->no_indels = 0;
+     c->approx_threshold_n = -1;
 }
 
 
@@ -1064,7 +1065,8 @@ int
 snpcaller(long double *snp_pvalues,
           const double *err_probs, const int num_err_probs,
           const int *noncons_counts,
-          const long long int bonf_factor, const double sig_level)
+          const long long int bonf_factor, const double sig_level,
+          const int approx_threshold_n)
 {
     double *probvec = NULL;
     int i;
@@ -1102,10 +1104,21 @@ snpcaller(long double *snp_pvalues,
         goto free_and_exit;
     }
 
+/* how to combine ifndef? */
+#ifndef HAVE_LIBGSL
+#ifndef HAVE_LIBGSLCBLAS
+     if (approx_threshold_n>0) {
+          LOG_FATAL("%s\n", "Can't use approximation. It was disabled during compile time");
+          exit(1);
+     }
+#endif
+#endif
+
+/* how to combine ifdef? */
 #ifdef HAVE_LIBGSL
      #ifdef HAVE_LIBGSLCBLAS
-     // Only approximate if sufficient data available
-     if (num_err_probs > 100) {
+     /* Only approximate if sufficient data available */
+     if (approx_threshold_n > 0 && num_err_probs > approx_threshold_n) {
           long double mu = 0;
           for (int i = 0; i < num_err_probs; ++i) {
                mu += err_probs[i];

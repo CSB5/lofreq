@@ -309,7 +309,7 @@ uniq_snv(const plp_col_t *p, void *confp)
           alt_counts[1] = alt_counts[2] = 0;
 
           if (snpcaller(pvalues, err_probs, num_err_probs,
-                        alt_counts, bonf, alpha)) {
+                        alt_counts, bonf, alpha, -1)) {
                fprintf(stderr, "FATAL: snpcaller() failed at %s:%s():%d\n",
                        __FILE__, __FUNCTION__, __LINE__);
                free(err_probs);

@@ -315,7 +315,7 @@ call_alt_ins(const plp_col_t *p, double *bi_err_probs, int bi_num_err_probs,
                bi_num_err_probs, ins_counts[0], ins_counts[1], ins_counts[2]);
      // compute p-value for insertion
      if (snpcaller(bi_pvalues, bi_err_probs, bi_num_err_probs, ins_counts,
-                   conf->bonf_indel, conf->sig)) {
+                   conf->bonf_indel, conf->sig, conf->approx_threshold_n)) {
           fprintf(stderr, "FATAL: snpcaller() failed at %s:%s():%d\n",
                   __FILE__, __FUNCTION__, __LINE__);
           return 1;
@@ -380,7 +380,7 @@ int call_alt_del(const plp_col_t *p, double *bd_err_probs, int bd_num_err_probs,
 
      /* snpcaller for deletion */
      if (snpcaller(bd_pvalues, bd_err_probs, bd_num_err_probs, del_counts,
-                   conf->bonf_indel, conf->sig)) {
+                   conf->bonf_indel, conf->sig, conf->approx_threshold_n)) {
           fprintf(stderr, "FATAL: snpcaller() failed at %s:%s():%d\n",
                   __FILE__, __FUNCTION__, __LINE__);
           return 1;
@@ -803,7 +803,7 @@ call_snvs(const plp_col_t *p, varcall_conf_t *conf)
                 bc_num_err_probs, alt_counts[0], alt_counts[1], alt_counts[2], num_snv_tests, conf->bonf_subst, conf->sig);
 
       if (snpcaller(pvalues, bc_err_probs, bc_num_err_probs,
-                   alt_counts, conf->bonf_subst, conf->sig)) {
+                   alt_counts, conf->bonf_subst, conf->sig, conf->approx_threshold_n)) {
            fprintf(stderr, "FATAL: snpcaller() failed at %s:%s():%d\n",
                    __FILE__, __FUNCTION__, __LINE__);
            free(bc_err_probs);
@@ -986,6 +986,7 @@ usage(const mplp_conf_t *mplp_conf, const varcall_conf_t *varcall_conf)
      fprintf(stderr, "       -C | --min-cov INT           Test only positions having at least this coverage [%d]\n", varcall_conf->min_cov);
      fprintf(stderr, "                                    (note: without --no-default-filter default filters (incl. coverage) kick in after predictions are done)\n");
      fprintf(stderr, "       -d | --max-depth INT         Cap coverage at this depth [%d]\n", mplp_conf->max_depth);
+     fprintf(stderr, "       -t | --approx-threshold INT  Use fast approximation at this depth (might decrease number of calls; off if <= 0) [%d]\n", varcall_conf->approx_threshold_n);
      fprintf(stderr, "            --illumina-1.3          Assume the quality is Illumina-1.3-1.7/ASCII+64 encoded\n");
      fprintf(stderr, "            --use-orphan            Count anomalous read pairs (i.e. where mate is not aligned properly)\n");
      fprintf(stderr, "            --plp-summary-only      No variant calling. Just output pileup summary per column\n");
@@ -1094,6 +1095,7 @@ for cov in coverage_range:
 
               {"min-cov", required_argument, NULL, 'C'},
               {"max-depth", required_argument, NULL, 'd'},
+              {"approx-threshold", required_argument, NULL, 't'},
 
               {"illumina-1.3", no_argument, &illumina_1_3, 1},
               {"use-orphan", no_argument, &use_orphan, 1},
@@ -1270,6 +1272,10 @@ for cov in coverage_range:
 
          case 'd':
               mplp_conf.max_depth = atoi(optarg);
+              break;
+
+         case 't':
+              varcall_conf.approx_threshold_n = atoi(optarg);
               break;
 
          case 'h':

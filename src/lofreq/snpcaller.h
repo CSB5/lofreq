@@ -59,6 +59,7 @@ typedef struct {
      int only_indels; 
      int no_indels; 
 
+     int approx_threshold_n; /* when to use fast poisson binomial approximation for early exit */
 } varcall_conf_t;
 
 
@@ -97,7 +98,8 @@ extern int
 snpcaller(long double *snp_pvalues, const double *err_probs,
           const int num_err_probs, const int *noncons_counts,
           const long long int bonf_factor,
-          const double sig_level);
+          const double sig_level,
+          const int approx_treshold_n);
 
 
 #endif
