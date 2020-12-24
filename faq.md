@@ -10,28 +10,65 @@ LoFreq's source code is released under [the MIT license](http://opensource.org/l
 
 ### Do I need to filter LoFreq predictions?
 
-You usually don't. Predicted variants are already filtered using
+Predicted variants are already filtered using
 default parameters (which include coverage, strand-bias, snv-quality
 etc). If you however need extra conservative settings you can use
 `lofreq filter` to add some more filter criteria.
+
+
+### Troubleshooting missing variants (where did my favourite variant go?)
+
+There are a number of reasons why a variant might not be predicted by LoFreq, 
+even though it's "visible" in the pileup. These reasons include low(ish) variant
+quality or high strand-bias, high alignment error possibilties etc.
+
+Note that LoFreq by default applies filtering on variant quality and also runs
+`lofreq filter` after each run. The latter  removes low coverage variants and
+those with strand bias (see settings there).
+
+A simple troubleshooting approach is to rerun LoFreq with very permissive options
+on the region of interest. If the variants "reappears" then you can remove the
+permissive options one by one and revert back to the default, to see which option
+was responsible.
+
+To run LoFreq in a very permissive way use:
+
+    lofreq call --no-default-filter -A -B -a 1 -b 1 -r yourchr:yourstart-yourend -f yourref.fa your.bam
+
+With this `lofreq filter` won't be called (`--no-default-filter`), alignment
+qualities are ignored (`-A -B`) and multiple testing correction and p-value
+threshold filtering (on variant quality) is switched off (`-a 1 -b 1`).
+
+If the above calls the "missing" variant, check whether the strand bias value
+(SB) is high or coverage (DP) is low.  If they are, then the default filter is
+responsible for removing that variant. If those values are not problematic, then
+remove `-A -B`. If the variant is afterwards not predicted or the variant
+quality drops, then there is likely a base or indel-alignment issue that
+reduces the variant quality to a value that makes LoFreq discard the variant.
+
+
+### Should I add customer filters to `lofreq call`?
+
+We would discourage you to filter on base or mapping quality etc. in `lofreq call`.
+The reason is that these qualities are built into LoFreq's calling model, i.e. they 
+are dealt with properly, which is reflected in the resulting variant quality. 
+Using too many base filters can bias results.
+
+
 
 ### What if I didn't/can't recalibrate base-qualities?
 
 You can run LoFreq on non-recalibrated data, even though we recommend
 to follow GATK's best practices for pre-processing of your BAM file
 for Illumina data. Non-recalibrated Illumina data might lead to a
-slight increase in false positive calls but we've rarely seen really bad
-examples.
+slight increase in false positive calls, but having said this we've
+rarely seen really bad examples. 
 
-### How about recalibrating non-human data?
-
-We recommend GATK base-recalibration even for non-human data (or
-targeted sequencing), even though GATK requires the input of known
-variant sites (a circular problem actually), which are not known for
-many organisms (use dbsnp for human data). One option is to run LoFreq
-first and use its predictions as "known" variant input to GATK and
-then run LoFreq again. The other alternative is to simply use an empty
-vcf file.
+Newer GATK versions don't support recalibration of quality scores anymore.
+An easy alternative is to use `lofreq indelqual` and `alnqual` which add
+indel qualities (BI/BD) and alignment qualities (for indels and bases). 
+The added advantage is that you don't need a dbSNP file to do this, i.e. 
+you can use these subcommands on all species.
 
 ### Targeted Resequencing, Exome etc.
 
@@ -61,6 +98,9 @@ low-frequency variants, since the mis-incorporated bases look real to
 the sequencing machine. To get rid of these you will either have to
 run your samples in duplicates (before amplification) or remove SNVs
 below the expected PCR error frequency.
+
+And yet another problem with highly PCR amplified is the high strand bias.
+There is no one size fits all filtering setting for this.
 
 ### Choice of mapper: Bowtie and BWA-SW
 
