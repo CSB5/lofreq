@@ -43,6 +43,8 @@
 #include "fet.h"
 #include "utils.h"
 #include "log.h"
+#include "gsl/gsl_randist.h"
+#include "gsl/gsl_cdf.h"
 
 #include "snpcaller.h"
 #if TIMING
@@ -1100,6 +1102,17 @@ snpcaller(long double *snp_pvalues,
         goto free_and_exit;
     }
 
+    // Only approximate if sufficient data available
+    if (num_err_probs > 100) {
+        long double mu = 0;
+        for (int i = 0; i < num_err_probs; ++i) {
+            mu += err_probs[i];
+        }
+        const long double poibin_approximation = 1 - gsl_cdf_poisson_P(max_noncons_count - 1, mu);
+        if (poibin_approximation > sig_level + 0.05) {
+            goto free_and_exit;
+        }
+    }
     probvec = poissbin(&pvalue, err_probs, num_err_probs,
                        max_noncons_count, bonf_factor, sig_level);
 
@@ -1119,7 +1132,6 @@ snpcaller(long double *snp_pvalues,
 #endif
         goto free_and_exit;
     }
-
 
     /* report p-value for each non-consensus base
      */

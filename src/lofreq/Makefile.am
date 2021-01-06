@@ -1,4 +1,4 @@
-AM_CFLAGS = -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -Wall -I../cdflib90/ -I../uthash $(HTSLIB_CPPFLAGS) @AM_CFLAGS@
+AM_CFLAGS = -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -Wall -O3 -I../cdflib90/ -I../uthash $(HTSLIB_CPPFLAGS) @AM_CFLAGS@
 AM_LDFLAGS = $(LDFLAGS_for_htslib) @AM_LDFLAGS@
 bin_PROGRAMS = lofreq
 lofreq_SOURCES = bam_md_ext.c bam_md_ext.h \
@@ -41,4 +41,4 @@ LIBS_for_htslib = -lhts
 endif
 
 # note: order matters
-lofreq_LDADD = $(LIBS_for_htslib) ../cdflib90/libcdf.a
+lofreq_LDADD = $(LIBS_for_htslib) ../cdflib90/libcdf.a -l:libgsl.a -lcblas -lm
