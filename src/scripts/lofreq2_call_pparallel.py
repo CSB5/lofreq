@@ -166,16 +166,23 @@ def concat_vcf_files(vcf_files, vcf_out, source=None):
     """
 
     assert not os.path.exists(vcf_out)
-
-    cmd = ['lofreq', 'vcfset', '-a', 'concat', '-o', vcf_out, '-1']
+    #I didn't address the FIXME issue noted above but another bug was fixed here.
+    #This now uses bcftools to overcome systematic failures of merging with certain data sets due to multi-allelic variants
+    cmd = ['bcftools', 'concat', '-a', '-O', 'z', '-o', vcf_out]
     cmd.extend(vcf_files)
+    idx = ['bcftools','index','-t', vcf_out]
     try:
         subprocess.check_call(cmd)
     except subprocess.CalledProcessError as e:
         LOG.fatal("The following command failed with return code %d: %s" % (
             e.returncode, ' '.join(cmd)))
         sys.exit(1)
-
+    try:
+        subprocess.check_call(idx)
+    except subprocess.CalledProcessError as e:
+        LOG.fatal("The following command failed with return code %d: %s" % (
+            e.returncode, ' '.join(cmd)))
+        sys.exit(1)
 
 def sq_list_from_bam_samtools(bam):
     """Extract SQs listed in BAM head using samtools

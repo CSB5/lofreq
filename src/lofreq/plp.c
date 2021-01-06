@@ -816,7 +816,11 @@ void compile_plp_col(plp_col_t *plp_col,
       * n_plp[i] - m
       */
      ref_base = (ref && pos < ref_len)? ref[pos] : 'N';
-
+     /* Added by Ryan Morin in an attempt to mitigate issues with non-ACTG characters in the reference
+     An example position (hg38) affected by this is chr17   83129591  (the reference base is W) */
+     if (! (ref_base == 'A' || ref_base == 'C' || ref_base == 'T' || ref_base == 'G' || ref_base == 'N')){
+          ref_base = 'N';
+     }
      plp_col_init(plp_col);
      plp_col->target = strdup(target_name);
      plp_col->pos = pos;
