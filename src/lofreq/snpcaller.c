@@ -412,9 +412,9 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                      * count alt bases before applying bq filter
                      * AF will be calculated based on raw counts
                      */
-                   if (is_alt_base) {
+                    if (is_alt_base) {
                        alt_raw_counts[alt_idx] += 1;
-                   }
+                    }
 
                     /* bq filtering for all
                      * FIXME min_bq was meant to just influence quality calculations, not af etc
