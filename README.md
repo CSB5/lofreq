@@ -2,10 +2,15 @@
 
 ## Note
 
-Most users will want to use either the binary or the source-code
-package. Both are distributed via
-[LoFreq's Sourceforge site](https://sourceforge.net/projects/lofreq/files/).
-The source hosted here on github is mainly for developers!
+Most users will want to install LoFreq via [BioConda](https://bioconda.github.io/)!
+The source code hosted here on Github is mainly for developers!
+
+LoFreq was published 10 years ago, is considered very stable and has
+almost 1000 citations at the time of writing this.  I (Andreas) have
+long left academia and tried to maintain the code as best as I could
+until now, but find that I have no more time to do this. For bugs,
+suggestions, ideas, collaborations please contact [Niranjan Nagarajan](mailto:nagarajann@gis.a-star.edu.sg).
+
 
 ## Building the Source
 
