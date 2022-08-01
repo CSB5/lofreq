@@ -50,7 +50,7 @@
 #include "vcf.h"
 #include "defaults.h"
 
-#define LINE_BUF_SIZE 1<<12
+#define LINE_BUF_SIZE 1<<13
 
 
 /* this is the actual header. all the other stuff is actually called meta-info 
@@ -587,7 +587,7 @@ void vcf_var_sprintf_info(var_t *var,
                           const int dp, const float af, const int sb,
                           const dp4_counts_t *dp4,
                           const int indel, const int hrun, 
-                          const int consvar)
+                          const int consvar, const int num_alt_bases)
 {
      char buf[LINE_BUF_SIZE];
      snprintf(buf, sizeof(buf),
@@ -596,6 +596,8 @@ void vcf_var_sprintf_info(var_t *var,
      if (indel) {
           strcat(buf, ";INDEL");
           snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), ";HRUN=%d", hrun);
+     } else {
+          snprintf(buf +strlen(buf), sizeof(buf) - strlen(buf), ";HQA=%d", num_alt_bases);
      }
      if (consvar) {
           strcat(buf, ";CONSVAR");
@@ -644,6 +646,7 @@ void vcf_write_new_header(vcf_file_t *vcf_file, const char *src, const char *ref
      vcf_printf(vcf_file, "##INFO=<ID=AF,Number=1,Type=Float,Description=\"Allele Frequency\">\n");
      vcf_printf(vcf_file, "##INFO=<ID=SB,Number=1,Type=Integer,Description=\"Phred-scaled strand bias at this position\">\n");
      vcf_printf(vcf_file, "##INFO=<ID=DP4,Number=4,Type=Integer,Description=\"Counts for ref-forward bases, ref-reverse, alt-forward and alt-reverse bases\">\n");
+     vcf_printf(vcf_file, "##INFO=<ID=HQA,Number=1,Type=Integer,Description=\"Count of high quality alt bases supporting SNP call\">\n");
      vcf_printf(vcf_file, "##INFO=<ID=INDEL,Number=0,Type=Flag,Description=\"Indicates that the variant is an INDEL.\">\n");
      vcf_printf(vcf_file, "##INFO=<ID=CONSVAR,Number=0,Type=Flag,Description=\"Indicates that the variant is a consensus variant (as opposed to a low frequency variant).\">\n");
      vcf_printf(vcf_file, "##INFO=<ID=HRUN,Number=1,Type=Integer,Description=\"Homopolymer length to the right of report indel position\">\n");

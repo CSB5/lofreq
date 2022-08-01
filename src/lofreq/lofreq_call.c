@@ -127,8 +127,10 @@ report_var(vcf_file_t *vcf_file, const plp_col_t *p, const char *ref,
                                  &sb_left_pv, &sb_right_pv, &sb_two_pv);
           sb_qual = PROB_TO_PHREDQUAL_SAFE(sb_two_pv);
      }
+
+     
      vcf_var_sprintf_info(var, is_indel? p->coverage_plp - p->num_tails : p->coverage_plp,
-                          af, sb_qual, dp4, is_indel, p->hrun, is_consvar);
+                          af, sb_qual, dp4, is_indel, p->hrun, is_consvar, p->num_alt_bases);
 
      vcf_write_var(vcf_file, var);
      vcf_free_var(&var);
@@ -730,7 +732,7 @@ call_indels(const plp_col_t *p, varcall_conf_t *conf)
  *
  */
 void
-call_snvs(const plp_col_t *p, varcall_conf_t *conf)
+call_snvs(plp_col_t *p, varcall_conf_t *conf)
 {
      double *bc_err_probs; /* error probs (qualities) passed down to snpcaller */
      int bc_num_err_probs; /* #elements in bc_err_probs */
@@ -853,6 +855,9 @@ call_snvs(const plp_col_t *p, varcall_conf_t *conf)
                 dp4.ref_rv = p->rv_counts[ref_nt4];
                 dp4.alt_fw = p->fw_counts[alt_nt4];
                 dp4.alt_rv = p->rv_counts[alt_nt4];
+
+                // remember the filtered alt count to report it later
+                p->num_alt_bases = alt_count;
 
                 report_var(& conf->vcf_out, p, report_ref, report_alt,
                            af, PROB_TO_PHREDQUAL(pvalue),
