@@ -43,8 +43,11 @@
 #include "fet.h"
 #include "utils.h"
 #include "log.h"
+
+#ifdef HAVE_LIBGSL
 #include "gsl/gsl_randist.h"
 #include "gsl/gsl_cdf.h"
+#endif
 
 #include "snpcaller.h"
 #if TIMING
