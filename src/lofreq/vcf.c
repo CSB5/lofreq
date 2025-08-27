@@ -132,23 +132,45 @@ vcf_var_key_pos_only(char **key, var_t *var)
 
 int vcf_printf(vcf_file_t *f, char *fmt, ...)
 {
-     /* sadly there is no gzvprintf */
-     char buf[64000];/* needs to be able to hold header */
-     va_list args;
-     int len;
+     // vcf_printf does 2 passes:
+     // 1) write to NULL, figuring out how much storage is needed for headers
+     // 2) allocate a buffer, write to buffer, write out to file, free the buffer
+     va_list ap, ap2;
+     va_start(ap, fmt);
+     va_copy(ap2, ap);
 
-     va_start(args, fmt);
-     len = vsnprintf(buf, 64000, fmt, args);    
-     va_end(args);
-
-     if (len>=64000) {
-          LOG_WARN("%s\n", "Truncated vcf_printf");
+     // write to NULL, figure out how big the formatted string will be
+     int needed = vsnprintf(NULL, 0, fmt, ap);  // excludes terminating '\0'
+     va_end(ap);
+     if (needed < 0) {
+         va_end(ap2);
+         LOG_FATAL("%s\n", "vsnprintf failed to size buffer");
+         return -1;
      }
+
+     // allocate buffer and actually format
+     char *buf = (char *)malloc((size_t)needed + 1);
+     if (!buf) {
+         va_end(ap2);
+         LOG_FATAL("%s\n", "Out of memory in vcf_printf");
+         return -1;
+     }
+     vsnprintf(buf, (size_t)needed + 1, fmt, ap2);
+     va_end(ap2);
+
+     // write exactly `needed` bytes
+     int ret;
      if (f->is_bgz) {
-          return bgzf_write(f->fh_bgz, buf, strlen(buf));
+         // bgzf_write can handle >64k by splitting into blocks
+         ret = bgzf_write(f->fh_bgz, buf, (size_t)needed);
+         ret = (ret == needed) ? ret : -1;
      } else {
-          return fputs(buf, f->fh);
+         size_t nw = fwrite(buf, 1, (size_t)needed, f->fh);
+         ret = (nw == (size_t)needed) ? (int)nw : -1;
      }
+
+     free(buf);
+     return ret;
 }
 
 int
