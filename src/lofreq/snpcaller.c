@@ -411,6 +411,14 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
                if (p->base_quals[i].n) {
                     bq = p->base_quals[i].data[j];
 
+                    /*
+                     * count alt bases before applying bq filter
+                     * AF will be calculated based on raw counts
+                     */
+                    if (is_alt_base) {
+                       alt_raw_counts[alt_idx] += 1;
+                    }
+
                     /* bq filtering for all
                      * FIXME min_bq was meant to just influence quality calculations, not af etc
                      * but the filtering leaks out later, because alt_counts is computed and returned after filtering
@@ -421,7 +429,6 @@ plp_to_errprobs(double **err_probs, int *num_err_probs,
 
                     /* alt bq threshold and overwrite if needed */
                     if (is_alt_base) {
-                         alt_raw_counts[alt_idx] += 1;
                          /* ignore altogether if below alt bq threshold */
                          if (bq < conf->min_alt_bq) {
                               continue;
