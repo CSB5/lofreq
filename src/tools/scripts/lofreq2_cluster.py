@@ -80,9 +80,9 @@ def fasta_iter(fasta_name):
     for header in faiter:
         # drop the ">"
         #header = header.next()[1:].strip()
-        header = header.next()[1:].strip().split(" ")[0]
+        header = next(header)[1:].strip().split(" ")[0]
         # join all sequence lines to one.
-        seq = "".join(s.strip() for s in faiter.next())
+        seq = "".join(s.strip() for s in next(faiter))
         yield header, seq
         
 
@@ -187,8 +187,7 @@ def main():
     
     
 
-    assert all([x.INFO.has_key('AF') and x.INFO.has_key('DP')
-                for x in var_list])
+    assert all(['AF' in x.INFO and 'DP' in x.INFO for x in var_list])
     var_list = sorted(var_list, key=lambda x: x.INFO['AF'], reverse=True)
     ci_list = [compute_ci(v.INFO['DP'], int(v.INFO['AF'] * v.INFO['DP'])) 
                for v in var_list]
@@ -254,4 +253,3 @@ def main():
 if __name__ == "__main__":
     main()
     LOG.info("Successful program exit")
-        
